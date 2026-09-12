@@ -33,6 +33,10 @@ class AttemptRecord:
     artifacts: Mapping[str, str]
     failure_detail: str | None = None
 
+    def __post_init__(self) -> None:
+        if any(value < 0 for value in self.timing_seconds.values()):
+            raise ValueError("timing_seconds values must be non-negative")
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "attempt_id": self.attempt_id,

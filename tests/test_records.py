@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from robot_debug import records
 from robot_debug.records import AttemptOutcome, AttemptRecord
@@ -46,3 +47,7 @@ class AttemptRecordTests(unittest.TestCase):
 
         with self.assertRaises(duplicate_error):
             ledger.add(self._record())
+
+    def test_rejects_negative_timing(self) -> None:
+        with self.assertRaisesRegex(ValueError, "timing_seconds"):
+            replace(self._record(), timing_seconds={"wall_clock": -0.1})
