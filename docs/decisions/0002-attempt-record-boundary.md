@@ -41,4 +41,3 @@ This does not yet launch an evaluator, persist records, or decide the final
 artifact layout. Those choices wait for the first successful cloud baseline.
 The module's serialization and duplicate-protection behavior are covered by
 standard-library unit tests.
-

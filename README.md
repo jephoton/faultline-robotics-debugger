@@ -2,7 +2,9 @@
 
 Current direction: discover failures in simulated robot manipulation policies, reduce them into reproducible cases, and improve evaluation throughput through profiling and parallel execution.
 
-This repository currently contains planning documents, not a working implementation.
+This repository contains baseline preparation plus a small, tested core for
+replayable experiment records. It does not yet run a robot model or provision
+cloud compute.
 
 Collaboration: cloud compute is an available main resource; architectural and design choices are discussed with Jethro before adoption, with explanations to support learning. Work is committed frequently using Conventional Commits. See [project instructions](AGENTS.md).
 
@@ -14,3 +16,16 @@ Collaboration: cloud compute is an available main resource; architectural and de
 - [Cloud-pilot preflight](docs/setup/cloud-pilot.md): credential-safe resource, cost, and cleanup checklist.
 
 First milestone: one existing robot policy completes one simulated task and can be replayed. Model training and formal verification are outside the initial scope.
+
+## Local checks
+
+The current core uses only the Python standard library. From Ubuntu in WSL,
+run:
+
+```bash
+cd /mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon
+PYTHONPATH=src python3 -B -m unittest discover -s tests -v
+```
+
+This checks the portable attempt-record contract before it is connected to the
+cloud evaluator.
