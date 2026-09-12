@@ -68,4 +68,3 @@ vla-eval run --config /path/to/nebius-nvidia-hackathon/configs/baseline.yaml
 Wait for the model server's health endpoint before starting the evaluation.
 The first paid run is one clean, recorded episode; it is not a performance or
 robustness result.
-

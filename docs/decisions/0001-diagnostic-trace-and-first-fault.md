@@ -43,4 +43,3 @@ diagnostic extension creates a small amount of adapter code but does not
 require model training or a second simulator. It will be tested with a nominal
 restoration case so a disabled fault is observationally equivalent to the
 baseline.
-

@@ -1,0 +1,27 @@
+# The first paid pilot is deliberately one clean, recorded Object episode.
+# Replace the floating container tag with its pulled digest before the next run.
+server:
+  url: "ws://localhost:8000"
+docker:
+  image: "ghcr.io/allenai/vla-evaluation-harness/libero:latest"
+  user: host
+output_dir: "./results/baseline-object-pilot"
+render: gpu
+benchmarks:
+  - name: libero-object-pilot
+    benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
+    mode: sync
+    episodes_per_task: 1
+    max_tasks: 1
+    paced: false
+    throughput_mode: false
+    recording:
+      record_video: true
+      record_step: true
+      video_fps: 20
+    params:
+      suite: libero_object
+      seed: 7
+      env_seed: 7
+      num_steps_wait: 10
+

@@ -44,4 +44,3 @@ internet would change the timing experiment.
    cloud job's local cache.
 5. Record the explicit job-stop and resource-cleanup procedure in
    `docs/setup/cloud-pilot.md` before creating billable compute.
-
