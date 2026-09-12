@@ -8,9 +8,11 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** Baseline preparation is in progress. Local discovery and source inspection are recorded; a one-episode configuration and cloud preflight exist. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. Code-level implementation follows the compatibility experiment, when the actual APIs and constraints are known.
+**Status:** Baseline preparation is in progress. Local discovery and source inspection are recorded; a one-episode configuration and cloud preflight exist. The local Nebius CLI is authenticated to the initial-balance account, whose observed projects are suspended pending billing activation. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. Code-level implementation follows the compatibility experiment, when the actual APIs and constraints are known.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
+
+**Budget and account update (September 13):** The total intended Nebius-credit envelope is US$75: use the initial account's US$25 for the first baseline/integration work without deliberately wasting it, then use US$50 on the main account (US$25 initial balance plus US$25 promo) for perturbation, reduction, parallel-evaluation, and demo work. Nebius projects cannot move between tenants or regions, so this is an account/profile handoff using the same Git repository, not a project migration. The initial CLI-authenticated account is currently suspended; its billing, live price, quota, capacity, and balance/expiry must be verified before provisioning. Keep US$5--10 of the combined plan in reserve and treat the US$75 total as a hard ceiling unless Jethro explicitly changes it.
 
 ---
 
@@ -160,7 +162,7 @@ vla-eval run --config configs/benchmarks/libero/object.yaml
 
 **Output:** `docs/setup/cloud-pilot.md`.
 
-- [ ] Ask the user to configure cloud credentials or sign in locally when starting cloud setup. Cloud compute is a confirmed resource; inspect the actual account/project, credit balance and expiry, regions, GPU quotas, and allocation limits.
+- [x] Ask the user to configure cloud credentials or sign in locally when starting cloud setup. Local CLI authentication is complete; the currently authenticated account's projects are suspended, so no resource creation is possible yet.
 - [ ] Select the smallest available resource that meets the model and simulator requirements with memory headroom. Measure peak usage during the pilot; do not assume the laptop's 4 GB is sufficient or that an expensive GPU is automatically suitable.
 - [ ] Calculate the pilot's expected cost from the live resource rate, maximum duration, storage, and other applicable charges. Obtain the user's spending limit before creating billable resources.
 - [ ] Set a maximum job duration and one active pilot worker. Verify the chosen service's minimum timeout; do not assume a five-minute job timeout is supported.
