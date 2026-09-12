@@ -51,6 +51,11 @@ room inside the initial account's US$20--25 allocation. This is a proposed
 run-specific cap, not permission to create the VM. Recheck capacity and pricing
 immediately before provisioning.
 
+The public image listing contains the Ubuntu 24.04 CUDA 13.0 image family
+(`ubuntu24.04-cuda13.0`) for this region. Use the family name for creation and
+record the resolved image ID in the ignored run log; that preserves both an
+up-to-date security image at launch and experiment reproducibility.
+
 ## Account-specific preflight
 
 Record these values locally when cloud access is configured:
@@ -68,6 +73,37 @@ Record these values locally when cloud access is configured:
 The account's VM, L40S-GPU, and network-SSD quota records are present and
 unused. Capacity availability is dynamic, so repeat the check just before VM
 creation; it is evidence of feasibility, not a reservation.
+
+The default project subnet is ready. There are currently no VMs or disks in the
+project. Do not rely on a blank-list response as a numeric count without first
+checking that it contains an `items` array.
+
+## Proposed execution and teardown sequence
+
+For the initial account, use one VM with a **managed** 200 GiB boot disk. The
+model cache, upstream checkout, recordings, and logs live on that disk for at
+most 24 hours. Copy selected artifacts back to the workstation before teardown;
+do not create a long-lived object-store or filesystem dependency for this first
+episode. Managed disks are deleted together with the VM, which eliminates the
+most likely forgotten-storage charge.
+
+The workstation has no existing default WSL SSH public key. Before launch, make
+a project-specific SSH key rather than reusing an unrelated identity. The one
+remaining access decision is whether to attach a temporary public IP for this
+pilot (recommended for a fast, low-complexity SSH/scp loop) or first build an
+isolated jump-host/WireGuard path (more secure, but disproportionate for the
+first US$25 experiment). Either option keeps the model server loopback-only.
+
+After artifacts are copied, delete the VM and verify no unmanaged disk remains:
+
+```bash
+nebius compute instance delete <instance-id>
+nebius compute disk list --parent-id <project-id> --all
+```
+
+The first command also deletes managed disks declared in the VM specification.
+If an unmanaged disk was created separately, explicitly delete it only after
+checking its ID and confirming its contents have been copied.
 
 ## Budget and account sequence
 
