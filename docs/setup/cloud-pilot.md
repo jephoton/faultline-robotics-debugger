@@ -1,9 +1,10 @@
 # Cloud pilot preflight
 
 **Status:** no Nebius resources have been created. The local CLI is authenticated
-to the initial-balance account, but its projects were observed suspended on
-September 13, 2026. Billing activation is therefore still required before any
-VM can be created. Never record credentials here.
+to the initial-balance account. Its tenant and regional projects were observed
+active on September 13, 2026. Billing balance/expiry and the live estimate for
+the complete VM (including disk) still need verification before creation.
+Never record credentials here.
 
 ## Recommended pilot topology
 
@@ -22,19 +23,51 @@ the roughly 6 GB LIBERO image, Python/uv caches, and recordings. Select the
 actual platform, preset, region, disk size, and maximum price only after
 checking the signed-in account. One worker is sufficient for the pilot.
 
+### Current read-only evidence (September 13)
+
+The authenticated initial account has active projects in `eu-north1`. The
+capacity service reported 31 on-demand slots for the following candidate at the
+time of the check:
+
+| Candidate | GPU memory | Host resources | Availability |
+| --- | ---: | --- | --- |
+| `gpu-l40s-a` / `1gpu-16vcpu-64gb` | 48 GB | 16 vCPU, 64 GiB RAM | 31 of 32 on-demand slots available |
+
+The corresponding official L40S Intel rates at that check were US$1.35 per GPU
+hour, US$0.012 per vCPU hour, and US$0.0032 per GiB-hour. The resulting compute
+estimate is **US$1.7468 per running hour**:
+
+```text
+1 × 1.35 + 16 × 0.012 + 64 × 0.0032 = 1.7468 USD/hour
+```
+
+Source: [Nebius Compute pricing](https://docs.nebius.com/compute/resources/pricing).
+
+For a 200 GiB Network SSD boot disk, the listed US$0.071/GiB-month rate is
+approximately US$0.0195/hour (US$0.47/day) while the disk exists, including
+when the VM is stopped. A proposed first-run limit is **8 hours**: about
+US$13.97 of running compute plus at most one day of disk, leaving meaningful
+room inside the initial account's US$20--25 allocation. This is a proposed
+run-specific cap, not permission to create the VM. Recheck capacity and pricing
+immediately before provisioning.
+
 ## Account-specific preflight
 
 Record these values locally when cloud access is configured:
 
 | Item | Required value |
 | --- | --- |
-| Nebius project | Initial-balance account authenticated; selected project is suspended. Main-account project pending. |
-| Region and GPU platform/preset | Initial account observed in `eu-north1`; verify quota and availability after billing is active. |
+| Nebius project | Initial-balance account authenticated and active. Main-account project pending. |
+| Region and GPU platform/preset | `eu-north1`, candidate `gpu-l40s-a` / `1gpu-16vcpu-64gb`; read-only capacity check reported 31 on-demand slots available. |
 | Credit expiry and spending ceiling | US$75 total project envelope; verify account-specific balances and expiry before each run. |
 | VM disk size and price | Pending; account for model and container cache |
 | Public access method | Pending; prefer SSH-key access and no public model-server port |
 | Persistent artifact location | Pending; object storage or shared filesystem |
 | Exact teardown command / console action | Pending |
+
+The account's VM, L40S-GPU, and network-SSD quota records are present and
+unused. Capacity availability is dynamic, so repeat the check just before VM
+creation; it is evidence of feasibility, not a reservation.
 
 ## Budget and account sequence
 
@@ -54,11 +87,12 @@ account handoff therefore means selecting or creating a separate project and a
 separate local CLI profile, while continuing from the same Git repository and
 recording the account role in local run evidence. It is not a project migration.
 
-At the last pricing check, an L40S with 16 vCPU and 64 GiB RAM in the target
-region was approximately US$1.75 per hour before disk/storage charges. This is
-only a planning estimate: retrieve the live price for the exact available
-platform/preset immediately before provisioning. The US$75 envelope is roughly
-43 such GPU-hours before storage, so avoid idle time and open-ended sweeps.
+At the last pricing check, the candidate L40S with 16 vCPU and 64 GiB RAM in
+the target region was US$1.7468 per running hour before disk/storage charges.
+This is only a planning estimate: retrieve the live price for the exact
+available platform/preset immediately before provisioning. The US$75 envelope
+is roughly 43 such GPU-hours before storage, so avoid idle time and open-ended
+sweeps.
 
 ## Credentials and model access
 
