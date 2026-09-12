@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** Planning only. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. This document gives executable discovery tasks first and a gated implementation roadmap afterward. Code-level implementation plans follow the compatibility experiment, when the actual APIs and constraints are known.
+**Status:** Baseline preparation is in progress. Local discovery and source inspection are recorded; a one-episode configuration and cloud preflight exist. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. Code-level implementation follows the compatibility experiment, when the actual APIs and constraints are known.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -112,8 +112,8 @@ These are discovery and reproduction tasks. Their outputs determine the subseque
 
 **Output:** `docs/setup/local-environment.md`.
 
-- [ ] Read applicable `AGENTS.md` instructions in the project and target checkout locations.
-- [ ] Run these read-only checks from PowerShell and record the results:
+- [x] Read applicable `AGENTS.md` instructions in the project and target checkout locations.
+- [x] Run these read-only checks from PowerShell and record the results in `docs/setup/local-environment.md`:
 
 ```powershell
 & 'C:\Windows\System32\nvidia-smi.exe' --query-gpu=name,memory.total,driver_version --format=csv,noheader
@@ -123,9 +123,9 @@ These are discovery and reproduction tasks. Their outputs determine the subseque
 
 Expected: Ubuntu runs, available tools are identified, and free disk space is known. Missing tools are setup actions to record; they do not imply reinstalling WSL.
 
-- [ ] Check Docker using `docker version` from the Linux shell where it will be used. Success requires both client and server information. If only the client responds, resolve the engine or WSL integration first.
-- [ ] Verify GPU passthrough using the chosen runtime's documented diagnostic before attempting model installation.
-- [ ] Decide whether to retain the Windows checkout or create a separate Linux-filesystem development checkout. If creating one, transfer the uncommitted learning guide and plan deliberately; cloning GitHub alone currently omits them. Name one checkout as authoritative in the setup document.
+- [ ] Check Docker using `docker version` from the Linux shell where it will be used. Docker is not currently available in WSL, so cloud-host validation is still required.
+- [ ] Verify GPU passthrough using the chosen runtime's documented diagnostic before attempting model installation. WSL can see the GPU; Docker GPU support remains unverified.
+- [x] Decide whether to retain the Windows checkout or create a separate Linux-filesystem development checkout. The Windows checkout is authoritative; cloud execution will use its own pinned checkout.
 
 **Gate:** Linux commands run, storage is sufficient for the selected downloads, and the actual Docker/GPU state is documented. No model download is needed to pass the local discovery gate.
 
@@ -133,12 +133,12 @@ Expected: Ubuntu runs, available tools are identified, and free disk space is kn
 
 **Output:** `docs/experiments/stack-selection.md`.
 
-- [ ] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
-- [ ] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
-- [ ] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
-- [ ] Record the exact checkpoint, base-model dependencies, model licenses, access requirements, and download sizes. Confirm the user's account can access gated dependencies; do not accept terms on their behalf.
-- [ ] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with those actual supported fields. Resolve relative config inheritance rather than copying a broken `extends` reference.
-- [ ] Write the fully resolved server and experiment commands into the stack-selection document before any paid experiment.
+- [x] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
+- [x] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
+- [x] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
+- [x] Record the checkpoint, base-model dependencies, observed revisions, licence evidence, access requirements, and download-size constraints. Confirm the user's account can access any gated dependencies later; do not accept terms on their behalf.
+- [x] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with actual supported fields.
+- [x] Write the server and experiment commands into the stack-selection document before any paid experiment.
 
 The upstream server command to validate in its own checkout is:
 

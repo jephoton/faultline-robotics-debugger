@@ -67,4 +67,3 @@ Nebius Serverless AI jobs have a minimum one-hour timeout and can mount
 persistent storage, so they remain attractive once the workload is packaged as
 a single container. This is a deployment optimisation, not a baseline
 requirement.
-
