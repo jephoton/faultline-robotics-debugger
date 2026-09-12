@@ -17,4 +17,3 @@ jobs:
           python-version: "3.12"
       - name: Run unit tests
         run: PYTHONPATH=src python -B -m unittest discover -s tests -v
-
