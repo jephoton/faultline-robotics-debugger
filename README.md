@@ -8,5 +8,7 @@ Collaboration: cloud compute is an available main resource; architectural and de
 
 - [Startup plan](docs/superpowers/plans/2026-09-12-robot-debugging-startup.md): proposed stack, local hardware findings, first experiments, implementation milestones, HPC measurements, and submission checklist.
 - [Technology learning guide](PROJECT-LEARNING-GUIDE.md): plain-language explanations of robot assurance and failure diagnosis. Failure diagnosis is the selected direction.
+- [Baseline stack selection](docs/experiments/stack-selection.md): the pinned GR00T/LIBERO pairing and one-episode pilot scope.
+- [Diagnostic trace decision](docs/decisions/0001-diagnostic-trace-and-first-fault.md): why the debugger preserves the upstream evaluator and starts with perception faults.
 
 First milestone: one existing robot policy completes one simulated task and can be replayed. Model training and formal verification are outside the initial scope.
