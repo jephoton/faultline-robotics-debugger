@@ -1,0 +1,305 @@
+# Robot Debugging System Startup Plan
+
+> **For agentic workers:** Use the executing-plans skill to execute the startup tasks inline, checking the evidence at each gate. Do not delegate unless the user requests it. Steps use checkboxes for tracking.
+
+**Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
+
+**Architecture:** An existing model server chooses robot actions; simulation workers run independent task attempts. Our application records attempts, selects controlled perturbations, reduces failures, and produces replayable reports. Start with one worker and retain the upstream runner until there is evidence that custom infrastructure is necessary.
+
+**Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
+
+**Status:** Planning only. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. This document gives executable discovery tasks first and a gated implementation roadmap afterward. Code-level implementation plans follow the compatibility experiment, when the actual APIs and constraints are known.
+
+**User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
+
+---
+
+## 1. The project we are starting
+
+Working description:
+
+> Give a robot policy a task, search for conditions that make it fail, reduce those conditions into a repeatable bug report, and replay the report against a changed policy.
+
+The intended user is a robotics engineer testing an existing manipulation policy. The initial field is tabletop manipulation: an arm moving objects between locations. This is a research prototype for policy debugging, not an industrial safety certification system.
+
+An **episode** means one complete attempt. **Inference** means asking the trained model for actions. A **worker** runs episodes. A **perturbation** is a controlled change to an otherwise valid test.
+
+### First visible result
+
+Two recordings of the same task: a nominal attempt that succeeds and a deliberately changed condition that causes a repeatable failure. Each has a machine-readable configuration and outcome.
+
+### Competition-sized result
+
+- One supported NVIDIA robot policy, one simulator, and three related tasks.
+- Nominal tests plus two controlled perturbation families.
+- Sequential and parallel evaluation with measured performance.
+- Failure reduction and replay bundles.
+- A small report interface showing nominal, failing, and reduced cases.
+- A real Nebius execution path, reproducible setup, and submission artifacts.
+
+Do not make training, a second simulator, a robot purchase, SMT integration, or a large dashboard prerequisites for that result.
+
+## 2. What we know about this machine
+
+Read-only checks on September 12, 2026 found:
+
+| Item | Evidence | Consequence |
+| --- | --- | --- |
+| GPU | RTX 3050 Laptop GPU, 4096 MiB VRAM | Do not assume the proposed VLA model fits locally |
+| Driver | 591.59 | Record it; compatibility still needs a runtime check |
+| System memory | 16,487,870,464 bytes, about 15.36 GiB | Avoid running many heavyweight local workers |
+| WSL | Ubuntu and docker-desktop registered as WSL2, both stopped | Existing Linux tooling can be checked before installing anything |
+| Docker Desktop | Executable present | Installation is present; a working engine and GPU passthrough are unverified |
+| Repository | `C:\Users\Jethro\Documents\nebius-nvidia-hackathon` | Current source location |
+| GitHub | Private repository created previously | Public release belongs in the final submission stage |
+
+Use the laptop for editing, small CPU tests, report viewing, and lightweight simulator exploration if it works. Prefer colocating model inference and simulation on the cloud pilot to avoid sending every camera frame over the laptop's internet connection.
+
+Cloud compute is included among the main resources, as confirmed by the user. WSL/Docker functionality, disk space, cloud allocation details, and model access still need discovery. Ask for cloud authentication when it is needed, rather than assuming only inference credits are available.
+
+## 3. Starting technology decision
+
+**Primary candidate:** GR00T N1.7, the LIBERO Object checkpoint, and the AllenAI evaluation harness's LeRobot adapter.
+
+The inspected upstream configuration names:
+
+```text
+configs/model_servers/lerobot/groot_n17.yaml
+nvidia/gr00t17-lerobot-libero_object-640
+configs/benchmarks/libero/object.yaml
+```
+
+The adapter documentation distinguishes model loading from actual task reproduction. It also identifies gated model dependencies. Treat the entire pairing as a hypothesis to reproduce: exact versions, checkpoint access, camera mapping, state normalization, action chunks, and reset behavior matter. Do not substitute a generic GR00T base checkpoint and expect the same skill.
+
+Sources: [adapter documentation](https://github.com/allenai/vla-evaluation-harness/tree/main/configs/model_servers/lerobot), [GR00T config](https://github.com/allenai/vla-evaluation-harness/blob/main/configs/model_servers/lerobot/groot_n17.yaml), [reproduction report](https://github.com/allenai/vla-evaluation-harness/blob/main/docs/reproductions/lerobot.md).
+
+**First simulator choice:** LIBERO/MuJoCo. Isaac Lab-Arena remains an alternative if the chosen integration fails, not an additional initial dependency. Review a simulator's hardware requirements before selecting a GPU; CUDA model inference and RTX rendering are different requirements.
+
+**Dependency policy:** inspect the harness's documented release, select a revision containing the required configuration, and record the exact commit SHA. Pin model revisions and container image digests after the first successful run. A moving `main` branch is not an experiment identity.
+
+## 4. File layout and responsibilities
+
+Only this plan and a root README are created during planning. The following are planned execution artifacts.
+
+| Path | Responsibility |
+| --- | --- |
+| `docs/setup/local-environment.md` | Commands, output summaries, OS/tool versions, disk and GPU checks |
+| `docs/setup/cloud-pilot.md` | Account/region, resource shape, explicit spending cap, expiry and teardown procedure; no credentials |
+| `docs/experiments/stack-selection.md` | Chosen upstream revisions, model revisions, licenses, and exact launch commands |
+| `docs/experiments/first-baseline.md` | Task selection, nominal outcomes, timings, and observations |
+| `configs/baseline.yaml` | A self-contained, validated copy of the selected experiment configuration |
+| `configs/search.yaml` | Perturbation bounds, seeds, episode and time budgets |
+| `src/robot_debug/records.py` | Experiment and attempt records |
+| `src/robot_debug/runner.py` | Thin adapter over the working upstream runner |
+| `src/robot_debug/perturb.py` | Apply and validate the selected scene changes |
+| `src/robot_debug/search.py` | Budgeted random search first |
+| `src/robot_debug/reduce.py` | Remove or shrink changes while retesting failure |
+| `src/robot_debug/report.py` | Static report generation first |
+| `tests/test_records.py` | Round-trip configuration and duplicate-attempt handling |
+| `tests/test_perturb.py` | Bounds, nominal restoration, invalid configuration rejection |
+| `tests/test_reduce.py` | Reducer behavior using a deterministic toy failure function |
+| `tests/test_runner.py` | Crash, timeout, completion, and replay record handling |
+| `artifacts/` | Ignored local videos, traces, and run output; large artifacts go to object storage |
+| `submission/` | Demo script, Devpost draft, testing instructions, feedback, and final evidence |
+
+Keep third-party checkouts outside the tracked project source. Save their revisions and any patches. Keep secrets, model weights, datasets, and large recordings out of Git.
+
+## 5. Startup tasks: first three working sessions
+
+These are discovery and reproduction tasks. Their outputs determine the subsequent implementation details. Time estimates are planning targets, not promises about downloads or GPU availability.
+
+### Task 1 — establish a usable local environment
+
+**Output:** `docs/setup/local-environment.md`.
+
+- [ ] Read applicable `AGENTS.md` instructions in the project and target checkout locations.
+- [ ] Run these read-only checks from PowerShell and record the results:
+
+```powershell
+& 'C:\Windows\System32\nvidia-smi.exe' --query-gpu=name,memory.total,driver_version --format=csv,noheader
+& 'C:\Windows\System32\wsl.exe' --list --verbose
+& 'C:\Windows\System32\wsl.exe' -d Ubuntu -- bash -lc 'cat /etc/os-release; df -h .; command -v python3; command -v uv; command -v docker'
+```
+
+Expected: Ubuntu runs, available tools are identified, and free disk space is known. Missing tools are setup actions to record; they do not imply reinstalling WSL.
+
+- [ ] Check Docker using `docker version` from the Linux shell where it will be used. Success requires both client and server information. If only the client responds, resolve the engine or WSL integration first.
+- [ ] Verify GPU passthrough using the chosen runtime's documented diagnostic before attempting model installation.
+- [ ] Decide whether to retain the Windows checkout or create a separate Linux-filesystem development checkout. If creating one, transfer the uncommitted learning guide and plan deliberately; cloning GitHub alone currently omits them. Name one checkout as authoritative in the setup document.
+
+**Gate:** Linux commands run, storage is sufficient for the selected downloads, and the actual Docker/GPU state is documented. No model download is needed to pass the local discovery gate.
+
+### Task 2 — inspect and freeze the proposed policy pairing
+
+**Output:** `docs/experiments/stack-selection.md`.
+
+- [ ] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
+- [ ] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
+- [ ] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
+- [ ] Record the exact checkpoint, base-model dependencies, model licenses, access requirements, and download sizes. Confirm the user's account can access gated dependencies; do not accept terms on their behalf.
+- [ ] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with those actual supported fields. Resolve relative config inheritance rather than copying a broken `extends` reference.
+- [ ] Write the fully resolved server and experiment commands into the stack-selection document before any paid experiment.
+
+The upstream server command to validate in its own checkout is:
+
+```bash
+vla-eval serve --config configs/model_servers/lerobot/groot_n17.yaml
+```
+
+The upstream suite configuration is:
+
+```bash
+vla-eval run --config configs/benchmarks/libero/object.yaml
+```
+
+**Do not launch the full suite as the first experiment.** Inspect its episode count first and use the single-task configuration produced above. These commands are upstream entry points, not newly implemented project commands.
+
+**Gate:** accessible model artifacts, a version-pinned stack, and a one-episode configuration. If unresolved after two focused setup sessions, try the original documented policy evaluation path. Do not spend the first week building a new model adapter.
+
+### Task 3 — configure one bounded cloud pilot
+
+**Output:** `docs/setup/cloud-pilot.md`.
+
+- [ ] Ask the user to configure cloud credentials or sign in locally when starting cloud setup. Cloud compute is a confirmed resource; inspect the actual account/project, credit balance and expiry, regions, GPU quotas, and allocation limits.
+- [ ] Select the smallest available resource that meets the model and simulator requirements with memory headroom. Measure peak usage during the pilot; do not assume the laptop's 4 GB is sufficient or that an expensive GPU is automatically suitable.
+- [ ] Calculate the pilot's expected cost from the live resource rate, maximum duration, storage, and other applicable charges. Obtain the user's spending limit before creating billable resources.
+- [ ] Set a maximum job duration and one active pilot worker. Verify the chosen service's minimum timeout; do not assume a five-minute job timeout is supported.
+- [ ] Configure persistent output storage and a model cache. Identify credentials separately from committed configuration. Use authenticated access or an SSH tunnel for a model server.
+- [ ] Document the exact stop/cancel action for the created resource and identify storage/IP resources that can persist after compute stops.
+
+Nebius Jobs run containerized batch work; detailed creation and storage configuration are in the [job guide](https://docs.nebius.com/serverless/jobs/manage). Prefer one colocated inference/simulation pilot before splitting services.
+
+**Gate:** resource compatibility, access, cost ceiling, persistence, and teardown are concrete. No paid resource is authorized merely by this written plan.
+
+### Task 4 — obtain one working robot episode
+
+**Outputs:** `docs/experiments/first-baseline.md`, plus ignored videos and run records.
+
+- [ ] Start the model server using the pinned setup and wait for its documented readiness signal.
+- [ ] Run the single-task, single-episode configuration. Save logs and recording even if it fails.
+- [ ] Watch the video. Check that the instruction, observed objects, robot movement, and success check agree.
+- [ ] If motion is nonsensical, check observation names, normalization, action convention, embodiment, and chunk buffering before blaming the policy.
+- [ ] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
+- [ ] Once a successful episode exists, replay its configuration and record whether the result repeats.
+
+**Gate:** a visible successful task and replayable configuration. If this fails, continue debugging the baseline rather than adding perturbations.
+
+### Task 5 — measure a small baseline and choose the first perturbation
+
+**Outputs:** baseline results and an implementation brief for the runner/perturbation adapter.
+
+- [ ] Run 20 nominal episodes of one preselected supported task using a fixed recorded seed list. Treat this as a pilot, not a paper-level reproduction.
+- [ ] Record success, failure, timeout, infrastructure error, episode length, and wall-clock time separately.
+- [ ] Use at least 16 successes out of 20 as an engineering gate for a useful first task. Report the actual count; this threshold is a project choice, not a claim of general model capability.
+- [ ] If the gate fails, diagnose the setup. If choosing a different task, record the original results and the selection rule to avoid hiding unfavorable evidence.
+- [ ] Inspect the simulator API for camera pose or rendering changes. Choose **camera pose** first if the task remains observable within small documented bounds; otherwise use a supported lighting adjustment. Object placement is the second family only after validity checks work.
+- [ ] Document the exact reset/perturb/render sequence and a nominal-restoration check. Define a one-parameter sweep before adaptive search.
+- [ ] Save a concrete follow-on implementation plan using the inspected API. Its tests must include restoring the nominal scene and keeping infrastructure errors out of the policy-failure count.
+
+**Gate:** we understand a working policy/task combination, have baseline timing, and know the API needed for one controlled change.
+
+## 6. Implementation roadmap after the startup gates
+
+Each milestone produces working software; avoid opening all subsystems at once. The file map above defines ownership, while the code-level steps are written after Task 5 resolves the runtime interfaces.
+
+| Milestone | Work | Evidence required before moving on |
+| --- | --- | --- |
+| M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
+| M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
+| M3: useful parallelism | Profile; use upstream worker sharding and batching where supported | Equal-work sequential vs parallel results, memory use, and speedup |
+| M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
+| M5: diagnostic report | Show case, measured violation, original/reduced videos, replay recipe | Another session reproduces the report's case from saved artifacts |
+| M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
+| M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
+
+### Record contract
+
+Every episode record must contain:
+
+- Experiment ID, scenario ID, attempt ID, and parent case if reduced.
+- Task ID and instruction; full initial scene state where export is supported.
+- Model/checkpoint revision, runner commit, environment/container version, and configuration hash.
+- Seed, perturbation parameters, action horizon, and action-chunk settings.
+- Outcome: `success`, `task_failure`, `episode_timeout`, `infrastructure_error`, or `invalid_scenario`.
+- Timing fields with units; startup and steady-state inference separated.
+- Video/trace locations and the exact replay invocation.
+
+The same scenario may have multiple attempts. Preserve all attempts; do not overwrite earlier failures with later successful retries. Retry infrastructure errors at most once automatically during the pilot and retain both records.
+
+### First meaningful failure
+
+Use matched nominal and perturbed initial states/seeds. Repeat a candidate case five times as an engineering screen; label the observed failure fraction rather than calling it deterministic. A practical first demonstration target is four failures in five perturbed attempts with four successes in five matched nominal attempts. Later report more repetitions and intervals; five attempts do not support strong statistical claims.
+
+An invalid initial scene or unavailable model server is not a robot-policy failure. Camera variations must preserve usable target visibility for the chosen test contract; record intentionally unobservable cases separately.
+
+### HPC experiment
+
+Start with 1, 2, and 4 workers on the same allocated resource. Use the same finite scenario list, model, horizon, simulation timestep, and inference semantics.
+
+Measure:
+
+```text
+throughput = completed valid episodes / wall-clock hour
+speedup(n) = sequential wall time / n-worker wall time
+parallel efficiency(n) = speedup(n) / n
+cost per valid episode = allocated compute and related run cost / valid episodes
+```
+
+Also record peak GPU memory, CPU use, inference latency, and time in rendering, simulation, queues, and serialization. Include an end-to-end result with startup/download costs and a separate warm steady-state result.
+
+Keep policy state and buffered action chunks isolated per episode. Check the same fixed cases for outcome drift after batching. If the simulator advances while inference waits, batching changes control latency and may alter the experiment; use fixed stepping initially and explicitly label any later real-time mode.
+
+If more workers slow the system or exhaust memory, report that result and address the measured bottleneck. Multi-node execution is a stretch goal, not a prerequisite for substantive HPC work.
+
+### Reduction experiment
+
+Use greedy factor removal followed by bounded magnitude reduction. Do not assume failure is monotonic in camera displacement; a simple binary search can miss disconnected failure regions. Keep the tested sequence and stop at an explicit attempt budget.
+
+Define case size as active-factor count first, then normalized perturbation magnitude. Keep a reduction only when it preserves the selected failure category under the chosen repeated-trial rule. Call the output a reduced counterexample, not a globally minimal or causally proven explanation.
+
+Reserve fresh seeds for confirming selected cases. Adaptive-search samples must not be presented as an unbiased population success-rate estimate.
+
+## 7. Research and product boundary
+
+Existing benchmarks and harnesses already cover perturbations and parallel evaluation. Our proposed contribution is the workflow from a valid failure to a reduced, replayable engineering report, plus measured compute efficiency. This is a contribution hypothesis, not an established novelty claim.
+
+The first version explains measured conditions and outcomes. Automated root-cause claims require stronger intervention evidence. A language model can later help propose tests or summarize records, but a generated story must not become the failure oracle.
+
+Formal methods can inform explicit test contracts. TLA+ modeling of coordinator retries is optional after M5; SMT integration is not part of the initial schedule.
+
+## 8. Schedule and scope controls
+
+Assuming work begins around September 12:
+
+| Period | Target |
+| --- | --- |
+| Sep 12–18 | Startup gates, nominal robot episode, resource decision |
+| Sep 19–25 | First perturbation, failure replay, thin runner |
+| Sep 26–Oct 2 | Profiling and one-GPU parallel evaluation |
+| Oct 3–9 | Reduction and diagnostic report |
+| Oct 10–16 | Held-out experiments and related tasks |
+| Oct 17–23 | Reproducibility, documentation, demo draft |
+| Oct 24–29 | Freeze, public release, final video and submission |
+
+These are target weeks; access delays consume the buffer. If no real policy episode runs in week one, focus on compatibility rather than UI. If behind after M3, finish a strong one-task diagnosis demo before adding tasks. If adaptive search adds little, keep the measured random-search baseline and improve replay/reduction.
+
+## 9. Submission checklist
+
+- [ ] Record substantive NVIDIA model usage and Nebius execution with exact model and job identifiers, excluding secrets.
+- [ ] Recheck official Physical AI requirements before finalizing the submission.
+- [ ] Prepare a public repository with an appropriate open-source license, attribution, install instructions, and artifact access.
+- [ ] Include a public YouTube video under three minutes, with at least one minute showing operating modules.
+- [ ] Demonstrate nominal behavior, a failure, its reduction, and the throughput result within the video.
+- [ ] Explain limitations: simulation only, selected task/policy coverage, empirical evidence rather than safety certification.
+- [ ] Preserve a test build and required artifacts for judging through December 15; continuous GPU uptime is not assumed necessary.
+- [ ] Submit by the October 30 Pacific deadline, equivalent to October 31 at 01:00 Singapore time; target October 29 to leave a buffer.
+
+See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publishing, paid compute, and model-license acceptance are separate actions from writing this plan.
+
+## 10. The next working session
+
+Start with Tasks 1 and 2: check the existing Linux/Docker runtime and inspect the version-pinned policy/benchmark setup. Produce the exact one-episode configuration and a concrete cloud-pilot cost estimate. Then obtain model access and the spending limit needed for Task 3.
+
+Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
+
+The first success to aim for is simple: **watch one robot complete one task, know which software made it happen, and be able to run it again.**
