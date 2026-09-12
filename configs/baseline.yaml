@@ -24,4 +24,3 @@ benchmarks:
       seed: 7
       env_seed: 7
       num_steps_wait: 10
-

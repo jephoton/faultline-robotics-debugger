@@ -13,4 +13,3 @@ args:
     wrist: observation.images.wrist_image
   policy_kwargs:
     base_model_path: nvidia/GR00T-N1.7-3B
-
