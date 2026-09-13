@@ -1,9 +1,8 @@
 # The first paid pilot is deliberately one clean, recorded Object episode.
-# Replace the floating container tag with its pulled digest before the next run.
 server:
   url: "ws://localhost:8000"
 docker:
-  image: "ghcr.io/allenai/vla-evaluation-harness/libero:latest"
+  image: "ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0"
   user: host
 output_dir: "./results/baseline-object-pilot"
 render: gpu
