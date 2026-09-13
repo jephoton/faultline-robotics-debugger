@@ -1,0 +1,38 @@
+# One compatibility episode for the first global-session perception fault.
+server:
+  url: "ws://localhost:8000"
+docker:
+  image: "ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0"
+  # The pinned upstream image contains root-only evaluator source.
+  user: root
+  volumes:
+    - "${oc.env:ROBOT_DEBUG_SRC}:/workspace/robot-debug-src:ro"
+  env:
+    - "PYTHONPATH=/workspace/robot-debug-src:/workspace/src"
+output_dir: "./results/occlusion-smoke-object-pilot-valid"
+render: gpu
+benchmarks:
+  - name: libero-object-occlusion-smoke
+    benchmark: "robot_debug.libero:DiagnosticLIBEROBenchmark"
+    mode: sync
+    episodes_per_task: 1
+    max_tasks: 1
+    paced: false
+    throughput_mode: false
+    recording:
+      record_video: true
+      record_step: true
+      video_fps: 20
+    params:
+      suite: libero_object
+      seed: 7
+      env_seed: 7
+      num_steps_wait: 10
+      agentview_occlusion:
+        enabled: true
+        x: 0.375
+        y: 0.375
+        width: 0.25
+        height: 0.25
+        color: [0, 0, 0]
+        opacity: 1.0

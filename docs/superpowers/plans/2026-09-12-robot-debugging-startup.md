@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius pilot produced two valid, recorded LIBERO Object successes with the same task and seeds after the account holder authorized the transitive `Cosmos-Reason2-2B` dependency. The earlier pre-score authorization error remains preserved separately in `docs/experiments/2026-09-13-baseline-pilot.md`; the valid results are in `docs/experiments/first-baseline.md`. The replay reproduced outcome but differed by one step, so do not make trajectory-determinism or robustness claims. The next design gate is the first perception perturbation's exact control surface and range.
+**Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. The next design gate is the fixed occlusion sweep and replay budget; no failure has been discovered yet.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -194,9 +194,9 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 - [ ] Record success, failure, timeout, infrastructure error, episode length, and wall-clock time separately.
 - [ ] Use at least 16 successes out of 20 as an engineering gate for a useful first task. Report the actual count; this threshold is a project choice, not a claim of general model capability.
 - [ ] If the gate fails, diagnose the setup. If choosing a different task, record the original results and the selection rule to avoid hiding unfavorable evidence.
-- [ ] Inspect the simulator API for camera pose or rendering changes. Choose **camera pose** first if the task remains observable within small documented bounds; otherwise use a supported lighting adjustment. Object placement is the second family only after validity checks work.
-- [ ] Document the exact reset/perturb/render sequence and a nominal-restoration check. Define a one-parameter sweep before adaptive search.
-- [ ] Save a concrete follow-on implementation plan using the inspected API. Its tests must include restoring the nominal scene and keeping infrastructure errors out of the policy-failure count.
+- [x] Choose the first perturbation surface with the user. The accepted first family is a normalized opaque rectangle on the global `agentview`, preserving wrist input, robot state, physics, and success predicate. Camera pose and lighting remain later families.
+- [x] Document the exact observation transform and nominal-restoration behavior. The fixed sweep remains the next design gate before adaptive search.
+- [x] Save a concrete follow-on implementation plan using the inspected API. `docs/superpowers/plans/2026-09-13-global-scene-occlusion.md` covers the adapter, tests, cloud compatibility run, and infrastructure-error separation.
 
 **Gate:** we understand a working policy/task combination, have baseline timing, and know the API needed for one controlled change.
 
@@ -300,7 +300,7 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-Start with Tasks 1 and 2: check the existing Linux/Docker runtime and inspect the version-pinned policy/benchmark setup. Produce the exact one-episode configuration and a concrete cloud-pilot cost estimate. Then obtain model access and the spending limit needed for Task 3.
+Start from the successful global-occlusion compatibility episode. Define a fixed, budgeted rectangle sweep and candidate-failure replay rule before launching more paid episodes. Keep the current VM stopped between runs, preserve the US$75 total envelope, and do not treat the one perturbed success as a robustness estimate.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 

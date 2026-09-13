@@ -29,7 +29,7 @@
 - Modify: `src/robot_debug/records.py`
 - Test: `tests/test_records.py`
 
-- [ ] **Step 1: Add package metadata**
+- [x] **Step 1: Add package metadata**
 
 ```toml
 [build-system]
@@ -46,7 +46,7 @@ dependencies = ["numpy>=1.24,<1.25"]
 where = ["src"]
 ```
 
-- [ ] **Step 2: Replace Python 3.11-only `StrEnum`**
+- [x] **Step 2: Replace Python 3.11-only `StrEnum`**
 
 Use `class AttemptOutcome(str, Enum)` so importing the project source in the
 LIBERO Python 3.8 image remains valid while preserving serialized string values.
@@ -60,7 +60,13 @@ python3 -m venv .venv
 
 Expected: installation completes and NumPy 1.24.x is installed.
 
-- [ ] **Step 4: Run the existing tests**
+Execution note: WSL lacks `python3.12-venv`; installing it requires the user's
+sudo password. Local tests currently use Codex's bundled Python 3.12.14 with
+NumPy 2.3.5 and `PYTHONPATH=src`. No claim is made that the editable environment
+was installed. The real evaluator's Conda environment passed the adapter import
+check independently before model startup.
+
+- [x] **Step 4: Run the existing tests**
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
@@ -68,7 +74,7 @@ Expected: installation completes and NumPy 1.24.x is installed.
 
 Expected: the three attempt-record tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pyproject.toml src/robot_debug/records.py
@@ -81,7 +87,7 @@ git commit -m "chore: add Python 3.8 package environment"
 - Create: `src/robot_debug/occlusion.py`
 - Create: `tests/test_occlusion.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Tests construct small RGB arrays and require:
 
@@ -96,7 +102,7 @@ dictionary conversion, coordinate/color/opacity rejection, shape rejection,
 data-type rejection, and `apply_agentview_occlusion()` preserving wrist and
 state objects while replacing only `images.agentview`.
 
-- [ ] **Step 2: Run the focused tests and confirm the missing module failure**
+- [x] **Step 2: Run the focused tests and confirm the missing module failure**
 
 ```bash
 .venv/bin/python -m unittest tests.test_occlusion -v
@@ -104,7 +110,7 @@ state objects while replacing only `images.agentview`.
 
 Expected: import fails because `robot_debug.occlusion` does not exist.
 
-- [ ] **Step 3: Implement the value object and observation transform**
+- [x] **Step 3: Implement the value object and observation transform**
 
 ```python
 @dataclass(frozen=True)
@@ -174,7 +180,7 @@ def apply_agentview_occlusion(
 The implementation must reject non-finite values and rectangles whose right or
 bottom edge exceeds 1.0. Use `np.rint` for deterministic alpha blending.
 
-- [ ] **Step 4: Run focused and full tests**
+- [x] **Step 4: Run focused and full tests**
 
 ```bash
 .venv/bin/python -m unittest tests.test_occlusion -v
@@ -183,7 +189,7 @@ bottom edge exceeds 1.0. Use `np.rint` for deterministic alpha blending.
 
 Expected: all transform and record tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/robot_debug/occlusion.py tests/test_occlusion.py
@@ -196,7 +202,7 @@ git commit -m "feat(perturb): add rectangular agent-view occlusion"
 - Create: `src/robot_debug/libero.py`
 - Create: `tests/test_libero_adapter.py`
 
-- [ ] **Step 1: Write a failing adapter test**
+- [x] **Step 1: Write a failing adapter test**
 
 Inject a fake `vla_eval.benchmarks.libero.benchmark` module whose
 `LIBEROBenchmark` returns an observation containing agent-view, wrist, and
@@ -204,7 +210,7 @@ state. Import `robot_debug.libero`, instantiate the diagnostic subclass with a
 rectangle mapping, and assert that `make_obs()` changes agent-view only and
 `_extract_frame()` applies the same rectangle.
 
-- [ ] **Step 2: Run the focused test and confirm the missing module failure**
+- [x] **Step 2: Run the focused test and confirm the missing module failure**
 
 ```bash
 .venv/bin/python -m unittest tests.test_libero_adapter -v
@@ -212,7 +218,7 @@ rectangle mapping, and assert that `make_obs()` changes agent-view only and
 
 Expected: import fails because `robot_debug.libero` does not exist.
 
-- [ ] **Step 3: Implement the thin subclass**
+- [x] **Step 3: Implement the thin subclass**
 
 ```python
 class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
@@ -233,7 +239,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
 Keep this module valid under Python 3.8 syntax.
 
-- [ ] **Step 4: Run focused and full tests**
+- [x] **Step 4: Run focused and full tests**
 
 ```bash
 .venv/bin/python -m unittest tests.test_libero_adapter -v
@@ -242,7 +248,7 @@ Keep this module valid under Python 3.8 syntax.
 
 Expected: all adapter, transform, and record tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/robot_debug/libero.py tests/test_libero_adapter.py
@@ -256,7 +262,7 @@ git commit -m "feat(libero): inject global scene occlusion"
 - Create: `docs/experiments/first-occlusion.md`
 - Modify: `docs/superpowers/plans/2026-09-12-robot-debugging-startup.md`
 
-- [ ] **Step 1: Create the pinned smoke configuration**
+- [x] **Step 1: Create the pinned smoke configuration**
 
 Use the validated baseline image/server/task settings. Add:
 
@@ -282,26 +288,31 @@ benchmarks:
 Retain one Object task, one episode, seeds 7/7, video, step recording, and the
 pinned simulator digest.
 
-- [ ] **Step 2: Copy source/config to the stopped pilot disk after startup**
+- [x] **Step 2: Copy source/config to the stopped pilot disk after startup**
 
 Place the repository source at `/home/robot/nebius-nvidia-hackathon/src` and
 the YAML at `/home/robot/occlusion-smoke.yaml`. Do not transfer `.git`, local
 artifacts, credentials, or model files.
 
-- [ ] **Step 3: Validate import inside the pinned image before model startup**
+- [x] **Step 3: Validate import inside the pinned image before model startup**
 
 ```bash
 docker run --rm \
   -v /home/robot/nebius-nvidia-hackathon/src:/workspace/robot-debug-src:ro \
   -e PYTHONPATH=/workspace/robot-debug-src:/workspace/src \
-  --entrypoint python \
+  --entrypoint conda \
   ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0 \
+  run --no-capture-output -n libero python \
   -c "from robot_debug.libero import DiagnosticLIBEROBenchmark; print(DiagnosticLIBEROBenchmark.__name__)"
 ```
 
 Expected: `DiagnosticLIBEROBenchmark`.
 
-- [ ] **Step 4: Run one recorded episode**
+Execution note: overriding the image entrypoint with bare `python` bypasses its
+`libero` Conda environment and fails with missing NumPy. The corrected command
+above matches the evaluator's normal runtime and passed on September 13, 2026.
+
+- [x] **Step 4: Run one recorded episode**
 
 From `/home/robot/vla-evaluation-harness`, wait for the existing model server's
 health endpoint, then run:
@@ -315,14 +326,14 @@ ROBOT_DEBUG_SRC=/home/robot/nebius-nvidia-hackathon/src \
 Expected: one completed `success` or `fail` episode, with no infrastructure
 error and a video containing the centered rectangle.
 
-- [ ] **Step 5: Preserve and document evidence**
+- [x] **Step 5: Preserve and document evidence**
 
 Copy aggregate JSON, per-step JSONL, SQLite, video, and run log into an ignored
 local artifact directory. Record outcome, step count, elapsed time, perturbation
 specification, model/container revisions, import evidence, and visual-review
 status in `docs/experiments/first-occlusion.md`.
 
-- [ ] **Step 6: Stop the VM and run local regression tests**
+- [x] **Step 6: Stop the VM and run local regression tests**
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
@@ -331,7 +342,7 @@ status in `docs/experiments/first-occlusion.md`.
 Expected: all tests pass and the VM reports `STOPPED` while its managed disk
 retains the cache.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add configs/occlusion-smoke.yaml docs/experiments/first-occlusion.md \
