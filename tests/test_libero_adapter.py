@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import sys
 import types
 import unittest
@@ -77,9 +78,21 @@ class DiagnosticLIBEROBenchmarkTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            benchmark.upstream_kwargs, {"suite": "libero_object", "seed": 7}
+            benchmark.upstream_kwargs,
+            {
+                "suite": "libero_object",
+                "seed": 7,
+                "send_wrist_image": False,
+                "send_state": False,
+            },
         )
         self.assertEqual(benchmark.agentview_occlusion.color, (0, 0, 0))
+
+    def test_exposes_model_required_inputs_in_constructor_signature(self) -> None:
+        parameters = inspect.signature(self.benchmark_type.__init__).parameters
+
+        self.assertIn("send_wrist_image", parameters)
+        self.assertIn("send_state", parameters)
 
     def test_masks_only_policy_agentview(self) -> None:
         agentview = np.full((4, 4, 3), 255, dtype=np.uint8)

@@ -15,9 +15,15 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     def __init__(
         self,
         agentview_occlusion: Optional[Mapping[str, Any]] = None,
+        send_wrist_image: bool = False,
+        send_state: bool = False,
         **kwargs: Any
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(
+            send_wrist_image=send_wrist_image,
+            send_state=send_state,
+            **kwargs
+        )
         self.agentview_occlusion = RectOcclusion.from_mapping(agentview_occlusion)
 
     def make_obs(self, raw_obs: Any, task: Any) -> Any:
