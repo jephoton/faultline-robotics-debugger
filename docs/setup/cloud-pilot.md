@@ -1,10 +1,33 @@
 # Cloud pilot preflight
 
-**Status:** no Nebius resources have been created. The local CLI is authenticated
-to the initial-balance account. Its tenant and regional projects were observed
-active on September 13, 2026. Billing balance/expiry and the live estimate for
-the complete VM (including disk) still need verification before creation.
-Never record credentials here.
+**Status:** one bounded initial-account VM was provisioned on September 13,
+2026. The local CLI is authenticated to that account. Never record credentials
+here. Its managed boot disk must be deleted with the VM after artifacts are
+copied.
+
+## Provisioned pilot state
+
+The running VM is named `robot-debug-pilot`; identifiers and IP addresses are
+kept out of committed files. It has the selected `gpu-l40s-a` /
+`1gpu-16vcpu-64gb` resources, a 200 GiB managed Network SSD boot disk, and the
+`ubuntu24.04-cuda13.0` image family. A guest-side eight-hour shutdown guard was
+set at creation.
+
+Verification over the restricted SSH path found:
+
+| Item | Observed value |
+| --- | --- |
+| GPU | NVIDIA L40S, 46,068 MiB; driver 580.173.02 |
+| Docker | Docker Engine 29.8.0, usable by the dedicated `robot` user |
+| Root disk after setup | 175 GiB available |
+| Harness | pinned checkout `35f1200eb15608aa898f727a3722f7eef889c6cd`; isolated `vla-eval` CLI installed |
+| LIBERO container | Download in progress; record its immutable digest before the first run |
+
+The upstream checkout, Python environment, container cache, model cache, logs,
+and recordings live only on this managed disk. No model weights have been
+downloaded. The next required user action is accepting any GR00T base-model
+terms and authenticating Hugging Face on the VM through a local secret/token
+flow; do not send the token in chat.
 
 ## Recommended pilot topology
 
