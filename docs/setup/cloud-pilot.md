@@ -27,7 +27,7 @@ The upstream checkout, Python environment, container cache, model cache, logs,
 and recordings live only on this managed disk. No model weights have been
 downloaded. The next required user action is accepting any GR00T base-model
 terms and authenticating Hugging Face on the VM through a local secret/token
-flow; do not send the token in chat.
+flow; do not send the token in chat. See [model-access.md](model-access.md).
 
 The cached LIBERO image was started with Docker's GPU runtime and independently
 reported the same L40S, 46,068 MiB GPU memory, and 580.173.02 driver as the
