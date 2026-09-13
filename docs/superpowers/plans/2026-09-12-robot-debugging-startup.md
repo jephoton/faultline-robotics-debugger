@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius pilot produced one valid, recorded LIBERO Object success after the account holder authorized the transitive `Cosmos-Reason2-2B` dependency. The earlier pre-score authorization error remains preserved separately in `docs/experiments/2026-09-13-baseline-pilot.md`; the valid result is recorded in `docs/experiments/first-baseline.md`. Replay of the nominal case is the remaining Task 4 gate. Do not begin perturbation work or make robustness claims from one episode.
+**Status:** The bounded one-L40S Nebius pilot produced two valid, recorded LIBERO Object successes with the same task and seeds after the account holder authorized the transitive `Cosmos-Reason2-2B` dependency. The earlier pre-score authorization error remains preserved separately in `docs/experiments/2026-09-13-baseline-pilot.md`; the valid results are in `docs/experiments/first-baseline.md`. The replay reproduced outcome but differed by one step, so do not make trajectory-determinism or robustness claims. The next design gate is the first perception perturbation's exact control surface and range.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -182,7 +182,7 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 - [ ] Watch the video. Check that the instruction, observed objects, robot movement, and success check agree.
 - [ ] If motion is nonsensical, check observation names, normalization, action convention, embodiment, and chunk buffering before blaming the policy.
 - [x] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
-- [ ] Once a successful episode exists, replay its configuration and record whether the result repeats.
+- [x] Once a successful episode exists, replay its configuration and record whether the result repeats.
 
 **Gate:** a visible successful task and replayable configuration. If this fails, continue debugging the baseline rather than adding perturbations.
 

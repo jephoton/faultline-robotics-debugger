@@ -1,6 +1,7 @@
 # First valid baseline
 
-**Status:** one successful compatibility episode; exact replay still pending.
+**Status:** two successful nominal attempts with the same task and seeds; a
+manual video review remains before using either as demo footage.
 
 ## Result
 
@@ -19,6 +20,21 @@ valid baseline episode:
 
 This is a compatibility result, not a success-rate estimate: one of one is
 not evidence of robustness or general performance.
+
+## Outcome replay
+
+The exact nominal configuration was run again in a separate result directory:
+
+| Attempt | Outcome | Steps | Episode elapsed time |
+| --- | --- | ---: | ---: |
+| Initial authorized baseline | success | 137 | 33.718 seconds |
+| Replay | success | 138 | 24.875 seconds |
+
+The fixed task, seeds, model identity, and success outcome reproduced. The
+one-step difference shows that this setup is replayable at the **outcome**
+level, but is not demonstrated to be trajectory-identical. Future reduction
+rules must therefore define preservation by repeated outcome, rather than
+expecting byte-identical action traces.
 
 ## Reproduction identity
 
@@ -46,12 +62,14 @@ The following are copied to the ignored local directory
 - `task0000_ep0000_success.mp4`
 - the SQLite recording for the attempt
 
+The corresponding replay files are in
+`artifacts/2026-09-13-baseline-replay/`.
+
 The earlier one-frame authorization-error recording is deliberately retained
 in a different result directory and excluded from policy metrics.
 
 ## Next gate
 
-Repeat this exact nominal configuration once, retaining a separate recording.
-Compare task, seeds, step count, outcome, and video before choosing any
-perturbation family. The first perturbation choice remains a user-led design
-decision after that replay.
+Review the recorded videos, then choose the first perception perturbation's
+control surface and allowed range. That is a user-led design decision; only
+after it is recorded should we implement the simulator-specific adapter.
