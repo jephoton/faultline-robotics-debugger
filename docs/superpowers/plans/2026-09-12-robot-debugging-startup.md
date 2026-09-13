@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. The next design gate is the fixed occlusion sweep and replay budget; no failure has been discovered yet.
+**Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. **The immediate next step is the bounded US$1 combined cloud session defined under Task 5: finish the 20-episode nominal baseline, run the centered severity sweep, then replay the first apparent failure five times.** No failure has been discovered yet.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -200,14 +200,14 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 
 **Gate:** we understand a working policy/task combination, have baseline timing, and know the API needed for one controlled change.
 
-#### Accepted next combined cloud session
+#### NEXT STEP — accepted combined cloud session
 
 Before starting the next paid run, use one bounded session with a **US$1
 maximum** for this sequence:
 
-1. Complete a 20-episode nominal baseline across different initial states.
-2. Sweep centered-square occlusion severity from 6.25% toward 25% image area.
-3. Replay the first apparent failure five times before classifying it as a
+- [ ] Complete a 20-episode nominal baseline across different initial states.
+- [ ] Sweep centered-square occlusion severity from 6.25% toward 25% image area.
+- [ ] Replay the first apparent failure five times before classifying it as a
    reproducible perturbation-induced failure.
 
 The nominal sample estimates whether the selected task is naturally flaky.
@@ -317,7 +317,7 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-Start from the successful global-occlusion compatibility episode. Define a fixed, budgeted rectangle sweep and candidate-failure replay rule before launching more paid episodes. Keep the current VM stopped between runs, preserve the US$75 total envelope, and do not treat the one perturbed success as a robustness estimate.
+Execute the Task 5 **NEXT STEP** in order: finish the 20-episode nominal baseline, run the centered-square severity sweep, and replay the first apparent failure five times. Use one bounded cloud session with a US$1 maximum. Keep the current VM stopped until that session begins, preserve the US$75 total envelope, and do not treat the existing one perturbed success as a robustness estimate.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 
