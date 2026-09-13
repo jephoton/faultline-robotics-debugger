@@ -21,13 +21,18 @@ Verification over the restricted SSH path found:
 | Docker | Docker Engine 29.8.0, usable by the dedicated `robot` user |
 | Root disk after setup | 175 GiB available |
 | Harness | pinned checkout `35f1200eb15608aa898f727a3722f7eef889c6cd`; isolated `vla-eval` CLI installed |
-| LIBERO container | Download in progress; record its immutable digest before the first run |
+| LIBERO container | Cached at `ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0` (5.99 GB) |
 
 The upstream checkout, Python environment, container cache, model cache, logs,
 and recordings live only on this managed disk. No model weights have been
 downloaded. The next required user action is accepting any GR00T base-model
 terms and authenticating Hugging Face on the VM through a local secret/token
 flow; do not send the token in chat.
+
+The cached LIBERO image was started with Docker's GPU runtime and independently
+reported the same L40S, 46,068 MiB GPU memory, and 580.173.02 driver as the
+host. This passes the container-GPU compatibility gate without downloading or
+starting a policy.
 
 ## Recommended pilot topology
 
