@@ -1,14 +1,16 @@
 # Cloud pilot preflight
 
 **Status:** one bounded initial-account VM was provisioned on September 13,
-2026. The local CLI is authenticated to that account. Never record credentials
-here. Its managed boot disk must be deleted with the VM after artifacts are
+2026 and is currently **stopped** to avoid idle GPU charges while a gated model
+dependency is authorized. Its managed boot disk retains the cache and pilot
+artifacts. The local CLI is authenticated to that account. Never record
+credentials here. The disk must be deleted with the VM after artifacts are
 copied.
 
 ## Provisioned pilot state
 
-The running VM is named `robot-debug-pilot`; identifiers and IP addresses are
-kept out of committed files. It has the selected `gpu-l40s-a` /
+The VM is named `robot-debug-pilot`; identifiers and IP addresses are kept out
+of committed files. It has the selected `gpu-l40s-a` /
 `1gpu-16vcpu-64gb` resources, a 200 GiB managed Network SSD boot disk, and the
 `ubuntu24.04-cuda13.0` image family. A guest-side eight-hour shutdown guard was
 set at creation.
@@ -24,10 +26,10 @@ Verification over the restricted SSH path found:
 | LIBERO container | Cached at `ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0` (5.99 GB) |
 
 The upstream checkout, Python environment, container cache, model cache, logs,
-and recordings live only on this managed disk. No model weights have been
-downloaded. The selected GR00T repositories are public and not gated, so a
-Hugging Face token is optional rather than a prerequisite. See
-[model-access.md](model-access.md).
+and recordings live only on this managed disk. The direct GR00T base and
+checkpoint weights are cached. A first inference attempt exposed a separate
+gated Cosmos dependency, so a Hugging Face token is now required before a
+valid scored episode can run. See [model-access.md](model-access.md).
 
 The cached LIBERO image was started with Docker's GPU runtime and independently
 reported the same L40S, 46,068 MiB GPU memory, and 580.173.02 driver as the
@@ -102,9 +104,10 @@ The account's VM, L40S-GPU, and network-SSD quota records are present and
 unused. Capacity availability is dynamic, so repeat the check just before VM
 creation; it is evidence of feasibility, not a reservation.
 
-The default project subnet is ready. There are currently no VMs or disks in the
-project. Do not rely on a blank-list response as a numeric count without first
-checking that it contains an `items` array.
+The default project subnet is ready. The pilot VM and its managed boot disk are
+the only intended resources in the project. Do not rely on a blank-list
+response as a numeric count without first checking that it contains an `items`
+array.
 
 ## Proposed execution and teardown sequence
 
