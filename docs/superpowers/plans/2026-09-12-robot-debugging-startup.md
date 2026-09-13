@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** Baseline preparation is in progress. Local discovery and source inspection are recorded; a one-episode configuration and cloud preflight exist. The local Nebius CLI is authenticated to the active initial-balance account, and its `eu-north1` capacity check found the 1x L40S candidate available. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. Code-level implementation follows the compatibility experiment, when the actual APIs and constraints are known.
+**Status:** The bounded one-L40S Nebius pilot is provisioned and the pinned GR00T service is healthy. A single recorded LIBERO Object attempt reached the model service but produced an infrastructure error before its first action because a transitive `Cosmos-Reason2-2B` dependency is gated. Its artifacts and diagnosis are preserved in `docs/experiments/2026-09-13-baseline-pilot.md`. Resume only after the account holder accepts that model's terms and authenticates the VM with a read token; do not begin perturbation work or interpret the `0%` error attempt as a policy score.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -138,7 +138,7 @@ Expected: Ubuntu runs, available tools are identified, and free disk space is kn
 - [x] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
 - [x] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
 - [x] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
-- [x] Record the checkpoint, base-model dependencies, observed revisions, licence evidence, access requirements, and download-size constraints. Confirm the user's account can access any gated dependencies later; do not accept terms on their behalf.
+- [x] Record the checkpoint, base-model dependencies, observed revisions, licence evidence, access requirements, and download-size constraints. Do not accept terms on the user's behalf. The live run exposed an unresolved transitive gated dependency; see `docs/setup/model-access.md`.
 - [x] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with actual supported fields.
 - [x] Write the server and experiment commands into the stack-selection document before any paid experiment.
 
@@ -177,11 +177,11 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 
 **Outputs:** `docs/experiments/first-baseline.md`, plus ignored videos and run records.
 
-- [ ] Start the model server using the pinned setup and wait for its documented readiness signal.
-- [ ] Run the single-task, single-episode configuration. Save logs and recording even if it fails.
+- [x] Start the model server using the pinned setup and wait for its documented readiness signal.
+- [x] Run the single-task, single-episode configuration. Save logs and recording even if it fails.
 - [ ] Watch the video. Check that the instruction, observed objects, robot movement, and success check agree.
 - [ ] If motion is nonsensical, check observation names, normalization, action convention, embodiment, and chunk buffering before blaming the policy.
-- [ ] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
+- [x] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
 - [ ] Once a successful episode exists, replay its configuration and record whether the result repeats.
 
 **Gate:** a visible successful task and replayable configuration. If this fails, continue debugging the baseline rather than adding perturbations.
