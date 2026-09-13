@@ -87,12 +87,17 @@ do not create a long-lived object-store or filesystem dependency for this first
 episode. Managed disks are deleted together with the VM, which eliminates the
 most likely forgotten-storage charge.
 
-The workstation has no existing default WSL SSH public key. Before launch, make
-a project-specific SSH key rather than reusing an unrelated identity. The one
-remaining access decision is whether to attach a temporary public IP for this
-pilot (recommended for a fast, low-complexity SSH/scp loop) or first build an
-isolated jump-host/WireGuard path (more secure, but disproportionate for the
-first US$25 experiment). Either option keeps the model server loopback-only.
+The workstation had no existing default WSL SSH public key, so a dedicated
+project key was created locally with restrictive file permissions. It is not
+tracked and its private material is never printed or copied to the VM.
+
+Jethro selected a temporary public IP for the pilot. The provider's default
+security group allows all ingress, so the VM will instead use a dedicated
+security group with only stateful TCP/22 ingress from the workstation's current
+public IPv4 `/32` and stateful outbound access for package/model downloads. No
+model, notebook, simulator, or other application port is public. If the
+workstation's public IP changes, update the SSH rule before attempting to
+reconnect.
 
 After artifacts are copied, delete the VM and verify no unmanaged disk remains:
 
