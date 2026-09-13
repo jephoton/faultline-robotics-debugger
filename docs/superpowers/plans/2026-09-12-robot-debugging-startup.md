@@ -200,6 +200,23 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 
 **Gate:** we understand a working policy/task combination, have baseline timing, and know the API needed for one controlled change.
 
+#### Accepted next combined cloud session
+
+Before starting the next paid run, use one bounded session with a **US$1
+maximum** for this sequence:
+
+1. Complete a 20-episode nominal baseline across different initial states.
+2. Sweep centered-square occlusion severity from 6.25% toward 25% image area.
+3. Replay the first apparent failure five times before classifying it as a
+   reproducible perturbation-induced failure.
+
+The nominal sample estimates whether the selected task is naturally flaky.
+The one-dimensional centered-square sweep then isolates an occlusion severity
+threshold that can seed the later reducer. A position-grid sweep would map
+spatial sensitivity better, but is deferred because it does not establish a
+clean first severity threshold as efficiently. Keep infrastructure errors out
+of both policy-failure and replay counts.
+
 ## 6. Implementation roadmap after the startup gates
 
 Each milestone produces working software; avoid opening all subsystems at once. The file map above defines ownership, while the code-level steps are written after Task 5 resolves the runtime interfaces.
