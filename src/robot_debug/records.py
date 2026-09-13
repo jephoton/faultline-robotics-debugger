@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 from typing import Any, Mapping
 
 
-class AttemptOutcome(StrEnum):
+class AttemptOutcome(str, Enum):
     SUCCESS = "success"
     TASK_FAILURE = "task_failure"
     EPISODE_TIMEOUT = "episode_timeout"
