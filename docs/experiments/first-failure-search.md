@@ -1,8 +1,12 @@
 # First bounded failure search
 
-**Status:** ready for the approved evaluation session on September 14. Two
-earlier bounded launch attempts were stopped with no model server or evaluation episode started. The
-first stopped before SSH/model startup because the provider supplied its public
+**Status:** infrastructure invalidated the approved evaluation session on
+September 14. The VM is stopped. The cached runtime and model server became
+ready, but no evaluator episode or policy result was produced. A future
+billable retry needs a new explicit budget check after the local operational
+fixes below are reviewed. Two earlier bounded launch attempts were stopped with
+no model server or evaluation episode started. The first stopped before
+SSH/model startup because the provider supplied its public
 IPv4 with a CIDR suffix, which the initial operator extractor rejected. The
 second accepted that format, but SSH never became reachable; the current WSL
 egress address was outside the original TCP/22 rule, and a temporary matching
@@ -141,6 +145,28 @@ retry clones the verified bundle into a fresh per-session directory rather than
 altering that existing directory. Its hard stop is reduced to 28 minutes,
 giving an estimated US$0.8984297 retry maximum and preserving room for the
 short source-layout failure within the approved US$1.10 cap.
+
+The subsequent runtime preflight passed: the pinned harness and LIBERO image,
+the GR00T, LIBERO checkpoint, and Cosmos caches, the L40S GPU, and the
+authenticated Hugging Face client were all present. The client lives at
+`/home/robot/.venvs/vla-eval/bin/hf`; it is not on the remote login shell's
+global `PATH`. The model server reached loopback readiness in about two and a
+half minutes.
+
+No policy episode followed. The first driver invocation omitted the virtual
+environment's `PATH`, so its child `vla-eval` command was recorded as an
+infrastructure error. A corrected invocation then reused that invalid
+attempt's results root. The driver's deliberate nonempty-directory guard
+refused to overwrite the durable error summary. Both are operator-runbook
+errors, not model or simulator evidence. The VM was stopped immediately after
+the second error. The managed disk retains the logs, but no aggregate, video,
+or episode output exists to interpret.
+
+Before any future run, perform the non-billable local runbook check that the
+driver environment exports `/home/robot/.venvs/vla-eval/bin` and that every
+driver invocation receives a new, empty results root. Re-check the remaining
+provider-visible balance and obtain a new run-specific cap; the prior US$1.10
+authorization must not be treated as unspent credit.
 
 Permitted completed-run interpretations are limited to one of:
 

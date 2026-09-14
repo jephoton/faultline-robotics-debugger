@@ -503,7 +503,7 @@ git -C /home/robot/nebius-nvidia-hackathon status --short
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 docker image inspect ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0 >/dev/null
 df -h /home/robot
-hf auth whoami >/dev/null
+/home/robot/.venvs/vla-eval/bin/hf auth whoami >/dev/null
 ```
 
 If any pinned runtime component is absent, stop the VM rather than downloading
@@ -555,8 +555,9 @@ that duration to the driver:
 NOW_EPOCH="$(date -u +%s)"
 REMAINING_LAUNCH_SECONDS="$((VM_LAUNCH_CUTOFF_EPOCH - NOW_EPOCH))"
 test "$REMAINING_LAUNCH_SECONDS" -gt 0
+DRIVER_RESULTS_ROOT="${REMOTE_RESULTS_ROOT}-driver-$(date -u +%Y%m%dT%H%M%SZ)"
 ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
-  bash -s -- "$REMOTE_RESULTS_ROOT" "$REMAINING_LAUNCH_SECONDS" <<'SH'
+  bash -s -- "$DRIVER_RESULTS_ROOT" "$REMAINING_LAUNCH_SECONDS" <<'SH'
 set -euo pipefail
 results_root=$1
 remaining_seconds=$2
@@ -574,6 +575,11 @@ SH
 
 The driver stops after the nominal gate, the first sweep failure plus replays,
 all six successful severities, infrastructure evidence, or the cutoff.
+Its results root must be new and empty for each invocation. If an
+infrastructure-invalidated invocation has already created
+`first-failure-search/`, do not reuse that directory: stop the VM, preserve
+the evidence, and obtain authorization for a new bounded session rather than
+overwriting it.
 
 - [ ] **Step 7: Copy evidence in priority order**
 
