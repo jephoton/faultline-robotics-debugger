@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import json
 import os
 from pathlib import Path
@@ -17,6 +17,14 @@ from robot_debug.session import EpisodeResult, classify_aggregate, is_reproducib
 SESSION_DIRECTORY_NAME = "first-failure-search"
 SWEEP_SIDES = (0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
 NOMINAL_EPISODE_INDICES = tuple(range(20))
+
+
+@dataclass(frozen=True)
+class StageResult:
+    """The parsed evidence, or a durable infrastructure error, for one stage."""
+
+    results: Sequence[EpisodeResult]
+    infrastructure_error: str | None = None
 
 
 def run_session(
@@ -60,7 +68,9 @@ def run_session(
         summary["elapsed_seconds"] = elapsed()
         _atomic_write_json(session_dir / "session_summary.json", summary)
 
-    def launch(stage_name: str, *, episode_indices: Sequence[int], side: float | None) -> list[EpisodeResult] | None:
+    def launch(
+        stage_name: str, *, episode_indices: Sequence[int], side: float | None
+    ) -> StageResult | None:
         if not should_launch_next(elapsed(), launch_cutoff_seconds):
             save("launch_cutoff_reached")
             return None
@@ -74,25 +84,85 @@ def run_session(
             episode_indices=episode_indices,
             side=side,
         )
-        command_runner(
-            ["vla-eval", "run", "--config", str(config_path)],
-            cwd=upstream_root,
-            check=False,
+        try:
+            completed_process = command_runner(
+                ["vla-eval", "run", "--config", str(config_path)],
+                cwd=upstream_root,
+                check=False,
+            )
+        except Exception as error:
+            return record_stage(
+                stage_name, episode_indices, (), "command_runner: {}".format(error)
+            )
+        returncode = getattr(completed_process, "returncode", 0)
+        if returncode not in (0, None):
+            return record_stage(
+                stage_name,
+                episode_indices,
+                (),
+                "evaluator returned nonzero status {}".format(returncode),
+                returncode=returncode,
+            )
+        try:
+            results = _load_stage_results(output_dir, expected_count=len(episode_indices))
+        except Exception as error:
+            return record_stage(
+                stage_name,
+                episode_indices,
+                (),
+                "aggregate evidence error: {}: {}".format(
+                    type(error).__name__, error
+                ),
+                returncode=returncode,
+            )
+        return record_stage(
+            stage_name, episode_indices, results, returncode=returncode
         )
-        results = _load_stage_results(output_dir, expected_count=len(episode_indices))
-        summary["completed"]["stages"].append([stage_name, len(results)])
+
+    def record_stage(
+        stage_name: str,
+        episode_indices: Sequence[int],
+        results: Sequence[EpisodeResult],
+        infrastructure_error: str | None = None,
+        *,
+        returncode: int | None = None,
+    ) -> StageResult:
+        summary["completed"]["stages"].append(
+            {
+                "stage": stage_name,
+                "planned_episode_indices": list(episode_indices),
+                "completed_episodes": len(results),
+                "status": (
+                    "infrastructure_error"
+                    if infrastructure_error is not None
+                    else "completed"
+                ),
+                "infrastructure_error": infrastructure_error,
+                "returncode": returncode,
+            }
+        )
         summary["outcomes"].extend(
             {"stage": stage_name, **asdict(result)} for result in results
         )
         save()
-        return results
+        return StageResult(results=results, infrastructure_error=infrastructure_error)
 
-    nominal = launch("nominal", episode_indices=NOMINAL_EPISODE_INDICES, side=None)
-    if nominal is None:
+    nominal_stage = launch(
+        "nominal", episode_indices=NOMINAL_EPISODE_INDICES, side=None
+    )
+    if nominal_stage is None:
         return summary
+    if nominal_stage.infrastructure_error is not None:
+        save("nominal_infrastructure_error")
+        return summary
+    nominal = nominal_stage.results
     summary["completed"]["nominal_successes"] = sum(result.success for result in nominal)
+    save()
     if any(result.outcome == "infrastructure_error" for result in nominal):
         save("nominal_infrastructure_error")
+        return summary
+    if {result.episode_index for result in nominal} != set(NOMINAL_EPISODE_INDICES):
+        save("nominal_invalid_evidence")
         return summary
     if summary["completed"]["nominal_successes"] < 16:
         save("nominal_success_gate_failed")
@@ -100,10 +170,13 @@ def run_session(
 
     for side in SWEEP_SIDES:
         stage_name = "sweep-{:.2f}".format(side)
-        sweep = launch(stage_name, episode_indices=(0,), side=side)
-        if sweep is None:
+        sweep_stage = launch(stage_name, episode_indices=(0,), side=side)
+        if sweep_stage is None:
             return summary
-        result = sweep[0]
+        if sweep_stage.infrastructure_error is not None:
+            save("sweep_infrastructure_error")
+            return summary
+        result = sweep_stage.results[0]
         if result.outcome == "infrastructure_error":
             save("sweep_infrastructure_error")
             return summary
@@ -112,12 +185,15 @@ def run_session(
 
         replay_outcomes = []
         for replay_index in range(1, 6):
-            replay = launch(
+            replay_stage = launch(
                 "replay-{}".format(replay_index), episode_indices=(0,), side=side
             )
-            if replay is None:
+            if replay_stage is None:
                 return summary
-            replay_result = replay[0]
+            if replay_stage.infrastructure_error is not None:
+                save("replay_infrastructure_error")
+                return summary
+            replay_result = replay_stage.results[0]
             replay_outcomes.append(replay_result.outcome)
             summary["completed"]["replay_outcomes"] = replay_outcomes
             if replay_result.outcome == "infrastructure_error":

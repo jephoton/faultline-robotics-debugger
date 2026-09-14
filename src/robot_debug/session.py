@@ -78,10 +78,14 @@ def should_launch_next(elapsed_seconds: float, launch_cutoff_seconds: float) -> 
 
 
 def is_reproducible(outcomes: Sequence[str], required: int = 4) -> bool:
-    """Return whether valid replay outcomes meet the policy-failure threshold."""
+    """Apply the four-of-five gate to five valid completed replay outcomes."""
 
-    if "infrastructure_error" in outcomes:
-        raise ValueError("infrastructure errors invalidate reproducibility")
+    valid_outcomes = {"policy_failure", "success"}
+    if len(outcomes) != 5:
+        raise ValueError("reproducibility requires exactly five replay outcomes")
+    unknown_outcomes = set(outcomes) - valid_outcomes
+    if unknown_outcomes:
+        raise ValueError("replay outcomes must be completed policy results")
     return outcomes.count("policy_failure") >= required
 
 

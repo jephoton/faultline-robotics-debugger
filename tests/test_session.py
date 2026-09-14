@@ -1,8 +1,10 @@
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from robot_debug.session import (
     classify_aggregate,
@@ -14,6 +16,7 @@ from robot_debug.session import (
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "run_failure_search.py"
 SPEC = importlib.util.spec_from_file_location("run_failure_search", SCRIPT_PATH)
 run_failure_search = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = run_failure_search
 SPEC.loader.exec_module(run_failure_search)
 
 
@@ -92,6 +95,17 @@ class AggregateClassificationTests(unittest.TestCase):
         self.assertFalse(is_reproducible(["policy_failure"] * 3 + ["success"] * 2))
         with self.assertRaises(ValueError):
             is_reproducible(["policy_failure", "infrastructure_error"])
+        with self.assertRaises(ValueError):
+            is_reproducible(["policy_failure"] * 4)
+        with self.assertRaises(ValueError):
+            is_reproducible(["policy_failure"] * 4 + ["unknown"])
+
+
+class RunnerResponse:
+    def __init__(self, aggregate=None, *, returncode=0, aggregate_text=None):
+        self.aggregate = aggregate
+        self.returncode = returncode
+        self.aggregate_text = aggregate_text
 
 
 class FakeRunner:
@@ -111,13 +125,22 @@ class FakeRunner:
             raise AssertionError("generated config omitted output_dir")
         output_dir.mkdir(parents=True, exist_ok=True)
         response = self.responses.pop(0)
-        if isinstance(response, list):
-            aggregate = {"tasks": [{"episodes": response}]}
+        if isinstance(response, RunnerResponse):
+            aggregate = response.aggregate
+            returncode = response.returncode
+            aggregate_text = response.aggregate_text
         else:
             aggregate = response
-        (output_dir / "fake_aggregate.json").write_text(
-            json.dumps(aggregate), encoding="utf-8"
-        )
+            returncode = 0
+            aggregate_text = None
+        if isinstance(aggregate, list):
+            aggregate = {"tasks": [{"episodes": aggregate}]}
+        if aggregate is not None or aggregate_text is not None:
+            (output_dir / "fake_aggregate.json").write_text(
+                aggregate_text if aggregate_text is not None else json.dumps(aggregate),
+                encoding="utf-8",
+            )
+        return SimpleNamespace(returncode=returncode)
 
 
 class Clock:
@@ -167,14 +190,33 @@ class SessionDriverTests(unittest.TestCase):
         self.assertEqual(len(runner.commands), 7)
         self.assertEqual(summary["completed"]["nominal_successes"], 20)
         self.assertEqual(
-            [item[0] for item in summary["completed"]["stages"]],
+            [item["stage"] for item in summary["completed"]["stages"]],
             ["nominal", "sweep-0.25", "sweep-0.30", "sweep-0.35", "sweep-0.40", "sweep-0.45", "sweep-0.50"],
         )
+        for command, cwd, check in runner.commands:
+            self.assertEqual(command[:3], ["vla-eval", "run", "--config"])
+            self.assertEqual(cwd, self.upstream.resolve())
+            self.assertFalse(check)
         session_dir = self.results / "first-failure-search"
         self.assertTrue((session_dir / "session_summary.json").is_file())
         nominal_config = (session_dir / "configs" / "nominal.yaml").read_text(encoding="utf-8")
         self.assertIn("episodes_per_task: 20", nominal_config)
         self.assertIn("episode_indices: [0, 1, 2", nominal_config)
+        for side in run_failure_search.SWEEP_SIDES:
+            config = (session_dir / "configs" / "sweep-{:.2f}.yaml".format(side)).read_text(
+                encoding="utf-8"
+            )
+            offset = (1.0 - side) / 2.0
+            self.assertIn("seed: 7", config)
+            self.assertIn("env_seed: 7", config)
+            self.assertIn("task_ids: [0]", config)
+            self.assertIn("episode_indices: [0]", config)
+            self.assertIn("x: {:.6f}".format(offset), config)
+            self.assertIn("y: {:.6f}".format(offset), config)
+            self.assertIn("width: {:.6f}".format(side), config)
+            self.assertIn("height: {:.6f}".format(side), config)
+            self.assertIn("color: [0, 0, 0]", config)
+            self.assertIn("opacity: 1.0", config)
 
     def test_first_failure_replays_five_times_and_accepts_four_policy_failures(self):
         nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
@@ -191,6 +233,17 @@ class SessionDriverTests(unittest.TestCase):
         self.assertEqual(len(runner.commands), 8)
         self.assertTrue(summary["reproducible"])
         self.assertEqual(summary["completed"]["replay_outcomes"].count("policy_failure"), 4)
+        session_dir = self.results / "first-failure-search"
+        expected = self._normalise_config(
+            (session_dir / "configs" / "sweep-0.30.yaml").read_text(encoding="utf-8")
+        )
+        for index in range(1, 6):
+            replay = self._normalise_config(
+                (session_dir / "configs" / "replay-{}.yaml".format(index)).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(replay, expected)
 
     def test_nominal_infrastructure_error_stops_session(self):
         nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
@@ -219,6 +272,58 @@ class SessionDriverTests(unittest.TestCase):
         self.assertEqual(runner.commands, [])
         self.assertTrue((self.results / "first-failure-search" / "session_summary.json").is_file())
 
+    def test_cutoff_after_nominal_preserves_success_count_in_summary(self):
+        nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
+        summary, runner = self.run_driver(
+            [nominal], clock=Clock(0, 0, 0, 0, 1, 1), cutoff=1
+        )
+
+        self.assertEqual(summary["stop_reason"], "launch_cutoff_reached")
+        self.assertEqual(len(runner.commands), 1)
+        persisted = json.loads(
+            (self.results / "first-failure-search" / "session_summary.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(persisted["completed"]["nominal_successes"], 20)
+
+    def test_invalid_nominal_episode_indices_stop_as_invalid_evidence(self):
+        nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
+        nominal[-1]["episode_idx"] = 18
+
+        summary, runner = self.run_driver([nominal])
+
+        self.assertEqual(summary["stop_reason"], "nominal_invalid_evidence")
+        self.assertEqual(len(runner.commands), 1)
+        self.assertEqual(summary["completed"]["nominal_successes"], 20)
+
+    def test_evaluator_and_aggregate_failures_become_durable_infrastructure_evidence(self):
+        invalid_episode = single_episode(success=True)
+        del invalid_episode["steps"]
+        classifier_failure = [invalid_episode] + [
+            single_episode(success=True, episode_index=index) for index in range(1, 20)
+        ]
+        cases = {
+            "nonzero": RunnerResponse(aggregate_with_episode(), returncode=9),
+            "missing": RunnerResponse(),
+            "malformed": RunnerResponse(aggregate_text="{not json"),
+            "classification": RunnerResponse(classifier_failure),
+        }
+
+        for name, response in cases.items():
+            with self.subTest(name=name):
+                self.results = self.root / name / "results"
+                summary, runner = self.run_driver([response])
+
+                self.assertEqual(summary["stop_reason"], "nominal_infrastructure_error")
+                self.assertEqual(len(runner.commands), 1)
+                stage = summary["completed"]["stages"][0]
+                self.assertEqual(stage["status"], "infrastructure_error")
+                self.assertTrue(stage["infrastructure_error"])
+                self.assertTrue(
+                    (self.results / "first-failure-search" / "session_summary.json").is_file()
+                )
+
     def test_rejects_nonempty_session_output(self):
         session_dir = self.results / "first-failure-search"
         session_dir.mkdir(parents=True)
@@ -232,6 +337,16 @@ class SessionDriverTests(unittest.TestCase):
                 command_runner=FakeRunner([]),
                 monotonic_clock=Clock(0),
             )
+
+    @staticmethod
+    def _normalise_config(config):
+        return "\n".join(
+            line
+            for line in config.splitlines()
+            if not line.startswith("# Generated")
+            and not line.startswith("output_dir: ")
+            and not line.startswith("  - name: ")
+        )
 
 
 if __name__ == "__main__":
