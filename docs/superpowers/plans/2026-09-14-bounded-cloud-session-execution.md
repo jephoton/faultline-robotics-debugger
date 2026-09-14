@@ -10,6 +10,12 @@
 > evaluation session. Keep its 26-minute launch cutoff and 30-minute hard stop.
 > Use the current-session TCP/22 `/32` rule and the dedicated WSL key
 > `~/.ssh/nebius_robot_debug_2026`.
+>
+> **Source-layout amendment:** The VM's pre-existing project directory is not
+> a Git checkout. Clone the private bundle into a fresh per-session directory;
+> do not alter that directory. A short failed transfer attempt consumed part of
+> the separate US$1.10 evaluation authorization, so the retry has a 28-minute
+> hard stop and a 25-minute new-launch cutoff.
 
 **Architecture:** Repair one discovered mismatch between the generated YAML and the pinned evaluator contract, then perform a read-only provider preflight. A single execution owner controls VM lifecycle, the monotonic deadlines, SSH, the evaluator, artifact copying, and shutdown. Independent agents may inspect the upstream contract and validate copied evidence, but they do not mutate the cloud session.
 
@@ -466,7 +472,7 @@ PY
 ```
 
 Verify SSH with the candidate key. If it is accepted, transfer the ignored Git
-bundle, fetch it into the existing checkout, and detach at its recorded HEAD:
+bundle, clone it into a fresh session checkout, and detach at its recorded HEAD:
 
 ```bash
 SSH_KEY="$HOME/.ssh/nebius_robot_debug_2026"
@@ -476,7 +482,7 @@ scp -o IdentitiesOnly=yes -i "$SSH_KEY" \
   /mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon/artifacts/first-failure-search.bundle \
   "robot@${NB_VM_HOST}:/home/robot/first-failure-search.bundle"
 ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
-  'cd /home/robot/nebius-nvidia-hackathon && git fetch /home/robot/first-failure-search.bundle HEAD && git switch --detach FETCH_HEAD'
+  'git clone /home/robot/first-failure-search.bundle /home/robot/first-failure-search-session && git -C /home/robot/first-failure-search-session switch --detach HEAD'
 ```
 
 If the key is not authorized or the workstation `/32` changed, update only the

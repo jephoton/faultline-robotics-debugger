@@ -48,6 +48,7 @@ other failure modes.
 | New-launch cutoff | 26 minutes from issuing VM start (1560 seconds) |
 | Hard spending cap | **US$2 aggregate** for the aborted boot plus exactly one retry; no third billable session |
 | Evaluation-session cap | **US$1.10**, explicitly approved after the separate connectivity probe passed |
+| Remaining retry boundary | 28 minutes hard stop; **US$0.8984297** estimated maximum including GST |
 | Nebius CLI | 0.12.275, authenticated locally in WSL2 |
 | Region / platform / preset | `eu-north1` / `gpu-l40s-a` / `1gpu-16vcpu-64gb` |
 | Live compute rate, pre-tax | US$1.7468/hour: US$1.35 GPU + 16 × US$0.012 vCPU + 64 × US$0.0032 GiB RAM |
@@ -131,6 +132,15 @@ found the VM `STOPPED` and the temporary rule absent.
 Connectivity debugging is complete. Jethro explicitly approved a separate
 US$1.10 cap for this unchanged evaluation session. The session may now start
 only after its live preflight gates pass.
+
+The first evaluation start after that approval also stopped before runtime
+validation: SSH and source-bundle transfer succeeded, but the existing
+`/home/robot/nebius-nvidia-hackathon` directory is not a Git checkout, so the
+operator's `git fetch` command failed. No model server or episode started. The
+retry clones the verified bundle into a fresh per-session directory rather than
+altering that existing directory. Its hard stop is reduced to 28 minutes,
+giving an estimated US$0.8984297 retry maximum and preserving room for the
+short source-layout failure within the approved US$1.10 cap.
 
 Permitted completed-run interpretations are limited to one of:
 
