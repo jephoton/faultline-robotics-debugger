@@ -332,8 +332,10 @@ $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 git diff --check
 git status --short
 git check-ignore artifacts results
-$sshKey = Join-Path $env:USERPROFILE '.ssh\id_ed25519'
-if (-not (Test-Path -LiteralPath $sshKey -PathType Leaf)) { throw 'SSH key is unavailable' }
+$wsl = "$env:WINDIR\System32\wsl.exe"
+& $wsl -d Ubuntu -- bash --noprofile --norc -c \
+  'test -r "$HOME/.ssh/nebius_robot_debug_2026" && test "$(stat -c %a "$HOME/.ssh/nebius_robot_debug_2026")" = 600'
+if ($LASTEXITCODE -ne 0) { throw 'Dedicated Nebius SSH key is unavailable or has unsafe permissions' }
 ```
 
 Expected: tests pass, source is clean, artifact destinations are ignored, and
@@ -460,7 +462,7 @@ Verify SSH with the candidate key. If it is accepted, transfer the ignored Git
 bundle, fetch it into the existing checkout, and detach at its recorded HEAD:
 
 ```bash
-SSH_KEY=/mnt/c/Users/Jethro/.ssh/id_ed25519
+SSH_KEY="$HOME/.ssh/nebius_robot_debug_2026"
 ssh -o IdentitiesOnly=yes -o BatchMode=yes -i "$SSH_KEY" \
   "robot@${NB_VM_HOST}" true
 scp -o IdentitiesOnly=yes -i "$SSH_KEY" \

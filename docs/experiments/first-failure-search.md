@@ -109,10 +109,22 @@ Provider billing did not expose an isolated cost for either attempt at stop
 time, so no actual cost is recorded. The conservative two-full-session bound
 remains US$1.9252064; it is a cap calculation, not a measured charge.
 
-**Next decision (Red):** repair and prove the SSH/VM access path with a
-non-evaluation connectivity check, then authorize a new spending cap before a
-third billable session. Reuse the identical nominal/sweep/replay design only
-after that gate passes; do not count either launch as a policy result.
+Follow-up read-only diagnosis established both causes. Nebius serial logs show
+that cloud-init completed in 13--14 seconds and `ssh.socket` listened on both
+boots, then closed normally during shutdown. The attached security group is the
+group containing the TCP/22 rule, the subnet uses provider-default routing, and
+the public address is dynamic. The current WSL egress address is outside the
+rule's stale `/32`, which explains the TCP timeout. Separately, the execution
+plan selected `/mnt/c/Users/Jethro/.ssh/id_ed25519`; that key differs from the
+dedicated `~/.ssh/nebius_robot_debug_2026` key injected by cloud-init, and WSL
+rejects the Windows-mounted private key's mode. The dedicated key has mode 600
+and matches cloud-init.
+
+**Next decision (Red):** run the five-minute, non-evaluation connectivity probe
+in `docs/superpowers/plans/2026-09-14-connectivity-probe.md`, then authorize a
+separate evaluation cap only after the access gate passes. Reuse the identical
+nominal/sweep/replay design after that gate; neither launch above is a policy
+result.
 
 Permitted completed-run interpretations are limited to one of:
 
