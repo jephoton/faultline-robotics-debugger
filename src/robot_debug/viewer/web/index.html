@@ -11,7 +11,7 @@
   <a class="skip-link" href="#evidence">Skip to evidence</a>
   <header class="masthead">
     <div><p class="eyebrow">PHYSICAL AI / FAILURE FORENSICS</p><h1>Robot Debug Console</h1></div>
-    <div id="connection-status" role="status" aria-live="polite">INDEXING</div>
+    <div id="connection-status" role="status" aria-live="polite">LOADING EXPERIMENT EVIDENCE…</div>
   </header>
   <div class="workspace">
     <nav class="run-rail" aria-label="Experiment episodes">
@@ -22,24 +22,35 @@
       <ol id="run-list"></ol>
     </nav>
     <main id="evidence" tabindex="-1">
+      <section id="demo-guide" aria-label="Demo workflow">
+        <p class="eyebrow">QUICK START</p>
+        <ol>
+          <li><strong>01</strong> Select reference</li>
+          <li><strong>02</strong> Compare perturbation</li>
+          <li><strong>03</strong> Inspect result</li>
+        </ol>
+      </section>
+      <section id="comparison-conclusion" aria-live="polite">Loading experiment evidence…</section>
       <section id="summary-strip" aria-label="Selected episode summary">NO EVIDENCE</section>
       <section class="comparison-deck" aria-label="Synchronized episode comparison">
         <article class="video-channel" data-channel="primary">
+          <p id="primary-role" class="channel-role">PRIMARY EVIDENCE</p>
           <label for="primary-select">Primary evidence</label><select id="primary-select"></select>
           <video id="primary-video" controls preload="metadata"></video>
           <p id="primary-empty">Select an episode</p>
         </article>
         <article class="video-channel" data-channel="comparison">
+          <p id="comparison-role" class="channel-role">COMPARISON EVIDENCE</p>
           <label for="comparison-select">Comparison evidence</label><select id="comparison-select"></select>
           <video id="comparison-video" controls preload="metadata"></video>
           <p id="comparison-empty">Select a comparison</p>
         </article>
       </section>
       <section class="transport" aria-label="Linked playback controls">
-        <button id="play-pair" type="button">Play pair</button>
-        <button id="pause-pair" type="button">Pause pair</button>
-        <button id="align-pair" type="button">Align starts</button>
-        <label><input id="link-playback" type="checkbox" checked> Link playback</label>
+        <button id="play-pair" type="button">Play both</button>
+        <button id="pause-pair" type="button">Pause both</button>
+        <button id="align-pair" type="button">Restart both</button>
+        <label><input id="link-playback" type="checkbox" checked> Link playback <span id="link-state">LINKED</span></label>
         <label for="playback-rate">Playback speed</label>
         <select id="playback-rate"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
         <p>Timestamp-aligned comparison; trajectories are not assumed identical.</p>

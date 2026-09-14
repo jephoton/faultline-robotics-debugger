@@ -13,6 +13,28 @@ const formatSeconds = (value) => `${Number(value || 0).toFixed(2)} s`;
 function setText(element, value) { element.textContent = value == null ? "—" : String(value); }
 function showNonFatalError(error) { setText(byId("notices"), error.message || error); }
 function showFatalError(error) { setText(byId("connection-status"), "UNAVAILABLE"); showNonFatalError(error); }
+function outcomeLabel(episode) { return episode ? outcomeLabels[episode.outcome] : "NO EVIDENCE"; }
+function perturbationArea(episode) {
+  const fault = episode && episode.perturbation;
+  return fault && fault.enabled ? Number(fault.width || 0) * Number(fault.height || 0) * 100 : null;
+}
+
+function renderComparisonStory(primary, comparison) {
+  const primaryArea = perturbationArea(primary);
+  const comparisonArea = perturbationArea(comparison);
+  const perturbedArea = primaryArea == null ? comparisonArea : primaryArea;
+  const suffix = perturbedArea == null ? "" : ` at ${perturbedArea.toFixed(2)}% image occlusion`;
+  const displayed = comparison || primary;
+  const policyNote = displayed && displayed.outcome === "infrastructure_error" ? " / POLICY NOT EVALUATED" : "";
+  setText(byId("comparison-conclusion"), primary && comparison
+    ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${policyNote}`
+    : primary ? "Add a second episode to enable comparison" : "No experiment evidence found");
+  setText(byId("primary-role"), primary && !primary.perturbation.enabled
+    ? "REFERENCE / NOMINAL" : "PRIMARY / INVESTIGATION");
+  setText(byId("comparison-role"), comparison && comparison.perturbation.enabled
+    ? "INVESTIGATION / PERTURBED" : "COMPARISON / REFERENCE");
+  byId("comparison-conclusion").dataset.outcome = displayed ? displayed.outcome : "";
+}
 
 function defaultComparison() {
   const primary = episodeById(state.primaryId);
@@ -76,6 +98,10 @@ function renderDiagnostics(episode) {
     perturbation: episode.perturbation.enabled ? episode.perturbation : "NOMINAL / NO FAULT",
     provenance: episode.provenance }, null, 2);
   aside.append(title, detail);
+  if (episode.outcome === "infrastructure_error") {
+    const status = document.createElement("p"); status.className = "failure-detail";
+    status.textContent = "INFRA ERROR — POLICY NOT EVALUATED"; aside.append(status);
+  }
   if (episode.failure_detail) {
     const error = document.createElement("pre"); error.className = "failure-detail";
     error.textContent = episode.failure_detail; aside.append(error);
@@ -92,7 +118,7 @@ function renderRunList() {
       const item = document.createElement("li"); const button = document.createElement("button");
       const fault = episode.perturbation;
       const area = fault.enabled ? `${((fault.width || 0) * (fault.height || 0) * 100).toFixed(2)}% MASK` : "NOMINAL";
-      button.type = "button"; button.dataset.episodeId = episode.episode_id;
+      button.type = "button"; button.dataset.episodeId = episode.episode_id; button.dataset.outcome = episode.outcome;
       button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}`;
       button.addEventListener("click", () => { state.primaryId = episode.episode_id; render(); });
       item.append(button); list.append(item);
@@ -112,6 +138,8 @@ function render() {
   renderRunList();
   const primary = episodeById(state.primaryId);
   setText(byId("summary-strip"), primary ? `${primary.instruction} / ${outcomeLabels[primary.outcome]} / ${primary.steps} STEPS / ${formatSeconds(primary.elapsed_seconds)} / SEED ${primary.seed}` : "NO EVIDENCE — copy experiment artifacts into the configured directory");
+  const comparison = episodeById(state.comparisonId);
+  renderComparisonStory(primary, comparison);
   renderChannel("primary", state.primaryId); renderChannel("comparison", state.comparisonId); renderDiagnostics(primary);
   setText(byId("notices"), state.warnings.join(" · "));
   if (primary) refreshTrace(primary.episode_id).catch(showNonFatalError); else drawTimeline([]);
@@ -163,7 +191,10 @@ const primaryVideo = byId("primary-video"); const comparisonVideo = byId("compar
 byId("play-pair").addEventListener("click", () => Promise.all(videos.filter((video) => video.src).map((video) => video.play())).catch(showNonFatalError));
 byId("pause-pair").addEventListener("click", () => videos.forEach((video) => video.pause()));
 byId("align-pair").addEventListener("click", () => videos.forEach((video) => { video.currentTime = 0; }));
-byId("link-playback").addEventListener("change", (event) => { state.linked = event.target.checked; });
+byId("link-playback").addEventListener("change", (event) => {
+  state.linked = event.target.checked;
+  setText(byId("link-state"), state.linked ? "LINKED" : "UNLINKED");
+});
 byId("playback-rate").addEventListener("change", (event) => videos.forEach((video) => { video.playbackRate = Number(event.target.value); }));
 byId("outcome-filter").addEventListener("change", render);
 ["primary", "comparison"].forEach((channel) => byId(`${channel}-select`).addEventListener("change", (event) => { state[channel === "primary" ? "primaryId" : "comparisonId"] = event.target.value; render(); }));

@@ -94,6 +94,14 @@ class ViewerServerTests(unittest.TestCase):
         self.assertEqual(app_status, 200)
         self.assertEqual(app_headers["Content-Type"], "text/javascript; charset=utf-8")
         self.assertIn("refreshCatalog", app_body.decode("utf-8"))
+        for identifier in (
+            'id="demo-guide"',
+            'id="comparison-conclusion"',
+            'id="primary-role"',
+            'id="comparison-role"',
+            'id="link-state"',
+        ):
+            self.assertIn(identifier, page)
         for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
             self.assertIn(landmark, page)
 
