@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -99,6 +101,38 @@ class AggregateClassificationTests(unittest.TestCase):
             is_reproducible(["policy_failure"] * 4)
         with self.assertRaises(ValueError):
             is_reproducible(["policy_failure"] * 4 + ["unknown"])
+
+    def test_rejects_nonfinite_or_negative_timing_and_cutoff_values(self):
+        for value in (float("nan"), float("inf"), -0.1):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    should_launch_next(value, 1560)
+                with self.assertRaises(ValueError):
+                    should_launch_next(0, value)
+
+        for field, value in (("steps", -1), ("elapsed_sec", float("nan"))):
+            with self.subTest(field=field):
+                aggregate = aggregate_with_episode()
+                aggregate["tasks"][0]["episodes"][0][field] = value
+                with self.assertRaises(ValueError):
+                    classify_aggregate(aggregate)
+
+
+class SourceTreeCliTests(unittest.TestCase):
+    def test_help_runs_without_pythonpath(self):
+        environment = dict(os.environ)
+        environment.pop("PYTHONPATH", None)
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--help"],
+            cwd=str(SCRIPT_PATH.parents[1]),
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--upstream-root", completed.stdout)
 
 
 class RunnerResponse:
@@ -265,6 +299,32 @@ class SessionDriverTests(unittest.TestCase):
         self.assertEqual(summary["stop_reason"], "sweep_infrastructure_error")
         self.assertEqual(len(runner.commands), 2)
 
+    def test_wrong_sweep_episode_index_stops_as_invalid_evidence(self):
+        nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
+
+        summary, runner = self.run_driver(
+            [nominal, aggregate_with_episode(success=True, episode_index=1)]
+        )
+
+        self.assertEqual(summary["stop_reason"], "sweep_invalid_evidence")
+        self.assertEqual(len(runner.commands), 2)
+        self.assertEqual(summary["completed"]["stages"][-1]["status"], "invalid_evidence")
+
+    def test_wrong_replay_episode_index_stops_as_invalid_evidence(self):
+        nominal = [single_episode(success=True, episode_index=index) for index in range(20)]
+
+        summary, runner = self.run_driver(
+            [
+                nominal,
+                aggregate_with_episode(success=False),
+                aggregate_with_episode(success=False, episode_index=1),
+            ]
+        )
+
+        self.assertEqual(summary["stop_reason"], "replay_invalid_evidence")
+        self.assertEqual(len(runner.commands), 3)
+        self.assertEqual(summary["completed"]["stages"][-1]["status"], "invalid_evidence")
+
     def test_cutoff_before_next_launch_writes_summary(self):
         summary, runner = self.run_driver([], clock=Clock(0, 1560, 1560), cutoff=1560)
 
@@ -337,6 +397,52 @@ class SessionDriverTests(unittest.TestCase):
                 command_runner=FakeRunner([]),
                 monotonic_clock=Clock(0),
             )
+
+    def test_rejects_symlinked_session_output(self):
+        self.results.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        session_dir = self.results / "first-failure-search"
+        try:
+            session_dir.symlink_to(outside, target_is_directory=True)
+        except OSError as error:
+            self.skipTest("symlink creation is unavailable: {}".format(error))
+
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            run_failure_search.run_session(
+                upstream_root=self.upstream,
+                project_root=self.project,
+                results_root=self.results,
+                command_runner=FakeRunner([]),
+                monotonic_clock=Clock(0),
+            )
+
+    def test_config_quotes_special_path_values(self):
+        project = self.root / "project: # [unsafe]"
+        output = self.root / "output: # [unsafe]"
+        config_path = self.root / "config.yaml"
+
+        run_failure_search._write_config(
+            config_path=config_path,
+            output_dir=output,
+            project_root=project,
+            stage_name="sweep-0.25",
+            episode_indices=(0,),
+            side=0.25,
+        )
+
+        config = config_path.read_text(encoding="utf-8")
+        volume = "{}:/workspace/robot-debug-src:ro".format(project / "src")
+        self.assertIn("    - {}".format(json.dumps(volume)), config)
+        self.assertIn("output_dir: {}".format(json.dumps(str(output))), config)
+
+    def test_atomic_json_rejects_nonfinite_values(self):
+        target = self.root / "summary.json"
+
+        with self.assertRaises(ValueError):
+            run_failure_search._atomic_write_json(target, {"elapsed_seconds": float("nan")})
+
+        self.assertFalse(target.exists())
 
     @staticmethod
     def _normalise_config(config):

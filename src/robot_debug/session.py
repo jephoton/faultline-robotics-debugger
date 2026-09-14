@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+import math
+from typing import Any, Mapping, Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -14,8 +15,8 @@ class EpisodeResult:
     steps: int
     elapsed_seconds: float
     episode_index: int
-    failure_reason: str | None
-    failure_detail: str | None
+    failure_reason: Optional[str]
+    failure_detail: Optional[str]
     outcome: str
 
 
@@ -40,11 +41,21 @@ def classify_aggregate(aggregate: Mapping[str, Any]) -> EpisodeResult:
         raise ValueError("episode metrics.success must be a bool")
 
     try:
-        steps = int(raw["steps"])
+        raw_steps = raw["steps"]
+        steps = int(raw_steps)
         elapsed_seconds = float(raw["elapsed_sec"])
         episode_index = int(raw.get("episode_idx", raw.get("episode_id")))
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError("episode is missing required timing or index fields") from error
+    if (
+        isinstance(raw_steps, bool)
+        or not math.isfinite(float(raw_steps))
+        or steps < 0
+        or steps != float(raw_steps)
+    ):
+        raise ValueError("episode steps must be a non-negative finite integer")
+    if not math.isfinite(elapsed_seconds) or elapsed_seconds < 0:
+        raise ValueError("episode elapsed_sec must be finite and non-negative")
 
     failure_reason = raw.get("failure_reason")
     failure_detail = raw.get("failure_detail")
@@ -74,7 +85,9 @@ def classify_aggregate(aggregate: Mapping[str, Any]) -> EpisodeResult:
 def should_launch_next(elapsed_seconds: float, launch_cutoff_seconds: float) -> bool:
     """Return whether a new evaluator process may start before the cutoff."""
 
-    return elapsed_seconds < launch_cutoff_seconds
+    elapsed = _finite_nonnegative(elapsed_seconds, "elapsed_seconds")
+    cutoff = _finite_nonnegative(launch_cutoff_seconds, "launch_cutoff_seconds")
+    return elapsed < cutoff
 
 
 def is_reproducible(outcomes: Sequence[str], required: int = 4) -> bool:
@@ -94,7 +107,7 @@ def _is_sequence(value: Any) -> bool:
 
 
 def _has_infrastructure_indication(
-    raw: Mapping[str, Any], failure_reason: str | None
+    raw: Mapping[str, Any], failure_reason: Optional[str]
 ) -> bool:
     if raw.get("exception") or raw.get("infrastructure_error"):
         return True
@@ -103,3 +116,12 @@ def _has_infrastructure_indication(
         "infrastructure",
         "infrastructure_error",
     }
+
+
+def _finite_nonnegative(value: float, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("{} must be a finite non-negative number".format(name))
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed < 0:
+        raise ValueError("{} must be a finite non-negative number".format(name))
+    return parsed

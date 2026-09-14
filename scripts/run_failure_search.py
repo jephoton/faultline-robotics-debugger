@@ -8,8 +8,14 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union
+
+
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
 
 from robot_debug.session import EpisodeResult, classify_aggregate, is_reproducible, should_launch_next
 
@@ -24,28 +30,30 @@ class StageResult:
     """The parsed evidence, or a durable infrastructure error, for one stage."""
 
     results: Sequence[EpisodeResult]
-    infrastructure_error: str | None = None
+    infrastructure_error: Optional[str] = None
+    invalid_evidence: Optional[str] = None
 
 
 def run_session(
     *,
-    upstream_root: Path | str,
-    project_root: Path | str,
-    results_root: Path | str,
+    upstream_root: Union[Path, str],
+    project_root: Union[Path, str],
+    results_root: Union[Path, str],
     launch_cutoff_seconds: float = 1560,
     command_runner: Callable[..., Any] = subprocess.run,
     monotonic_clock: Callable[[], float] = time.monotonic,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """Launch the bounded search and return its atomically persisted summary."""
 
     started_at = monotonic_clock()
+    should_launch_next(0.0, launch_cutoff_seconds)
     upstream_root = Path(upstream_root).resolve()
     project_root = Path(project_root).resolve()
     session_dir = _prepare_session_directory(Path(results_root).resolve())
     configs_dir = session_dir / "configs"
     configs_dir.mkdir()
 
-    summary: dict[str, Any] = {
+    summary: Dict[str, Any] = {
         "planned": {
             "nominal_episode_indices": list(NOMINAL_EPISODE_INDICES),
             "sweep_sides": list(SWEEP_SIDES),
@@ -62,15 +70,15 @@ def run_session(
     def elapsed() -> float:
         return monotonic_clock() - started_at
 
-    def save(stop_reason: str | None = None) -> None:
+    def save(stop_reason: Optional[str] = None) -> None:
         if stop_reason is not None:
             summary["stop_reason"] = stop_reason
         summary["elapsed_seconds"] = elapsed()
         _atomic_write_json(session_dir / "session_summary.json", summary)
 
     def launch(
-        stage_name: str, *, episode_indices: Sequence[int], side: float | None
-    ) -> StageResult | None:
+        stage_name: str, *, episode_indices: Sequence[int], side: Optional[float]
+    ) -> Optional[StageResult]:
         if not should_launch_next(elapsed(), launch_cutoff_seconds):
             save("launch_cutoff_reached")
             return None
@@ -115,6 +123,16 @@ def run_session(
                 ),
                 returncode=returncode,
             )
+        if not any(result.outcome == "infrastructure_error" for result in results):
+            actual_indices = tuple(result.episode_index for result in results)
+            if actual_indices != tuple(episode_indices):
+                return record_stage(
+                    stage_name,
+                    episode_indices,
+                    results,
+                    invalid_evidence="aggregate episode indices do not match stage plan",
+                    returncode=returncode,
+                )
         return record_stage(
             stage_name, episode_indices, results, returncode=returncode
         )
@@ -123,9 +141,10 @@ def run_session(
         stage_name: str,
         episode_indices: Sequence[int],
         results: Sequence[EpisodeResult],
-        infrastructure_error: str | None = None,
+        infrastructure_error: Optional[str] = None,
+        invalid_evidence: Optional[str] = None,
         *,
-        returncode: int | None = None,
+        returncode: Optional[int] = None,
     ) -> StageResult:
         summary["completed"]["stages"].append(
             {
@@ -135,9 +154,10 @@ def run_session(
                 "status": (
                     "infrastructure_error"
                     if infrastructure_error is not None
-                    else "completed"
+                    else "invalid_evidence" if invalid_evidence is not None else "completed"
                 ),
                 "infrastructure_error": infrastructure_error,
+                "invalid_evidence": invalid_evidence,
                 "returncode": returncode,
             }
         )
@@ -145,7 +165,11 @@ def run_session(
             {"stage": stage_name, **asdict(result)} for result in results
         )
         save()
-        return StageResult(results=results, infrastructure_error=infrastructure_error)
+        return StageResult(
+            results=results,
+            infrastructure_error=infrastructure_error,
+            invalid_evidence=invalid_evidence,
+        )
 
     nominal_stage = launch(
         "nominal", episode_indices=NOMINAL_EPISODE_INDICES, side=None
@@ -158,11 +182,11 @@ def run_session(
     nominal = nominal_stage.results
     summary["completed"]["nominal_successes"] = sum(result.success for result in nominal)
     save()
+    if nominal_stage.invalid_evidence is not None:
+        save("nominal_invalid_evidence")
+        return summary
     if any(result.outcome == "infrastructure_error" for result in nominal):
         save("nominal_infrastructure_error")
-        return summary
-    if {result.episode_index for result in nominal} != set(NOMINAL_EPISODE_INDICES):
-        save("nominal_invalid_evidence")
         return summary
     if summary["completed"]["nominal_successes"] < 16:
         save("nominal_success_gate_failed")
@@ -175,6 +199,9 @@ def run_session(
             return summary
         if sweep_stage.infrastructure_error is not None:
             save("sweep_infrastructure_error")
+            return summary
+        if sweep_stage.invalid_evidence is not None:
+            save("sweep_invalid_evidence")
             return summary
         result = sweep_stage.results[0]
         if result.outcome == "infrastructure_error":
@@ -192,6 +219,9 @@ def run_session(
                 return summary
             if replay_stage.infrastructure_error is not None:
                 save("replay_infrastructure_error")
+                return summary
+            if replay_stage.invalid_evidence is not None:
+                save("replay_invalid_evidence")
                 return summary
             replay_result = replay_stage.results[0]
             replay_outcomes.append(replay_result.outcome)
@@ -215,13 +245,21 @@ def run_session(
 
 def _prepare_session_directory(results_root: Path) -> Path:
     results_root.mkdir(parents=True, exist_ok=True)
-    session_dir = results_root / SESSION_DIRECTORY_NAME
+    resolved_results_root = results_root.resolve()
+    session_dir = resolved_results_root / SESSION_DIRECTORY_NAME
+    if session_dir.is_symlink():
+        raise ValueError("refusing symlinked session directory: {}".format(session_dir))
     if session_dir.exists():
         if not session_dir.is_dir() or any(session_dir.iterdir()):
             raise ValueError("refusing nonempty session directory: {}".format(session_dir))
     else:
         session_dir.mkdir()
-    return session_dir
+    resolved_session_dir = session_dir.resolve()
+    try:
+        resolved_session_dir.relative_to(resolved_results_root)
+    except ValueError as error:
+        raise ValueError("session directory escapes results root") from error
+    return resolved_session_dir
 
 
 def _load_stage_results(output_dir: Path, *, expected_count: int) -> list[EpisodeResult]:
@@ -245,7 +283,7 @@ def _write_config(
     project_root: Path,
     stage_name: str,
     episode_indices: Sequence[int],
-    side: float | None,
+    side: Optional[float],
 ) -> None:
     params = [
         "      suite: libero_object",
@@ -278,10 +316,12 @@ def _write_config(
             '  image: "ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0"',
             "  user: root",
             "  volumes:",
-            "    - {}:/workspace/robot-debug-src:ro".format(project_root / "src"),
+            "    - {}".format(
+                _yaml_scalar("{}:/workspace/robot-debug-src:ro".format(project_root / "src"))
+            ),
             "  env:",
             "    - PYTHONPATH=/workspace/robot-debug-src:/workspace/src",
-            "output_dir: {}".format(json.dumps(str(output_dir))),
+            "output_dir: {}".format(_yaml_scalar(output_dir)),
             "render: gpu",
             "benchmarks:",
             "  - name: {}".format(stage_name),
@@ -303,9 +343,17 @@ def _write_config(
     config_path.write_text(text, encoding="utf-8")
 
 
+def _yaml_scalar(value: Any) -> str:
+    """Return a JSON-style double-quoted scalar, valid in YAML 1.2."""
+
+    return json.dumps(str(value), ensure_ascii=True)
+
+
 def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
     temporary_path = path.with_name(path.name + ".tmp")
-    temporary_path.write_text(json.dumps(value, indent=2, sort_keys=True), encoding="utf-8")
+    temporary_path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, allow_nan=False), encoding="utf-8"
+    )
     os.replace(temporary_path, path)
 
 
