@@ -1,11 +1,13 @@
 # First bounded failure search
 
-**Status:** local preparation and cloud preflight completed on September 14.
-One infrastructure-only launch was stopped before SSH/model startup because
-the current provider status supplies its public IPv4 with a CIDR suffix, which
-the initial operator extractor rejected. The VM is confirmed stopped; no model
-server or evaluation episode started. This record is not evidence of a new
-robot-policy result.
+**Status:** infrastructure-invalidated on September 14. Two bounded launch
+attempts were stopped with no model server or evaluation episode started. The
+first stopped before SSH/model startup because the provider supplied its public
+IPv4 with a CIDR suffix, which the initial operator extractor rejected. The
+second accepted that format, but SSH never became reachable; the current WSL
+egress address was outside the original TCP/22 rule, and a temporary matching
+rule still did not establish a connection. The VM is confirmed stopped and the
+temporary rule is absent. This record is not evidence of a robot-policy result.
 
 ## Purpose and claim boundary
 
@@ -87,11 +89,30 @@ objects, then expose copied artifacts through the existing local viewer.
 
 ## Results
 
-Pending. The provider usage page has not yet isolated the cost of the aborted
-boot from earlier pilot usage. Jethro explicitly approved a US$2 aggregate cap
-for that aborted boot plus one fresh retry, whose conservative two-full-session
-bound is US$1.9252064. The updated execution plan accepts both CIDR-suffixed
-and bare public IPv4 status values.
+**Outcome: infrastructure invalidated the session.** The US$2 aggregate
+authorization covered the first aborted boot plus exactly one retry. Neither
+attempt reached remote source transfer, cached-runtime validation, model-server
+startup, nominal evaluation, sweep evaluation, or replay. There are no driver
+artifacts, raw aggregates, videos, episode timings, policy failures, or
+replay counts to interpret.
+
+The first attempt found and fixed an operator-only compatibility issue:
+Nebius returns the public IPv4 as a CIDR-suffixed interface, so the extractor
+now accepts both that form and a bare address. The second attempt isolated a
+different access-path issue: its VM was `RUNNING`, but TCP/22 did not accept a
+valid key. Read-only inspection showed that the current WSL egress `/32` was
+not in the existing SSH rule. A temporary, otherwise equivalent TCP/22 rule
+for that `/32` was created and verified absent after cleanup; SSH still did not
+respond. The existing rule was not deleted or broadened.
+
+Provider billing did not expose an isolated cost for either attempt at stop
+time, so no actual cost is recorded. The conservative two-full-session bound
+remains US$1.9252064; it is a cap calculation, not a measured charge.
+
+**Next decision (Red):** repair and prove the SSH/VM access path with a
+non-evaluation connectivity check, then authorize a new spending cap before a
+third billable session. Reuse the identical nominal/sweep/replay design only
+after that gate passes; do not count either launch as a policy result.
 
 Permitted completed-run interpretations are limited to one of:
 
