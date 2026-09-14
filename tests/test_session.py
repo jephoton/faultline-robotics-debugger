@@ -117,6 +117,19 @@ class AggregateClassificationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     classify_aggregate(aggregate)
 
+    def test_rejects_fractional_episode_index_and_overflowing_steps(self):
+        fractional_index = aggregate_with_episode(episode_index=0.5)
+
+        with self.assertRaises(ValueError):
+            classify_aggregate(fractional_index)
+
+        for steps in (float("inf"), 1e999):
+            with self.subTest(steps=steps):
+                aggregate = aggregate_with_episode()
+                aggregate["tasks"][0]["episodes"][0]["steps"] = steps
+                with self.assertRaises(ValueError):
+                    classify_aggregate(aggregate)
+
 
 class SourceTreeCliTests(unittest.TestCase):
     def test_help_runs_without_pythonpath(self):
@@ -367,6 +380,7 @@ class SessionDriverTests(unittest.TestCase):
             "nonzero": RunnerResponse(aggregate_with_episode(), returncode=9),
             "missing": RunnerResponse(),
             "malformed": RunnerResponse(aggregate_text="{not json"),
+            "nonstandard_constant": RunnerResponse(aggregate_text='{"value": NaN}'),
             "classification": RunnerResponse(classifier_failure),
         }
 

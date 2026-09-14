@@ -42,18 +42,14 @@ def classify_aggregate(aggregate: Mapping[str, Any]) -> EpisodeResult:
 
     try:
         raw_steps = raw["steps"]
-        steps = int(raw_steps)
         elapsed_seconds = float(raw["elapsed_sec"])
-        episode_index = int(raw.get("episode_idx", raw.get("episode_id")))
-    except (KeyError, TypeError, ValueError) as error:
+        raw_episode_index = raw.get("episode_idx", raw.get("episode_id"))
+    except (KeyError, TypeError, ValueError, OverflowError) as error:
         raise ValueError("episode is missing required timing or index fields") from error
-    if (
-        isinstance(raw_steps, bool)
-        or not math.isfinite(float(raw_steps))
-        or steps < 0
-        or steps != float(raw_steps)
-    ):
-        raise ValueError("episode steps must be a non-negative finite integer")
+    steps = _finite_nonnegative_integer(raw_steps, "episode steps")
+    episode_index = _finite_nonnegative_integer(
+        raw_episode_index, "episode index"
+    )
     if not math.isfinite(elapsed_seconds) or elapsed_seconds < 0:
         raise ValueError("episode elapsed_sec must be finite and non-negative")
 
@@ -125,3 +121,15 @@ def _finite_nonnegative(value: float, name: str) -> float:
     if not math.isfinite(parsed) or parsed < 0:
         raise ValueError("{} must be a finite non-negative number".format(name))
     return parsed
+
+
+def _finite_nonnegative_integer(value: Any, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError("{} must be a non-negative finite integer".format(name))
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError("{} must be a non-negative finite integer".format(name)) from error
+    if not math.isfinite(parsed) or parsed < 0 or not parsed.is_integer():
+        raise ValueError("{} must be a non-negative finite integer".format(name))
+    return int(parsed)

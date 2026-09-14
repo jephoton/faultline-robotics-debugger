@@ -266,7 +266,10 @@ def _load_stage_results(output_dir: Path, *, expected_count: int) -> list[Episod
     aggregate_paths = sorted(output_dir.rglob("*_aggregate.json"))
     if len(aggregate_paths) != 1:
         raise ValueError("expected exactly one aggregate in {}".format(output_dir))
-    aggregate = json.loads(aggregate_paths[0].read_text(encoding="utf-8"))
+    aggregate = json.loads(
+        aggregate_paths[0].read_text(encoding="utf-8"),
+        parse_constant=_reject_json_constant,
+    )
     tasks = aggregate.get("tasks") if isinstance(aggregate, Mapping) else None
     if not isinstance(tasks, list) or len(tasks) != 1 or not isinstance(tasks[0], Mapping):
         raise ValueError("aggregate must contain exactly one task")
@@ -274,6 +277,10 @@ def _load_stage_results(output_dir: Path, *, expected_count: int) -> list[Episod
     if not isinstance(episodes, list) or len(episodes) != expected_count:
         raise ValueError("aggregate episode count does not match stage plan")
     return [classify_aggregate({"tasks": [{"episodes": [raw]}]}) for raw in episodes]
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError("non-standard JSON constant: {}".format(value))
 
 
 def _write_config(
