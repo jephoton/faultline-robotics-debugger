@@ -8,6 +8,7 @@
   --cyan: #48d8e8;
   --success: #70e09a;
   --failure: #ff5d56;
+  --infrastructure: #b99ae8;
   --radius: 2px;
   --space-1: 0.375rem;
   --space-2: 0.75rem;
@@ -36,17 +37,30 @@ h1 { margin: var(--space-1) 0 0; font-size: clamp(1.5rem, 3vw, 2.4rem); }
 .rail-controls { display: grid; gap: var(--space-1); }
 #run-list { display: grid; gap: var(--space-2); padding: 0; list-style: none; }
 #run-list button { width: 100%; white-space: pre-line; text-align: left; font-size: .75rem; }
+#run-list button[data-outcome] { border-left: 3px solid var(--outcome); }
 #run-list button[aria-current="true"] { border-color: var(--cyan); box-shadow: inset 3px 0 var(--cyan); }
+[data-outcome="success"] { --outcome: var(--success); }
+[data-outcome="task_failure"] { --outcome: var(--failure); }
+[data-outcome="episode_timeout"] { --outcome: var(--amber); }
+[data-outcome="infrastructure_error"] { --outcome: var(--infrastructure); }
 main { min-width: 0; padding: var(--space-3); }
+#demo-guide, #comparison-conclusion { border: 1px solid var(--line); background: var(--panel); }
+#demo-guide { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
+#demo-guide ol { display: flex; gap: var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .76rem; }
+#demo-guide strong { color: var(--cyan); margin-right: var(--space-1); }
+#comparison-conclusion { margin-top: var(--space-2); padding: var(--space-2); border-left: 3px solid var(--outcome, var(--cyan)); color: var(--ink); font-family: "Arial Narrow", "Roboto Condensed", sans-serif; letter-spacing: .04em; text-transform: uppercase; }
 #summary-strip, .transport, .timeline-panel { border: 1px solid var(--line); background: var(--panel); padding: var(--space-2); }
-#summary-strip { color: var(--cyan); font-size: .82rem; }
+#summary-strip { margin-top: var(--space-2); color: var(--cyan); font-size: .82rem; }
 .comparison-deck { display: grid; grid-template-columns: 1.15fr .85fr; gap: var(--space-3); margin: var(--space-3) 0; }
 .video-channel { min-width: 0; border: 1px solid var(--line); padding: var(--space-2); }
+.channel-role { margin: 0 0 var(--space-1); color: var(--cyan); font-size: .7rem; letter-spacing: .1em; }
 .video-channel > label { display: block; color: var(--muted); margin-bottom: var(--space-1); font-size: .75rem; }
 .video-channel select { max-width: 100%; width: 100%; margin-bottom: var(--space-2); }
 video { width: 100%; min-height: 12rem; display: block; background: #000; }
 .video-channel p { color: var(--muted); min-height: 2rem; }
 .transport { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.transport label { display: inline-flex; align-items: center; gap: var(--space-1); }
+#link-state { color: var(--cyan); font-size: .7rem; letter-spacing: .08em; }
 .transport p { color: var(--muted); font-size: .72rem; margin: 0 0 0 auto; }
 .timeline-panel { margin-top: var(--space-3); }
 #timeline { display: block; width: 100%; min-height: 6rem; }
@@ -55,5 +69,5 @@ video { width: 100%; min-height: 12rem; display: block; background: #000; }
 pre { white-space: pre-wrap; font-size: .75rem; color: var(--muted); }
 .failure-detail { color: var(--failure); }
 @media (max-width: 1050px) { .workspace { grid-template-columns: 17rem minmax(0, 1fr); } #diagnostics { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } }
-@media (max-width: 768px) { .masthead { align-items: start; flex-direction: column; } .workspace { display: block; } .run-rail, #diagnostics { border: 0; border-bottom: 1px solid var(--line); } .comparison-deck { grid-template-columns: 1fr; } main { padding: var(--space-2); } .transport p { margin-left: 0; } }
+@media (max-width: 768px) { .masthead { align-items: start; flex-direction: column; } .workspace { display: block; } .run-rail, #diagnostics { border: 0; border-bottom: 1px solid var(--line); } .comparison-deck { grid-template-columns: 1fr; } #demo-guide { align-items: start; flex-direction: column; } #demo-guide ol { display: grid; gap: var(--space-1); } main { padding: var(--space-2); } .transport p { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
