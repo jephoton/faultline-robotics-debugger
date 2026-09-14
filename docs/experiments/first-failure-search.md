@@ -1,7 +1,8 @@
 # First bounded failure search
 
-**Status:** prepared locally; cloud preflight not yet completed. This record is
-not evidence of a new robot-policy result.
+**Status:** local preparation and cloud preflight completed on September 14;
+the bounded run has not yet started. This record is not evidence of a new
+robot-policy result.
 
 ## Purpose and claim boundary
 
@@ -15,7 +16,7 @@ other failure modes.
 
 | Item | Value |
 | --- | --- |
-| Driver integration commit | `201712c` (`merge: integrate bounded failure search driver`) |
+| Driver commit for this session | `93b9306` (`fix(search): align episode selection with harness`) |
 | Harness | `allenai/vla-evaluation-harness` at `35f1200eb15608aa898f727a3722f7eef889c6cd` |
 | Simulator image | `ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0` |
 | Policy checkpoint | `nvidia/gr00t17-lerobot-libero_object-640` at `1499db357f6ca3762b56c2e8c00b530eb9a09444` |
@@ -35,21 +36,28 @@ other failure modes.
 
 | Guard | Value |
 | --- | --- |
-| Account role | Initial US$25 account; pending live profile verification |
-| Existing VM | `robot-debug-pilot`; must be confirmed stopped before start |
+| Account role | Initial US$25 account; active card-funded balance verified |
+| Existing VM | `robot-debug-pilot`; verified stopped before start |
 | Worker shape | One L40S GPU, one active worker, sequential evaluation |
 | Session ceiling | 30 minutes from issuing VM start |
 | New-launch cutoff | 26 minutes from issuing VM start (1560 seconds) |
 | Hard spending cap | US$1 for this session |
-| Live complete-VM rate | Pending read-only provider check |
-| Live disk rate | Pending read-only provider check |
-| Balance / expiry | Pending read-only provider check |
-| Capacity / quota | Pending read-only provider check |
+| Nebius CLI | 0.12.275, authenticated locally in WSL2 |
+| Region / platform / preset | `eu-north1` / `gpu-l40s-a` / `1gpu-16vcpu-64gb` |
+| Live compute rate, pre-tax | US$1.7468/hour: US$1.35 GPU + 16 × US$0.012 vCPU + 64 × US$0.0032 GiB RAM |
+| Live Network SSD rate, pre-tax | US$0.000097222/GiB-hour; 200 GiB = US$0.0194444/hour |
+| 30-minute pre-tax maximum | US$0.8831222 |
+| Tax calculation | Singapore billing address; 9% GST applied to the provider's tax-exclusive list price |
+| Effective 30-minute maximum | **US$0.9626032**, below the US$1 cap |
+| Balance / expiry | US$22.38 active balance; card-funded balance is shown as active and no separately expiring credit is presented |
+| Capacity / quota | Fresh medium on-demand capacity for the exact preset (limit 32); matching compute L40S quota is not used |
 
-The historical planning estimate was US$1.7468 per running hour plus roughly
-US$0.0195 per disk-hour, or about US$0.88315 for thirty minutes. It is not an
-authoritative price and must be replaced or confirmed by the preflight check
-before a VM is started.
+The price list excludes discounts and taxes. The estimate uses the live
+provider rates above and Singapore's current 9% GST. It includes 30 minutes of
+the existing VM's GPU, CPU, RAM, and 200 GiB Network SSD allocation, but not
+new resources, workers, or large transfer/storage growth. The US$0.0373968
+margin is deliberately narrow: stop at the hard deadline and do not extend the
+session.
 
 ## Preconditions and evidence handling
 
