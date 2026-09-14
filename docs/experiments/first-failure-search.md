@@ -44,23 +44,26 @@ other failure modes.
 | Worker shape | One L40S GPU, one active worker, sequential evaluation |
 | Session ceiling | 30 minutes from issuing VM start |
 | New-launch cutoff | 26 minutes from issuing VM start (1560 seconds) |
-| Hard spending cap | US$1 for this session |
+| Hard spending cap | **US$2 aggregate** for the aborted boot plus exactly one retry; no third billable session |
 | Nebius CLI | 0.12.275, authenticated locally in WSL2 |
 | Region / platform / preset | `eu-north1` / `gpu-l40s-a` / `1gpu-16vcpu-64gb` |
 | Live compute rate, pre-tax | US$1.7468/hour: US$1.35 GPU + 16 × US$0.012 vCPU + 64 × US$0.0032 GiB RAM |
 | Live Network SSD rate, pre-tax | US$0.000097222/GiB-hour; 200 GiB = US$0.0194444/hour |
 | 30-minute pre-tax maximum | US$0.8831222 |
 | Tax calculation | Singapore billing address; 9% GST applied to the provider's tax-exclusive list price |
-| Effective 30-minute maximum | **US$0.9626032**, below the US$1 cap |
+| Effective 30-minute maximum | **US$0.9626032** for one full retry |
+| Conservative aggregate bound | **US$1.9252064** for two full 30-minute sessions, below the approved US$2 cap |
 | Balance / expiry | US$22.38 active balance; card-funded balance is shown as active and no separately expiring credit is presented |
 | Capacity / quota | Fresh medium on-demand capacity for the exact preset (limit 32); matching compute L40S quota is not used |
 
 The price list excludes discounts and taxes. The estimate uses the live
 provider rates above and Singapore's current 9% GST. It includes 30 minutes of
 the existing VM's GPU, CPU, RAM, and 200 GiB Network SSD allocation, but not
-new resources, workers, or large transfer/storage growth. The US$0.0373968
-margin is deliberately narrow: stop at the hard deadline and do not extend the
-session.
+new resources, workers, or large transfer/storage growth. Although the initial
+launch was stopped far earlier than its deadline, the provider has not isolated
+its cost. The approved cap therefore uses the conservative bound of two complete
+30-minute sessions (US$1.9252064), leaving US$0.0747936. Stop at the hard
+deadline and do not add a third billable session.
 
 ## Preconditions and evidence handling
 
@@ -85,10 +88,10 @@ objects, then expose copied artifacts through the existing local viewer.
 ## Results
 
 Pending. The provider usage page has not yet isolated the cost of the aborted
-boot from earlier pilot usage, so do not assume the original US$1 batch has its
-full US$0.9626032 run allowance remaining. The updated execution plan accepts
-both CIDR-suffixed and bare public IPv4 status values. A fresh paid retry needs
-an explicit remaining-budget decision before VM start.
+boot from earlier pilot usage. Jethro explicitly approved a US$2 aggregate cap
+for that aborted boot plus one fresh retry, whose conservative two-full-session
+bound is US$1.9252064. The updated execution plan accepts both CIDR-suffixed
+and bare public IPv4 status values.
 
 Permitted completed-run interpretations are limited to one of:
 

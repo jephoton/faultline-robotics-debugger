@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Validate and execute the accepted 20-episode nominal baseline, centered-occlusion sweep, and five-replay confirmation on the existing Nebius L40S VM within the US$1 session cap.
+**Goal:** Validate and execute the accepted 20-episode nominal baseline, centered-occlusion sweep, and five-replay confirmation on the existing Nebius L40S VM within the user-approved US$2 all-in cap for the aborted boot plus one retry.
 
 **Architecture:** Repair one discovered mismatch between the generated YAML and the pinned evaluator contract, then perform a read-only provider preflight. A single execution owner controls VM lifecycle, the monotonic deadlines, SSH, the evaluator, artifact copying, and shutdown. Independent agents may inspect the upstream contract and validate copied evidence, but they do not mutate the cloud session.
 
@@ -16,12 +16,15 @@ The experiment design is already accepted. Keep task 0, nominal episode
 indices 0–19, the 16/20 nominal gate, the centered opaque-black square side
 sequence `0.25, 0.30, 0.35, 0.40, 0.45, 0.50`, episode 0 with both seeds set
 to 7, five exact replays, the 4/5 reproducibility gate, one sequential worker,
-a 26-minute new-launch cutoff, a 30-minute hard stop, and a US$1 maximum.
+a 26-minute new-launch cutoff, a 30-minute hard stop, and a US$2 aggregate
+maximum covering the already-aborted boot plus exactly one retry. Do not add a
+third billable session.
 
 The session can produce at most 31 episodes. Infrastructure errors and invalid
 evidence do not count as policy failures. If the nominal gate fails, if model
 readiness takes more than eight minutes from VM start, or if the live maximum
-including applicable tax exceeds US$1, stop without expanding the experiment.
+including applicable tax exceeds the remaining US$2 aggregate boundary, stop
+without expanding the experiment.
 
 ## Evidence discovered while writing this plan
 
@@ -83,7 +86,8 @@ Autonomy classification:
 
 - **Green:** Tasks 1–3, local tests, read-only provider checks, evidence
   parsing, documentation, and viewer inspection.
-- **Amber:** Task 4 is authorized inside the accepted experiment and US$1 cap.
+- **Amber:** Task 4 is authorized inside the accepted experiment and US$2
+  aggregate cap (the aborted boot plus this one retry).
   The primary owner may execute it after every preflight gate passes.
 - **Red:** any new VM, second worker, different model/simulator, new
   perturbation family, changed failure/reproducibility definition, larger
@@ -312,10 +316,12 @@ disk_per_hour = 200 × network_SSD_per_GiB_month ÷ 730
 30_minute_max = 0.5 × (compute_per_hour + disk_per_hour) × applicable_tax_factor
 ```
 
-Proceed only when `30_minute_max <= US$1`, the available balance exceeds that
-maximum, and the credits remain valid through the session. Preserve exact
-numbers in the experiment record; keep account, tenant, project, and payment
-identifiers out of Git.
+Proceed only when the maximum for one 30-minute retry fits the available
+balance and the user-approved US$2 aggregate cap. The two-session conservative
+bound is `2 x 30_minute_max`; it must remain at or below US$2, because the
+provider has not isolated the much-shorter aborted boot's cost. Credits must
+remain valid through the session. Preserve exact numbers in the experiment
+record; keep account, tenant, project, and payment identifiers out of Git.
 
 - [ ] **Step 3: Verify local inputs**
 
@@ -685,7 +691,8 @@ Do not push or publish the result without Jethro's explicit instruction.
 
 - Generated YAML matches the pinned evaluator contract before cloud start.
 - The authenticated account, profile, project, VM state, capacity, quota,
-  balance, expiry, price, and effective US$1 maximum are verified.
+  balance, expiry, price, and the effective US$2 aggregate maximum are
+  verified.
 - Only the existing one-L40S VM runs, with one execution owner.
 - No new episode launches after 26 minutes and the VM is stopped by 30 minutes.
 - Raw evidence is copied before interpretation and independently recounted.
