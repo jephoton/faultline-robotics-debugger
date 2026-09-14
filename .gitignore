@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.worktrees/
 
 # Local credentials and service configuration
 .env
