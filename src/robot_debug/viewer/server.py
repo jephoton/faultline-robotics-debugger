@@ -82,8 +82,11 @@ def make_handler(
                 status = 206
 
             length = max(0, end - start + 1)
+            suffix = path.suffix.lower()
             content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            if path.suffix.lower() in {".html", ".css", ".js"}:
+            if suffix == ".js":
+                content_type = "text/javascript"
+            if suffix in {".html", ".css", ".js"}:
                 content_type += "; charset=utf-8"
             self.send_response(status)
             self.send_header("Content-Type", content_type)

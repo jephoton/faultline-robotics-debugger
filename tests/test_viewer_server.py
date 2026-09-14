@@ -6,7 +6,9 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from unittest.mock import patch
 
+import robot_debug.viewer.server as viewer_server
 from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.viewer.server import make_handler
 from tests.test_viewer_catalog import write_episode
@@ -104,6 +106,17 @@ class ViewerServerTests(unittest.TestCase):
             self.assertIn(identifier, page)
         for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
             self.assertIn(landmark, page)
+
+    def test_javascript_asset_uses_stable_content_type(self):
+        with patch.object(
+            viewer_server.mimetypes,
+            "guess_type",
+            return_value=("application/javascript", None),
+        ):
+            status, headers, _ = self.get("/app.js")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
 
 
 if __name__ == "__main__":
