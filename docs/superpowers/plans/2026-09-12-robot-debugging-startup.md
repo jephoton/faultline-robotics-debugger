@@ -8,9 +8,11 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** Planning only. No model has been downloaded, no robot experiment has run, and no cloud resource has been provisioned. This document gives executable discovery tasks first and a gated implementation roadmap afterward. Code-level implementation plans follow the compatibility experiment, when the actual APIs and constraints are known.
+**Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. A dependency-free, local read-only artifact viewer is now implemented at `src/robot_debug/viewer/`; its completed UX, packaging, and acceptance evidence are in `docs/superpowers/plans/2026-09-14-viewer-demo-clarity.md`. Existing nominal artifacts lack a video, so a future recorded baseline is needed to demonstrate linked baseline-versus-perturbation playback. **The immediate next step is the bounded US$1 combined cloud session defined under Task 5: finish the 20-episode nominal baseline, run the centered severity sweep, then replay the first apparent failure five times.** No failure has been discovered yet.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
+
+**Budget and account update (September 13):** The total intended Nebius-credit envelope is US$75: use the initial account's US$25 for the first baseline/integration work without deliberately wasting it, then use US$50 on the main account (US$25 initial balance plus US$25 promo) for perturbation, reduction, parallel-evaluation, and demo work. Nebius projects cannot move between tenants or regions, so this is an account/profile handoff using the same Git repository, not a project migration. The initial CLI-authenticated account is active and currently shows suitable `eu-north1` L40S capacity; its billing, live complete-VM price, quota, capacity, and balance/expiry must still be verified immediately before provisioning. Keep US$5--10 of the combined plan in reserve and treat the US$75 total as a hard ceiling unless Jethro explicitly changes it.
 
 ---
 
@@ -95,6 +97,8 @@ Only this plan and a root README are created during planning. The following are 
 | `src/robot_debug/search.py` | Budgeted random search first |
 | `src/robot_debug/reduce.py` | Remove or shrink changes while retesting failure |
 | `src/robot_debug/report.py` | Static report generation first |
+| `src/robot_debug/viewer/` | Implemented local read-only artifact viewer: run catalog, media/trace serving, paired comparison, diagnostics, and timeline |
+| `docs/superpowers/plans/2026-09-14-viewer-demo-clarity.md` | Completed viewer implementation and acceptance evidence, including current missing-baseline-video limitation |
 | `tests/test_records.py` | Round-trip configuration and duplicate-attempt handling |
 | `tests/test_perturb.py` | Bounds, nominal restoration, invalid configuration rejection |
 | `tests/test_reduce.py` | Reducer behavior using a deterministic toy failure function |
@@ -112,8 +116,8 @@ These are discovery and reproduction tasks. Their outputs determine the subseque
 
 **Output:** `docs/setup/local-environment.md`.
 
-- [ ] Read applicable `AGENTS.md` instructions in the project and target checkout locations.
-- [ ] Run these read-only checks from PowerShell and record the results:
+- [x] Read applicable `AGENTS.md` instructions in the project and target checkout locations.
+- [x] Run these read-only checks from PowerShell and record the results in `docs/setup/local-environment.md`:
 
 ```powershell
 & 'C:\Windows\System32\nvidia-smi.exe' --query-gpu=name,memory.total,driver_version --format=csv,noheader
@@ -123,9 +127,9 @@ These are discovery and reproduction tasks. Their outputs determine the subseque
 
 Expected: Ubuntu runs, available tools are identified, and free disk space is known. Missing tools are setup actions to record; they do not imply reinstalling WSL.
 
-- [ ] Check Docker using `docker version` from the Linux shell where it will be used. Success requires both client and server information. If only the client responds, resolve the engine or WSL integration first.
-- [ ] Verify GPU passthrough using the chosen runtime's documented diagnostic before attempting model installation.
-- [ ] Decide whether to retain the Windows checkout or create a separate Linux-filesystem development checkout. If creating one, transfer the uncommitted learning guide and plan deliberately; cloning GitHub alone currently omits them. Name one checkout as authoritative in the setup document.
+- [ ] Check Docker using `docker version` from the Linux shell where it will be used. Docker is not currently available in WSL, so cloud-host validation is still required.
+- [ ] Verify GPU passthrough using the chosen runtime's documented diagnostic before attempting model installation. WSL can see the GPU; Docker GPU support remains unverified.
+- [x] Decide whether to retain the Windows checkout or create a separate Linux-filesystem development checkout. The Windows checkout is authoritative; cloud execution will use its own pinned checkout.
 
 **Gate:** Linux commands run, storage is sufficient for the selected downloads, and the actual Docker/GPU state is documented. No model download is needed to pass the local discovery gate.
 
@@ -133,12 +137,12 @@ Expected: Ubuntu runs, available tools are identified, and free disk space is kn
 
 **Output:** `docs/experiments/stack-selection.md`.
 
-- [ ] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
-- [ ] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
-- [ ] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
-- [ ] Record the exact checkpoint, base-model dependencies, model licenses, access requirements, and download sizes. Confirm the user's account can access gated dependencies; do not accept terms on their behalf.
-- [ ] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with those actual supported fields. Resolve relative config inheritance rather than copying a broken `extends` reference.
-- [ ] Write the fully resolved server and experiment commands into the stack-selection document before any paid experiment.
+- [x] Inspect the upstream release and the GR00T adapter, benchmark configuration, and reproduction instructions linked above.
+- [x] Obtain a separate upstream checkout, then record `git rev-parse HEAD` and `git status --short` from it.
+- [x] Confirm the chosen revision includes the GR00T and LIBERO Object configuration files. Copying a configuration from a newer revision into an older runtime requires a separate compatibility check.
+- [x] Record the checkpoint, base-model dependencies, observed revisions, licence evidence, access requirements, and download-size constraints. Do not accept terms on the user's behalf. The live run exposed an unresolved transitive gated dependency; see `docs/setup/model-access.md`.
+- [x] Inspect the benchmark configuration schema and determine how to select one task, one episode, recording, seed, and episode horizon. Produce `configs/baseline.yaml` with actual supported fields.
+- [x] Write the server and experiment commands into the stack-selection document before any paid experiment.
 
 The upstream server command to validate in its own checkout is:
 
@@ -160,12 +164,12 @@ vla-eval run --config configs/benchmarks/libero/object.yaml
 
 **Output:** `docs/setup/cloud-pilot.md`.
 
-- [ ] Ask the user to configure cloud credentials or sign in locally when starting cloud setup. Cloud compute is a confirmed resource; inspect the actual account/project, credit balance and expiry, regions, GPU quotas, and allocation limits.
-- [ ] Select the smallest available resource that meets the model and simulator requirements with memory headroom. Measure peak usage during the pilot; do not assume the laptop's 4 GB is sufficient or that an expensive GPU is automatically suitable.
-- [ ] Calculate the pilot's expected cost from the live resource rate, maximum duration, storage, and other applicable charges. Obtain the user's spending limit before creating billable resources.
-- [ ] Set a maximum job duration and one active pilot worker. Verify the chosen service's minimum timeout; do not assume a five-minute job timeout is supported.
-- [ ] Configure persistent output storage and a model cache. Identify credentials separately from committed configuration. Use authenticated access or an SSH tunnel for a model server.
-- [ ] Document the exact stop/cancel action for the created resource and identify storage/IP resources that can persist after compute stops.
+- [x] Ask the user to configure cloud credentials or sign in locally when starting cloud setup. Local CLI authentication is complete; the initial account and its projects are active, and a read-only capacity check found the one-L40S pilot candidate available.
+- [x] Select a proposed smallest available resource that meets the model and simulator requirements with memory headroom. Read-only capacity evidence supports `eu-north1` `gpu-l40s-a` / `1gpu-16vcpu-64gb` (48 GB GPU memory); measure peak usage during the pilot before accepting it as the ongoing worker shape.
+- [x] Calculate a preflight cost estimate from the current public rate: US$1.7468 per running hour for the candidate, plus roughly US$0.47/day for a 200 GiB Network SSD. The proposed 8-hour pilot is about US$14.44 including one day of disk, within the user-confirmed US$20--25 initial-account allocation. Recheck live price and balance immediately before creation; this is not provisioning approval.
+- [x] Set a proposed maximum job duration and one active pilot worker: one regular VM, one worker, and an 8-hour runtime ceiling. A VM, unlike a Serverless AI job, has no assumed one-hour batch timeout to configure; do not start additional workers until the baseline is measured.
+- [x] Configure the proposed first-pilot persistence approach: keep the model cache and artifacts on a managed 200 GiB boot disk for no more than 24 hours, copy selected artifacts to the workstation, then delete the VM. The model server remains loopback-only. The remaining user security choice is temporary public SSH/scp access versus an isolated jump-host path.
+- [x] Document the exact teardown sequence: `nebius compute instance delete <instance-id>` deletes the managed boot disk; then list project disks to detect any separately created storage. No resources currently exist in the selected project.
 
 Nebius Jobs run containerized batch work; detailed creation and storage configuration are in the [job guide](https://docs.nebius.com/serverless/jobs/manage). Prefer one colocated inference/simulation pilot before splitting services.
 
@@ -175,12 +179,12 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 
 **Outputs:** `docs/experiments/first-baseline.md`, plus ignored videos and run records.
 
-- [ ] Start the model server using the pinned setup and wait for its documented readiness signal.
-- [ ] Run the single-task, single-episode configuration. Save logs and recording even if it fails.
+- [x] Start the model server using the pinned setup and wait for its documented readiness signal.
+- [x] Run the single-task, single-episode configuration. Save logs and recording even if it fails.
 - [ ] Watch the video. Check that the instruction, observed objects, robot movement, and success check agree.
 - [ ] If motion is nonsensical, check observation names, normalization, action convention, embodiment, and chunk buffering before blaming the policy.
-- [ ] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
-- [ ] Once a successful episode exists, replay its configuration and record whether the result repeats.
+- [x] Separate dependency errors, model failures, simulator crashes, and genuine completed task failures in the report.
+- [x] Once a successful episode exists, replay its configuration and record whether the result repeats.
 
 **Gate:** a visible successful task and replayable configuration. If this fails, continue debugging the baseline rather than adding perturbations.
 
@@ -192,11 +196,28 @@ Nebius Jobs run containerized batch work; detailed creation and storage configur
 - [ ] Record success, failure, timeout, infrastructure error, episode length, and wall-clock time separately.
 - [ ] Use at least 16 successes out of 20 as an engineering gate for a useful first task. Report the actual count; this threshold is a project choice, not a claim of general model capability.
 - [ ] If the gate fails, diagnose the setup. If choosing a different task, record the original results and the selection rule to avoid hiding unfavorable evidence.
-- [ ] Inspect the simulator API for camera pose or rendering changes. Choose **camera pose** first if the task remains observable within small documented bounds; otherwise use a supported lighting adjustment. Object placement is the second family only after validity checks work.
-- [ ] Document the exact reset/perturb/render sequence and a nominal-restoration check. Define a one-parameter sweep before adaptive search.
-- [ ] Save a concrete follow-on implementation plan using the inspected API. Its tests must include restoring the nominal scene and keeping infrastructure errors out of the policy-failure count.
+- [x] Choose the first perturbation surface with the user. The accepted first family is a normalized opaque rectangle on the global `agentview`, preserving wrist input, robot state, physics, and success predicate. Camera pose and lighting remain later families.
+- [x] Document the exact observation transform and nominal-restoration behavior. The fixed sweep remains the next design gate before adaptive search.
+- [x] Save a concrete follow-on implementation plan using the inspected API. `docs/superpowers/plans/2026-09-13-global-scene-occlusion.md` covers the adapter, tests, cloud compatibility run, and infrastructure-error separation.
 
 **Gate:** we understand a working policy/task combination, have baseline timing, and know the API needed for one controlled change.
+
+#### NEXT STEP — accepted combined cloud session
+
+Before starting the next paid run, use one bounded session with a **US$1
+maximum** for this sequence:
+
+- [ ] Complete a 20-episode nominal baseline across different initial states.
+- [ ] Sweep centered-square occlusion severity from 6.25% toward 25% image area.
+- [ ] Replay the first apparent failure five times before classifying it as a
+   reproducible perturbation-induced failure.
+
+The nominal sample estimates whether the selected task is naturally flaky.
+The one-dimensional centered-square sweep then isolates an occlusion severity
+threshold that can seed the later reducer. A position-grid sweep would map
+spatial sensitivity better, but is deferred because it does not establish a
+clean first severity threshold as efficiently. Keep infrastructure errors out
+of both policy-failure and replay counts.
 
 ## 6. Implementation roadmap after the startup gates
 
@@ -298,7 +319,7 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-Start with Tasks 1 and 2: check the existing Linux/Docker runtime and inspect the version-pinned policy/benchmark setup. Produce the exact one-episode configuration and a concrete cloud-pilot cost estimate. Then obtain model access and the spending limit needed for Task 3.
+Execute the Task 5 **NEXT STEP** in order: finish the 20-episode nominal baseline, run the centered-square severity sweep, and replay the first apparent failure five times. Use one bounded cloud session with a US$1 maximum. Keep the current VM stopped until that session begins, preserve the US$75 total envelope, and do not treat the existing one perturbed success as a robustness estimate.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 

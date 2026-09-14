@@ -1,0 +1,18 @@
+# Python tooling
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local credentials and service configuration
+.env
+.env.*
+!.env.example
+
+# Large, reproducible-but-untracked experiment outputs
+artifacts/
+results/
+model-cache/
+datasets/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

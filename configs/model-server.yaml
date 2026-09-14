@@ -1,0 +1,15 @@
+# Run from the pinned vla-evaluation-harness checkout so `script` resolves
+# relative to that checkout. See docs/experiments/stack-selection.md.
+script: "src/vla_eval/model_servers/lerobot.py"
+args:
+  device: cuda
+  port: 8000
+  policy_type: groot
+  checkpoint: nvidia/gr00t17-lerobot-libero_object-640
+  state_key: observation.state
+  chunk_size: null
+  image_keys:
+    agentview: observation.images.image
+    wrist: observation.images.wrist_image
+  policy_kwargs:
+    base_model_path: nvidia/GR00T-N1.7-3B

@@ -1,0 +1,27 @@
+# The first paid pilot is deliberately one clean, recorded Object episode.
+server:
+  url: "ws://localhost:8000"
+docker:
+  image: "ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0"
+  # The upstream image has root-only Python source, so its evaluator must use
+  # the image's root user. Normalize artifact ownership after each cloud run.
+  user: root
+output_dir: "./results/baseline-object-pilot"
+render: gpu
+benchmarks:
+  - name: libero-object-pilot
+    benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
+    mode: sync
+    episodes_per_task: 1
+    max_tasks: 1
+    paced: false
+    throughput_mode: false
+    recording:
+      record_video: true
+      record_step: true
+      video_fps: 20
+    params:
+      suite: libero_object
+      seed: 7
+      env_seed: 7
+      num_steps_wait: 10
