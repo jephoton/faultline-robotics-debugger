@@ -361,16 +361,14 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-Do not start a third billable session under the completed US$2 aggregate
-authorization. Read-only diagnosis found a stale source `/32` in the attached
-TCP/22 rule and a runbook regression from the dedicated WSL key to a different
-Windows-mounted key. Execute the observable five-minute access check in
-[`2026-09-14-connectivity-probe.md`](2026-09-14-connectivity-probe.md) after a
-new cap decision; then present Jethro a separate bounded evaluation choice
-before resuming the 20-episode nominal baseline, centered-square sweep, and
-five-replay sequence. Keep the current VM stopped, preserve the US$75 total
-envelope, and do not treat the existing one perturbed success as a robustness
-estimate.
+Do not start a third evaluation session under the completed US$2 aggregate
+authorization. The observable five-minute access check in
+[`2026-09-14-connectivity-probe.md`](2026-09-14-connectivity-probe.md) passed:
+TCP/22 opened after a condition-based wait and the dedicated WSL key
+authenticated successfully. The VM is stopped and the temporary rule is
+absent. Pause here for Jethro's requested model downscale; resuming the
+20-episode nominal baseline, centered-square sweep, and five-replay sequence
+requires a separate bounded evaluation decision.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 

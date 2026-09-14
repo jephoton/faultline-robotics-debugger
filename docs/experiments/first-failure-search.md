@@ -120,11 +120,15 @@ dedicated `~/.ssh/nebius_robot_debug_2026` key injected by cloud-init, and WSL
 rejects the Windows-mounted private key's mode. The dedicated key has mode 600
 and matches cloud-init.
 
-**Next decision (Red):** run the five-minute, non-evaluation connectivity probe
-in `docs/superpowers/plans/2026-09-14-connectivity-probe.md`, then authorize a
-separate evaluation cap only after the access gate passes. Reuse the identical
-nominal/sweep/replay design after that gate; neither launch above is a policy
-result.
+The five-minute, non-evaluation connectivity probe subsequently passed. With a
+temporary current-egress `/32` rule, TCP/22 opened 64 seconds after the start
+request. The SSH server accepted `~/.ssh/nebius_robot_debug_2026`, and the
+non-interactive command exited 0. A post-run serial capture contains cloud-init
+completion and `ssh.socket` listening evidence. Independent cleanup verification
+found the VM `STOPPED` and the temporary rule absent.
+
+Connectivity debugging is complete. Evaluation remains paused for a separate
+spending decision and is outside the scope of this diagnostic pass.
 
 Permitted completed-run interpretations are limited to one of:
 

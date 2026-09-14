@@ -1,5 +1,10 @@
 # Observable Nebius Connectivity Probe
 
+**Status:** completed successfully on September 14. TCP/22 opened 64 seconds
+after the start request, the server accepted the dedicated key, and the
+non-interactive SSH command exited 0. The VM is stopped and the temporary rule
+is absent.
+
 **Goal:** Prove the workstation-to-guest SSH path before another evaluation
 run, while capturing enough evidence to distinguish firewall, routing, guest
 boot, TCP, and authentication failures.
@@ -43,7 +48,7 @@ spending-cap decision and must be approved before start.
    egress `/32`. Keep the original rule during the probe.
 4. Record the start epoch, start the existing VM, and immediately create an
    independent stop watchdog for minute 4:30.
-5. Stream `nebius compute instance logs --follow` into
+5. Stream `nebius compute instance logs --since 1m --follow` into
    `artifacts/connectivity-diagnostics/serial-probe.log`. Save sanitized
    control-plane snapshots beside it without committing IDs or addresses.
 6. Poll the VM state and public address. Once `RUNNING`, test TCP/22 every five
@@ -74,3 +79,20 @@ spending-cap decision and must be approved before start.
 
 The probe passes only when the exact non-interactive SSH command exits 0 and
 the VM and temporary rule are both cleaned up afterward.
+
+## Observed result
+
+- Provider state progressed from `STOPPED` to `STARTING`, then `RUNNING`.
+- The first TCP probes after `RUNNING` did not connect; TCP/22 opened at 64
+  seconds from the start request, showing that rule/guest readiness needs a
+  condition-based wait rather than one immediate probe.
+- The server accepted `~/.ssh/nebius_robot_debug_2026` and SSH exited 0.
+- The post-run serial capture contains both cloud-init completion and
+  `ssh.socket` listening evidence.
+- Independent cleanup verification found the VM `STOPPED` and zero rules named
+  `ssh-connectivity-probe`.
+
+The original failure came from a stale source `/32`, compounded by the runbook
+selecting a different key. Future runs must create the current-session `/32`
+rule before start, wait until TCP/22 actually opens, and use the dedicated WSL
+key.
