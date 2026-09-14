@@ -235,6 +235,43 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
+### Current roadmap position — September 14
+
+We are at the boundary between **M1: reproducible runner** and **M2: first
+failure**:
+
+- The runner, structured evidence, replay control, first perturbation adapter,
+  and viewer are implemented locally and tested.
+- Small Nebius pilot runs proved that the GR00T/LIBERO stack can execute, but
+  they did not establish a nominal reliability rate or find a failure.
+- M1 is not complete until the bounded session produces a valid nominal set and
+  the required replayable evidence, including the missing baseline recording.
+- M2 is not complete until a matched perturbed failure repeats at least four
+  times in five exact replays. A single apparent failure is insufficient.
+- The active execution plan is
+  [`2026-09-14-bounded-cloud-session-execution.md`](2026-09-14-bounded-cloud-session-execution.md).
+  It is the experiment that decides whether M1 and M2 can be closed; M3 and M4
+  have not started.
+
+### Immediate decision after the bounded session
+
+Interpret the raw counts, timings, and cost with Jethro before choosing the next
+implementation plan. Follow the branch supported by the evidence:
+
+| Bounded-session result | Immediate next work |
+| --- | --- |
+| Reproducible perturbed failure and valid nominal gate | Design the bounded failure reducer (M4) next, then use that real search-and-reduction workload for the M3 sequential-versus-parallel comparison. |
+| Apparent failure does not repeat | Diagnose stochasticity and strengthen repeatability controls or failure classification before claiming M2. |
+| No failure through 25% centered occlusion | Decide whether to expand severity/position coverage or approve a second perturbation family; do not silently enlarge the search space. |
+| Nominal gate fails | Stabilize the benchmark, seeds, or failure definition before further perturbation search. |
+| Infrastructure invalidates the session | Repair the execution path and rerun the same bounded design; do not count infrastructure errors as policy evidence. |
+
+The recommended happy-path order is **reducer before parallel scaling**. It
+gives the HPC experiment a meaningful end-to-end workload to accelerate instead
+of benchmarking arbitrary episode throughput. The reducer algorithm, parallel
+worker topology, any new perturbation family, and any higher spending cap remain
+separate user decisions.
+
 ### Record contract
 
 Every episode record must contain:
