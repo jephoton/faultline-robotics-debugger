@@ -84,12 +84,16 @@ class ViewerServerTests(unittest.TestCase):
     def test_static_workbench_assets_expose_semantic_landmarks(self):
         page_status, page_headers, page_body = self.get("/")
         css_status, css_headers, _ = self.get("/styles.css")
+        app_status, app_headers, app_body = self.get("/app.js")
 
         page = page_body.decode("utf-8")
         self.assertEqual(page_status, 200)
         self.assertEqual(page_headers["Content-Type"], "text/html; charset=utf-8")
         self.assertEqual(css_status, 200)
         self.assertEqual(css_headers["Content-Type"], "text/css; charset=utf-8")
+        self.assertEqual(app_status, 200)
+        self.assertEqual(app_headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertIn("refreshCatalog", app_body.decode("utf-8"))
         for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
             self.assertIn(landmark, page)
 
