@@ -1,7 +1,7 @@
 # First bounded failure search
 
-**Status:** infrastructure-invalidated on September 14. Two bounded launch
-attempts were stopped with no model server or evaluation episode started. The
+**Status:** ready for the approved evaluation session on September 14. Two
+earlier bounded launch attempts were stopped with no model server or evaluation episode started. The
 first stopped before SSH/model startup because the provider supplied its public
 IPv4 with a CIDR suffix, which the initial operator extractor rejected. The
 second accepted that format, but SSH never became reachable; the current WSL
@@ -47,6 +47,7 @@ other failure modes.
 | Session ceiling | 30 minutes from issuing VM start |
 | New-launch cutoff | 26 minutes from issuing VM start (1560 seconds) |
 | Hard spending cap | **US$2 aggregate** for the aborted boot plus exactly one retry; no third billable session |
+| Evaluation-session cap | **US$1.10**, explicitly approved after the separate connectivity probe passed |
 | Nebius CLI | 0.12.275, authenticated locally in WSL2 |
 | Region / platform / preset | `eu-north1` / `gpu-l40s-a` / `1gpu-16vcpu-64gb` |
 | Live compute rate, pre-tax | US$1.7468/hour: US$1.35 GPU + 16 × US$0.012 vCPU + 64 × US$0.0032 GiB RAM |
@@ -127,8 +128,9 @@ non-interactive command exited 0. A post-run serial capture contains cloud-init
 completion and `ssh.socket` listening evidence. Independent cleanup verification
 found the VM `STOPPED` and the temporary rule absent.
 
-Connectivity debugging is complete. Evaluation remains paused for a separate
-spending decision and is outside the scope of this diagnostic pass.
+Connectivity debugging is complete. Jethro explicitly approved a separate
+US$1.10 cap for this unchanged evaluation session. The session may now start
+only after its live preflight gates pass.
 
 Permitted completed-run interpretations are limited to one of:
 

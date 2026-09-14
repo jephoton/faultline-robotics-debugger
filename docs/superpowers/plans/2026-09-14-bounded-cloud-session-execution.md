@@ -4,6 +4,13 @@
 
 **Goal:** Validate and execute the accepted 20-episode nominal baseline, centered-occlusion sweep, and five-replay confirmation on the existing Nebius L40S VM within the user-approved US$2 all-in cap for the aborted boot plus one retry.
 
+> **September 14 execution amendment:** The original US$2 authorization ended
+> as infrastructure-only. After the five-minute connectivity probe passed,
+> Jethro approved a separate **US$1.10 cap** for exactly one unchanged
+> evaluation session. Keep its 26-minute launch cutoff and 30-minute hard stop.
+> Use the current-session TCP/22 `/32` rule and the dedicated WSL key
+> `~/.ssh/nebius_robot_debug_2026`.
+
 **Architecture:** Repair one discovered mismatch between the generated YAML and the pinned evaluator contract, then perform a read-only provider preflight. A single execution owner controls VM lifecycle, the monotonic deadlines, SSH, the evaluator, artifact copying, and shutdown. Independent agents may inspect the upstream contract and validate copied evidence, but they do not mutate the cloud session.
 
 **Tech Stack:** Python 3.8-compatible standard library, AllenAI VLA Evaluation Harness at `35f1200eb15608aa898f727a3722f7eef889c6cd`, NVIDIA GR00T N1.7, LIBERO/MuJoCo, Docker, Nebius CLI on Ubuntu under WSL2, one Nebius L40S VM, OpenSSH, JSON/JSONL/SQLite/MP4 artifacts, local read-only viewer.
