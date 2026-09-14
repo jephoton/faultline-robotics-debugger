@@ -296,8 +296,6 @@ def _write_config(
         "      suite: libero_object",
         "      seed: 7",
         "      env_seed: 7",
-        "      task_ids: [0]",
-        "      episode_indices: [{}]".format(", ".join(str(index) for index in episode_indices)),
         "      num_steps_wait: 10",
     ]
     if side is not None:

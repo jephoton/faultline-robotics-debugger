@@ -248,7 +248,9 @@ class SessionDriverTests(unittest.TestCase):
         self.assertTrue((session_dir / "session_summary.json").is_file())
         nominal_config = (session_dir / "configs" / "nominal.yaml").read_text(encoding="utf-8")
         self.assertIn("episodes_per_task: 20", nominal_config)
-        self.assertIn("episode_indices: [0, 1, 2", nominal_config)
+        self.assertIn("max_tasks: 1", nominal_config)
+        self.assertNotIn("task_ids:", nominal_config)
+        self.assertNotIn("episode_indices:", nominal_config)
         for side in run_failure_search.SWEEP_SIDES:
             config = (session_dir / "configs" / "sweep-{:.2f}.yaml".format(side)).read_text(
                 encoding="utf-8"
@@ -256,8 +258,10 @@ class SessionDriverTests(unittest.TestCase):
             offset = (1.0 - side) / 2.0
             self.assertIn("seed: 7", config)
             self.assertIn("env_seed: 7", config)
-            self.assertIn("task_ids: [0]", config)
-            self.assertIn("episode_indices: [0]", config)
+            self.assertIn("episodes_per_task: 1", config)
+            self.assertIn("max_tasks: 1", config)
+            self.assertNotIn("task_ids:", config)
+            self.assertNotIn("episode_indices:", config)
             self.assertIn("x: {:.6f}".format(offset), config)
             self.assertIn("y: {:.6f}".format(offset), config)
             self.assertIn("width: {:.6f}".format(side), config)
