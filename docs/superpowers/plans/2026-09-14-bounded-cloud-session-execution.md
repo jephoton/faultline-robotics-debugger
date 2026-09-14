@@ -433,11 +433,14 @@ def visit(value, public=False):
             visit(item, public)
     elif public and isinstance(value, str):
         try:
-            address = ipaddress.ip_address(value)
+            # Current Nebius instance status returns the public address as an
+            # IPv4 interface (for example, with a `/32` suffix).  `ip_interface`
+            # also accepts a bare IPv4 address and normalizes both forms.
+            address = ipaddress.ip_interface(value).ip
         except ValueError:
             return
         if address.version == 4:
-            found.append(value)
+            found.append(str(address))
 visit(data)
 unique = sorted(set(found))
 if len(unique) != 1:

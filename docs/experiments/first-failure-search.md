@@ -1,7 +1,10 @@
 # First bounded failure search
 
-**Status:** local preparation and cloud preflight completed on September 14;
-the bounded run has not yet started. This record is not evidence of a new
+**Status:** local preparation and cloud preflight completed on September 14.
+One infrastructure-only launch was stopped before SSH/model startup because
+the current provider status supplies its public IPv4 with a CIDR suffix, which
+the initial operator extractor rejected. The VM is confirmed stopped; no model
+server or evaluation episode started. This record is not evidence of a new
 robot-policy result.
 
 ## Purpose and claim boundary
@@ -81,7 +84,13 @@ objects, then expose copied artifacts through the existing local viewer.
 
 ## Results
 
-Pending. Permitted interpretations are limited to one of:
+Pending. The provider usage page has not yet isolated the cost of the aborted
+boot from earlier pilot usage, so do not assume the original US$1 batch has its
+full US$0.9626032 run allowance remaining. The updated execution plan accepts
+both CIDR-suffixed and bare public IPv4 status values. A fresh paid retry needs
+an explicit remaining-budget decision before VM start.
+
+Permitted completed-run interpretations are limited to one of:
 
 - nominal gate failed;
 - infrastructure invalidated the session;
