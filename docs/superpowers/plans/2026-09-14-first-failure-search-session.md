@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3.8 standard library, existing `vla-eval` CLI, YAML templates emitted as text, GR00T N1.7 LIBERO Object checkpoint, LIBERO/MuJoCo, Nebius L40S VM, JSON/JSONL/MP4 artifacts.
 
+**Execution status (September 14):** The local driver and evidence boundary are implemented, independently reviewed, and merged. The full suite has 51 passing tests under Python 3.11.9 and the bundled runtime. A planning audit then found that `task_ids` and `episode_indices` are unsupported LIBERO constructor parameters; the driver must use the pinned orchestrator's top-level `max_tasks` / `episodes_per_task` mechanism before cloud execution. Continue with [the bounded cloud execution plan](2026-09-14-bounded-cloud-session-execution.md), which supplies that repair and the remaining preflight/run/evidence steps.
+
 ---
 
 ## Accepted experiment design

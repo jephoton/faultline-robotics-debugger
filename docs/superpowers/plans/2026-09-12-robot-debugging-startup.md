@@ -1,6 +1,6 @@
 # Robot Debugging System Startup Plan
 
-> **For agentic workers:** Use the executing-plans skill to execute the startup tasks inline, checking the evidence at each gate. Do not delegate unless the user requests it. Steps use checkboxes for tracking.
+> **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
 
@@ -9,6 +9,8 @@
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
 **Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. A dependency-free, local read-only artifact viewer is now implemented at `src/robot_debug/viewer/`; its completed UX, packaging, and acceptance evidence are in `docs/superpowers/plans/2026-09-14-viewer-demo-clarity.md`. Existing nominal artifacts lack a video, so a future recorded baseline is needed to demonstrate linked baseline-versus-perturbation playback. **The immediate next step is the bounded US$1 combined cloud session defined under Task 5: finish the 20-episode nominal baseline, run the centered severity sweep, then replay the first apparent failure five times.** No failure has been discovered yet.
+
+**Next-session execution handoff (September 14):** The local session driver is reviewed and merged, and 51 tests pass under both Python 3.11.9 and the bundled runtime. Continue with [the bounded cloud execution plan](2026-09-14-bounded-cloud-session-execution.md). Its first gate repairs unsupported `task_ids` and `episode_indices` constructor parameters using the pinned harness's existing `max_tasks` / `episodes_per_task` mechanism, then restores CLI access and verifies the live US$1 preflight before VM start. The experiment design and sequential baseline remain unchanged.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
