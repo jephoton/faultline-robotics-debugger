@@ -25,6 +25,15 @@ SWEEP_SIDES = (0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
 NOMINAL_EPISODE_INDICES = tuple(range(20))
 
 
+def _resolve_evaluator_command(interpreter: Path) -> str:
+    """Prefer the evaluator installed beside the active Python interpreter."""
+
+    sibling = Path(interpreter).with_name("vla-eval")
+    if sibling.is_file():
+        return str(sibling)
+    return "vla-eval"
+
+
 @dataclass(frozen=True)
 class StageResult:
     """The parsed evidence, or a durable infrastructure error, for one stage."""
@@ -94,7 +103,12 @@ def run_session(
         )
         try:
             completed_process = command_runner(
-                ["vla-eval", "run", "--config", str(config_path)],
+                [
+                    _resolve_evaluator_command(Path(sys.executable)),
+                    "run",
+                    "--config",
+                    str(config_path),
+                ],
                 cwd=upstream_root,
                 check=False,
             )

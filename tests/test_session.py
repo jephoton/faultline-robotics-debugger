@@ -148,6 +148,21 @@ class SourceTreeCliTests(unittest.TestCase):
         self.assertIn("--upstream-root", completed.stdout)
 
 
+class EvaluatorCommandTests(unittest.TestCase):
+    def test_uses_sibling_evaluator_from_virtual_environment(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            bin_dir = Path(temporary_directory) / "venv" / "bin"
+            bin_dir.mkdir(parents=True)
+            interpreter = bin_dir / "python"
+            evaluator = bin_dir / "vla-eval"
+            interpreter.touch()
+            evaluator.touch()
+
+            command = run_failure_search._resolve_evaluator_command(interpreter)
+
+        self.assertEqual(command, str(evaluator))
+
+
 class RunnerResponse:
     def __init__(self, aggregate=None, *, returncode=0, aggregate_text=None):
         self.aggregate = aggregate
