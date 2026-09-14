@@ -29,3 +29,27 @@ PYTHONPATH=src python3 -B -m unittest discover -s tests -v
 
 This checks the portable attempt-record contract before it is connected to the
 cloud evaluator.
+
+## Viewer
+
+The read-only viewer turns copied experiment artifacts into a paired demo of a
+nominal robot-policy episode and a fault-injected episode. It never changes an
+artifact and labels infrastructure errors separately from robot task failures.
+
+Cloud evidence must first be copied or synchronized into the local `artifacts/`
+directory. Then launch the viewer from PowerShell:
+
+```powershell
+$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
+& $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Select a nominal baseline
+as the primary evidence and the global-occlusion episode as the comparison;
+use the paired videos, conclusion line, and timeline to tell the failure
+diagnosis story. An `INFRA ERROR` means the policy was not evaluated, rather
+than that the robot failed the task.
+
+The viewer binds only to loopback by default. Do not use `--host 0.0.0.0` on an
+untrusted network.
