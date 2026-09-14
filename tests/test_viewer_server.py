@@ -18,8 +18,7 @@ class ViewerServerTests(unittest.TestCase):
         self.root = Path(self.temporary_directory.name)
         write_episode(self.root, "valid", success=True)
         self.catalog = ArtifactCatalog(self.root)
-        self.web_root = self.root / "web"
-        self.web_root.mkdir()
+        self.web_root = Path(__file__).resolve().parents[1] / "src" / "robot_debug" / "viewer" / "web"
         handler = make_handler(self.catalog, self.web_root)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -81,6 +80,18 @@ class ViewerServerTests(unittest.TestCase):
         self.assertEqual(health_status, 200)
         self.assertEqual(json.loads(health_body)["read_only"], True)
         self.assertEqual(unknown_status, 404)
+
+    def test_static_workbench_assets_expose_semantic_landmarks(self):
+        page_status, page_headers, page_body = self.get("/")
+        css_status, css_headers, _ = self.get("/styles.css")
+
+        page = page_body.decode("utf-8")
+        self.assertEqual(page_status, 200)
+        self.assertEqual(page_headers["Content-Type"], "text/html; charset=utf-8")
+        self.assertEqual(css_status, 200)
+        self.assertEqual(css_headers["Content-Type"], "text/css; charset=utf-8")
+        for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
+            self.assertIn(landmark, page)
 
 
 if __name__ == "__main__":

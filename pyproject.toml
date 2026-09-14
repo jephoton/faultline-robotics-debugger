@@ -10,3 +10,6 @@ dependencies = ["numpy>=1.24,<1.25"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"robot_debug.viewer" = ["web/*"]
