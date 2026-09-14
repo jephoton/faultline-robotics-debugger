@@ -2,9 +2,9 @@
 
 Current direction: discover failures in simulated robot manipulation policies, reduce them into reproducible cases, and improve evaluation throughput through profiling and parallel execution.
 
-This repository contains baseline preparation plus a small, tested core for
-replayable experiment records. It does not yet run a robot model or provision
-cloud compute.
+The project has reproduced NVIDIA GR00T on LIBERO using Nebius GPU compute,
+added a controlled agent-view occlusion, and implemented replayable experiment
+records plus a local evidence viewer.
 
 Collaboration: cloud compute is an available main resource; architectural and design choices are discussed with Jethro before adoption, with explanations to support learning. Work is committed frequently using Conventional Commits. See [project instructions](AGENTS.md).
 
@@ -16,6 +16,31 @@ Collaboration: cloud compute is an available main resource; architectural and de
 - [Cloud-pilot preflight](docs/setup/cloud-pilot.md): credential-safe resource, cost, and cleanup checklist.
 
 First milestone: one existing robot policy completes one simulated task and can be replayed. Model training and formal verification are outside the initial scope.
+
+## Differentiator
+
+Most robustness benchmarks answer: **how often does a policy fail under a
+predefined set of conditions?** This project aims to turn that measurement into
+an actionable debugging workflow:
+
+> Find a robot-policy failure within a fixed compute budget, prove that it
+> repeats, minimize the condition that triggers it, and save it as a regression
+> test for future policy versions.
+
+The project builds on existing VLA evaluation, perturbation testing, and
+parallel execution rather than claiming those techniques as new. Its intended
+contribution is the integrated path from controlled search to a small,
+reproducible counterexample, with time-to-failure and GPU cost measured along
+the way. The MVP begins with visual occlusion in simulated manipulation; later
+perturbation families can reuse the same search, confirmation, reduction, and
+replay contract.
+
+Success therefore means more than producing a robustness score. The final demo
+should show nominal success, a discovered failure, repeated confirmation, a
+reduced trigger, replay against a policy version, and a sequential-versus-
+parallel cost/throughput comparison. Until those experiments exist, describe
+the system as a working diagnostic foundation rather than a completed novel
+failure-discovery method.
 
 ## Local checks
 

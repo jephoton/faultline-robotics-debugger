@@ -34,3 +34,11 @@ These preferences were explicitly provided by Jethro on September 12, 2026. Appl
 - Ask a focused question and wait for the user's choice before dependent implementation. Continue independent read-only research or already-approved work while waiting.
 - Handle routine implementation details autonomously within approved decisions; do not ask about every variable name, formatting choice, or minor helper function.
 - Record accepted decisions and their rationale in `docs/decisions/`. Mark proposed, accepted, and superseded status explicitly. Do not repeatedly ask about settled decisions unless new evidence materially changes the tradeoff.
+
+## Product differentiator and claim boundary
+
+- Preserve this core positioning: find a robot-policy failure within a fixed compute budget, confirm that it repeats, minimize its triggering condition, and save it as a replayable regression test.
+- Existing VLA harnesses already provide evaluation, perturbation suites already test robustness, and prior falsification systems already search simulations. Do not present occlusion, episode sharding, batching, or parallelism alone as this project's novelty.
+- The intended contribution is the integrated diagnostic loop—search, repeatability control, counterexample reduction, replay, and GPU time/cost measurement—specialized to modern VLA manipulation policies.
+- Measure the differentiator against explicit baselines such as grid or random search using time to first apparent failure, time to first reproducible failure, time/cost to a reduced failure, and final perturbation size.
+- Do not claim coverage of all possible failure modes, causal proof, or research novelty until experiments support it. State the tested perturbation family and search space explicitly.
