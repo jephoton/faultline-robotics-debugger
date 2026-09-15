@@ -3,8 +3,10 @@
 **Status:** proposed for Jethro's design review; no new model, import format,
 search algorithm, or Token Factory spend is authorized by this document.
 Jethro subsequently delegated the license choice: Apache-2.0 is selected and
-implemented. See the [artifact and model research](../../research/2026-09-15-production-artifacts-and-nemotron.md)
-before selecting the import adapter or Nemotron endpoint.
+implemented. Jethro also prioritized a usable, scalable first import: pursue
+one replay-feasible LIBERO/robomimic-style HDF5 adapter after inspecting a real
+sample. Exact reader/schema and Nemotron endpoint remain design decisions.
+See the [artifact and model research](../../research/2026-09-15-production-artifacts-and-nemotron.md).
 
 **Goal:** Let a robotics engineer bring a supported failure case, confirm and
 shrink it under a compute budget, then inspect a grounded diagnostic report.
@@ -51,7 +53,7 @@ the reducer or create a regression test without a compatible case bundle.
 | --- | --- | --- |
 | 0. Finish the accepted fixed-area cloud grid | Real bounded M2 evidence, even if negative | Fresh Nebius preflight and Jethro-approved cap; no import/Nemotron changes in that preregistered run |
 | 1. License decision | Apache-2.0 added by Terra under delegated choice; README and package metadata updated | Local verification complete; GitHub visibility checked after authorized publication |
-| 2. Existing-artifact adapter and case contract | Read-only import of one supported episode format; separate inspection and replay capability | Jethro approves adapter after a real sample feasibility check; fixture and traversal tests pass |
+| 2. Existing-artifact adapter and case contract | Read-only import of a real replay-feasible LIBERO/robomimic-style HDF5 episode; episode/capability interface can accept later adapters | Inspect actual sample/reset prerequisites before implementation; exact schema and rejection rules are reviewed; fixture and traversal tests pass |
 | 3. Confirm and reduce | Replays imported suspected case, checks matched nominal controls, reduces only the already-approved fault family | Jethro approves reducer/search budget and failure predicate; positive demo requires actual valid outcomes |
 | 4. Nemotron pilot | Evidence-grounded triage and candidate suggestions through Nebius Token Factory | Model/API availability, input format, cost, credentials, and output quality are checked before billable calls |
 | 5. Product demonstration | Viewer shows import identity, budget/progress, nominal/failing/reduced videos, exact replay recipe, cost, and uncertainty | A fresh operator can complete the flow; no unsupported causal or robustness claims |

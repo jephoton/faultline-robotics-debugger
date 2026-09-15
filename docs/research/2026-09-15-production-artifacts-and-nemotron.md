@@ -39,13 +39,13 @@ Important compatibility traps:
 
 Target **simulation-based manipulation-policy developers**, not arbitrary deployed fleets, for the hackathon. They are closest to the environment our debugger can actually rerun.
 
-First support our existing evaluation artifacts, then test one external LIBERO/robomimic HDF5 episode as the proposed first external adapter. Separately consider GR00T LeRobot inspection if interviews show that is the artifact target users actually hand over. Do not implement both adapters simply to claim compatibility.
+Jethro prioritized the option that makes the product usable and scalable. The resulting direction is: first support our existing evaluation artifacts, then test one external LIBERO/robomimic-style HDF5 episode as the first external adapter **if its simulator state is genuinely restorable**. This is the best chance of delivering the complete import-to-regression journey with one existing format. A format-independent episode/capability interface permits later LeRobot and MCAP readers without promising that they all support simulator replay. The internal interface is a design direction; exact schema and reader implementation need a sample feasibility check.
 
 Before choosing the external adapter, inspect a real rights-compatible sample: identify its task, cameras, controller/actions, simulator reset information, model/assets and policy reference; try restoring and rerunning it with the pinned environment. If restoration is unavailable, label it inspection-only and reconsider the adapter before investing in UI.
 
 Proposed user journey: select existing artifact → choose episode → see **inspectable / replay-ready / missing prerequisites** → fill only missing configuration → approve bounded diagnosis → inspect confirmed/reduced evidence → export a regression recipe. Imports must not execute embedded scripts, fetch untrusted checkpoints automatically, or start paid compute.
 
-MCAP is a sensible later production extension, but would initially add observational triage, not universal failure minimization. Interviewing one actual target team could change this ordering.
+Next investigate direct GR00T-compatible LeRobot v2 ingestion for a broader VLA-developer audience. It can show and index episodes even when replay prerequisites are missing. MCAP is a sensible later production extension, but would initially add observational triage, not universal failure minimization. An un-restorable HDF5 sample or evidence that target teams mostly hand over LeRobot folders would change the ordering.
 
 ## 2. Nemotron: the diagnostic assistant, not the robot policy
 
