@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import subprocess
 import sys
 import time
@@ -266,6 +266,8 @@ def _prepare_session_directory(
     session_directory = Path(session_directory_name)
     if (
         session_directory.drive
+        or PureWindowsPath(session_directory_name).drive
+        or len(PureWindowsPath(session_directory_name).parts) != 1
         or session_directory.is_absolute()
         or len(session_directory.parts) != 1
         or session_directory_name in (".", "..")
