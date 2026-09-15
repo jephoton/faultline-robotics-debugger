@@ -1,10 +1,14 @@
 # First bounded failure search
 
-**Status:** infrastructure invalidated the approved evaluation session on
-September 14. The VM is stopped. The cached runtime and model server became
-ready, but no evaluator episode or policy result was produced. A future
-billable retry needs a new explicit budget check after the local operational
-fixes below are reviewed. Two earlier bounded launch attempts were stopped with
+**Status:** a fresh US$1.00 evaluation cap was approved on September 15 after
+the September 14 session was invalidated by operator errors. Authentication is
+renewed, the VM is stopped, the active card-funded balance is US$20.98, and live
+rates are unchanged. Current L40S capacity is fresh with 21 on-demand instances
+available for the exact preset. The pinned platform is Intel Ice Lake, so the
+existing 30-minute estimate of US$0.9626032 including GST remains applicable.
+Use driver `c4cd678`, the venv interpreter, a current checkout, a new results
+root per invocation, pre-created log directories, and an independent VM-stop
+watchdog. Two earlier bounded launch attempts were stopped with
 no model server or evaluation episode started. The first stopped before
 SSH/model startup because the provider supplied its public
 IPv4 with a CIDR suffix, which the initial operator extractor rejected. The

@@ -1,5 +1,13 @@
 # Bounded Cloud Session Execution Plan
 
+> **September 15 current authorization:** Jethro approved a fresh **US$1.00**
+> cap and active debugging during the unchanged experiment. Earlier caps below
+> are historical. Verify renewed authentication, balance, quota and live price
+> before start. Use one existing VM, a 26-minute launch cutoff, and a 30-minute
+> hard stop including startup and copying. Every driver invocation gets its own
+> empty results root. Use the current source checkout consistently, create log
+> directories before redirection, and copy evidence from the driver root.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Validate and execute the accepted 20-episode nominal baseline, centered-occlusion sweep, and five-replay confirmation on the existing Nebius L40S VM within the user-approved US$2 all-in cap for the aborted boot plus one retry.
@@ -561,6 +569,7 @@ ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
 set -euo pipefail
 results_root=$1
 remaining_seconds=$2
+mkdir -p "$results_root/operator-logs"
 export PATH="/home/robot/.venvs/vla-eval/bin:$PATH"
 cd /home/robot/vla-evaluation-harness
 /home/robot/.venvs/vla-eval/bin/python \
