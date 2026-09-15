@@ -100,6 +100,14 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIn("refreshCatalog", app)
         self.assertIn("representativeNominal", app)
         self.assertIn("displayEpisodes", app)
+        for token in (
+            "perturbationPosition",
+            "perturbationPosition(episode)",
+            "perturbationPosition(perturbed)",
+            "x=",
+            "y=",
+        ):
+            self.assertIn(token, app)
         for identifier in (
             'id="demo-guide"',
             'id="comparison-conclusion"',

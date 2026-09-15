@@ -31,16 +31,24 @@ function perturbationArea(episode) {
   const fault = episode && episode.perturbation;
   return fault && fault.enabled ? Number(fault.width || 0) * Number(fault.height || 0) * 100 : null;
 }
+function perturbationPosition(episode) {
+  const fault = episode && episode.perturbation;
+  if (!fault || !fault.enabled) return "";
+  const x = Number(fault.x);
+  const y = Number(fault.y);
+  return Number.isFinite(x) && Number.isFinite(y)
+    ? ` · x=${x.toFixed(2)} y=${y.toFixed(2)}`
+    : "";
+}
 
 function renderComparisonStory(primary, comparison) {
-  const primaryArea = perturbationArea(primary);
-  const comparisonArea = perturbationArea(comparison);
-  const perturbedArea = primaryArea == null ? comparisonArea : primaryArea;
+  const perturbed = primary && primary.perturbation.enabled ? primary : comparison && comparison.perturbation.enabled ? comparison : null;
+  const perturbedArea = perturbationArea(perturbed);
   const suffix = perturbedArea == null ? "" : ` at ${perturbedArea.toFixed(2)}% image occlusion`;
   const displayed = comparison || primary;
   const policyNote = displayed && displayed.outcome === "infrastructure_error" ? " / POLICY NOT EVALUATED" : "";
   setText(byId("comparison-conclusion"), primary && comparison
-    ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${policyNote}`
+    ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${perturbationPosition(perturbed)}${policyNote}`
     : primary ? "Add a second episode to enable comparison" : "No experiment evidence found");
   setText(byId("primary-role"), primary && !primary.perturbation.enabled
     ? "REFERENCE / NOMINAL" : "PRIMARY / INVESTIGATION");
@@ -137,7 +145,7 @@ function renderRunList() {
       const fault = episode.perturbation;
       const area = fault.enabled ? `${((fault.width || 0) * (fault.height || 0) * 100).toFixed(2)}% MASK` : "NOMINAL";
       button.type = "button"; button.dataset.episodeId = episode.episode_id; button.dataset.outcome = episode.outcome;
-      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}`;
+      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}${perturbationPosition(episode)}`;
       button.addEventListener("click", () => { state.primaryId = episode.episode_id; render(); });
       item.append(button); list.append(item);
     });

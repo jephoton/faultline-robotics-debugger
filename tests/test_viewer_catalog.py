@@ -46,7 +46,7 @@ def write_episode(
             "params": {
                 "seed": 7,
                 "env_seed": 7,
-                "agentview_occlusion": {"enabled": True, "width": 0.25},
+                "agentview_occlusion": {"enabled": True, "x": 0.0, "y": 0.5, "width": 0.25},
             },
         },
         "server_info": {"harness_version": "0.5.1", "model_server": "LeRobotModelServer"},
@@ -76,6 +76,8 @@ class ArtifactCatalogTests(unittest.TestCase):
         episode = ArtifactCatalog(self.root).list_episodes()[0]
 
         self.assertEqual(episode.outcome, "success")
+        self.assertEqual(episode.perturbation["x"], 0.0)
+        self.assertEqual(episode.perturbation["y"], 0.5)
         self.assertEqual(episode.perturbation["width"], 0.25)
         self.assertEqual(episode.provenance["model_server"], "LeRobotModelServer")
 
