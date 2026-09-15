@@ -375,4 +375,3 @@ fresh live preflight and new run-specific cap.
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 
 The first success to aim for is simple: **watch one robot complete one task, know which software made it happen, and be able to run it again.**
-
