@@ -97,3 +97,34 @@ human question or material decision
     → human interpretation or next decision
     → autonomous execution within the accepted boundary
 ```
+
+## Plan-first model handoff
+
+For every new material project step, separate design reasoning from routine
+execution so Jethro can learn from the decision without paying the strongest
+model's token cost for mechanical implementation.
+
+1. Use the stronger currently selected model to inspect evidence, explain the
+   decision, settle red choices with Jethro, and write a committed implementation
+   plan under `docs/superpowers/plans/`.
+2. Make the plan self-contained: include exact scope, files, tests, conventional
+   commit boundaries, autonomy levels, agent ownership, review checkpoints, and
+   any cloud or spending gate. Do not start billable work merely because the plan
+   exists.
+3. After Jethro approves the design and plan, hand green and bounded amber
+   implementation to a smaller capable model by default. Prefer a balanced
+   implementation model such as `gpt-5.6-terra` at medium reasoning when it is
+   available. The stronger-model coordinator remains the integration owner and
+   synthesizes reviews and learning checkpoints.
+4. If the product cannot change the active task's model directly, use a
+   smaller-model sub-agent for the implementation handoff or pause and tell
+   Jethro exactly what model change is needed. Never imply that the active model
+   was changed when it was not.
+5. Escalate back to a stronger model when evidence exposes a new red decision,
+   experiment-validity ambiguity, architectural conflict, difficult live-system
+   debugging, or repeated implementation failure. Routine test failures and
+   plan-conforming fixes stay with the smaller model first.
+
+This handoff is automatic after an already approved plan; do not repeatedly ask
+whether to downscale. It does not override user review gates, cloud caps, the
+single external-resource owner rule, or verification before integration.
