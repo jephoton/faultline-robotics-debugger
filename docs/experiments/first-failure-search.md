@@ -1,21 +1,11 @@
 # First bounded failure search
 
-**Status:** a fresh US$1.00 evaluation cap was approved on September 15 after
-the September 14 session was invalidated by operator errors. Authentication is
-renewed, the VM is stopped, the active card-funded balance is US$20.98, and live
-rates are unchanged. Current L40S capacity is fresh with 21 on-demand instances
-available for the exact preset. The pinned platform is Intel Ice Lake, so the
-existing 30-minute estimate of US$0.9626032 including GST remains applicable.
-Use driver `c4cd678`, the venv interpreter, a current checkout, a new results
-root per invocation, pre-created log directories, and an independent VM-stop
-watchdog. Two earlier bounded launch attempts were stopped with
-no model server or evaluation episode started. The first stopped before
-SSH/model startup because the provider supplied its public
-IPv4 with a CIDR suffix, which the initial operator extractor rejected. The
-second accepted that format, but SSH never became reachable; the current WSL
-egress address was outside the original TCP/22 rule, and a temporary matching
-rule still did not establish a connection. The VM is confirmed stopped and the
-temporary rule is absent. This record is not evidence of a robot-policy result.
+**Status:** completed on September 15 under the approved US$1.00 cap. The
+nominal gate passed with 20/20 successes. Episode 0 then succeeded at every
+centered-square severity from 6.25% through 25% image area, so the driver found
+no apparent policy failure and correctly launched no confirmation replays. The
+VM is confirmed stopped and the temporary SSH rule is absent. This is a valid
+bounded negative result, not evidence of general policy robustness.
 
 ## Purpose and claim boundary
 
@@ -29,7 +19,8 @@ other failure modes.
 
 | Item | Value |
 | --- | --- |
-| Driver commit for this session | `93b9306` (`fix(search): align episode selection with harness`) |
+| Execution checkout | `62e953c` (`docs(search): approve fresh one-dollar evaluation`) |
+| Driver fix included | `c4cd678` (`fix(search): resolve venv evaluator command`) |
 | Harness | `allenai/vla-evaluation-harness` at `35f1200eb15608aa898f727a3722f7eef889c6cd` |
 | Simulator image | `ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0` |
 | Policy checkpoint | `nvidia/gr00t17-lerobot-libero_object-640` at `1499db357f6ca3762b56c2e8c00b530eb9a09444` |
@@ -54,28 +45,26 @@ other failure modes.
 | Worker shape | One L40S GPU, one active worker, sequential evaluation |
 | Session ceiling | 30 minutes from issuing VM start |
 | New-launch cutoff | 26 minutes from issuing VM start (1560 seconds) |
-| Hard spending cap | **US$2 aggregate** for the aborted boot plus exactly one retry; no third billable session |
-| Evaluation-session cap | **US$1.10**, explicitly approved after the separate connectivity probe passed |
-| Remaining retry boundary | 28 minutes hard stop; **US$0.8984297** estimated maximum including GST |
+| Hard spending cap | **US$1.00** for this fresh September 15 evaluation session |
+| Independent stop watchdog | Stop request at minute 28, inside the 30-minute cost ceiling |
 | Nebius CLI | 0.12.275, authenticated locally in WSL2 |
 | Region / platform / preset | `eu-north1` / `gpu-l40s-a` / `1gpu-16vcpu-64gb` |
 | Live compute rate, pre-tax | US$1.7468/hour: US$1.35 GPU + 16 × US$0.012 vCPU + 64 × US$0.0032 GiB RAM |
 | Live Network SSD rate, pre-tax | US$0.000097222/GiB-hour; 200 GiB = US$0.0194444/hour |
 | 30-minute pre-tax maximum | US$0.8831222 |
 | Tax calculation | Singapore billing address; 9% GST applied to the provider's tax-exclusive list price |
-| Effective 30-minute maximum | **US$0.9626032** for one full retry |
-| Conservative aggregate bound | **US$1.9252064** for two full 30-minute sessions, below the approved US$2 cap |
-| Balance / expiry | US$22.38 active balance; card-funded balance is shown as active and no separately expiring credit is presented |
-| Capacity / quota | Fresh medium on-demand capacity for the exact preset (limit 32); matching compute L40S quota is not used |
+| Effective 30-minute maximum | **US$0.9626032** for one full session |
+| Balance / expiry | US$20.98 active card-funded balance before this run; no separately expiring credit was presented |
+| Capacity / quota | Fresh on-demand capacity: 21 exact-shape instances available against limit 32; matching compute L40S quota is not used |
 
 The price list excludes discounts and taxes. The estimate uses the live
 provider rates above and Singapore's current 9% GST. It includes 30 minutes of
 the existing VM's GPU, CPU, RAM, and 200 GiB Network SSD allocation, but not
-new resources, workers, or large transfer/storage growth. Although the initial
-launch was stopped far earlier than its deadline, the provider has not isolated
-its cost. The approved cap therefore uses the conservative bound of two complete
-30-minute sessions (US$1.9252064), leaving US$0.0747936. Stop at the hard
-deadline and do not add a third billable session.
+new resources, workers, or large transfer/storage growth. The completed run
+used 1,043 seconds (17 minutes 23 seconds) from the VM start request through the
+recorded stop. Prorating the complete live shape and adding 9% GST gives an
+estimated upper-bound charge of **US$0.558**. This is a wall-clock estimate,
+not a provider-isolated billed amount.
 
 ## Preconditions and evidence handling
 
@@ -98,6 +87,38 @@ becomes available. Interpret outcomes only from the preserved raw episode
 objects, then expose copied artifacts through the existing local viewer.
 
 ## Results
+
+### September 15 completed evaluation
+
+The accepted bounded session completed without infrastructure errors. An
+independent recomputation from the raw aggregates, rather than only the driver
+summary, found:
+
+- 20 nominal attempts for task 0, episode indices 0--19: 20 successes;
+- six sweep attempts for task 0, episode 0, with `seed=7` and `env_seed=7`;
+- success at square sides `0.25`, `0.30`, `0.35`, `0.40`, `0.45`, and `0.50`;
+- zero apparent policy failures, so zero confirmation replays; and
+- stop reason `no_policy_failure_in_sweep` after 489.20 seconds of driver work.
+
+All 26 attempts have MP4 and episode JSONL evidence; the seven stages each
+have an SQLite record. The copied evidence is under the ignored local
+`artifacts/session-20260915/copied/` tree. Point the existing viewer specifically
+at `artifacts/session-20260915/copied/runs` to see 26 episodes with 26 mapped
+videos. The broader copied root contains a duplicate aggregate copy made during
+media collection and would show 52 catalog entries; the duplicate files agree
+but are not additional attempts. The operator encountered one transient Nebius
+control-plane lookup timeout while polling model readiness. Caching the already
+verified active host address removed that unnecessary dependency; model loading
+continued normally and the episode evidence remained valid.
+
+The supported conclusion is deliberately narrow: the accepted GR00T checkpoint
+completed all 20 nominal initial states on LIBERO Object task 0, and episode 0
+also completed with a centered opaque black square covering 6.25%--25% of the
+agent-view image. This does not establish a failure threshold or robustness to
+other initial states under occlusion, positions, tasks, perturbations, or all
+failure modes.
+
+### September 14 invalidated attempts and diagnosis
 
 **Outcome: infrastructure invalidated the session.** The US$2 aggregate
 authorization covered the first aborted boot plus exactly one retry. Neither
@@ -166,11 +187,10 @@ errors, not model or simulator evidence. The VM was stopped immediately after
 the second error. The managed disk retains the logs, but no aggregate, video,
 or episode output exists to interpret.
 
-Before any future run, perform the non-billable local runbook check that the
-driver environment exports `/home/robot/.venvs/vla-eval/bin` and that every
-driver invocation receives a new, empty results root. Re-check the remaining
-provider-visible balance and obtain a new run-specific cap; the prior US$1.10
-authorization must not be treated as unspent credit.
+Those operator defects were repaired before the completed September 15 run:
+the driver environment exported `/home/robot/.venvs/vla-eval/bin`, every driver
+invocation received a new empty results root, and an independent watchdog owned
+the VM stop deadline.
 
 Permitted completed-run interpretations are limited to one of:
 

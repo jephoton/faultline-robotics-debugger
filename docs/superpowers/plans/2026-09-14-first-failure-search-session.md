@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.8 standard library, existing `vla-eval` CLI, YAML templates emitted as text, GR00T N1.7 LIBERO Object checkpoint, LIBERO/MuJoCo, Nebius L40S VM, JSON/JSONL/MP4 artifacts.
 
-**Execution status (September 14):** The local driver and evidence boundary are implemented, independently reviewed, and merged. The full suite has 51 passing tests under Python 3.11.9 and the bundled runtime. A planning audit then found that `task_ids` and `episode_indices` are unsupported LIBERO constructor parameters; the driver must use the pinned orchestrator's top-level `max_tasks` / `episodes_per_task` mechanism before cloud execution. Continue with [the bounded cloud execution plan](2026-09-14-bounded-cloud-session-execution.md), which supplies that repair and the remaining preflight/run/evidence steps.
+**Execution status (September 15):** Complete on the accepted no-failure branch. The reviewed driver ran on one Nebius L40S: 20/20 nominal episodes and all six centered-square severities succeeded, so no confirmation replay was launched. Independent raw-evidence and viewer checks passed, the VM is stopped, and the temporary SSH rule is absent. The next perturbation-search choice is a new red decision rather than an unapproved extension of this plan.
 
 ---
 
@@ -251,13 +251,13 @@ experiment and continues to incur its documented storage charge.
 - Modify: `docs/superpowers/plans/2026-09-12-robot-debugging-startup.md`
 - Read only: copied `artifacts/<session>/`
 
-- [ ] **Step 1: Validate the evidence locally**
+- [x] **Step 1: Validate the evidence locally**
 
 Recompute nominal valid/success/error counts from aggregate JSON. Confirm the
 severity sequence, first apparent failure, replay count, and reproducibility
 gate from raw episode objects rather than trusting only `session_summary.json`.
 
-- [ ] **Step 2: Update the experiment report**
+- [x] **Step 2: Update the experiment report**
 
 Report one of these outcomes precisely:
 
@@ -271,14 +271,14 @@ Include episode wall time, total session time, estimated and provider-visible
 cost, and all relevant revision identities. Do not generalize beyond task 0,
 the tested initial state(s), and centered opaque black occlusion.
 
-- [ ] **Step 3: Update the main plan and viewer**
+- [x] **Step 3: Update the main plan and viewer**
 
 Mark only completed gates in the main plan and set its next step from the actual
 result. The local viewer indexes copied aggregates automatically; verify the new
 runs appear and that infrastructure errors remain separate. Do not modify
 artifacts to make them display.
 
-- [ ] **Step 4: Test and commit the evidence**
+- [x] **Step 4: Test and commit the evidence**
 
 ```powershell
 $workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'

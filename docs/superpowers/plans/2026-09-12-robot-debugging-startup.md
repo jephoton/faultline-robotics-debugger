@@ -8,9 +8,9 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius pilot produced two valid nominal LIBERO Object successes and one valid centered global-agent-view occlusion success with the same task and seeds. The accepted first perturbation is an opaque normalized rectangle applied only to `agentview`; its design and first cloud result are recorded in `docs/superpowers/specs/2026-09-13-global-scene-occlusion-design.md` and `docs/experiments/first-occlusion.md`. The nominal replay differed by one step, so do not make trajectory-determinism or robustness claims. A dependency-free, local read-only artifact viewer is now implemented at `src/robot_debug/viewer/`; its completed UX, packaging, and acceptance evidence are in `docs/superpowers/plans/2026-09-14-viewer-demo-clarity.md`. Existing nominal artifacts lack a video, so a future recorded baseline is needed to demonstrate linked baseline-versus-perturbation playback. **The later US$2 aggregate baseline/sweep/replay authorization ended with two infrastructure-only launches: neither reached SSH, source transfer, model startup, or an episode.** No failure has been discovered yet.
+**Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. Because there was no apparent failure, the five-replay phase was correctly skipped. All 26 attempts have video and trace evidence, and the local read-only viewer is implemented at `src/robot_debug/viewer/`. This closes the valid nominal-evidence portion of M1 but does not complete M2: no failure has yet been found or reduced. The result supports only the tested task, states, and centered-occlusion range, not a general robustness claim.
 
-**Next-session execution handoff (September 14):** The local session driver is reviewed and merged, and 51 tests pass under both Python 3.11.9 and the bundled runtime. [The bounded cloud execution plan](2026-09-14-bounded-cloud-session-execution.md) repaired unsupported `task_ids` and `episode_indices` using the pinned harness's existing `max_tasks` / `episodes_per_task` mechanism, but its US$2 aggregate authorization ended with two infrastructure-only launches. The second never reached SSH despite a temporary exact-egress TCP/22 rule. The experiment design remains unchanged, but a new red decision is required: prove the access path with a non-evaluation check and authorize a new cap before another billable session.
+**Next decision (September 15):** The bounded baseline/sweep/replay plan is complete on its no-failure branch. The next red decision is whether to extend the same centered-square severity range, map spatial sensitivity at an accepted severity, or approve a second perturbation family. No further billable run or search-space expansion is implied by the completed session.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -237,24 +237,22 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
-### Current roadmap position — September 14
+### Current roadmap position — September 15
 
-We are at the boundary between **M1: reproducible runner** and **M2: first
-failure**:
+We have completed the nominal-evidence portion of **M1: reproducible runner**
+and are working on **M2: first failure**:
 
 - The runner, structured evidence, replay control, first perturbation adapter,
   and viewer are implemented locally and tested.
-- Small Nebius pilot runs proved that the GR00T/LIBERO stack can execute, but
-  they did not establish a nominal reliability rate or find a failure.
-- M1 is not complete until the bounded session produces a valid nominal set and
-  the required replayable evidence, including the missing baseline recording.
+- The September 15 bounded session established a 20/20 nominal result and saved
+  videos and traces for every nominal and perturbed attempt.
+- The runner, structured evidence, first perturbation adapter, replay control,
+  and viewer are now exercised end to end on Nebius.
 - M2 is not complete until a matched perturbed failure repeats at least four
   times in five exact replays. A single apparent failure is insufficient.
-- The active execution plan is
-  [`2026-09-14-bounded-cloud-session-execution.md`](2026-09-14-bounded-cloud-session-execution.md).
-  It reached the infrastructure-invalidated branch: both bounded VM launches
-  stopped before source transfer, model startup, or episode execution. M1 and
-  M2 therefore remain open; M3 and M4 have not started.
+- The bounded session reached the accepted no-failure branch: all severities
+  through 25% centered occlusion succeeded, so M2 remains open and M3/M4 have
+  not started.
 
 ### Immediate decision after the bounded session
 
@@ -361,14 +359,13 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-Do not start a third evaluation session under the completed US$2 aggregate
-authorization. The observable five-minute access check in
-[`2026-09-14-connectivity-probe.md`](2026-09-14-connectivity-probe.md) passed:
-TCP/22 opened after a condition-based wait and the dedicated WSL key
-authenticated successfully. The VM is stopped and the temporary rule is
-absent. Pause here for Jethro's requested model downscale; resuming the
-20-episode nominal baseline, centered-square sweep, and five-replay sequence
-requires a separate bounded evaluation decision.
+The baseline/sweep/replay session is complete. The VM is stopped, its temporary
+SSH rule is absent, and the copied evidence has passed an independent raw-count
+review. Stop at the learning checkpoint before changing the experiment: Jethro
+must choose whether the next bounded search extends centered-square severity,
+maps position sensitivity, or introduces a second perturbation family. Each
+option changes what the resulting evidence means, and any billable execution
+requires a new run-specific cap.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 
