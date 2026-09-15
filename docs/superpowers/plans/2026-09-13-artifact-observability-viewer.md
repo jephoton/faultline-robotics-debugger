@@ -47,7 +47,7 @@ Codex bundled interpreter for full regression tests, and re-resolve it with
 `load_workspace_dependencies` if its cache path changes:
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 ```
 
@@ -176,7 +176,7 @@ media traversal such as `../secret.txt` raising `ValueError`.
 - [ ] **Step 2: Run the focused tests and verify the missing module failure**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_catalog -v
 ```
@@ -373,7 +373,7 @@ harness versions, model-server name, benchmark import path, and aggregate
 - [ ] **Step 4: Run focused and full tests**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_catalog -v
 & $workspacePython -B -m unittest discover -s tests -v
@@ -425,7 +425,7 @@ on JSON so active local runs refresh.
 - [ ] **Step 2: Run tests and verify the missing server failure**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_server -v
 ```
@@ -585,7 +585,7 @@ invalid range, stream in 64 KiB chunks, and set the MIME type with
 - [ ] **Step 4: Run focused and full tests**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_server -v
 & $workspacePython -B -m unittest discover -s tests -v
@@ -617,7 +617,7 @@ landmarks `header`, `nav`, `main`, `aside`, and a live status region.
 - [ ] **Step 2: Run the asset tests and verify they fail with 404**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_server -v
 ```
@@ -729,7 +729,7 @@ Add to `pyproject.toml`:
 Run:
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_server -v
 & $workspacePython -B -m unittest discover -s tests -v
@@ -1086,7 +1086,7 @@ content type now that the file exists.
 
 ```powershell
 node --check src/robot_debug/viewer/web/app.js
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 git diff --check
@@ -1123,7 +1123,7 @@ robot-debug-viewer = "robot_debug.viewer.server:main"
 The module invocation remains the dependency-free fallback:
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
 ```
@@ -1145,7 +1145,7 @@ Add a `Viewer` section to `README.md` containing:
 - [ ] **Step 3: Run the complete automated verification**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 & $workspacePython -m robot_debug.viewer.server --help

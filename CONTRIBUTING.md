@@ -8,7 +8,7 @@ small, explain its evidence, and preserve prior experiment results.
 Run the credential-free test suite from Ubuntu in WSL:
 
 ```bash
-cd /mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon
+cd "$(git rev-parse --show-toplevel)"
 PYTHONPATH=src python3 -B -m unittest discover -s tests -v
 ```
 

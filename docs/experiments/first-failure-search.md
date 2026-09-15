@@ -146,7 +146,7 @@ boots, then closed normally during shutdown. The attached security group is the
 group containing the TCP/22 rule, the subnet uses provider-default routing, and
 the public address is dynamic. The current WSL egress address is outside the
 rule's stale `/32`, which explains the TCP timeout. Separately, the execution
-plan selected `/mnt/c/Users/Jethro/.ssh/id_ed25519`; that key differs from the
+plan selected a Windows-mounted default private-key path; that key differs from the
 dedicated `~/.ssh/nebius_robot_debug_2026` key injected by cloud-init, and WSL
 rejects the Windows-mounted private key's mode. The dedicated key has mode 600
 and matches cloud-init.

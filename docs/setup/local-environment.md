@@ -22,11 +22,10 @@ practical limit.
 
 ## Development / execution split
 
-The authoritative Git checkout remains the Windows checkout at
-`C:\Users\Jethro\Documents\nebius-nvidia-hackathon`. The laptop is used for
-source edits, documentation, and light validation. The first real evaluation
-will run on Nebius with model inference and simulation colocated on the same
-GPU host.
+The authoritative Git checkout is the repository root on the development
+machine. The laptop is used for source edits, documentation, and light
+validation. The first real evaluation will run on Nebius with model inference
+and simulation colocated on the same GPU host.
 
 This avoids two avoidable problems: a 4 GiB local GPU is unlikely to fit the
 policy with rendering overhead, and streaming camera observations over the

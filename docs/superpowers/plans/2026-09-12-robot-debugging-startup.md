@@ -54,7 +54,7 @@ Read-only checks on September 12, 2026 found:
 | System memory | 16,487,870,464 bytes, about 15.36 GiB | Avoid running many heavyweight local workers |
 | WSL | Ubuntu and docker-desktop registered as WSL2, both stopped | Existing Linux tooling can be checked before installing anything |
 | Docker Desktop | Executable present | Installation is present; a working engine and GPU passthrough are unverified |
-| Repository | `C:\Users\Jethro\Documents\nebius-nvidia-hackathon` | Current source location |
+| Repository | Repository root | Current source location |
 | GitHub | Private repository created previously | Public release belongs in the final submission stage |
 
 Use the laptop for editing, small CPU tests, report viewing, and lightweight simulator exploration if it works. Prefer colocating model inference and simulation on the cloud pilot to avoid sending every camera frame over the laptop's internet connection.

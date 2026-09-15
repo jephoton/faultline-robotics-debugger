@@ -86,7 +86,7 @@ silently classified.
 - [ ] **Step 2: Run the focused tests and observe failure**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_session -v
 ```
@@ -156,7 +156,7 @@ directories and a fake runner that writes representative aggregate JSON. Cover:
 - [ ] **Step 7: Run tests and commit**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 git diff --check
@@ -281,7 +281,7 @@ artifacts to make them display.
 - [x] **Step 4: Test and commit the evidence**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 git diff --check

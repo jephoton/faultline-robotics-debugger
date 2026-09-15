@@ -122,7 +122,7 @@ def test_prepare_session_directory_accepts_distinct_safe_name(self):
 - [ ] **Step 2: Run the focused tests and confirm the new calls fail**
 
 ```powershell
-$workspacePython='C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH=(Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_session -v
 ```

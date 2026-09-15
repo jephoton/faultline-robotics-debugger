@@ -53,7 +53,7 @@ for identifier in (
 - [x] **Step 2: Run the focused test and confirm it fails**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest tests.test_viewer_server.ViewerServerTests.test_static_workbench_assets_expose_semantic_landmarks -v
 ```
@@ -134,7 +134,7 @@ diagnostics text.
 
 ```powershell
 node --check src\robot_debug\viewer\web\app.js
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 git diff --check
@@ -181,7 +181,7 @@ focus rings and the reduced-motion query.
 - [x] **Step 2: Check the stylesheet and full test suite**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 git diff --check
@@ -222,7 +222,7 @@ and separate infrastructure-error classification. Warn against binding
 - [x] **Step 3: Run packaging and CLI checks**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -B -m unittest discover -s tests -v
 & $workspacePython -m robot_debug.viewer.server --help
@@ -248,7 +248,7 @@ git commit -m "docs(viewer): add local demo workflow"
 - [x] **Step 1: Launch the real artifact viewer**
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
 ```

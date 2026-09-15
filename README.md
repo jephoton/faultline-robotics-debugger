@@ -48,7 +48,7 @@ The current core uses only the Python standard library. From Ubuntu in WSL,
 run:
 
 ```bash
-cd /mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon
+cd "$(git rev-parse --show-toplevel)"
 PYTHONPATH=src python3 -B -m unittest discover -s tests -v
 ```
 
@@ -65,7 +65,7 @@ Cloud evidence must first be copied or synchronized into the local `artifacts/`
 directory. Then launch the viewer from PowerShell:
 
 ```powershell
-$workspacePython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$workspacePython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
 ```

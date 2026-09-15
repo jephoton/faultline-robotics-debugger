@@ -206,7 +206,7 @@ by the orchestrator.
 
 ```powershell
 $python311 = "$env:LOCALAPPDATA\Microsoft\WindowsApps\python3.11.exe"
-$bundledPython = 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$bundledPython = 'python'
 $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $python311 -B -m unittest discover -s tests -v
 & $bundledPython -B -m unittest discover -s tests -v
@@ -484,10 +484,11 @@ bundle, clone it into a fresh session checkout, and detach at its recorded HEAD:
 
 ```bash
 SSH_KEY="$HOME/.ssh/nebius_robot_debug_2026"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 ssh -o IdentitiesOnly=yes -o BatchMode=yes -i "$SSH_KEY" \
   "robot@${NB_VM_HOST}" true
 scp -o IdentitiesOnly=yes -i "$SSH_KEY" \
-  /mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon/artifacts/first-failure-search.bundle \
+  "$PROJECT_ROOT/artifacts/first-failure-search.bundle" \
   "robot@${NB_VM_HOST}:/home/robot/first-failure-search.bundle"
 ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
   'git clone /home/robot/first-failure-search.bundle /home/robot/first-failure-search-session && git -C /home/robot/first-failure-search-session switch --detach HEAD'
@@ -596,7 +597,8 @@ Create the ignored local destination and copy summary/config/aggregate/log
 evidence before larger recordings:
 
 ```bash
-LOCAL_ARTIFACTS=/mnt/c/Users/Jethro/Documents/nebius-nvidia-hackathon/artifacts/2026-09-14-first-failure-search
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+LOCAL_ARTIFACTS="$PROJECT_ROOT/artifacts/2026-09-14-first-failure-search"
 LOCAL_SESSION_ARTIFACTS="$LOCAL_ARTIFACTS/first-failure-search"
 mkdir -p "$LOCAL_SESSION_ARTIFACTS"
 scp -o IdentitiesOnly=yes -i "$SSH_KEY" -r \
