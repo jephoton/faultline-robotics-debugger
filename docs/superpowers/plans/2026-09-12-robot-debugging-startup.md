@@ -10,7 +10,7 @@
 
 **Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. Because there was no apparent failure, the five-replay phase was correctly skipped. All 26 attempts have video and trace evidence, and the local read-only viewer is implemented at `src/robot_debug/viewer/`. This closes the valid nominal-evidence portion of M1 but does not complete M2: no failure has yet been found or reduced. The result supports only the tested task, states, and centered-occlusion range, not a general robustness claim.
 
-**Next decision (September 15):** The bounded baseline/sweep/replay plan is complete on its no-failure branch. The next red decision is whether to extend the same centered-square severity range, map spatial sensitivity at an accepted severity, or approve a second perturbation family. No further billable run or search-space expansion is implied by the completed session.
+**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Local implementation may proceed through its review checkpoint; cloud execution still requires a fresh live preflight and separately approved cap.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -361,11 +361,11 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 The baseline/sweep/replay session is complete. The VM is stopped, its temporary
 SSH rule is absent, and the copied evidence has passed an independent raw-count
-review. Stop at the learning checkpoint before changing the experiment: Jethro
-must choose whether the next bounded search extends centered-square severity,
-maps position sensitivity, or introduces a second perturbation family. Each
-option changes what the resulting evidence means, and any billable execution
-requires a new run-specific cap.
+review. Jethro selected the position-sensitivity branch. Implement and review
+the fixed-area grid locally using
+[`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md), then
+stop at its learning and cost checkpoint. Any billable execution requires a
+fresh live preflight and new run-specific cap.
 
 Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
 

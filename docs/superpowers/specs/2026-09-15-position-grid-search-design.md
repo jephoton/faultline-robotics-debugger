@@ -63,6 +63,13 @@ again in this grid.
    eight cells succeed, report a bounded negative result. Do not enlarge the
    grid, area, task, or perturbation family within this session.
 
+Any launch cutoff, infrastructure error, or invalid evidence during replay or
+matched controls stops the corresponding phase with a durable phase-specific
+terminal reason. An incomplete set is never passed to a 4/5 gate. If all five
+controls are valid but fewer than four succeed, record
+`reproducible_failure_nominal_controls_failed`; do not imply that controls were
+absent.
+
 ## Evidence contract
 
 Use a new session directory so the completed severity-search evidence remains
@@ -109,4 +116,3 @@ controls succeeded. A negative result may say no failure was observed at the
 eight newly tested coarse-grid positions. Neither result establishes causality,
 exhaustive spatial coverage, general robustness, or behavior on other tasks,
 states, seeds, or perturbation families.
-
