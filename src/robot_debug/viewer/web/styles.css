@@ -51,7 +51,7 @@ main { min-width: 0; padding: var(--space-3); }
 #comparison-conclusion { margin-top: var(--space-2); padding: var(--space-2); border-left: 3px solid var(--outcome, var(--cyan)); color: var(--ink); font-family: "Arial Narrow", "Roboto Condensed", sans-serif; letter-spacing: .04em; text-transform: uppercase; }
 #summary-strip, .transport, .timeline-panel { border: 1px solid var(--line); background: var(--panel); padding: var(--space-2); }
 #summary-strip { margin-top: var(--space-2); color: var(--cyan); font-size: .82rem; }
-.comparison-deck { display: grid; grid-template-columns: 1.15fr .85fr; gap: var(--space-3); margin: var(--space-3) 0; }
+.comparison-deck { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .video-channel { min-width: 0; border: 1px solid var(--line); padding: var(--space-2); }
 .channel-role { margin: 0 0 var(--space-1); color: var(--cyan); font-size: .7rem; letter-spacing: .1em; }
 .video-channel > label { display: block; color: var(--muted); margin-bottom: var(--space-1); font-size: .75rem; }

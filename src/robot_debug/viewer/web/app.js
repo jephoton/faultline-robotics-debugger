@@ -9,6 +9,19 @@ const outcomeLabels = {
 };
 const byId = (id) => document.getElementById(id);
 const episodeById = (id) => state.episodes.find((episode) => episode.episode_id === id);
+const isNominal = (episode) => !episode.perturbation.enabled;
+function representativeNominal(episodes) {
+  return episodes.filter(isNominal).sort((left, right) => {
+    const runPreference = Number(left.run_name !== "nominal") - Number(right.run_name !== "nominal");
+    if (runPreference) return runPreference;
+    const episodePreference = Number(left.episode_index || 0) - Number(right.episode_index || 0);
+    return episodePreference || left.episode_id.localeCompare(right.episode_id);
+  })[0] || null;
+}
+function displayEpisodes() {
+  const nominal = representativeNominal(state.episodes);
+  return state.episodes.filter((episode) => !isNominal(episode) || episode.episode_id === (nominal && nominal.episode_id));
+}
 const formatSeconds = (value) => `${Number(value || 0).toFixed(2)} s`;
 function setText(element, value) { element.textContent = value == null ? "—" : String(value); }
 function showNonFatalError(error) { setText(byId("notices"), error.message || error); }
@@ -38,10 +51,10 @@ function renderComparisonStory(primary, comparison) {
 
 function defaultComparison() {
   const primary = episodeById(state.primaryId);
-  const nominal = state.episodes.find((item) => item.episode_id !== state.primaryId &&
+  const nominal = displayEpisodes().find((item) => item.episode_id !== state.primaryId &&
     !item.perturbation.enabled && item.instruction === (primary && primary.instruction) &&
     item.seed === (primary && primary.seed) && item.env_seed === (primary && primary.env_seed));
-  return nominal || state.episodes.find((item) => item.episode_id !== state.primaryId) || null;
+  return nominal || displayEpisodes().find((item) => item.episode_id !== state.primaryId) || null;
 }
 
 async function refreshCatalog() {
@@ -50,8 +63,12 @@ async function refreshCatalog() {
   const snapshot = await response.json();
   state.episodes = snapshot.episodes;
   state.warnings = snapshot.warnings;
-  if (!episodeById(state.primaryId)) state.primaryId = state.episodes[0] ? state.episodes[0].episode_id : null;
-  if (!episodeById(state.comparisonId)) {
+  const visible = displayEpisodes();
+  if (!visible.some((item) => item.episode_id === state.primaryId)) {
+    const primary = visible.find((item) => item.perturbation.enabled) || visible[0];
+    state.primaryId = primary ? primary.episode_id : null;
+  }
+  if (!visible.some((item) => item.episode_id === state.comparisonId)) {
     const comparison = defaultComparison();
     state.comparisonId = comparison ? comparison.episode_id : null;
   }
@@ -60,10 +77,11 @@ async function refreshCatalog() {
 
 function renderChannel(channel, id) {
   const select = byId(`${channel}-select`);
-  const signature = state.episodes.map((item) => item.episode_id).join("|");
+  const visible = displayEpisodes();
+  const signature = visible.map((item) => item.episode_id).join("|");
   if (select.dataset.signature !== signature) {
     select.replaceChildren();
-    state.episodes.forEach((item) => {
+    visible.forEach((item) => {
       const option = document.createElement("option");
       option.value = item.episode_id;
       option.textContent = `${item.run_name} / ${outcomeLabels[item.outcome]}`;
@@ -110,7 +128,7 @@ function renderDiagnostics(episode) {
 
 function renderRunList() {
   const list = byId("run-list"); const filter = byId("outcome-filter");
-  const visible = state.episodes.filter((item) => filter.value === "all" || item.outcome === filter.value);
+  const visible = displayEpisodes().filter((item) => filter.value === "all" || item.outcome === filter.value);
   const signature = visible.map((item) => item.episode_id).join("|");
   if (list.dataset.signature !== signature) {
     list.replaceChildren();
@@ -130,7 +148,7 @@ function renderRunList() {
 }
 
 function render() {
-  setText(byId("connection-status"), `READ ONLY / ${state.episodes.length} EPISODES`);
+  setText(byId("connection-status"), `READ ONLY / ${displayEpisodes().length} EPISODES`);
   const filter = byId("outcome-filter");
   if (filter.options.length === 1) Object.entries(outcomeLabels).forEach(([value, label]) => {
     const option = document.createElement("option"); option.value = value; option.textContent = label; filter.append(option);
