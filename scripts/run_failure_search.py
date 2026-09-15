@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -257,10 +258,22 @@ def run_session(
     return summary
 
 
-def _prepare_session_directory(results_root: Path) -> Path:
+def _prepare_session_directory(
+    results_root: Path, *, session_directory_name: str = SESSION_DIRECTORY_NAME
+) -> Path:
+    if not isinstance(session_directory_name, str) or not session_directory_name:
+        raise ValueError("session directory must be a single directory name")
+    session_directory = Path(session_directory_name)
+    if (
+        session_directory.drive
+        or session_directory.is_absolute()
+        or len(session_directory.parts) != 1
+        or session_directory_name in (".", "..")
+    ):
+        raise ValueError("session directory must be a single directory name")
     results_root.mkdir(parents=True, exist_ok=True)
     resolved_results_root = results_root.resolve()
-    session_dir = resolved_results_root / SESSION_DIRECTORY_NAME
+    session_dir = resolved_results_root / session_directory
     if session_dir.is_symlink():
         raise ValueError("refusing symlinked session directory: {}".format(session_dir))
     if session_dir.exists():
@@ -305,6 +318,8 @@ def _write_config(
     stage_name: str,
     episode_indices: Sequence[int],
     side: Optional[float],
+    x: Optional[float] = None,
+    y: Optional[float] = None,
 ) -> None:
     params = [
         "      suite: libero_object",
@@ -312,14 +327,29 @@ def _write_config(
         "      env_seed: 7",
         "      num_steps_wait: 10",
     ]
-    if side is not None:
-        offset = (1.0 - side) / 2.0
+    if side is None:
+        if x is not None or y is not None:
+            raise ValueError("x and y require an enabled occlusion")
+    else:
+        _validate_finite_number("side", side)
+        if side <= 0:
+            raise ValueError("side must be greater than zero")
+        if (x is None) != (y is None):
+            raise ValueError("x and y must be supplied together")
+        if x is None:
+            x = (1.0 - side) / 2.0
+            y = x
+        else:
+            _validate_finite_number("x", x)
+            _validate_finite_number("y", y)
+        if x < 0 or y < 0 or x + side > 1 or y + side > 1:
+            raise ValueError("occlusion must remain within image bounds")
         params.extend(
             [
                 "      agentview_occlusion:",
                 "        enabled: true",
-                "        x: {:.6f}".format(offset),
-                "        y: {:.6f}".format(offset),
+                "        x: {:.6f}".format(x),
+                "        y: {:.6f}".format(y),
                 "        width: {:.6f}".format(side),
                 "        height: {:.6f}".format(side),
                 "        color: [0, 0, 0]",
@@ -360,6 +390,13 @@ def _write_config(
         ]
     )
     config_path.write_text(text, encoding="utf-8")
+
+
+def _validate_finite_number(name: str, value: Any) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("{} must be a finite number".format(name))
+    if not math.isfinite(value):
+        raise ValueError("{} must be a finite number".format(name))
 
 
 def _yaml_scalar(value: Any) -> str:

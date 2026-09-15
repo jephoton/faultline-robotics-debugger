@@ -100,6 +100,20 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIn("refreshCatalog", app)
         self.assertIn("representativeNominal", app)
         self.assertIn("displayEpisodes", app)
+        for token in (
+            "perturbationPosition",
+            "perturbationPosition(episode)",
+            "perturbationPosition(perturbed)",
+            "isPerturbed",
+            "matchesPrimary",
+            "candidates.find(isPerturbed)",
+            "visible = displayEpisodes",
+            'typeof fault.x === "number"',
+            'typeof fault.y === "number"',
+            "x=",
+            "y=",
+        ):
+            self.assertIn(token, app)
         for identifier in (
             'id="demo-guide"',
             'id="comparison-conclusion"',

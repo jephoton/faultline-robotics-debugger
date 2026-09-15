@@ -469,6 +469,58 @@ class SessionDriverTests(unittest.TestCase):
         self.assertIn("    - {}".format(json.dumps(volume)), config)
         self.assertIn("output_dir: {}".format(json.dumps(str(output))), config)
 
+    def test_config_writes_explicit_occlusion_position(self):
+        config_path = self.root / "config.yaml"
+
+        run_failure_search._write_config(
+            config_path=config_path,
+            output_dir=self.root / "output",
+            project_root=self.project,
+            stage_name="position-0.00-0.50",
+            episode_indices=(0,),
+            side=0.50,
+            x=0.00,
+            y=0.50,
+        )
+
+        config = config_path.read_text(encoding="utf-8")
+        self.assertIn("        x: 0.000000", config)
+        self.assertIn("        y: 0.500000", config)
+        self.assertIn("        width: 0.500000", config)
+        self.assertIn("        height: 0.500000", config)
+
+    def test_config_rejects_invalid_explicit_occlusion_positions(self):
+        base_arguments = {
+            "config_path": self.root / "config.yaml",
+            "output_dir": self.root / "output",
+            "project_root": self.project,
+            "stage_name": "position",
+            "episode_indices": (0,),
+            "side": 0.50,
+        }
+
+        with self.assertRaisesRegex(ValueError, "x and y"):
+            run_failure_search._write_config(**base_arguments, x=0.00)
+        with self.assertRaisesRegex(ValueError, "image bounds"):
+            run_failure_search._write_config(**base_arguments, x=0.51, y=0.00)
+        with self.assertRaisesRegex(ValueError, "finite number"):
+            run_failure_search._write_config(**base_arguments, x=True, y=0.00)
+
+    def test_prepare_session_directory_accepts_single_custom_name(self):
+        session_dir = run_failure_search._prepare_session_directory(
+            self.results, session_directory_name="position-grid-search"
+        )
+
+        self.assertEqual(session_dir, (self.results / "position-grid-search").resolve())
+        with self.assertRaisesRegex(ValueError, "single directory name"):
+            run_failure_search._prepare_session_directory(
+                self.results, session_directory_name="../escape"
+            )
+        with self.assertRaisesRegex(ValueError, "single directory name"):
+            run_failure_search._prepare_session_directory(
+                self.results, session_directory_name="C:"
+            )
+
     def test_atomic_json_rejects_nonfinite_values(self):
         target = self.root / "summary.json"
 

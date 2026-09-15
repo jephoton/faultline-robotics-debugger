@@ -9,17 +9,27 @@ const outcomeLabels = {
 };
 const byId = (id) => document.getElementById(id);
 const episodeById = (id) => state.episodes.find((episode) => episode.episode_id === id);
-const isNominal = (episode) => !episode.perturbation.enabled;
-function representativeNominal(episodes) {
-  return episodes.filter(isNominal).sort((left, right) => {
+function isPerturbed(episode) {
+  const fault = episode && episode.perturbation;
+  return Boolean(fault && typeof fault === "object" && fault.enabled === true);
+}
+const isNominal = (episode) => !isPerturbed(episode);
+function matchesPrimary(nominal, primary) {
+  return primary && nominal.instruction === primary.instruction &&
+    nominal.seed === primary.seed && nominal.env_seed === primary.env_seed;
+}
+function representativeNominal(episodes, primary) {
+  const nominals = episodes.filter(isNominal);
+  const matches = nominals.filter((episode) => matchesPrimary(episode, primary));
+  return (matches.length ? matches : nominals).sort((left, right) => {
     const runPreference = Number(left.run_name !== "nominal") - Number(right.run_name !== "nominal");
     if (runPreference) return runPreference;
     const episodePreference = Number(left.episode_index || 0) - Number(right.episode_index || 0);
     return episodePreference || left.episode_id.localeCompare(right.episode_id);
   })[0] || null;
 }
-function displayEpisodes() {
-  const nominal = representativeNominal(state.episodes);
+function displayEpisodes(primary = episodeById(state.primaryId)) {
+  const nominal = representativeNominal(state.episodes, primary);
   return state.episodes.filter((episode) => !isNominal(episode) || episode.episode_id === (nominal && nominal.episode_id));
 }
 const formatSeconds = (value) => `${Number(value || 0).toFixed(2)} s`;
@@ -29,32 +39,39 @@ function showFatalError(error) { setText(byId("connection-status"), "UNAVAILABLE
 function outcomeLabel(episode) { return episode ? outcomeLabels[episode.outcome] : "NO EVIDENCE"; }
 function perturbationArea(episode) {
   const fault = episode && episode.perturbation;
-  return fault && fault.enabled ? Number(fault.width || 0) * Number(fault.height || 0) * 100 : null;
+  return isPerturbed(episode) ? Number(fault.width || 0) * Number(fault.height || 0) * 100 : null;
+}
+function perturbationPosition(episode) {
+  const fault = episode && episode.perturbation;
+  if (!isPerturbed(episode)) return "";
+  const x = fault.x;
+  const y = fault.y;
+  return typeof fault.x === "number" && typeof fault.y === "number" && Number.isFinite(x) && Number.isFinite(y)
+    ? ` · x=${x.toFixed(2)} y=${y.toFixed(2)}`
+    : "";
 }
 
 function renderComparisonStory(primary, comparison) {
-  const primaryArea = perturbationArea(primary);
-  const comparisonArea = perturbationArea(comparison);
-  const perturbedArea = primaryArea == null ? comparisonArea : primaryArea;
+  const perturbed = isPerturbed(primary) ? primary : isPerturbed(comparison) ? comparison : null;
+  const perturbedArea = perturbationArea(perturbed);
   const suffix = perturbedArea == null ? "" : ` at ${perturbedArea.toFixed(2)}% image occlusion`;
   const displayed = comparison || primary;
   const policyNote = displayed && displayed.outcome === "infrastructure_error" ? " / POLICY NOT EVALUATED" : "";
   setText(byId("comparison-conclusion"), primary && comparison
-    ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${policyNote}`
+    ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${perturbationPosition(perturbed)}${policyNote}`
     : primary ? "Add a second episode to enable comparison" : "No experiment evidence found");
-  setText(byId("primary-role"), primary && !primary.perturbation.enabled
+  setText(byId("primary-role"), primary && !isPerturbed(primary)
     ? "REFERENCE / NOMINAL" : "PRIMARY / INVESTIGATION");
-  setText(byId("comparison-role"), comparison && comparison.perturbation.enabled
+  setText(byId("comparison-role"), isPerturbed(comparison)
     ? "INVESTIGATION / PERTURBED" : "COMPARISON / REFERENCE");
   byId("comparison-conclusion").dataset.outcome = displayed ? displayed.outcome : "";
 }
 
 function defaultComparison() {
   const primary = episodeById(state.primaryId);
-  const nominal = displayEpisodes().find((item) => item.episode_id !== state.primaryId &&
-    !item.perturbation.enabled && item.instruction === (primary && primary.instruction) &&
-    item.seed === (primary && primary.seed) && item.env_seed === (primary && primary.env_seed));
-  return nominal || displayEpisodes().find((item) => item.episode_id !== state.primaryId) || null;
+  const candidates = displayEpisodes(primary).filter((item) => item.episode_id !== state.primaryId);
+  const nominal = candidates.find((item) => isNominal(item) && matchesPrimary(item, primary));
+  return nominal || candidates.find(isPerturbed) || null;
 }
 
 async function refreshCatalog() {
@@ -63,10 +80,11 @@ async function refreshCatalog() {
   const snapshot = await response.json();
   state.episodes = snapshot.episodes;
   state.warnings = snapshot.warnings;
-  const visible = displayEpisodes();
+  let visible = displayEpisodes();
   if (!visible.some((item) => item.episode_id === state.primaryId)) {
-    const primary = visible.find((item) => item.perturbation.enabled) || visible[0];
+    const primary = visible.find(isPerturbed) || visible[0];
     state.primaryId = primary ? primary.episode_id : null;
+    visible = displayEpisodes(episodeById(state.primaryId));
   }
   if (!visible.some((item) => item.episode_id === state.comparisonId)) {
     const comparison = defaultComparison();
@@ -113,7 +131,7 @@ function renderDiagnostics(episode) {
   const detail = document.createElement("pre");
   detail.textContent = JSON.stringify({ task: episode.instruction, task_id: episode.task_id,
     initial_state: episode.episode_index, seed: episode.seed, env_seed: episode.env_seed,
-    perturbation: episode.perturbation.enabled ? episode.perturbation : "NOMINAL / NO FAULT",
+    perturbation: isPerturbed(episode) ? episode.perturbation : "NOMINAL / NO FAULT",
     provenance: episode.provenance }, null, 2);
   aside.append(title, detail);
   if (episode.outcome === "infrastructure_error") {
@@ -135,9 +153,9 @@ function renderRunList() {
     visible.forEach((episode) => {
       const item = document.createElement("li"); const button = document.createElement("button");
       const fault = episode.perturbation;
-      const area = fault.enabled ? `${((fault.width || 0) * (fault.height || 0) * 100).toFixed(2)}% MASK` : "NOMINAL";
+      const area = isPerturbed(episode) ? `${((fault.width || 0) * (fault.height || 0) * 100).toFixed(2)}% MASK` : "NOMINAL";
       button.type = "button"; button.dataset.episodeId = episode.episode_id; button.dataset.outcome = episode.outcome;
-      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}`;
+      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}${perturbationPosition(episode)}`;
       button.addEventListener("click", () => { state.primaryId = episode.episode_id; render(); });
       item.append(button); list.append(item);
     });

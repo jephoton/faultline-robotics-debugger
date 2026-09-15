@@ -67,7 +67,7 @@ stop Nebius compute, alter a security rule, copy cloud artifacts, or publish.
 - Modify: `scripts/run_failure_search.py`
 - Modify: `tests/test_session.py`
 
-- [ ] **Step 1: Write failing compatibility and coordinate tests**
+- [x] **Step 1: Write failing compatibility and coordinate tests**
 
 Extend the direct `_write_config` coverage with one explicit placement and one
 invalid partial placement. Also require the safe-directory helper to support a
@@ -119,7 +119,7 @@ def test_prepare_session_directory_accepts_distinct_safe_name(self):
         )
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm the new calls fail**
+- [x] **Step 2: Run the focused tests and confirm the new calls fail**
 
 ```powershell
 $workspacePython = 'python'
@@ -130,7 +130,7 @@ $env:PYTHONPATH=(Join-Path (Resolve-Path '.').Path 'src')
 Expected: the new tests fail because `_write_config` has no `x` or `y`
 parameters; existing tests remain passing.
 
-- [ ] **Step 3: Implement bounded explicit coordinates**
+- [x] **Step 3: Implement bounded explicit coordinates**
 
 Change the signature to accept `x: Optional[float] = None` and
 `y: Optional[float] = None`. Preserve centered behavior for every existing
@@ -166,7 +166,7 @@ value. Existing `run_session`
 continues to call it without the new argument, preserving the completed session
 path.
 
-- [ ] **Step 4: Run the focused and full suites**
+- [x] **Step 4: Run the focused and full suites**
 
 ```powershell
 & $workspacePython -B -m unittest tests.test_session -v
@@ -176,7 +176,7 @@ path.
 Expected: all tests pass; the historical centered configs remain byte-equivalent
 apart from no intentional text changes.
 
-- [ ] **Step 5: Commit the compatibility increment**
+- [x] **Step 5: Commit the compatibility increment**
 
 ```powershell
 git add -- scripts/run_failure_search.py tests/test_session.py
@@ -189,7 +189,7 @@ git commit -m "feat(search): support explicit occlusion positions"
 - Create: `scripts/run_position_grid_search.py`
 - Create: `tests/test_position_grid_search.py`
 
-- [ ] **Step 1: Write the driver contract tests**
+- [x] **Step 1: Write the driver contract tests**
 
 Use a local fake command runner and monotonic clock, following the aggregate
 fixtures in `tests/test_session.py` without importing that test module. Cover:
@@ -230,7 +230,7 @@ Also assert the summary's `planned.grid_positions`, `completed.positions_attempt
 Add cutoff, infrastructure, and wrong-index cases during both replay and matched
 control phases; assert that incomplete outcome lists never reach a 4/5 gate.
 
-- [ ] **Step 2: Run the new tests and confirm import failure**
+- [x] **Step 2: Run the new tests and confirm import failure**
 
 ```powershell
 & $workspacePython -B -m unittest tests.test_position_grid_search -v
@@ -238,7 +238,7 @@ control phases; assert that incomplete outcome lists never reach a 4/5 gate.
 
 Expected: FAIL because `scripts/run_position_grid_search.py` does not exist.
 
-- [ ] **Step 3: Define immutable positions and the public entry point**
+- [x] **Step 3: Define immutable positions and the public entry point**
 
 Create the new script with these public constants and value type. Insert the
 script directory into `sys.path` before importing `run_failure_search as base`,
@@ -325,7 +325,7 @@ Every stage and outcome carries `perturbation`: nominal uses
 `infrastructure_error`, `invalid_evidence`, and `returncode` as in the completed
 driver.
 
-- [ ] **Step 4: Implement the finite-state sequence**
+- [x] **Step 4: Implement the finite-state sequence**
 
 The implementation must follow this state machine literally:
 
@@ -439,7 +439,7 @@ never counts invalid or infrastructure evidence in the 4/5 gates. Replays call
 the same config writer with the candidate's exact `x`, `y`, and side. Nominal
 controls pass `side=None`, `x=None`, and `y=None`.
 
-- [ ] **Step 5: Add the credential-free CLI**
+- [x] **Step 5: Add the credential-free CLI**
 
 ```python
 parser.add_argument("--upstream-root", required=True, type=Path)
@@ -452,7 +452,7 @@ The 22-minute launch cutoff leaves four minutes inside a possible future
 26-minute VM ceiling. It is a launch gate, not a cloud authorization or a
 substitute for the external stop watchdog.
 
-- [ ] **Step 6: Run new, legacy, source-tree, and full tests**
+- [x] **Step 6: Run new, legacy, source-tree, and full tests**
 
 ```powershell
 & $workspacePython -B -m unittest tests.test_position_grid_search -v
@@ -464,7 +464,7 @@ substitute for the external stop watchdog.
 Expected: all tests pass, help exits 0 without manually setting `PYTHONPATH`,
 and the completed severity driver retains its original seven-stage behavior.
 
-- [ ] **Step 7: Commit the driver**
+- [x] **Step 7: Commit the driver**
 
 ```powershell
 git add -- scripts/run_position_grid_search.py tests/test_position_grid_search.py
@@ -478,7 +478,7 @@ git commit -m "feat(search): add fixed-area position grid"
 - Modify: `tests/test_viewer_catalog.py`
 - Modify: `tests/test_viewer_server.py`
 
-- [ ] **Step 1: Add failing coordinate-preservation and asset tests**
+- [x] **Step 1: Add failing coordinate-preservation and asset tests**
 
 Extend the catalog fixture assertion so an enabled occlusion returns its exact
 `x` and `y`. Extend the static-asset test to require coordinate-aware labeling
@@ -501,7 +501,7 @@ self.assertIn("x=", javascript)
 self.assertIn("y=", javascript)
 ```
 
-- [ ] **Step 2: Run focused viewer tests and verify the asset test fails**
+- [x] **Step 2: Run focused viewer tests and verify the asset test fails**
 
 ```powershell
 & $workspacePython -B -m unittest tests.test_viewer_catalog tests.test_viewer_server -v
@@ -510,7 +510,7 @@ self.assertIn("y=", javascript)
 Expected: existing catalog mapping passes or needs only fixture coordinates;
 the new JavaScript-label assertion fails.
 
-- [ ] **Step 3: Implement one compact label helper**
+- [x] **Step 3: Implement one compact label helper**
 
 Add and reuse this behavior in the run list and comparison conclusion. In the
 comparison function, select the enabled member before formatting so coordinates
@@ -534,7 +534,7 @@ const perturbed = primary && primary.perturbation.enabled ? primary
 Keep the existing area label and append the position. Do not add a heatmap,
 schema migration, write API, or new dependency.
 
-- [ ] **Step 4: Run focused and full tests, then commit**
+- [x] **Step 4: Run focused and full tests, then commit**
 
 ```powershell
 & $workspacePython -B -m unittest tests.test_viewer_catalog tests.test_viewer_server -v
@@ -550,7 +550,7 @@ git commit -m "feat(viewer): label occlusion coordinates"
 - Modify: `docs/superpowers/plans/2026-09-12-robot-debugging-startup.md`
 - Modify: `docs/superpowers/plans/2026-09-15-position-grid-search.md`
 
-- [ ] **Step 1: Run the complete local verification**
+- [x] **Step 1: Run the complete local verification**
 
 ```powershell
 & $workspacePython -B -m unittest discover -s tests -v
@@ -561,7 +561,7 @@ git diff --check
 
 Expected: zero failures, both CLIs exit 0, and no whitespace errors.
 
-- [ ] **Step 2: Treat the explicit contract suite as the fake-evidence audit**
+- [x] **Step 2: Treat the explicit contract suite as the fake-evidence audit**
 
 Confirm that named tests explicitly assert one sentinel plus eight unique
 coordinate stages on the no-failure path, byte-equivalent discovery/replay
@@ -570,7 +570,7 @@ fixtures are deleted after tests, so do not claim to inspect their output after
 the suite. Do not create synthetic files under the real `artifacts/` tree for
 the demo.
 
-- [ ] **Step 3: Record readiness without claiming a cloud result**
+- [x] **Step 3: Record readiness without claiming a cloud result**
 
 Create the experiment record with status `local implementation ready; cloud
 execution not authorized`. Include the frozen identity, ordered cells, all stop
@@ -578,7 +578,7 @@ reasons, 19-episode hard maximum, evidence contract, historical timing estimate,
 and the required live preflight. Update the main roadmap to say the position
 search is implemented but M2 remains open.
 
-- [ ] **Step 4: Mark completed local checkboxes and commit**
+- [x] **Step 4: Mark completed local checkboxes and commit**
 
 ```powershell
 git add -- docs/experiments/position-grid-search.md docs/superpowers/plans/2026-09-12-robot-debugging-startup.md docs/superpowers/plans/2026-09-15-position-grid-search.md
@@ -589,14 +589,14 @@ git commit -m "docs(search): prepare bounded position session"
 
 **Files:** read-only review of every Task 1--4 path
 
-- [ ] **Step 1: Run a specification-compliance review**
+- [x] **Step 1: Run a specification-compliance review**
 
 Give a fresh reviewer the design, plan, diff, and acceptance criteria. Require
 it to report omissions, unapproved scope, legacy-driver regressions, summary
 ambiguities, candidate-shopping paths, missing matched-control gates, and
 credential/cost leakage. It must not edit the builder's files.
 
-- [ ] **Step 2: Run a code-quality review after compliance passes**
+- [x] **Step 2: Run a code-quality review after compliance passes**
 
 Require a separate review of validation, path safety, atomic persistence,
 deadline behavior, Python 3.8 compatibility, test strength, viewer escaping,
