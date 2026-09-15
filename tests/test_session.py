@@ -516,6 +516,10 @@ class SessionDriverTests(unittest.TestCase):
             run_failure_search._prepare_session_directory(
                 self.results, session_directory_name="../escape"
             )
+        with self.assertRaisesRegex(ValueError, "single directory name"):
+            run_failure_search._prepare_session_directory(
+                self.results, session_directory_name="C:"
+            )
 
     def test_atomic_json_rejects_nonfinite_values(self):
         target = self.root / "summary.json"

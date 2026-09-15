@@ -265,7 +265,8 @@ def _prepare_session_directory(
         raise ValueError("session directory must be a single directory name")
     session_directory = Path(session_directory_name)
     if (
-        session_directory.is_absolute()
+        session_directory.drive
+        or session_directory.is_absolute()
         or len(session_directory.parts) != 1
         or session_directory_name in (".", "..")
     ):
