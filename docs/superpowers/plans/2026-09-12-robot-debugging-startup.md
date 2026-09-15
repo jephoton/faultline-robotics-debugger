@@ -10,7 +10,7 @@
 
 **Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. Because there was no apparent failure, the five-replay phase was correctly skipped. All 26 attempts have video and trace evidence, and the local read-only viewer is implemented at `src/robot_debug/viewer/`. This closes the valid nominal-evidence portion of M1 but does not complete M2: no failure has yet been found or reduced. The result supports only the tested task, states, and centered-occlusion range, not a general robustness claim.
 
-**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Local implementation may proceed through its review checkpoint; cloud execution still requires a fresh live preflight and separately approved cap.
+**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Its local implementation is ready for review; cloud execution still requires a fresh live preflight and separately approved cap.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
@@ -253,6 +253,9 @@ and are working on **M2: first failure**:
 - The bounded session reached the accepted no-failure branch: all severities
   through 25% centered occlusion succeeded, so M2 remains open and M3/M4 have
   not started.
+- The fixed-area position-grid search is implemented locally and ready for its
+  review checkpoint; it has not run in the cloud, so it provides no new M2
+  experimental evidence.
 
 ### Immediate decision after the bounded session
 
