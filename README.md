@@ -2,6 +2,12 @@
 
 Current direction: discover failures in simulated robot manipulation policies, reduce them into reproducible cases, and improve evaluation throughput through profiling and parallel execution.
 
+## License
+
+Original project code is licensed under the [Apache License 2.0](LICENSE).
+External models, datasets, and other third-party assets retain their own terms;
+this repository does not relicense model weights or assets.
+
 The project has reproduced NVIDIA GR00T on LIBERO using Nebius GPU compute,
 added a controlled agent-view occlusion, and implemented replayable experiment
 records plus a local evidence viewer.
