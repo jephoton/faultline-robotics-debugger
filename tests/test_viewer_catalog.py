@@ -6,6 +6,9 @@ from pathlib import Path
 from robot_debug.viewer.catalog import ArtifactCatalog
 
 
+DEFAULT_OCCLUSION = object()
+
+
 def write_episode(
     root: Path,
     run_name: str,
@@ -13,6 +16,7 @@ def write_episode(
     success: bool,
     failure_reason=None,
     malformed_aggregate: bool = False,
+    occlusion=DEFAULT_OCCLUSION,
 ) -> Path:
     run = root / run_name
     episode_dir = run / "episodes" / "libero-object"
@@ -46,7 +50,11 @@ def write_episode(
             "params": {
                 "seed": 7,
                 "env_seed": 7,
-                "agentview_occlusion": {"enabled": True, "x": 0.0, "y": 0.5, "width": 0.25},
+                "agentview_occlusion": (
+                    {"enabled": True, "x": 0.0, "y": 0.5, "width": 0.25}
+                    if occlusion is DEFAULT_OCCLUSION
+                    else occlusion
+                ),
             },
         },
         "server_info": {"harness_version": "0.5.1", "model_server": "LeRobotModelServer"},
@@ -89,6 +97,13 @@ class ArtifactCatalogTests(unittest.TestCase):
 
         self.assertEqual(outcomes["infra"], "infrastructure_error")
         self.assertEqual(outcomes["failure"], "task_failure")
+
+    def test_catalog_preserves_explicit_null_occlusion(self):
+        write_episode(self.root, "null-occlusion", success=True, occlusion=None)
+
+        episode = ArtifactCatalog(self.root).list_episodes()[0]
+
+        self.assertIsNone(episode.perturbation)
 
     def test_catalog_classifies_timeout(self):
         write_episode(self.root, "timeout", success=False, failure_reason="timeout")

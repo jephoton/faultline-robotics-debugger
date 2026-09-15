@@ -104,6 +104,12 @@ class ViewerServerTests(unittest.TestCase):
             "perturbationPosition",
             "perturbationPosition(episode)",
             "perturbationPosition(perturbed)",
+            "isPerturbed",
+            "matchesPrimary",
+            "candidates.find(isPerturbed)",
+            "visible = displayEpisodes",
+            'typeof fault.x === "number"',
+            'typeof fault.y === "number"',
             "x=",
             "y=",
         ):
