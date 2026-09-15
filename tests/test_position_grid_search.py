@@ -10,6 +10,12 @@ from types import SimpleNamespace
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "run_position_grid_search.py"
+APPROVED_GRID = [
+    ("grid-x000-y050", .00, .50), ("grid-x050-y050", .50, .50),
+    ("grid-x000-y000", .00, .00), ("grid-x050-y000", .50, .00),
+    ("grid-x025-y050", .25, .50), ("grid-x000-y025", .00, .25),
+    ("grid-x050-y025", .50, .25), ("grid-x025-y000", .25, .00),
+]
 SPEC = importlib.util.spec_from_file_location("run_position_grid_search", SCRIPT_PATH)
 position_grid = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = position_grid
@@ -61,7 +67,7 @@ class PositionGridDriverTests(unittest.TestCase):
 
     def test_successful_sentinel_and_grid_record_fixed_geometry(self):
         summary, runner = self.run_driver([aggregate()] * 9)
-        stages = ["nominal-sentinel"] + [point.stage for point in position_grid.GRID_POINTS]
+        stages = ["nominal-sentinel"] + [stage for stage, _, _ in APPROVED_GRID]
         self.assertEqual(summary["stop_reason"], "no_policy_failure_in_grid")
         self.assertEqual(len(runner.commands), 9)
         self.assertEqual([stage["stage"] for stage in summary["completed"]["stages"]], stages)
@@ -70,9 +76,12 @@ class PositionGridDriverTests(unittest.TestCase):
         self.assertEqual(summary["completed"]["sentinel_outcome"], "success")
         self.assertEqual(summary["completed"]["stages"][0]["perturbation"], {"enabled": False})
         self.assertEqual(summary["completed"]["stages"][1]["perturbation"]["width"], .5)
-        for point in position_grid.GRID_POINTS:
-            text = self.config(point.stage)
-            for field, value in (("seed", "7"), ("env_seed", "7"), ("episodes_per_task", "1"), ("max_tasks", "1"), ("x", "{:.6f}".format(point.x)), ("y", "{:.6f}".format(point.y)), ("width", "0.500000"), ("height", "0.500000")):
+        self.assertEqual(summary["planned"]["grid_positions"], [
+            {"stage": stage, "x": x, "y": y} for stage, x, y in APPROVED_GRID
+        ])
+        for stage, x, y in APPROVED_GRID:
+            text = self.config(stage)
+            for field, value in (("seed", "7"), ("env_seed", "7"), ("episodes_per_task", "1"), ("max_tasks", "1"), ("x", "{:.6f}".format(x)), ("y", "{:.6f}".format(y)), ("width", "0.500000"), ("height", "0.500000")):
                 self.assertIn("{}: {}".format(field, value), text)
         self.assertNotIn("agentview_occlusion", self.config("nominal-sentinel"))
 
@@ -111,7 +120,7 @@ class PositionGridDriverTests(unittest.TestCase):
     def test_wrong_sentinel_episode_index_is_invalid_evidence(self):
         summary, runner = self.run_driver([aggregate(True, episode_index=1)])
         self.assertEqual(summary["stop_reason"], "nominal_sentinel_invalid_evidence")
-        self.assertEqual(summary["completed"]["sentinel_outcome"], "success")
+        self.assertIsNone(summary["completed"]["sentinel_outcome"])
         self.assertEqual(len(runner.commands), 1)
 
     def test_invalid_indices_and_incomplete_replay_or_control_never_pass_gates(self):
@@ -134,6 +143,34 @@ class PositionGridDriverTests(unittest.TestCase):
         summary, runner = self.run_driver([aggregate(), aggregate(False)] + [aggregate(False)] * 5 + [aggregate()] * 3 + [Response(None, 2)])
         self.assertEqual(summary["stop_reason"], "control_infrastructure_error")
         self.assertEqual(len(summary["completed"]["control_outcomes"]), 3)
+        self.assertIsNone(summary["nominal_controls_passed"])
+
+    def test_replay_and_control_aggregate_load_errors_stop_before_gate(self):
+        summary, runner = self.run_driver([aggregate(), aggregate(False), aggregate(False), Response()])
+        self.assertEqual(summary["stop_reason"], "replay_infrastructure_error")
+        self.assertEqual(summary["completed"]["replay_outcomes"], ["policy_failure"])
+        self.assertEqual(summary["completed"]["stages"][-1]["status"], "infrastructure_error")
+        self.assertIsNone(summary["reproducible"])
+        self.results = self.root / "control-aggregate" / "results"
+        summary, runner = self.run_driver([aggregate(), aggregate(False)] + [aggregate(False)] * 5 + [aggregate()] * 2 + [Response()])
+        self.assertEqual(summary["stop_reason"], "control_infrastructure_error")
+        self.assertEqual(len(summary["completed"]["control_outcomes"]), 2)
+        self.assertEqual(summary["completed"]["stages"][-1]["status"], "infrastructure_error")
+        self.assertIsNone(summary["nominal_controls_passed"])
+
+    def test_cutoff_during_replay_or_controls_preserves_incomplete_gates(self):
+        replay_clock = Clock(*([0] * 8 + [1, 1]))
+        summary, runner = self.run_driver([aggregate(), aggregate(False)], clock=replay_clock, cutoff=1)
+        self.assertEqual(summary["stop_reason"], "launch_cutoff_reached")
+        self.assertEqual(len(runner.commands), 2)
+        self.assertEqual(summary["completed"]["replay_outcomes"], [])
+        self.assertIsNone(summary["reproducible"])
+        self.results = self.root / "control-cutoff" / "results"
+        control_clock = Clock(*([0] * 24 + [1, 1]))
+        summary, runner = self.run_driver([aggregate(), aggregate(False)] + [aggregate(False)] * 5, clock=control_clock, cutoff=1)
+        self.assertEqual(summary["stop_reason"], "launch_cutoff_reached")
+        self.assertEqual(len(runner.commands), 7)
+        self.assertEqual(summary["completed"]["control_outcomes"], [])
         self.assertIsNone(summary["nominal_controls_passed"])
 
     def test_cutoff_and_unsafe_existing_session_are_rejected_or_persisted(self):

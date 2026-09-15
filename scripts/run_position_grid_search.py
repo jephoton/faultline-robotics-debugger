@@ -182,15 +182,14 @@ def run_session(
     sentinel = launch("nominal-sentinel")
     if sentinel is None:
         return summary
-    if sentinel.results:
-        summary["completed"]["sentinel_outcome"] = sentinel.results[0].outcome
-        save()
     if sentinel.infrastructure_error is not None or (sentinel.results and sentinel.results[0].outcome == "infrastructure_error"):
         save("nominal_sentinel_infrastructure_error")
         return summary
     if sentinel.invalid_evidence is not None:
         save("nominal_sentinel_invalid_evidence")
         return summary
+    summary["completed"]["sentinel_outcome"] = sentinel.results[0].outcome
+    save()
     if sentinel.results[0].outcome != "success":
         save("nominal_sentinel_failed")
         return summary
