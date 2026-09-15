@@ -10,7 +10,7 @@
 
 **Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. Because there was no apparent failure, the five-replay phase was correctly skipped. All 26 attempts have video and trace evidence, and the local read-only viewer is implemented at `src/robot_debug/viewer/`. This closes the valid nominal-evidence portion of M1 but does not complete M2: no failure has yet been found or reduced. The result supports only the tested task, states, and centered-occlusion range, not a general robustness claim.
 
-**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Its local implementation passed review and all 68 tests in GitHub CI; cloud execution still requires a fresh live preflight and separately approved cap.
+**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Its local implementation passed review and all 68 tests in GitHub CI. **Next execution step: Task 6, the bounded Nebius grid session**, after current-account, price, capacity and run-cap preflight. Sample-format inspection for the first external import may proceed read-only in parallel; import implementation follows the result and does not alter the preregistered grid.
 
 **Proposed product/submission plan:** [Replayable case import, Nemotron, and license](2026-09-15-case-import-nemotron-submission.md) scopes the post-grid product experience and remaining submission requirements. Jethro prioritized a replay-feasible LIBERO/robomimic-style external episode as the first import direction; exact implementation/model designs remain proposed. Apache-2.0 was selected under Jethro's delegation and added locally. [Production-artifact and Nemotron research](../../research/2026-09-15-production-artifacts-and-nemotron.md) explains the format alternatives and capability checks.
 
@@ -364,14 +364,20 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-The baseline/sweep/replay session is complete. The VM is stopped, its temporary
-SSH rule is absent, and the copied evidence has passed an independent raw-count
-review. Jethro selected the position-sensitivity branch. Implement and review
-the fixed-area grid locally using
-[`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md), then
-stop at its learning and cost checkpoint. Any billable execution requires a
-fresh live preflight and new run-specific cap.
+The baseline/sweep/replay session is complete and its evidence was reviewed.
+The fixed-area position-grid driver and viewer labels are implemented, reviewed,
+and CI-tested. Execute Task 6 of
+[`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md):
+complete the live Nebius preflight, confirm the applicable run-specific cap,
+run the preregistered grid with one cloud owner, copy evidence, tear down paid
+resources, and interpret the result before any new fault-family decision.
+Existing approvals persist within their exact scope; a cap or account change
+requires Jethro's decision.
 
-Before adopting the proposed model/benchmark pair, present the compatibility evidence and practical alternatives to the user for selection. Before adopting a cloud topology or resource shape, explain its cost, hardware requirements, and learning tradeoffs. Record accepted choices in `docs/decisions/`. Commit each completed documentation, setup, or implementation increment using Conventional Commits.
-
-The first success to aim for is simple: **watch one robot complete one task, know which software made it happen, and be able to run it again.**
+In parallel, read-only inspection of one real LIBERO/robomimic-style HDF5
+sample can determine which observations, actions, simulator states, assets and
+task settings are actually present. This **does not** authorize changing grid
+inputs or implementing the importer. If the sample is restorable, write a
+separate scoped import design/plan for Jethro's review. If it is not, report the
+missing prerequisites and reconsider the first external format. Nemotron API
+feasibility is a later product step, separate from GR00T's current robot runs.
