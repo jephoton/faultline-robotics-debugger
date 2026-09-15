@@ -1,8 +1,10 @@
 # Replayable Case Import and Submission Completeness Plan
 
 **Status:** proposed for Jethro's design review; no new model, import format,
-search algorithm, public license, or Token Factory spend is authorized by this
-document.
+search algorithm, or Token Factory spend is authorized by this document.
+Jethro subsequently delegated the license choice: Apache-2.0 is selected and
+implemented. See the [artifact and model research](../../research/2026-09-15-production-artifacts-and-nemotron.md)
+before selecting the import adapter or Nemotron endpoint.
 
 **Goal:** Let a robotics engineer bring a supported failure case, confirm and
 shrink it under a compute budget, then inspect a grounded diagnostic report.
@@ -17,7 +19,9 @@ seeds, robot state, camera streams, task instruction, actions, or exact
 perturbation. Inferring those from pixels and claiming a replayable failure
 would be misleading.
 
-The first importable unit should instead be a **replayable case bundle**:
+The first import should accept an **existing supported artifact**, not require
+users to export a proprietary bundle. Generate the internal case index below
+from its available metadata and ask only for missing replay prerequisites:
 
 ```text
 case manifest
@@ -46,8 +50,8 @@ the reducer or create a regression test without a compatible case bundle.
 | Phase | Deliverable | Gate |
 | --- | --- | --- |
 | 0. Finish the accepted fixed-area cloud grid | Real bounded M2 evidence, even if negative | Fresh Nebius preflight and Jethro-approved cap; no import/Nemotron changes in that preregistered run |
-| 1. License decision | Top-level `LICENSE`, README/model-data attribution, repository-page visibility | Jethro chooses the public code license and copyright holder wording before publication |
-| 2. Case-bundle contract | A locally validated, read-only import of one *supported* GR00T/LIBERO episode bundle | Jethro approves the format and rejection rules; fixture and traversal tests pass |
+| 1. License decision | Apache-2.0 added by Terra under delegated choice; README and package metadata updated | Local verification complete; GitHub visibility checked after authorized publication |
+| 2. Existing-artifact adapter and case contract | Read-only import of one supported episode format; separate inspection and replay capability | Jethro approves adapter after a real sample feasibility check; fixture and traversal tests pass |
 | 3. Confirm and reduce | Replays imported suspected case, checks matched nominal controls, reduces only the already-approved fault family | Jethro approves reducer/search budget and failure predicate; positive demo requires actual valid outcomes |
 | 4. Nemotron pilot | Evidence-grounded triage and candidate suggestions through Nebius Token Factory | Model/API availability, input format, cost, credentials, and output quality are checked before billable calls |
 | 5. Product demonstration | Viewer shows import identity, budget/progress, nominal/failing/reduced videos, exact replay recipe, cost, and uncertainty | A fresh operator can complete the flow; no unsupported causal or robustness claims |
@@ -64,10 +68,10 @@ repository. Recommend **Apache-2.0** for this robotics tooling project because
 its explicit patent grant can help future reuse; **MIT** is a shorter,
 permissive alternative. This choice governs *our code*, not GR00T weights,
 LIBERO assets, third-party libraries, or imported videos. Their upstream terms
-and redistribution rights must be documented separately. Jethro must approve
-the choice and copyright-holder line. After that, use the exact steward text,
-add `LICENSE` at the root, state the SPDX identifier in the README/package
-metadata, and verify GitHub displays the license. Do not generate a custom
+and redistribution rights must be documented separately. Jethro delegated the
+choice on September 15; Apache-2.0 was selected and Terra added the exact steward
+text at `LICENSE`, with README and package metadata. No copyright holder was
+invented. Verify GitHub displays the license after publication. Do not generate a custom
 license or copy third-party media into the public repository without rights.
 
 ### Nemotron role (Phase 4)
@@ -145,7 +149,7 @@ Use parallel agents only for substantial independent work with nonoverlapping
 files. One owner manages external resources and spending. At each red gate,
 explain alternatives and evidence to Jethro: bundle vs MP4-only import,
 supported fault family, reducer algorithm and cap, Nemotron model/input mode,
-and public license. Green implementation may proceed after those decisions;
+and external data rights. The code license is now settled. Green implementation may proceed after those decisions;
 claims for the submission require a human interpretation checkpoint.
 
 ## Sources and claim limits
