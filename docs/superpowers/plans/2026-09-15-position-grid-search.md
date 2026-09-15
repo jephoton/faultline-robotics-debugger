@@ -589,14 +589,14 @@ git commit -m "docs(search): prepare bounded position session"
 
 **Files:** read-only review of every Task 1--4 path
 
-- [ ] **Step 1: Run a specification-compliance review**
+- [x] **Step 1: Run a specification-compliance review**
 
 Give a fresh reviewer the design, plan, diff, and acceptance criteria. Require
 it to report omissions, unapproved scope, legacy-driver regressions, summary
 ambiguities, candidate-shopping paths, missing matched-control gates, and
 credential/cost leakage. It must not edit the builder's files.
 
-- [ ] **Step 2: Run a code-quality review after compliance passes**
+- [x] **Step 2: Run a code-quality review after compliance passes**
 
 Require a separate review of validation, path safety, atomic persistence,
 deadline behavior, Python 3.8 compatibility, test strength, viewer escaping,
