@@ -8,9 +8,9 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. Because there was no apparent failure, the five-replay phase was correctly skipped. All 26 attempts have video and trace evidence, and the local read-only viewer is implemented at `src/robot_debug/viewer/`. This closes the valid nominal-evidence portion of M1 but does not complete M2: no failure has yet been found or reduced. The result supports only the tested task, states, and centered-occlusion range, not a general robustness claim.
+**Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. On September 16, the fixed-area position grid found a failure at `x=0.50, y=0.00`: the original attempt and all five exact replays failed, while the nominal sentinel and all five matched nominal controls succeeded. All grid attempts have video, trace, aggregate, and SQLite evidence indexed by the local viewer. This completes the engineering evidence gate for M2 on the exact tested case; it does not establish causal diagnosis or general robustness.
 
-**Next scoped plan (September 15):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. The plan in [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) adds one fresh nominal sentinel, eight previously untested 25%-area positions, five exact replays of the first apparent failure, and conditional matched nominal controls. Its local implementation passed review and all 68 tests in GitHub CI. **Next execution step remains Task 6, the bounded Nebius grid session**, after current-account, price, capacity and run-cap preflight. The CLI context blocker was resolved. `3-series` and `4-series` infrastructure attempts reached SSH but never an evaluator. Labeled checks in `4-series` identified a typo in the local operator harness revision; a focused regression first failed then passed after correction. Both sessions ended with the VM STOPPED and exact SSH rule absent. A distinct `5-series` retry starts the unchanged grid only if corrected runtime checks pass, subject to refreshed preflight and the cumulative $2 cap. Sample-format inspection is independent and does not alter the preregistered grid.
+**Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
 **Proposed product/submission plan:** [Replayable case import, Nemotron, and license](2026-09-15-case-import-nemotron-submission.md) scopes the post-grid product experience and remaining submission requirements. Jethro prioritized a replay-feasible LIBERO/robomimic-style external episode as the first import direction; exact implementation/model designs remain proposed. Apache-2.0 was selected under Jethro's delegation and added locally. [Production-artifact and Nemotron research](../../research/2026-09-15-production-artifacts-and-nemotron.md) explains the format alternatives and capability checks.
 
@@ -239,10 +239,10 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
-### Current roadmap position — September 15
+### Current roadmap position — September 16
 
-We have completed the nominal-evidence portion of **M1: reproducible runner**
-and are working on **M2: first failure**:
+We have completed **M1: reproducible runner** and the engineering gate for
+**M2: first failure** on one exact case:
 
 - The runner, structured evidence, replay control, first perturbation adapter,
   and viewer are implemented locally and tested.
@@ -250,14 +250,12 @@ and are working on **M2: first failure**:
   videos and traces for every nominal and perturbed attempt.
 - The runner, structured evidence, first perturbation adapter, replay control,
   and viewer are now exercised end to end on Nebius.
-- M2 is not complete until a matched perturbed failure repeats at least four
-  times in five exact replays. A single apparent failure is insufficient.
-- The bounded session reached the accepted no-failure branch: all severities
-  through 25% centered occlusion succeeded, so M2 remains open and M3/M4 have
-  not started.
-- The fixed-area position-grid search is implemented locally and passed review;
-  it has not run in the cloud, so it provides no new M2
-  experimental evidence.
+- The upper-right 25%-area cell failed in discovery and 5/5 exact replays;
+  the nominal sentinel and 5/5 fresh nominal controls succeeded.
+- M2 is complete for that narrow experiment contract. Reduction has not yet
+  shown whether a smaller rectangle preserves the failure, so M4 remains open.
+- M3 has not started. The accepted happy-path order remains reducer design
+  before parallel scaling so the HPC comparison accelerates real diagnosis.
 
 ### Immediate decision after the bounded session
 
@@ -364,15 +362,16 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-The baseline/sweep/replay session is complete and its evidence was reviewed.
-The fixed-area position-grid driver and viewer labels are implemented, reviewed,
-and CI-tested. Execute Task 6 of
-[`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md):
-complete the live Nebius preflight, confirm the applicable run-specific cap,
-run the preregistered grid with one cloud owner, copy evidence, tear down paid
-resources, and interpret the result before any new fault-family decision.
-Existing approvals persist within their exact scope; a cap or account change
-requires Jethro's decision.
+The baseline/sweep/replay and fixed-area position-grid sessions are complete.
+The grid produced the first replayable failure and passed the matched nominal
+control gate. The next material decision is the M4 reducer design: choose the
+case-size objective, search algorithm, retry budget, and fresh confirmation
+seeds for shrinking the upper-right rectangle without changing the failure
+definition. Write and approve that plan before implementation or cloud spend.
+After reduction, design M3's equal-work 1/2/4-worker comparison around this real
+diagnostic workload. Existing approvals persist only within their exact scope;
+a reducer algorithm, worker topology, new cap, or account change requires
+Jethro's decision.
 
 The parallel sample check found no external file in this repository. Upstream
 LIBERO HDF5 does contain actions, observations, simulator states, model XML,

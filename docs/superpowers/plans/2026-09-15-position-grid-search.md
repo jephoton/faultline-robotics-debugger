@@ -603,7 +603,7 @@ deadline behavior, Python 3.8 compatibility, test strength, viewer escaping,
 and maintainability. The implementation owner fixes findings and reruns the
 complete suite before integration.
 
-- [ ] **Step 3: Present the learning checkpoint to Jethro**
+- [x] **Step 3: Present the learning checkpoint to Jethro**
 
 Explain:
 
@@ -637,21 +637,21 @@ and not a measured future charge.
 - Modify after evidence exists: `docs/experiments/position-grid-search.md`
 - Modify after evidence exists: `docs/superpowers/plans/2026-09-12-robot-debugging-startup.md`
 
-- [ ] **Step 1: Preflight and arm independent cleanup**
+- [x] **Step 1: Preflight and arm independent cleanup**
 
 Use one cloud owner. Save credential-free preflight evidence, create only the
 temporary exact-egress SSH rule, start the existing VM, and arm a stop request
 at minute 24 so shutdown completes inside the 26-minute ceiling. Never rely on
 the Python launch cutoff as the VM cost watchdog.
 
-- [ ] **Step 2: Validate the frozen runtime before driver launch**
+- [x] **Step 2: Validate the frozen runtime before driver launch**
 
 Confirm the checked-out commit, pinned harness/container/model revisions, GPU,
 model cache, HF authorization, model-server readiness, fresh empty results root,
 venv evaluator path, and ignored operator-log directory. Stop on mismatch; do
 not repair or redesign inside a billable experiment.
 
-- [ ] **Step 3: Run the position driver once**
+- [x] **Step 3: Run the position driver once**
 
 ```bash
 /home/robot/.venvs/vla-eval/bin/python \
@@ -665,13 +665,13 @@ not repair or redesign inside a billable experiment.
 If infrastructure invalidates this logical session, stop and amend the plan
 with a distinct run identifier before any retry; never reuse the nonempty root.
 
-- [ ] **Step 4: Collect evidence and clean up first**
+- [x] **Step 4: Collect evidence and clean up first**
 
 Copy summary, aggregate JSON, generated YAML, and logs before media. Request VM
 stop by the watchdog boundary, then independently verify `STOPPED` and zero
 temporary rules. Never delay cleanup for video transfer.
 
-- [ ] **Step 5: Recompute and expose the result**
+- [x] **Step 5: Recompute and expose the result**
 
 Independently recompute the sentinel, ordered cells, first apparent failure,
 five replay outcomes, five control outcomes, terminal reason, media counts,
