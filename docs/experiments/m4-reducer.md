@@ -52,9 +52,11 @@ C:\Windows\py.exe -3.11 scripts/run_failure_reduction.py `
 ## Replay
 
 Replay the exported final rectangle using the `replay_command` recorded inside
-`replay_case.json`, from the upstream evaluator working directory identified
-by `<upstream-root>` so relative config paths resolve correctly. Inspect that
-recorded command rather than inventing flags.
+`replay_case.json`. The manifest's relative config path is relative to
+`<results-root>/failure-reduction`; start the replay from that session
+directory (or resolve the path explicitly), while invoking the evaluator from
+the appropriate environment/path identified by the evaluator setup. Inspect
+the recorded command rather than inventing flags.
 The manifest identifies the task, seeds, expected outcome, acceptance rule,
 configuration, and repository revision.
 

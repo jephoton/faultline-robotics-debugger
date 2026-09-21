@@ -159,11 +159,9 @@ class ArtifactCatalog:
     def load_reduction(self) -> Dict[str, Any]:
         """Load only the fixed reducer session pair under the artifact root."""
         session_name = "failure-reduction"
-        session_root = (self.artifact_root / session_name).resolve()
         try:
-            session_root.relative_to(self.artifact_root)
-            summary_path = session_root / "session_summary.json"
-            replay_path = session_root / "replay_case.json"
+            summary_path = self._resolve_path(session_name + "/session_summary.json")
+            replay_path = self._resolve_path(session_name + "/replay_case.json")
             if not summary_path.is_file() or not replay_path.is_file():
                 return {"reduction": None, "warnings": []}
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -175,13 +173,18 @@ class ArtifactCatalog:
 
     @staticmethod
     def _validate_reduction(summary: Mapping[str, Any], replay: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(summary, Mapping) or not isinstance(replay, Mapping):
+            return None
         geometry = summary.get("geometry", {})
+        completed = summary.get("completed", {})
+        if not isinstance(geometry, Mapping) or not isinstance(completed, Mapping):
+            return None
         parent = geometry.get("parent")
         current = geometry.get("current")
         final = geometry.get("final")
         lineage = summary.get("lineage")
         replay_rect = replay.get("rectangle")
-        decisions = summary.get("completed", {}).get("decisions", [])
+        decisions = completed.get("decisions", [])
         rule = replay.get("acceptance_rule")
         terminal = summary.get("stop_reason")
         if not isinstance(lineage, list) or not lineage or not isinstance(decisions, list) or not decisions:
@@ -207,10 +210,16 @@ class ArtifactCatalog:
         parent_values, final_values = coordinates(parent), coordinates(final)
         if parent_values is None or final_values is None or not same(current, final) or not same(replay_rect, final):
             return None
+        if (final_values[2] * final_values[3] >= parent_values[2] * parent_values[3]
+                or final_values[0] < parent_values[0] or final_values[1] < parent_values[1]
+                or final_values[0] + final_values[2] > parent_values[0] + parent_values[2]
+                or final_values[1] + final_values[3] > parent_values[1] + parent_values[3]):
+            return None
         last_lineage = lineage[-1]
         if not isinstance(last_lineage, Mapping) or not same(last_lineage.get("rectangle"), final):
             return None
-        accepted = [item for item in decisions if isinstance(item, Mapping) and item.get("decision") == "pass"
+        accepted = [item for item in decisions if isinstance(item, Mapping) and item.get("label") == "candidate"
+                    and item.get("decision") == "pass"
                     and same(item.get("rectangle"), final)]
         if not accepted:
             return None
@@ -221,7 +230,7 @@ class ArtifactCatalog:
         parent_area, reduced_area = parent_values[2] * parent_values[3], final_values[2] * final_values[3]
         certification = None
         if terminal == "reduced_failure_with_nominal_controls":
-            controls = summary.get("completed", {}).get("control_outcomes", [])
+            controls = completed.get("control_outcomes", [])
             if not isinstance(controls, list) or len(controls) != 5 or any(item != "success" for item in controls):
                 return None
             certification = "4/5 rule passed"

@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -207,6 +208,13 @@ class ViewerServerTests(unittest.TestCase):
         status, _, body = self.get("/api/reduction")
         self.assertIsNone(json.loads(body)["reduction"])
 
+        for malformed in ([], None, {"geometry": None}, {"completed": None}):
+            (reduction / "session_summary.json").write_text(json.dumps(malformed), encoding="utf-8")
+            (reduction / "replay_case.json").write_text("[]", encoding="utf-8")
+            status, _, body = self.get("/api/reduction")
+            self.assertEqual(status, 200)
+            self.assertIsNone(json.loads(body)["reduction"])
+
         self._write_reduction_fixture()
         manifest = json.loads((reduction / "replay_case.json").read_text(encoding="utf-8"))
         manifest["rectangle"]["width"] = 0.25
@@ -215,7 +223,9 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIsNone(json.loads(body)["reduction"])
 
     def test_reduction_endpoint_with_failed_nominal_controls_has_no_certification(self):
-        self._write_reduction_fixture(stop_reason="reduced_failure_nominal_controls_failed")
+        self._write_reduction_fixture(
+            stop_reason="reduced_failure_nominal_controls_failed", control_outcomes=["success"] * 4 + ["task_failure"]
+        )
 
         status, _, body = self.get("/api/reduction")
 
@@ -224,7 +234,47 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIsNone(reduction["certification"])
         self.assertEqual(reduction["terminal_outcome"], "reduced_failure_nominal_controls_failed")
 
-    def _write_reduction_fixture(self, *, stop_reason="reduced_failure_with_nominal_controls"):
+    def test_reduction_endpoint_rejects_zero_outside_parent_and_parent_decisions(self):
+        self._write_reduction_fixture()
+        reduction = self.root / "failure-reduction"
+        summary_path = reduction / "session_summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["geometry"]["final"]["width"] = 0.5
+        summary["geometry"]["final"]["area"] = 0.25
+        summary["geometry"]["current"] = dict(summary["geometry"]["final"])
+        summary["lineage"][0]["rectangle"] = dict(summary["geometry"]["final"])
+        summary["completed"]["decisions"][0]["rectangle"] = dict(summary["geometry"]["final"])
+        summary["completed"]["decisions"][0]["label"] = "parent"
+        summary_path.write_text(json.dumps(summary), encoding="utf-8")
+        self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
+
+        self._write_reduction_fixture()
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["geometry"]["final"]["x"] = 0.8
+        summary["geometry"]["current"] = dict(summary["geometry"]["final"])
+        summary["lineage"][0]["rectangle"] = dict(summary["geometry"]["final"])
+        summary["completed"]["decisions"][0]["rectangle"] = dict(summary["geometry"]["final"])
+        summary_path.write_text(json.dumps(summary), encoding="utf-8")
+        self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_reduction_endpoint_rejects_file_symlink_escape(self):
+        outside = self.root.parent / (self.root.name + "-outside")
+        outside.mkdir()
+        try:
+            (outside / "session_summary.json").write_text("{}", encoding="utf-8")
+            (outside / "replay_case.json").write_text("{}", encoding="utf-8")
+            reduction = self.root / "failure-reduction"
+            reduction.mkdir()
+            os.symlink(outside / "session_summary.json", reduction / "session_summary.json")
+            os.symlink(outside / "replay_case.json", reduction / "replay_case.json")
+            self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
+        finally:
+            for path in (outside / "session_summary.json", outside / "replay_case.json"):
+                path.unlink(missing_ok=True)
+            outside.rmdir()
+
+    def _write_reduction_fixture(self, *, stop_reason="reduced_failure_with_nominal_controls", control_outcomes=None):
         reduction = self.root / "failure-reduction"
         reduction.mkdir(exist_ok=True)
         rectangle = {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.5}
@@ -245,7 +295,7 @@ class ViewerServerTests(unittest.TestCase):
                     "label": "candidate", "edge": "left", "decision": "pass",
                     "rectangle": rectangle, "outcomes": ["policy_failure"] * 4 + ["success"],
                 }],
-                "control_outcomes": ["success"] * 5,
+                    "control_outcomes": control_outcomes if control_outcomes is not None else ["success"] * 5,
             },
         }
         replay = {
