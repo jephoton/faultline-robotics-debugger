@@ -319,9 +319,11 @@ def _write_config(
     project_root: Path,
     stage_name: str,
     episode_indices: Sequence[int],
-    side: Optional[float],
+    side: Optional[float] = None,
     x: Optional[float] = None,
     y: Optional[float] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
 ) -> None:
     params = [
         "      suite: libero_object",
@@ -329,10 +331,9 @@ def _write_config(
         "      env_seed: 7",
         "      num_steps_wait: 10",
     ]
-    if side is None:
-        if x is not None or y is not None:
-            raise ValueError("x and y require an enabled occlusion")
-    else:
+    if side is not None:
+        if width is not None or height is not None:
+            raise ValueError("side cannot be combined with width or height")
         _validate_finite_number("side", side)
         if side <= 0:
             raise ValueError("side must be greater than zero")
@@ -344,7 +345,24 @@ def _write_config(
         else:
             _validate_finite_number("x", x)
             _validate_finite_number("y", y)
-        if x < 0 or y < 0 or x + side > 1 or y + side > 1:
+        width = side
+        height = side
+    elif width is None and height is None:
+        if x is not None or y is not None:
+            raise ValueError("x and y require an enabled occlusion")
+    else:
+        if width is None or height is None:
+            raise ValueError("width and height must be supplied together")
+        if x is None or y is None:
+            raise ValueError("rectangular occlusion requires x and y")
+        _validate_finite_number("width", width)
+        _validate_finite_number("height", height)
+        _validate_finite_number("x", x)
+        _validate_finite_number("y", y)
+        if width <= 0 or height <= 0:
+            raise ValueError("width and height must be greater than zero")
+    if width is not None and height is not None:
+        if x < 0 or y < 0 or x + width > 1 or y + height > 1:
             raise ValueError("occlusion must remain within image bounds")
         params.extend(
             [
@@ -352,8 +370,8 @@ def _write_config(
                 "        enabled: true",
                 "        x: {:.6f}".format(x),
                 "        y: {:.6f}".format(y),
-                "        width: {:.6f}".format(side),
-                "        height: {:.6f}".format(side),
+                "        width: {:.6f}".format(width),
+                "        height: {:.6f}".format(height),
                 "        color: [0, 0, 0]",
                 "        opacity: 1.0",
             ]
