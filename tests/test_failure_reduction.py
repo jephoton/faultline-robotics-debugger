@@ -89,6 +89,40 @@ class FailureReductionDriverTests(unittest.TestCase):
         summary, runner = self.run_driver([aggregate()], clock=Clock(100, 102, 102), cutoff=11)
         self.assertEqual(summary["stop_reason"], "launch_cutoff_reached"); self.assertEqual(runner.commands, []); self.assertGreaterEqual(summary["elapsed_seconds"], 12)
 
+    def test_interrupt_persists_active_elapsed_time_before_reraise(self):
+        clock = Clock(0, 0, 100, 100)
+        def interrupted(*args, **kwargs):
+            clock(); raise KeyboardInterrupt("during evaluator")
+        with self.assertRaises(KeyboardInterrupt):
+            reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, launch_cutoff_seconds=10, command_runner=interrupted, monotonic_clock=clock)
+        saved = json.loads((self.results / "failure-reduction" / "session_summary.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(saved["elapsed_seconds"], 100)
+        resumed = Runner([aggregate()])
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, launch_cutoff_seconds=10, command_runner=resumed, monotonic_clock=Clock(200, 200, 200))
+        self.assertEqual(summary["stop_reason"], "launch_cutoff_reached"); self.assertEqual(resumed.commands, [])
+
+    def test_resume_after_completed_search_preserves_search_history(self):
+        initial = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 4), *([aggregate(False)] * 4)]
+        interrupted = InterruptingRunner(initial, interrupt_at=17)
+        with self.assertRaises(KeyboardInterrupt): self.run_driver(initial, runner_class=lambda _: interrupted)
+        before = json.loads((self.results / "failure-reduction" / "session_summary.json").read_text(encoding="utf-8"))
+        resumed = Runner([aggregate()] * 5)
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
+        self.assertEqual(resumed.commands.__len__(), 5)
+        self.assertEqual(summary["completed"]["decisions"], before["completed"]["decisions"])
+        self.assertEqual(summary["lineage"], before["lineage"])
+        self.assertEqual(summary["reduction_search_stop"], before["reduction_search_stop"])
+
+    def test_candidate_stage_and_decision_records_include_normalized_area(self):
+        responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), *([aggregate()] * 5)]
+        summary, _ = self.run_driver(responses)
+        for stage in summary["completed"]["stages"]:
+            if stage["stage"].startswith("delta-"):
+                self.assertEqual(stage["area"], stage["rectangle"]["width"] * stage["rectangle"]["height"])
+        for decision in summary["completed"]["decisions"]:
+            if decision["label"] == "candidate":
+                self.assertEqual(decision["area"], decision["rectangle"]["width"] * decision["rectangle"]["height"])
+
     def test_controls_require_five_successes(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False)]
         summary, _ = self.run_driver(responses); self.assertEqual(summary["stop_reason"], "reduced_failure_nominal_controls_failed")

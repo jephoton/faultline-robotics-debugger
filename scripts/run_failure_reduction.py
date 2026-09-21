@@ -58,7 +58,7 @@ class ReductionSession:
             return existing.resolve(), summary
         directory = base._prepare_session_directory(root, session_directory_name=SESSION_DIRECTORY_NAME)
         plan = self._plan(); plan["launch_cutoff_seconds"] = self.launch_cutoff_seconds
-        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "config_paths": [], "elapsed_seconds": 0.0, "reduction_search_stop": None, "stop_reason": None}
+        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "config_paths": [], "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
 
     def elapsed(self) -> float: return self.prior_elapsed + max(0.0, self.clock() - self.started_at)
     def _valid_count(self) -> int: return sum(len(stage.get("results", [])) for stage in self.summary["completed"]["stages"] if stage["status"] == "completed")
@@ -94,11 +94,13 @@ class ReductionSession:
         kwargs: dict[str, Any] = {"config_path": config_path, "output_dir": output_dir, "project_root": self.project_root, "stage_name": name, "episode_indices": (0,)}
         if rect is not None: kwargs.update(x=rect.x, y=rect.y, width=rect.width, height=rect.height)
         base._write_config(**kwargs)
-        stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
+        stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "area": None if rect is None else rect.area, "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
         self.summary["config_paths"].append(stage["config_path"])
         try:
             completed = self.command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config_path)], cwd=self.upstream_root, check=False)
-        except KeyboardInterrupt: raise
+        except KeyboardInterrupt:
+            self.save()
+            raise
         except Exception as error:
             stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "command_runner: {}".format(error); return self._record_stage(stage)
         if getattr(completed, "returncode", 0) not in (0, None):
@@ -116,13 +118,18 @@ class ReductionSession:
     def _record_decision(self, *, label: str, edge: Optional[str], delta: Optional[float], rect: Rect, outcomes: list[str], decision: str) -> None:
         decisions = self.summary["completed"]["decisions"]
         decisions[:] = [item for item in decisions if not (item["label"] == label and item.get("edge") == edge and item.get("delta") == delta and item["rectangle"] == _rect_dict(rect))]
-        decisions.append({"label": label, "edge": edge, "delta": delta, "rectangle": _rect_dict(rect), "outcomes": outcomes, "decision": decision}); self.save()
+        decisions.append({"label": label, "edge": edge, "delta": delta, "rectangle": _rect_dict(rect), "area": rect.area, "outcomes": outcomes, "decision": decision}); self.save()
     def _candidate_attempt_count(self) -> int: return sum(1 for stage in self.summary["completed"]["stages"] if stage["stage"].startswith("delta-") and stage["status"] == "completed")
     def _gate_error(self, stage: base.StageResult) -> bool:
         if stage.infrastructure_error: self.save("infrastructure_error"); return True
         if stage.invalid_evidence: self.save("invalid_evidence"); return True
         return False
     def run_gate(self, *, label: str, rect: Rect, edge: Optional[str] = None, delta: Optional[float] = None) -> GateDecision | None:
+        for saved in self.summary["completed"]["decisions"]:
+            if saved["label"] == label and saved.get("edge") == edge and saved.get("delta") == delta and saved["rectangle"] == _rect_dict(rect):
+                if saved["decision"] == GateDecision.PASS.value: return GateDecision.PASS
+                if saved["decision"] == GateDecision.REJECT.value: return GateDecision.REJECT
+                if saved["decision"] == "inconclusive_budget_exhausted": return GateDecision.PENDING
         outcomes: list[str] = []
         for attempt in range(1, 6):
             stage = self._saved_stage(_stage_rect(label, rect, attempt, delta, edge))
@@ -147,9 +154,10 @@ class ReductionSession:
         if outcome != "success": self.save("nominal_sentinel_failed"); return False
         return True
     def _accept(self, candidate, delta: float) -> None:
-        self.summary["certified_rectangle"] = _rect_dict(candidate.rect); self.summary["lineage"].append({"edge": candidate.edge, "delta": delta, "rectangle": _rect_dict(candidate.rect), "area": candidate.rect.area}); self.save()
+        self.summary["certified_rectangle"] = _rect_dict(candidate.rect); self.summary["reduction_search"] = {"active_delta": delta, "current_rectangle": _rect_dict(candidate.rect)}; self.summary["lineage"].append({"edge": candidate.edge, "delta": delta, "rectangle": _rect_dict(candidate.rect), "area": candidate.rect.area}); self.save()
     def run_candidates(self) -> bool:
-        current = Rect(**self.summary["certified_rectangle"]); delta_index = 0
+        search = self.summary["reduction_search"]
+        current = Rect(**search["current_rectangle"]); delta_index = DELTAS.index(search["active_delta"])
         while delta_index < len(DELTAS):
             delta, accepted = DELTAS[delta_index], False
             for candidate in candidates(current, delta=delta):
@@ -162,6 +170,8 @@ class ReductionSession:
                     self.save("candidate_budget_exhausted"); return False
             if accepted: continue  # Binding greedy restart rule: same delta, new parent.
             delta_index += 1
+            if delta_index < len(DELTAS):
+                self.summary["reduction_search"] = {"active_delta": DELTAS[delta_index], "current_rectangle": _rect_dict(current)}; self.save()
         self.summary["reduction_search_stop"] = "local_minimum_reached"; self.save()
         if self.summary["lineage"]: return True
         self.save("local_minimum_reached"); return False
@@ -188,7 +198,7 @@ class ReductionSession:
         parent = self.run_gate(label="parent", rect=PARENT_RECT)
         if parent is None: return self.summary
         if parent is not GateDecision.PASS: self.save("parent_not_reproducible"); return self.summary
-        if not self.run_candidates(): return self.summary
+        if self.summary["reduction_search_stop"] is None and not self.run_candidates(): return self.summary
         self.run_controls()
         if self.summary["stop_reason"] in {"reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"}: self._write_manifest()
         return self.summary
