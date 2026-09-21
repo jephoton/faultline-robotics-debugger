@@ -65,18 +65,19 @@ class ReductionSession:
             return existing.resolve(), summary
         directory = base._prepare_session_directory(root, session_directory_name=SESSION_DIRECTORY_NAME)
         plan = self._plan(); plan["launch_cutoff_seconds"] = self.launch_cutoff_seconds
-        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "config_paths": [], "in_flight": None, "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
+        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "physical_episode_count": 0, "config_paths": [], "in_flight": None, "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
 
     def elapsed(self) -> float: return self.prior_elapsed + max(0.0, self.clock() - self.started_at)
     def _valid_count(self) -> int: return sum(len(stage.get("results", [])) for stage in self.summary["completed"]["stages"] if stage["status"] == "completed")
+    def _physical_count(self) -> int: return sum(stage.get("physical_episode_count", 0) for stage in self.summary["completed"]["stages"])
     def save(self, stop_reason: Optional[str] = None) -> None:
         if stop_reason is not None:
             if stop_reason not in STOP_REASONS: raise ValueError("unknown stop reason: {}".format(stop_reason))
             self.summary["stop_reason"] = stop_reason
         current = Rect(**self.summary["certified_rectangle"])
         self.summary["geometry"]["current"] = _geometry(current); self.summary["geometry"]["final"] = _geometry(current)
-        self.summary["candidate_valid_attempts"] = self._candidate_attempt_count(); self.summary["valid_episode_count"] = self._valid_count(); self.summary["elapsed_seconds"] = self.elapsed()
-        if self.summary["valid_episode_count"] > TOTAL_VALID_EPISODE_LIMIT: raise RuntimeError("valid episode cap exceeded")
+        self.summary["candidate_valid_attempts"] = self._candidate_attempt_count(); self.summary["valid_episode_count"] = self._valid_count(); self.summary["physical_episode_count"] = self._physical_count(); self.summary["elapsed_seconds"] = self.elapsed()
+        if self.summary["physical_episode_count"] > TOTAL_VALID_EPISODE_LIMIT: raise RuntimeError("physical episode cap exceeded")
         base._atomic_write_json(self.session_dir / "session_summary.json", self.summary)
 
     def _saved_stage(self, name: str) -> Optional[base.StageResult]:
@@ -100,14 +101,19 @@ class ReductionSession:
             if results[0].episode_index != 0 or self._invalid_task_id(output_dir): raise ValueError("aggregate task or episode index does not match stage plan")
         except Exception as error:
             stage["status"] = "invalid_evidence"; stage["invalid_evidence"] = "{}: {}".format(type(error).__name__, error); return
-        stage["status"] = "completed"
+        stage["status"] = "completed"; stage["physical_episode_count"] = 1
         if results[0].outcome == "infrastructure_error":
             stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "aggregate reports infrastructure error"
         else: stage["results"] = [asdict(item) for item in results]
     def _reconcile_in_flight(self) -> base.StageResult:
         stage = dict(self.summary["in_flight"])
         output_dir = self.session_dir / stage["output_path"]
-        if not output_dir.exists() or not list(output_dir.rglob("*_aggregate.json")):
+        if stage.get("runner_error"):
+            if output_dir.exists() and list(output_dir.rglob("*_aggregate.json")):
+                self._classify_evidence(stage, output_dir)
+            stage["physical_episode_count"] = stage.get("physical_episode_count", 0)
+            stage["results"] = []; stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = stage["runner_error"]
+        elif not output_dir.exists() or not list(output_dir.rglob("*_aggregate.json")):
             stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "in-flight launch has no durable aggregate"
         else:
             self._classify_evidence(stage, output_dir)
@@ -116,12 +122,12 @@ class ReductionSession:
     def launch(self, name: str, *, rect: Optional[Rect]) -> Optional[base.StageResult]:
         saved = self._saved_stage(name)
         if saved is not None: return saved
-        if self._valid_count() >= TOTAL_VALID_EPISODE_LIMIT or not base.should_launch_next(self.elapsed(), self.launch_cutoff_seconds): self.save("launch_cutoff_reached"); return None
+        if self._physical_count() >= TOTAL_VALID_EPISODE_LIMIT or not base.should_launch_next(self.elapsed(), self.launch_cutoff_seconds): self.save("launch_cutoff_reached"); return None
         output_dir, config_path = self.session_dir / "runs" / name, self.configs_dir / (name + ".yaml")
         kwargs: dict[str, Any] = {"config_path": config_path, "output_dir": output_dir, "project_root": self.project_root, "stage_name": name, "episode_indices": (0,)}
         if rect is not None: kwargs.update(x=rect.x, y=rect.y, width=rect.width, height=rect.height)
         base._write_config(**kwargs)
-        stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "area": None if rect is None else rect.area, "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
+        stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "area": None if rect is None else rect.area, "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "physical_episode_count": 0, "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
         stage["status"] = "in_flight"; self.summary["config_paths"].append(stage["config_path"]); self.summary["in_flight"] = stage; self.save()
         try:
             completed = self.command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config_path)], cwd=self.upstream_root, check=False)

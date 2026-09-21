@@ -46,6 +46,11 @@ class WritingInterruptAtRunner(Runner):
         if len(self.commands) - 1 == self.interrupt_at: raise KeyboardInterrupt("after aggregate write")
         return result
 
+class WritingExceptionRunner(Runner):
+    def __call__(self, command, *, cwd, check):
+        super().__call__(command, cwd=cwd, check=check)
+        raise RuntimeError("after aggregate write")
+
 class CountingRunner(Runner):
     def __init__(self, responses): super().__init__(responses); self.completed = 0
     def __call__(self, command, *, cwd, check):
@@ -180,6 +185,25 @@ class FailureReductionDriverTests(unittest.TestCase):
         summary, runner = self.run_driver([aggregate(), *parent, *candidates, *([aggregate()] * 5)], runner_class=CountingRunner)
         self.assertEqual(runner.completed, 23)
         self.assertEqual(summary["valid_episode_count"], runner.completed)
+
+    def test_nonzero_exit_with_valid_aggregate_is_infrastructure_not_gate_evidence(self):
+        summary, _ = self.run_driver([Response(aggregate(), 2)])
+        self.assertEqual(summary["stop_reason"], "infrastructure_error")
+        self.assertEqual(summary["completed"]["sentinel_outcome"], None)
+        self.assertEqual(summary["completed"]["stages"][0]["results"], [])
+        self.assertEqual(summary["valid_episode_count"], 0)
+        self.assertEqual(summary["physical_episode_count"], 1)
+        resumed = Runner([])
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
+        self.assertEqual(resumed.commands, []); self.assertEqual(summary["completed"]["control_outcomes"], [])
+
+    def test_exception_after_valid_aggregate_is_infrastructure_not_gate_evidence(self):
+        summary, _ = self.run_driver([aggregate()], runner_class=WritingExceptionRunner)
+        self.assertEqual(summary["stop_reason"], "infrastructure_error")
+        self.assertEqual(summary["completed"]["sentinel_outcome"], None)
+        self.assertEqual(summary["completed"]["stages"][0]["results"], [])
+        self.assertEqual(summary["valid_episode_count"], 0)
+        self.assertEqual(summary["physical_episode_count"], 1)
 
     def test_controls_require_five_successes(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False)]
