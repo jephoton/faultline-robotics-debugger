@@ -71,8 +71,19 @@ appear in the implementation commit.
 
 ## 10. Verification commands and expected results
 
-Run from the implementation worktree with the full launcher path because `py`
-may not be inherited in the subprocess environment:
+The September 21 retry is authorized after a diagnosed sandbox ACL mismatch.
+The worktree now grants scoped modify permission to `BUILTIN\Users`; do not
+change ACLs or Git configuration further. The sandbox cannot launch Jethro's
+Windows Store Python 3.11 package, so use the bundled Python 3.12 interpreter
+for the worker's red/green loop:
+
+```powershell
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+& 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest tests.test_reduce -v
+```
+
+The OpenAI coordinator will independently run the required Python 3.11 check
+outside the sandbox before accepting the result:
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
@@ -81,9 +92,11 @@ git diff --check
 git status --short
 ```
 
-Expected: every reducer test passes; `git diff --check` is silent; before the
-commit only the two authorized paths are changed, and afterward the worktree is
-clean at the new detached commit.
+Expected in both environments: every reducer test passes. `git diff --check` is
+silent; before the commit only the two authorized paths are changed, and
+afterward the worktree is clean at the new detached commit. For Git commands,
+use per-process `GIT_CONFIG_COUNT` safe-directory environment entries; do not
+persist configuration.
 
 ## 11. Required instructions and skills
 
@@ -106,7 +119,9 @@ change models or providers.
 
 ## 13. Attempt limit
 
-Make no more than two implementation attempts for the same failure. A focused
+Jethro authorized one fresh handoff after the original worktree-permission
+failure was diagnosed and repaired. Within this fresh handoff, make no more
+than two implementation attempts for the same code/test failure. A focused
 test/fix cycle counts as one attempt when it addresses the same root failure.
 
 ## 14. Stop conditions

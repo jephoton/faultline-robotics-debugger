@@ -38,6 +38,10 @@ Jethro explicitly authorized DeepSeek Flash for the isolated pure reducer
 kernel on September 21. Its durable task handoff is
 `docs/codex-handoff/tasks/2026-09-21-reducer-kernel.md`; this authorization
 does not include other files, models, providers, or external systems.
+The initial handoff exposed a Windows ACL mismatch between sandbox identities.
+Jethro authorized a fresh retry after a scoped permission repair; partial files
+were removed before retrying, and independent Python 3.11 verification remains
+the coordinator's responsibility.
 
 ## Known limitations and risks
 
