@@ -52,10 +52,10 @@ class ArtifactCatalog:
         self.artifact_root = artifact_root.resolve()
 
     def snapshot(self) -> CatalogSnapshot:
-        episodes = []
+        episodes_by_identity = {}
         warnings = []
         if not self.artifact_root.is_dir():
-            return CatalogSnapshot(episodes=episodes, warnings=["Artifact directory is unavailable"])
+            return CatalogSnapshot(episodes=[], warnings=["Artifact directory is unavailable"])
 
         for aggregate_path in sorted(self.artifact_root.rglob("*_aggregate.json")):
             try:
@@ -69,12 +69,32 @@ class ArtifactCatalog:
                     for raw in task["episodes"]:
                         task_id = int(raw["task_id"])
                         episode_index = int(raw.get("episode_idx", raw.get("episode_id", 0)))
-                        identity = "{}:{}:{}".format(relative, task_id, episode_index)
+                        eval_id = aggregate.get("eval_id")
+                        identity = "{}:{}:{}".format(
+                            eval_id if eval_id else relative, task_id, episode_index
+                        )
                         episode_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-                        media_dir = resolved_aggregate.parent / "episodes" / benchmark
                         stem = "task{:04d}_ep{:04d}_*".format(task_id, episode_index)
-                        video = next(iter(sorted(media_dir.glob(stem + ".mp4"))), None)
-                        trace = next(iter(sorted(media_dir.glob(stem + ".jsonl"))), None)
+                        media_directories = (
+                            resolved_aggregate.parent / "episodes" / benchmark,
+                            resolved_aggregate.parent,
+                        )
+                        video = next(
+                            (
+                                match
+                                for directory in media_directories
+                                for match in sorted(directory.glob(stem + ".mp4"))
+                            ),
+                            None,
+                        )
+                        trace = next(
+                            (
+                                match
+                                for directory in media_directories
+                                for match in sorted(directory.glob(stem + ".jsonl"))
+                            ),
+                            None,
+                        )
                         reason = raw.get("failure_reason")
                         if reason == "exception":
                             outcome = "infrastructure_error"
@@ -84,8 +104,7 @@ class ArtifactCatalog:
                             outcome = "episode_timeout"
                         else:
                             outcome = "task_failure"
-                        episodes.append(
-                            EpisodeView(
+                        candidate = EpisodeView(
                                 episode_id=episode_id,
                                 run_name=resolved_aggregate.parent.name,
                                 benchmark=benchmark,
@@ -118,11 +137,22 @@ class ArtifactCatalog:
                                     if trace is not None
                                     else None
                                 ),
-                            )
                         )
+                        existing = episodes_by_identity.get(identity)
+                        candidate_media = sum(
+                            item is not None for item in (candidate.video_path, candidate.trace_path)
+                        )
+                        existing_media = (
+                            sum(item is not None for item in (existing.video_path, existing.trace_path))
+                            if existing is not None
+                            else -1
+                        )
+                        if candidate_media > existing_media:
+                            episodes_by_identity[identity] = candidate
             except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
                 warnings.append("{}: {}".format(aggregate_path.name, type(error).__name__))
 
+        episodes = list(episodes_by_identity.values())
         episodes.sort(key=lambda item: (item.created_at, item.episode_id), reverse=True)
         return CatalogSnapshot(episodes=episodes, warnings=warnings)
 

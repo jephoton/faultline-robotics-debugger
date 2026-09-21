@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -128,6 +129,34 @@ class ArtifactCatalogTests(unittest.TestCase):
 
         self.assertEqual(snapshot.episodes, [])
         self.assertEqual(len(snapshot.warnings), 1)
+
+    def test_catalog_deduplicates_copied_aggregate_and_prefers_media(self):
+        full_run = write_episode(self.root / "full", "valid", success=True)
+        metadata_run = self.root / "core" / "valid"
+        metadata_run.mkdir(parents=True)
+        shutil.copy2(
+            full_run / "libero-object_aggregate.json",
+            metadata_run / "libero-object_aggregate.json",
+        )
+
+        episodes = ArtifactCatalog(self.root).list_episodes()
+
+        self.assertEqual(len(episodes), 1)
+        self.assertIsNotNone(episodes[0].video_path)
+        self.assertIn("full/valid/episodes/libero-object", episodes[0].video_path)
+
+    def test_catalog_finds_media_beside_flat_layout_aggregate(self):
+        run = write_episode(self.root, "flat", success=True)
+        nested = run / "episodes" / "libero-object"
+        for media in tuple(nested.iterdir()):
+            media.replace(run / media.name)
+        nested.rmdir()
+        nested.parent.rmdir()
+
+        episode = ArtifactCatalog(self.root).list_episodes()[0]
+
+        self.assertEqual(episode.video_path, "flat/task0000_ep0000_success.mp4")
+        self.assertEqual(episode.trace_path, "flat/task0000_ep0000_success.jsonl")
 
     def test_media_path_cannot_escape_artifact_root(self):
         write_episode(self.root, "valid", success=True)
