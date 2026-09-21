@@ -28,6 +28,8 @@ def make_handler(
                     self.send_json(200, {"status": "ok", "read_only": True})
                 elif path == "/api/runs":
                     self.send_json(200, catalog.snapshot().to_dict())
+                elif path == "/api/reduction":
+                    self.send_json(200, catalog.load_reduction())
                 elif path.startswith("/api/episodes/") and path.endswith("/trace"):
                     episode_id = path[len("/api/episodes/") : -len("/trace")]
                     self.send_json(200, catalog.load_trace(episode_id))

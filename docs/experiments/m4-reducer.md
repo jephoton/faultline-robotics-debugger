@@ -21,19 +21,15 @@ The reducer driver accepts only the flags shown by its help output:
 C:\Windows\py.exe -3.11 scripts/run_failure_reduction.py --help
 ```
 
-For a local fake-evaluator integration, pass temporary repository-relative
-placeholders to the driver as appropriate:
+For the free local fake-evaluator integration, use the focused tests:
 
 ```powershell
-C:\Windows\py.exe -3.11 scripts/run_failure_reduction.py `
-  --upstream-root <upstream-root> `
-  --project-root <repo-root> `
-  --results-root <repo-root>/artifacts
+C:\Windows\py.exe -3.11 -m unittest tests.test_failure_reduction tests.test_viewer_server -v
 ```
 
 Do not commit the generated `failure-reduction/` directory or its media.
 
-## Live Nebius run
+## Live/Nebius run (fresh cap approval required)
 
 A live reduction is gated by fresh human approval. Before launching, refresh
 the selected account, region, GPU quota, credit expiry/balance, capacity,
@@ -44,10 +40,21 @@ The run must preserve its `session_summary.json` and exported
 `replay_case.json`; the viewer should show lineage only when both are present
 and the recorded final geometry agrees with the replay rectangle.
 
+After the help check and fresh cap approval, launch with the verified flags:
+
+```powershell
+C:\Windows\py.exe -3.11 scripts/run_failure_reduction.py `
+  --upstream-root <upstream-root> `
+  --project-root <repo-root> `
+  --results-root <repo-root>/artifacts
+```
+
 ## Replay
 
 Replay the exported final rectangle using the `replay_command` recorded inside
-`replay_case.json`. Inspect that recorded command rather than inventing flags.
+`replay_case.json`, from the upstream evaluator working directory identified
+by `<upstream-root>` so relative config paths resolve correctly. Inspect that
+recorded command rather than inventing flags.
 The manifest identifies the task, seeds, expected outcome, acceptance rule,
 configuration, and repository revision.
 

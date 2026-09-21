@@ -61,6 +61,7 @@ function rectangleArea(rectangle) {
 }
 
 function acceptedReduction(snapshot) {
+  if (snapshot && snapshot.reduction && snapshot.reduction.metrics) return snapshot.reduction;
   const summary = snapshot && snapshot.session_summary;
   const replay = snapshot && snapshot.replay_case;
   const lineage = summary && Array.isArray(summary.lineage) ? summary.lineage : [];
@@ -171,16 +172,24 @@ function renderDiagnostics(episode) {
   aside.append(title, detail);
   if (state.reduction) {
     const reduction = document.createElement("section"); reduction.className = "reduction-lineage";
-    const heading = document.createElement("h2"); heading.textContent = "Reduction";
+    const heading = document.createElement("h2"); heading.textContent = `Reduction session / ${state.reduction.session_name}`;
     const facts = document.createElement("dl");
-    [["Parent area", state.reduction.parentArea * 100], ["Reduced area", state.reduction.reducedArea * 100],
-      ["Area reduction", state.reduction.areaReduction * 100]].forEach(([label, value]) => {
+    const metrics = state.reduction.metrics || {};
+    [["Parent area", metrics.parent_area_percent], ["Reduced area", metrics.reduced_area_percent],
+      ["Area reduction", metrics.area_reduction_percent]].forEach(([label, value]) => {
       const term = document.createElement("dt"); term.textContent = label;
       const valueNode = document.createElement("dd"); valueNode.textContent = `${value.toFixed(2)}%`;
       facts.append(term, valueNode);
     });
-    const certification = document.createElement("p"); certification.textContent = `Certification ${state.reduction.certification}`;
-    reduction.append(heading, facts, certification); aside.append(reduction);
+    reduction.append(heading, facts);
+    if (state.reduction.certification) {
+      const certification = document.createElement("p"); certification.textContent = `Certification ${state.reduction.certification}`;
+      reduction.append(certification);
+    } else {
+      const note = document.createElement("p"); note.className = "failure-detail";
+      note.textContent = `Uncertified terminal result: ${state.reduction.terminal_outcome}`; reduction.append(note);
+    }
+    aside.append(reduction);
   }
   if (episode.outcome === "infrastructure_error") {
     const status = document.createElement("p"); status.className = "failure-detail";

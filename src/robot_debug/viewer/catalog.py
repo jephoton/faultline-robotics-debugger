@@ -156,6 +156,88 @@ class ArtifactCatalog:
         episodes.sort(key=lambda item: (item.created_at, item.episode_id), reverse=True)
         return CatalogSnapshot(episodes=episodes, warnings=warnings)
 
+    def load_reduction(self) -> Dict[str, Any]:
+        """Load only the fixed reducer session pair under the artifact root."""
+        session_name = "failure-reduction"
+        session_root = (self.artifact_root / session_name).resolve()
+        try:
+            session_root.relative_to(self.artifact_root)
+            summary_path = session_root / "session_summary.json"
+            replay_path = session_root / "replay_case.json"
+            if not summary_path.is_file() or not replay_path.is_file():
+                return {"reduction": None, "warnings": []}
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            replay = json.loads(replay_path.read_text(encoding="utf-8"))
+            reduction = self._validate_reduction(summary, replay)
+            return {"reduction": reduction, "warnings": [] if reduction else ["Reduction evidence is incomplete or mismatched"]}
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return {"reduction": None, "warnings": ["Reduction evidence is unavailable"]}
+
+    @staticmethod
+    def _validate_reduction(summary: Mapping[str, Any], replay: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        geometry = summary.get("geometry", {})
+        parent = geometry.get("parent")
+        current = geometry.get("current")
+        final = geometry.get("final")
+        lineage = summary.get("lineage")
+        replay_rect = replay.get("rectangle")
+        decisions = summary.get("completed", {}).get("decisions", [])
+        rule = replay.get("acceptance_rule")
+        terminal = summary.get("stop_reason")
+        if not isinstance(lineage, list) or not lineage or not isinstance(decisions, list) or not decisions:
+            return None
+        if rule != {"failures": 4, "attempts": 5} or terminal not in {
+            "reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"
+        }:
+            return None
+
+        def coordinates(rect):
+            if not isinstance(rect, Mapping):
+                return None
+            values = tuple(float(rect[key]) for key in ("x", "y", "width", "height"))
+            return values if (all(0 <= value <= 1 for value in values) and values[2] > 0 and values[3] > 0
+                              and values[0] + values[2] <= 1 and values[1] + values[3] <= 1) else None
+
+        def same(left, right):
+            left_values, right_values = coordinates(left), coordinates(right)
+            return left_values is not None and right_values is not None and all(
+                abs(a - b) <= 1e-9 for a, b in zip(left_values, right_values)
+            )
+
+        parent_values, final_values = coordinates(parent), coordinates(final)
+        if parent_values is None or final_values is None or not same(current, final) or not same(replay_rect, final):
+            return None
+        last_lineage = lineage[-1]
+        if not isinstance(last_lineage, Mapping) or not same(last_lineage.get("rectangle"), final):
+            return None
+        accepted = [item for item in decisions if isinstance(item, Mapping) and item.get("decision") == "pass"
+                    and same(item.get("rectangle"), final)]
+        if not accepted:
+            return None
+        outcomes = accepted[-1].get("outcomes", [])
+        if (not isinstance(outcomes, list) or len(outcomes) > 5 or outcomes.count("policy_failure") < 4
+                or any(item not in {"policy_failure", "success"} for item in outcomes)):
+            return None
+        parent_area, reduced_area = parent_values[2] * parent_values[3], final_values[2] * final_values[3]
+        certification = None
+        if terminal == "reduced_failure_with_nominal_controls":
+            controls = summary.get("completed", {}).get("control_outcomes", [])
+            if not isinstance(controls, list) or len(controls) != 5 or any(item != "success" for item in controls):
+                return None
+            certification = "4/5 rule passed"
+        return {
+            "session_name": "failure-reduction",
+            "metrics": {
+                "parent_area_percent": parent_area * 100,
+                "reduced_area_percent": reduced_area * 100,
+                "area_reduction_percent": (parent_area - reduced_area) / parent_area * 100,
+            },
+            "certification": certification,
+            "terminal_outcome": terminal,
+            "parent_rectangle": dict(parent),
+            "reduced_rectangle": dict(final),
+        }
+
     def list_episodes(self) -> Sequence[EpisodeView]:
         return self.snapshot().episodes
 

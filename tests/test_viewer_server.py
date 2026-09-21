@@ -168,6 +168,94 @@ class ViewerServerTests(unittest.TestCase):
         ):
             self.assertIn(token, app)
 
+    def test_reduction_endpoint_returns_validated_session_metrics(self):
+        self._write_reduction_fixture()
+
+        status, _, body = self.get("/api/reduction")
+
+        payload = json.loads(body)
+        self.assertEqual(status, 200)
+        reduction = payload["reduction"]
+        self.assertEqual(reduction["session_name"], "failure-reduction")
+        self.assertEqual(reduction["metrics"], {
+            "parent_area_percent": 25.0,
+            "reduced_area_percent": 18.75,
+            "area_reduction_percent": 25.0,
+        })
+        self.assertEqual(reduction["certification"], "4/5 rule passed")
+        self.assertEqual(reduction["terminal_outcome"], "reduced_failure_with_nominal_controls")
+
+    def test_reduction_endpoint_isolated_from_unrelated_episode_and_media_json(self):
+        self._write_reduction_fixture()
+
+        status, _, body = self.get("/api/reduction")
+        media_status, _, _ = self.get("/media/failure-reduction/session_summary.json")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["reduction"]["session_name"], "failure-reduction")
+        self.assertIn(media_status, (400, 404))
+
+    def test_reduction_endpoint_suppresses_missing_malformed_and_mismatched_evidence(self):
+        status, _, body = self.get("/api/reduction")
+        self.assertEqual(status, 200)
+        self.assertIsNone(json.loads(body)["reduction"])
+
+        reduction = self.root / "failure-reduction"
+        reduction.mkdir()
+        (reduction / "session_summary.json").write_text("{bad", encoding="utf-8")
+        (reduction / "replay_case.json").write_text("{}", encoding="utf-8")
+        status, _, body = self.get("/api/reduction")
+        self.assertIsNone(json.loads(body)["reduction"])
+
+        self._write_reduction_fixture()
+        manifest = json.loads((reduction / "replay_case.json").read_text(encoding="utf-8"))
+        manifest["rectangle"]["width"] = 0.25
+        (reduction / "replay_case.json").write_text(json.dumps(manifest), encoding="utf-8")
+        status, _, body = self.get("/api/reduction")
+        self.assertIsNone(json.loads(body)["reduction"])
+
+    def test_reduction_endpoint_with_failed_nominal_controls_has_no_certification(self):
+        self._write_reduction_fixture(stop_reason="reduced_failure_nominal_controls_failed")
+
+        status, _, body = self.get("/api/reduction")
+
+        reduction = json.loads(body)["reduction"]
+        self.assertEqual(status, 200)
+        self.assertIsNone(reduction["certification"])
+        self.assertEqual(reduction["terminal_outcome"], "reduced_failure_nominal_controls_failed")
+
+    def _write_reduction_fixture(self, *, stop_reason="reduced_failure_with_nominal_controls"):
+        reduction = self.root / "failure-reduction"
+        reduction.mkdir(exist_ok=True)
+        rectangle = {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.5}
+        summary = {
+            "geometry": {
+                "parent": {"x": 0.5, "y": 0.0, "width": 0.5, "height": 0.5, "area": 0.25},
+                "current": dict(rectangle, area=0.1875),
+                "final": dict(rectangle, area=0.1875),
+            },
+            "lineage": [{"edge": "left", "rectangle": rectangle, "area": 0.1875}],
+            "completed": {"decisions": [{
+                "label": "candidate", "edge": "left", "decision": "pass",
+                "rectangle": rectangle, "outcomes": ["policy_failure"] * 4 + ["success"],
+            }]},
+            "stop_reason": stop_reason,
+            "completed": {
+                "decisions": [{
+                    "label": "candidate", "edge": "left", "decision": "pass",
+                    "rectangle": rectangle, "outcomes": ["policy_failure"] * 4 + ["success"],
+                }],
+                "control_outcomes": ["success"] * 5,
+            },
+        }
+        replay = {
+            "rectangle": rectangle,
+            "acceptance_rule": {"failures": 4, "attempts": 5},
+            "expected_outcome": "policy_failure",
+        }
+        (reduction / "session_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+        (reduction / "replay_case.json").write_text(json.dumps(replay), encoding="utf-8")
+
 
 if __name__ == "__main__":
     unittest.main()
