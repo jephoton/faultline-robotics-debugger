@@ -25,11 +25,14 @@
 
 ## Next material decision
 
-Design M4 failure reduction for the proven upper-right occlusion. Jethro must
-choose the reduction objective, algorithm, retry budget, confirmation seeds,
-and any fresh cloud cap before dependent execution. The current recommendation
-is a bounded nested rectangle reducer, followed by an equal-work 1/2/4-worker
-HPC comparison using the resulting diagnostic workload.
+M4 now has an accepted design direction and a scoped implementation plan at
+`docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md`. The next
+work is local-only: pure reducer, rectangle config support, session driver,
+viewer lineage, and fake-evaluator verification. DeepSeek execution requires
+separate explicit authorization and its mandated isolated handoff. Before any
+live Nebius session, Jethro must approve a fresh dollar cap after current price,
+balance, quota, and resource state are verified. M3's equal-work 1/2/4-worker
+comparison follows the M4 evidence.
 
 ## Known limitations and risks
 
@@ -39,4 +42,3 @@ HPC comparison using the resulting diagnostic workload.
   or durable off-machine.
 - The position failure is empirical and spatially specific, not a causal or
   universal robustness claim.
-

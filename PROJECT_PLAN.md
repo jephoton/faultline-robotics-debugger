@@ -278,6 +278,21 @@ of benchmarking arbitrary episode throughput. The reducer algorithm, parallel
 worker topology, any new perturbation family, and any higher spending cap remain
 separate user decisions.
 
+### Current scoped plan — M4 bounded failure reducer
+
+The accepted reducer direction and executable task breakdown are recorded in
+[`2026-09-21-m4-bounded-failure-reducer.md`](docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md).
+It uses nested greedy edge stripping, an adaptive four-of-five repeatability
+gate, and a proposed 23-valid-episode ceiling. Implementation is divided by
+capability and file ownership: DeepSeek Flash may implement only the isolated
+pure kernel after separate explicit authorization, Terra owns evaluator
+integration, Luna owns stable viewer/docs work, and the stronger OpenAI
+coordinator retains design, integration, review, and all cloud spending.
+
+No paid M4 run is authorized by the plan. Local implementation and fake-runner
+verification come first; live price/resource preflight and a fresh dollar cap
+remain a red checkpoint.
+
 ### Record contract
 
 Every episode record must contain:
