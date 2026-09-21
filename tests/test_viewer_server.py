@@ -136,6 +136,38 @@ class ViewerServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
 
+    def test_reduction_lineage_fixture_contract_is_present_in_viewer_assets(self):
+        reduction = self.root / "failure-reduction"
+        reduction.mkdir()
+        (reduction / "session_summary.json").write_text(
+            json.dumps({
+                "geometry": {
+                    "parent": {"area": 0.25},
+                    "final": {"area": 0.1875},
+                },
+                "lineage": [{"rectangle": {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.5}}],
+                "stop_reason": "reduced_failure_with_nominal_controls",
+            }), encoding="utf-8"
+        )
+        (reduction / "replay_case.json").write_text(
+            json.dumps({"acceptance_rule": {"failures": 4, "attempts": 5}}),
+            encoding="utf-8",
+        )
+
+        status, _, body = self.get("/app.js")
+
+        self.assertEqual(status, 200)
+        app = body.decode("utf-8")
+        for token in (
+            "replay_case.json",
+            "session_summary.json",
+            "accepted lineage",
+            "reduction-lineage",
+            "Parent area",
+            "Certification",
+        ):
+            self.assertIn(token, app)
+
 
 if __name__ == "__main__":
     unittest.main()

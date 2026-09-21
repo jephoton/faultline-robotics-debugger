@@ -1,6 +1,6 @@
 const state = {
   episodes: [], warnings: [], primaryId: null, comparisonId: null,
-  traces: new Map(), linked: true, refreshMs: 2000,
+  traces: new Map(), linked: true, refreshMs: 2000, reduction: null,
 };
 
 const outcomeLabels = {
@@ -51,6 +51,40 @@ function perturbationPosition(episode) {
     : "";
 }
 
+function rectangleArea(rectangle) {
+  if (!rectangle || typeof rectangle !== "object") return null;
+  const area = Number(rectangle.area);
+  if (Number.isFinite(area) && area > 0) return area;
+  const width = Number(rectangle.width); const height = Number(rectangle.height);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    ? width * height : null;
+}
+
+function acceptedReduction(snapshot) {
+  const summary = snapshot && snapshot.session_summary;
+  const replay = snapshot && snapshot.replay_case;
+  const lineage = summary && Array.isArray(summary.lineage) ? summary.lineage : [];
+  if (!summary || !replay || !lineage.length || !replay.acceptance_rule) return null;
+  const parentArea = rectangleArea(summary.geometry && summary.geometry.parent);
+  const reducedArea = rectangleArea(summary.geometry && (summary.geometry.final || summary.geometry.current));
+  const replayArea = rectangleArea(replay.rectangle);
+  const failures = Number(replay.acceptance_rule.failures);
+  const attempts = Number(replay.acceptance_rule.attempts);
+  if (!parentArea || !reducedArea || !replayArea || reducedArea !== replayArea || reducedArea >= parentArea ||
+      !Number.isInteger(failures) || !Number.isInteger(attempts) || failures <= 0 || attempts <= 0) return null;
+  return { parentArea, reducedArea, areaReduction: (parentArea - reducedArea) / parentArea,
+    certification: `${failures}/${attempts} rule passed` };
+}
+
+async function refreshReduction() {
+  // The read-only API validates session_summary.json, replay_case.json, and accepted lineage.
+  try {
+    const response = await fetch("/api/reduction", { cache: "no-store" });
+    if (!response.ok) { state.reduction = null; return; }
+    state.reduction = acceptedReduction(await response.json());
+  } catch (_) { state.reduction = null; }
+}
+
 function renderComparisonStory(primary, comparison) {
   const perturbed = isPerturbed(primary) ? primary : isPerturbed(comparison) ? comparison : null;
   const perturbedArea = perturbationArea(perturbed);
@@ -78,6 +112,7 @@ async function refreshCatalog() {
   const response = await fetch("/api/runs", { cache: "no-store" });
   if (!response.ok) throw new Error(`catalog request failed: ${response.status}`);
   const snapshot = await response.json();
+  await refreshReduction();
   state.episodes = snapshot.episodes;
   state.warnings = snapshot.warnings;
   let visible = displayEpisodes();
@@ -134,6 +169,19 @@ function renderDiagnostics(episode) {
     perturbation: isPerturbed(episode) ? episode.perturbation : "NOMINAL / NO FAULT",
     provenance: episode.provenance }, null, 2);
   aside.append(title, detail);
+  if (state.reduction) {
+    const reduction = document.createElement("section"); reduction.className = "reduction-lineage";
+    const heading = document.createElement("h2"); heading.textContent = "Reduction";
+    const facts = document.createElement("dl");
+    [["Parent area", state.reduction.parentArea * 100], ["Reduced area", state.reduction.reducedArea * 100],
+      ["Area reduction", state.reduction.areaReduction * 100]].forEach(([label, value]) => {
+      const term = document.createElement("dt"); term.textContent = label;
+      const valueNode = document.createElement("dd"); valueNode.textContent = `${value.toFixed(2)}%`;
+      facts.append(term, valueNode);
+    });
+    const certification = document.createElement("p"); certification.textContent = `Certification ${state.reduction.certification}`;
+    reduction.append(heading, facts, certification); aside.append(reduction);
+  }
   if (episode.outcome === "infrastructure_error") {
     const status = document.createElement("p"); status.className = "failure-detail";
     status.textContent = "INFRA ERROR — POLICY NOT EVALUATED"; aside.append(status);
