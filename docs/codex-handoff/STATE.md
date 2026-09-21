@@ -28,11 +28,16 @@
 M4 now has an accepted design direction and a scoped implementation plan at
 `docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md`. The next
 work is local-only: pure reducer, rectangle config support, session driver,
-viewer lineage, and fake-evaluator verification. DeepSeek execution requires
-separate explicit authorization and its mandated isolated handoff. Before any
+viewer lineage, and fake-evaluator verification. The isolated DeepSeek kernel
+handoff has now been explicitly authorized. Before any
 live Nebius session, Jethro must approve a fresh dollar cap after current price,
 balance, quota, and resource state are verified. M3's equal-work 1/2/4-worker
 comparison follows the M4 evidence.
+
+Jethro explicitly authorized DeepSeek Flash for the isolated pure reducer
+kernel on September 21. Its durable task handoff is
+`docs/codex-handoff/tasks/2026-09-21-reducer-kernel.md`; this authorization
+does not include other files, models, providers, or external systems.
 
 ## Known limitations and risks
 
