@@ -43,6 +43,13 @@ class ReductionSession:
         self.started_at = self.clock(); self.session_dir, self.summary = self._open_or_create()
         self.prior_elapsed = float(self.summary.get("elapsed_seconds", 0.0))
         self.configs_dir = self.session_dir / "configs"; self.configs_dir.mkdir(exist_ok=True)
+        self.reconciliation_terminal = False
+        if self.summary.get("in_flight"):
+            reconciled = self._reconcile_in_flight()
+            if reconciled.infrastructure_error:
+                self.save("infrastructure_error"); self.reconciliation_terminal = True
+            elif reconciled.invalid_evidence:
+                self.save("invalid_evidence"); self.reconciliation_terminal = True
 
     @staticmethod
     def _plan() -> dict[str, Any]:
@@ -58,7 +65,7 @@ class ReductionSession:
             return existing.resolve(), summary
         directory = base._prepare_session_directory(root, session_directory_name=SESSION_DIRECTORY_NAME)
         plan = self._plan(); plan["launch_cutoff_seconds"] = self.launch_cutoff_seconds
-        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "config_paths": [], "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
+        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "config_paths": [], "in_flight": None, "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
 
     def elapsed(self) -> float: return self.prior_elapsed + max(0.0, self.clock() - self.started_at)
     def _valid_count(self) -> int: return sum(len(stage.get("results", [])) for stage in self.summary["completed"]["stages"] if stage["status"] == "completed")
@@ -77,6 +84,8 @@ class ReductionSession:
             if stage["stage"] == name: return base.StageResult([SimpleNamespace(**item) for item in stage.get("results", [])], stage.get("infrastructure_error"), stage.get("invalid_evidence"))
         return None
     def _record_stage(self, stage: dict[str, Any]) -> base.StageResult:
+        if self._saved_stage(stage["stage"]) is not None: return self._saved_stage(stage["stage"])
+        self.summary["in_flight"] = None
         self.summary["completed"]["stages"].append(stage)
         for item in stage["results"]: self.summary["outcomes"].append(dict(item, stage=stage["stage"], rectangle=stage["rectangle"]))
         self.save(); return base.StageResult([SimpleNamespace(**item) for item in stage["results"]], stage["infrastructure_error"], stage["invalid_evidence"])
@@ -85,6 +94,24 @@ class ReductionSession:
         try:
             raw = json.loads(paths[0].read_text(encoding="utf-8")); return raw["tasks"][0]["episodes"][0].get("task_id") != 0
         except (IndexError, KeyError, TypeError, json.JSONDecodeError): return True
+    def _classify_evidence(self, stage: dict[str, Any], output_dir: Path) -> None:
+        try:
+            results = base._load_stage_results(output_dir, expected_count=1)
+            if results[0].episode_index != 0 or self._invalid_task_id(output_dir): raise ValueError("aggregate task or episode index does not match stage plan")
+        except Exception as error:
+            stage["status"] = "invalid_evidence"; stage["invalid_evidence"] = "{}: {}".format(type(error).__name__, error); return
+        stage["status"] = "completed"
+        if results[0].outcome == "infrastructure_error":
+            stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "aggregate reports infrastructure error"
+        else: stage["results"] = [asdict(item) for item in results]
+    def _reconcile_in_flight(self) -> base.StageResult:
+        stage = dict(self.summary["in_flight"])
+        output_dir = self.session_dir / stage["output_path"]
+        if not output_dir.exists() or not list(output_dir.rglob("*_aggregate.json")):
+            stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "in-flight launch has no durable aggregate"
+        else:
+            self._classify_evidence(stage, output_dir)
+        return self._record_stage(stage)
 
     def launch(self, name: str, *, rect: Optional[Rect]) -> Optional[base.StageResult]:
         saved = self._saved_stage(name)
@@ -95,24 +122,17 @@ class ReductionSession:
         if rect is not None: kwargs.update(x=rect.x, y=rect.y, width=rect.width, height=rect.height)
         base._write_config(**kwargs)
         stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "area": None if rect is None else rect.area, "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
-        self.summary["config_paths"].append(stage["config_path"])
+        stage["status"] = "in_flight"; self.summary["config_paths"].append(stage["config_path"]); self.summary["in_flight"] = stage; self.save()
         try:
             completed = self.command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config_path)], cwd=self.upstream_root, check=False)
         except KeyboardInterrupt:
             self.save()
             raise
         except Exception as error:
-            stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "command_runner: {}".format(error); return self._record_stage(stage)
+            stage["runner_error"] = "command_runner: {}".format(error); self.save(); return self._reconcile_in_flight()
         if getattr(completed, "returncode", 0) not in (0, None):
-            stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "evaluator returned nonzero status {}".format(completed.returncode); return self._record_stage(stage)
-        try:
-            results = base._load_stage_results(output_dir, expected_count=1)
-            if results[0].episode_index != 0 or self._invalid_task_id(output_dir): raise ValueError("aggregate task or episode index does not match stage plan")
-        except Exception as error:
-            stage["status"] = "invalid_evidence"; stage["invalid_evidence"] = "{}: {}".format(type(error).__name__, error); return self._record_stage(stage)
-        if results[0].outcome == "infrastructure_error":
-            stage["status"] = "infrastructure_error"; stage["infrastructure_error"] = "aggregate reports infrastructure error"
-        else: stage["results"] = [asdict(item) for item in results]
+            stage["runner_error"] = "evaluator returned nonzero status {}".format(completed.returncode); self.save(); return self._reconcile_in_flight()
+        self._classify_evidence(stage, output_dir)
         return self._record_stage(stage)
 
     def _record_decision(self, *, label: str, edge: Optional[str], delta: Optional[float], rect: Rect, outcomes: list[str], decision: str) -> None:

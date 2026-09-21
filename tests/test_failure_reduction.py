@@ -34,6 +34,25 @@ class InterruptingRunner(Runner):
         if len(self.commands) == self.interrupt_at: raise KeyboardInterrupt("intentional interruption")
         return super().__call__(command, cwd=cwd, check=check)
 
+class WritingInterruptRunner(Runner):
+    def __call__(self, command, *, cwd, check):
+        super().__call__(command, cwd=cwd, check=check)
+        raise KeyboardInterrupt("after aggregate write")
+
+class WritingInterruptAtRunner(Runner):
+    def __init__(self, responses, *, interrupt_at): super().__init__(responses); self.interrupt_at = interrupt_at
+    def __call__(self, command, *, cwd, check):
+        result = super().__call__(command, cwd=cwd, check=check)
+        if len(self.commands) - 1 == self.interrupt_at: raise KeyboardInterrupt("after aggregate write")
+        return result
+
+class CountingRunner(Runner):
+    def __init__(self, responses): super().__init__(responses); self.completed = 0
+    def __call__(self, command, *, cwd, check):
+        result = super().__call__(command, cwd=cwd, check=check)
+        if result.returncode == 0: self.completed += 1
+        return result
+
 class Clock:
     def __init__(self, *values): self.values = iter(values)
     def __call__(self): return next(self.values)
@@ -68,12 +87,12 @@ class FailureReductionDriverTests(unittest.TestCase):
         self.assertEqual(summary["geometry"]["parent"]["area"], .25); self.assertEqual(summary["geometry"]["final"]["area"], .1875); self.assertEqual(summary["model_identity"], reduction.MODEL_ID)
 
     def test_resume_reconstructs_three_pending_attempts_and_launches_fourth_at_global_limit(self):
-        initial = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 4), *([aggregate(False)] * 3)]
-        interrupted = InterruptingRunner(initial, interrupt_at=16)
+        initial = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 4), *([aggregate(False)] * 4)]
+        interrupted = WritingInterruptAtRunner(initial, interrupt_at=16)
         with self.assertRaises(KeyboardInterrupt): self.run_driver(initial, runner_class=lambda _: interrupted)
-        resumed = Runner([aggregate(False), *([aggregate()] * 5)])
+        resumed = Runner([aggregate()] * 5)
         summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
-        self.assertEqual(len(resumed.commands), 6); self.assertEqual(summary["candidate_valid_attempts"], 12); self.assertEqual(summary["lineage"][-1]["delta"], .0625); self.assertEqual(summary["stop_reason"], "reduced_failure_with_nominal_controls")
+        self.assertEqual(len(resumed.commands), 5); self.assertEqual(summary["candidate_valid_attempts"], 12); self.assertEqual(summary["lineage"][-1]["delta"], .0625); self.assertEqual(summary["stop_reason"], "reduced_failure_with_nominal_controls")
 
     def test_terminal_resume_repairs_missing_manifest_without_relaunching(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), *([aggregate()] * 5)]
@@ -90,7 +109,7 @@ class FailureReductionDriverTests(unittest.TestCase):
         self.assertEqual(summary["stop_reason"], "launch_cutoff_reached"); self.assertEqual(runner.commands, []); self.assertGreaterEqual(summary["elapsed_seconds"], 12)
 
     def test_interrupt_persists_active_elapsed_time_before_reraise(self):
-        clock = Clock(0, 0, 100, 100)
+        clock = Clock(0, 0, 100, 100, 100)
         def interrupted(*args, **kwargs):
             clock(); raise KeyboardInterrupt("during evaluator")
         with self.assertRaises(KeyboardInterrupt):
@@ -99,16 +118,16 @@ class FailureReductionDriverTests(unittest.TestCase):
         self.assertGreaterEqual(saved["elapsed_seconds"], 100)
         resumed = Runner([aggregate()])
         summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, launch_cutoff_seconds=10, command_runner=resumed, monotonic_clock=Clock(200, 200, 200))
-        self.assertEqual(summary["stop_reason"], "launch_cutoff_reached"); self.assertEqual(resumed.commands, [])
+        self.assertEqual(summary["stop_reason"], "infrastructure_error"); self.assertEqual(resumed.commands, [])
 
     def test_resume_after_completed_search_preserves_search_history(self):
         initial = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 4), *([aggregate(False)] * 4)]
-        interrupted = InterruptingRunner(initial, interrupt_at=17)
+        interrupted = WritingInterruptAtRunner(initial + [aggregate()], interrupt_at=17)
         with self.assertRaises(KeyboardInterrupt): self.run_driver(initial, runner_class=lambda _: interrupted)
         before = json.loads((self.results / "failure-reduction" / "session_summary.json").read_text(encoding="utf-8"))
         resumed = Runner([aggregate()] * 5)
         summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
-        self.assertEqual(resumed.commands.__len__(), 5)
+        self.assertEqual(resumed.commands.__len__(), 4)
         self.assertEqual(summary["completed"]["decisions"], before["completed"]["decisions"])
         self.assertEqual(summary["lineage"], before["lineage"])
         self.assertEqual(summary["reduction_search_stop"], before["reduction_search_stop"])
@@ -141,6 +160,26 @@ class FailureReductionDriverTests(unittest.TestCase):
         self.assertEqual(summary["lineage"], [])
         self.assertEqual(summary["certified_rectangle"], {"x": .5, "y": .0, "width": .5, "height": .5})
         self.assertEqual(summary["stop_reason"], "candidate_budget_exhausted")
+
+    def test_resume_reconciles_written_aggregate_once_without_relaunching_intent(self):
+        with self.assertRaises(KeyboardInterrupt): self.run_driver([aggregate()], runner_class=WritingInterruptRunner)
+        saved = json.loads((self.results / "failure-reduction" / "session_summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["in_flight"]["stage"], "nominal-sentinel")
+        resumed = Runner([])
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, launch_cutoff_seconds=0, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
+        self.assertEqual(resumed.commands, [])
+        self.assertIsNone(summary["in_flight"])
+        self.assertEqual([stage["stage"] for stage in summary["completed"]["stages"]], ["nominal-sentinel"])
+        self.assertEqual(summary["valid_episode_count"], 1)
+        repeated = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, launch_cutoff_seconds=0, command_runner=Runner([]), monotonic_clock=Clock(*range(1000)))
+        self.assertEqual(len(repeated["completed"]["stages"]), 1)
+
+    def test_worst_case_completed_evaluations_match_recorded_cap(self):
+        parent = [aggregate(False), aggregate(False), aggregate(False), aggregate(), aggregate(False)]
+        candidates = [aggregate(), aggregate()] * 4 + [aggregate(False)] * 4
+        summary, runner = self.run_driver([aggregate(), *parent, *candidates, *([aggregate()] * 5)], runner_class=CountingRunner)
+        self.assertEqual(runner.completed, 23)
+        self.assertEqual(summary["valid_episode_count"], runner.completed)
 
     def test_controls_require_five_successes(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False)]
