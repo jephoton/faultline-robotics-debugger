@@ -123,6 +123,25 @@ class FailureReductionDriverTests(unittest.TestCase):
             if decision["label"] == "candidate":
                 self.assertEqual(decision["area"], decision["rectangle"]["width"] * decision["rectangle"]["height"])
 
+    def test_resume_finalizes_saved_negative_search_stop_without_controls(self):
+        original_save = reduction.ReductionSession.save
+        def interrupt_after_search_stop(session, stop_reason=None):
+            original_save(session, stop_reason)
+            if session.summary["reduction_search_stop"] and not session.summary["lineage"] and stop_reason is None:
+                raise KeyboardInterrupt("after durable negative search stop")
+        reduction.ReductionSession.save = interrupt_after_search_stop
+        try:
+            responses = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 6)]
+            with self.assertRaises(KeyboardInterrupt): self.run_driver(responses)
+        finally:
+            reduction.ReductionSession.save = original_save
+        resumed = Runner([aggregate()] * 5)
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=resumed, monotonic_clock=Clock(*range(1000)))
+        self.assertEqual(resumed.commands, [])
+        self.assertEqual(summary["lineage"], [])
+        self.assertEqual(summary["certified_rectangle"], {"x": .5, "y": .0, "width": .5, "height": .5})
+        self.assertEqual(summary["stop_reason"], "candidate_budget_exhausted")
+
     def test_controls_require_five_successes(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False)]
         summary, _ = self.run_driver(responses); self.assertEqual(summary["stop_reason"], "reduced_failure_nominal_controls_failed")

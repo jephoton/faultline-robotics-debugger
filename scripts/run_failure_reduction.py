@@ -198,6 +198,9 @@ class ReductionSession:
         parent = self.run_gate(label="parent", rect=PARENT_RECT)
         if parent is None: return self.summary
         if parent is not GateDecision.PASS: self.save("parent_not_reproducible"); return self.summary
+        if self.summary["reduction_search_stop"] and not self.summary["lineage"]:
+            self.save(self.summary["reduction_search_stop"])
+            return self.summary
         if self.summary["reduction_search_stop"] is None and not self.run_candidates(): return self.summary
         self.run_controls()
         if self.summary["stop_reason"] in {"reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"}: self._write_manifest()
