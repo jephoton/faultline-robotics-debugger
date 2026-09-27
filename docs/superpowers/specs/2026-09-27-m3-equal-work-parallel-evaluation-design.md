@@ -1,6 +1,6 @@
 # M3 Equal-Work Parallel Evaluation Design
 
-**Status:** Proposed for Jethro's design review; no worker topology or cloud spending authorized
+**Status:** Accepted single-VM/shared-server design on 2026-09-27; no cloud spending authorized
 
 **Date:** 2026-09-27
 
@@ -124,9 +124,7 @@ reconciled; comparable outcome semantics are checked; the viewer or a linked
 report exposes the evidence; and the README states the measured speedup,
 cost/episode, bottleneck, and limitations without overstating generality.
 
-**Review question:** Approve approach A and this fixed-repeat M4 replay workload
-for M3? If accepted, write a bite-sized implementation plan, verify the pinned
+**Accepted next step:** Write a bite-sized implementation plan, verify the pinned
 harness's actual CLI/repeat support, calculate a live-session cap, and return
-for the separate spending decision. If the priority is end-to-end adaptive
-reducer acceleration instead, revise the design first because that changes the
-algorithm and result being measured.
+for the separate spending decision. End-to-end adaptive reducer acceleration
+remains a later design because it changes the algorithm and result measured.

@@ -30,19 +30,16 @@
 ## Next material decision
 
 M4's bounded live run and evidence validation are complete; details are in
-`docs/experiments/m4-reducer.md`. The next material step is to design M3's
-equal-work 1/2/4-worker comparison around the real reduction workload.
-Worker topology, valid outcome-drift rules, and any paid run cap remain Jethro
-decisions. The root `FEEDBACK.md` tracks submission feedback by actual tool.
+`docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
+1/2/4-worker design on one GPU VM with a shared GR00T server, using fixed
+repeats of the real M4 case. Implementation planning is next; outcome-drift
+rules and a paid run cap still need explicit review. The root `FEEDBACK.md`
+tracks submission feedback by actual tool.
 
-Jethro explicitly authorized DeepSeek Flash for the isolated pure reducer
-kernel on September 21. Its durable task handoff is
-`docs/codex-handoff/tasks/2026-09-21-reducer-kernel.md`; this authorization
-does not include other files, models, providers, or external systems.
-The initial handoff exposed a Windows ACL mismatch between sandbox identities.
-Jethro authorized a fresh retry after a scoped permission repair; partial files
-were removed before retrying, and independent Python 3.11 verification remains
-the coordinator's responsibility.
+The M4 reducer kernel's September 21 external-provider handoff is historical
+provenance only. Jethro has retired that provider from future routing after
+integration issues. See the archived handoff under `docs/codex-handoff/tasks/`
+only when investigating M4 history; do not treat it as an active instruction.
 
 ## Known limitations and risks
 
