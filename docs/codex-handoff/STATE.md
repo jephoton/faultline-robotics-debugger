@@ -10,32 +10,30 @@
 - The fixed-area position grid found a reproducible failure at normalized
   `x=0.50, y=0.00`: discovery plus 5/5 replays failed, while the nominal
   sentinel and 5/5 fresh nominal controls succeeded.
-- The ignored local artifact tree contains 45 recorded episode videos.
+- The September 27 M4 session reduced the 25%-area parent to a certified
+  14.0625%-area rectangle at `x=0.625, y=0, width=0.375, height=0.375`.
+  Its accepted cases failed 4/4, while five fresh nominal controls succeeded.
+  The 12-candidate-attempt budget ended before proving a minimum.
+- The ignored local M4 artifact tree contains 22 aggregates, traces, MP4s,
+  SQLite recordings, the summary, and the replay manifest.
 
 ## Current implementation
 
 - The read-only viewer runs from `src/robot_debug/viewer/` and scans artifacts
   on each catalog request.
-- Commit `3791fa7` deduplicates copied aggregate records by logical evaluation
-  identity, prefers the copy with attached media, and supports early flat media
-  layouts. The real catalog now exposes 45 unique episodes with zero missing
-  video paths.
-- The main branch is ahead of the configured remote; publishing remains a
-  separate user-controlled action.
+- The viewer deduplicates copied aggregates, prefers media-bearing records,
+  and displays accepted reduction lineage. Its M4 catalog indexes all 22
+  episodes with no missing media or warnings.
+- The main branch was synced with the private remote before this documentation
+  update. Public release remains a separate user-controlled action.
 
 ## Next material decision
 
-M4 has an accepted design and implementation plan at
-`docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md`. Tasks 1--6
-are complete locally: pure reducer, rectangular config support, resumable
-session driver, replay manifest, validated viewer lineage, fake-evaluator
-resume/idempotence checks, a 126-test Python 3.11 suite, and browser smoke
-testing. No live M4 episode has run and no reduced rectangle is claimed.
-
-The next step is the read-only Nebius preflight in Task 7. Before provisioning
-or running an episode, Jethro must approve a fresh dollar cap after current
-price, balance, quota, capacity, instance, disk, and firewall state are
-verified. M3's equal-work 1/2/4-worker comparison follows the M4 evidence.
+M4's bounded live run and evidence validation are complete; details are in
+`docs/experiments/m4-reducer.md`. The next material step is to design M3's
+equal-work 1/2/4-worker comparison around the real reduction workload.
+Worker topology, valid outcome-drift rules, and any paid run cap remain Jethro
+decisions. The root `FEEDBACK.md` tracks submission feedback by actual tool.
 
 Jethro explicitly authorized DeepSeek Flash for the isolated pure reducer
 kernel on September 21. Its durable task handoff is
@@ -52,5 +50,8 @@ the coordinator's responsibility.
   viewer tests are independently runnable.
 - Experiment evidence is ignored and local; do not infer that it is published
   or durable off-machine.
+- The retained 200 GiB boot disk continues to accrue storage cost while the VM
+  is stopped. A future storage/teardown decision should preserve any needed
+  model cache and copied evidence explicitly.
 - The position failure is empirical and spatially specific, not a causal or
   universal robustness claim.
