@@ -8,7 +8,9 @@ from contextlib import nullcontext
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import threading
@@ -37,11 +39,16 @@ class _LaunchCancelled(Exception):
     """A submitted item never started because another worker requested a stop."""
 
 
+class _EvaluatorInterrupted(Exception):
+    """An active evaluator was cancelled by the session owner."""
+
+
 def _run_evaluator_safely(
     argv: list[str], *, cwd: Path, check: bool, timeout: float,
     process_factory: Callable[..., Any] = subprocess.Popen,
     docker_runner: Callable[..., Any] = subprocess.run,
     stop_event: threading.Event | None = None,
+    interrupt_event: threading.Event | None = None,
     launch_lock: threading.Lock | None = None,
 ) -> Any:
     """Own the evaluator PID so timeout can trigger the pinned CLI's SIGTERM cleanup.
@@ -51,11 +58,27 @@ def _run_evaluator_safely(
     An uncertain Docker query must never count as cleanup confirmation.
     """
     with launch_lock if launch_lock is not None else nullcontext():
-        if stop_event is not None and stop_event.is_set():
+        if ((stop_event is not None and stop_event.is_set())
+                or (interrupt_event is not None and interrupt_event.is_set())):
             raise _LaunchCancelled()
         process = process_factory(argv, cwd=cwd)
     try:
-        process.wait(timeout=timeout)
+        if interrupt_event is None:
+            process.wait(timeout=timeout)
+        else:
+            deadline = time.monotonic() + timeout
+            while True:
+                if interrupt_event.is_set():
+                    raise _EvaluatorInterrupted("session interrupted")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(argv, timeout)
+                try:
+                    process.wait(timeout=min(remaining, 0.2))
+                    break
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(argv, timeout) from None
         return process
     except BaseException as error:
         if stop_event is not None:
@@ -128,6 +151,7 @@ def run_mode(
     item_timeout_seconds: float = 300,
     command_runner: Callable[..., Any] | None = None,
     monotonic_clock: Callable[[], float] = time.monotonic,
+    interrupt_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Run a fixed manifest once, stopping future launches on unsafe evidence."""
     if isinstance(workers, bool) or not isinstance(workers, int) or workers not in (1, 2, 4):
@@ -135,6 +159,8 @@ def run_mode(
     _positive_finite_seconds("launch_cutoff_seconds", launch_cutoff_seconds)
     _positive_finite_seconds("item_timeout_seconds", item_timeout_seconds)
     stop_requested = threading.Event()
+    if interrupt_event is None:
+        interrupt_event = threading.Event()
     launch_lock = threading.Lock()
 
     def request_stop() -> None:
@@ -144,7 +170,7 @@ def run_mode(
     if command_runner is None:
         def command_runner(argv: list[str], *, cwd: Path, check: bool, timeout: float) -> Any:
             return _run_evaluator_safely(argv, cwd=cwd, check=check, timeout=timeout,
-                stop_event=stop_requested, launch_lock=launch_lock)
+                stop_event=stop_requested, interrupt_event=interrupt_event, launch_lock=launch_lock)
     upstream_root = Path(upstream_root).resolve()
     project_root = Path(project_root).resolve()
     started = monotonic_clock()
@@ -197,6 +223,13 @@ def run_mode(
                 cwd=upstream_root, check=False, timeout=item_timeout_seconds)
         except _LaunchCancelled:
             return None
+        except _EvaluatorInterrupted as error:
+            request_stop()
+            cleanup_confirmed = getattr(error, "cleanup_confirmed", False)
+            cleanup_error = getattr(error, "cleanup_error", None)
+            record.update(status="infrastructure_error", cleanup_confirmed=cleanup_confirmed,
+                infrastructure_error="session interrupted"
+                + (f"; cleanup risk: {cleanup_error}" if cleanup_error else ""))
         except subprocess.TimeoutExpired as error:
             request_stop()
             cleanup_confirmed = getattr(error, "cleanup_confirmed", False)
@@ -246,9 +279,11 @@ def run_mode(
     active: dict[Any, str] = {}
     stopped = False
     save()
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    executor = ThreadPoolExecutor(max_workers=workers)
+    interrupted = False
+    try:
         while True:
-            while not stopped and not stop_requested.is_set() and len(active) < workers:
+            while not stopped and not stop_requested.is_set() and not interrupt_event.is_set() and len(active) < workers:
                 if elapsed() >= launch_cutoff_seconds:
                     stopped = True; summary["stop_reason"] = "launch_cutoff_reached"; save(); break
                 try:
@@ -260,7 +295,7 @@ def run_mode(
                     stage_name=f"m3-{item['case_id']}", episode_indices=(0,), **({} if item["rectangle"] is None else item["rectangle"]))
                 attempt_started = elapsed()
                 summary["in_flight_ids"].append(item["case_id"]); save()
-                if elapsed() >= launch_cutoff_seconds or stop_requested.is_set():
+                if elapsed() >= launch_cutoff_seconds or stop_requested.is_set() or interrupt_event.is_set():
                     summary["in_flight_ids"].remove(item["case_id"])
                     if not stop_requested.is_set():
                         stopped = True
@@ -268,7 +303,7 @@ def run_mode(
                     save()
                     break
                 with launch_lock:
-                    if stop_requested.is_set():
+                    if stop_requested.is_set() or interrupt_event.is_set():
                         cancelled = True
                     else:
                         active[executor.submit(execute, item, config, output, attempt_started)] = item["case_id"]
@@ -279,11 +314,15 @@ def run_mode(
                     break
             if not active:
                 break
-            done, _ = wait(active, return_when=FIRST_COMPLETED)
+            if interrupt_event.is_set():
+                interrupted = True
+                break
+            done, _ = wait(active, timeout=0.2, return_when=FIRST_COMPLETED)
             for future in done:
-                case_id = active.pop(future)
-                summary["in_flight_ids"].remove(case_id)
+                case_id = active[future]
                 record = future.result()
+                active.pop(future)
+                summary["in_flight_ids"].remove(case_id)
                 if record is None:
                     save()
                     continue
@@ -294,6 +333,50 @@ def run_mode(
                     stopped = True
                     summary["stop_reason"] = record["status"]
                 save()
+        if interrupt_event.is_set():
+            interrupted = True
+    except KeyboardInterrupt:
+        interrupted = True
+        interrupt_event.set()
+    finally:
+        if interrupted or interrupt_event.is_set():
+            interrupt_event.set()
+            request_stop()
+            summary["stop_reason"] = "interrupted"
+            for future, case_id in list(active.items()):
+                if future.cancel():
+                    active.pop(future)
+                    summary["in_flight_ids"].remove(case_id)
+            save()
+            # The default evaluator's graceful and forced cleanup is bounded by
+            # its subprocess/Docker timeouts. Keep uncertain workers in_flight.
+            deadline = time.monotonic() + 90
+            while active and time.monotonic() < deadline:
+                done, _ = wait(active, timeout=min(0.2, max(0, deadline - time.monotonic())),
+                    return_when=FIRST_COMPLETED)
+                for future in done:
+                    case_id = active.pop(future)
+                    summary["in_flight_ids"].remove(case_id)
+                    try:
+                        record = future.result()
+                    except BaseException as error:
+                        record = {"case_id": case_id, "status": "infrastructure_error",
+                            "cleanup_confirmed": False,
+                            "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
+                    if record is not None:
+                        summary["results"].append(record)
+                        if record["status"] == "valid":
+                            summary["valid_count"] += 1
+                        if (record["status"] == "infrastructure_error"
+                                and record.get("cleanup_confirmed") is not True):
+                            summary["stop_reason"] = "interrupted_cleanup_risk"
+                    save()
+            if active:
+                summary["stop_reason"] = "interrupted_cleanup_risk"
+                save()
+            executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            executor.shutdown(wait=True)
     if summary["stop_reason"] is None and len(summary["results"]) != len(items):
         summary["stop_reason"] = "partial"
     save()
@@ -495,7 +578,18 @@ def main() -> None:
     parser.add_argument("--launch-cutoff-seconds", required=True, type=float)
     parser.add_argument("--item-timeout-seconds", required=True, type=float)
     args = parser.parse_args()
-    summary = run_mode(**vars(args))
+    interrupt_event = threading.Event()
+    previous_handlers = {}
+    if os.name == "posix" and threading.current_thread() is threading.main_thread():
+        def request_interrupt(signum: int, frame: Any) -> None:
+            interrupt_event.set()
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous_handlers[signum] = signal.signal(signum, request_interrupt)
+    try:
+        summary = run_mode(**vars(args), interrupt_event=interrupt_event)
+    finally:
+        for signum, previous in previous_handlers.items():
+            signal.signal(signum, previous)
     path = args.results_root.resolve() / f"m3-workers-{args.workers}" / "session_summary.json"
     print(f"summary: {path} | stop: {summary['stop_reason'] or 'complete'} | valid: {summary['valid_count']}/{len(summary['planned_ids'])} | attempts: {len(summary['results'])}")
     if summary["stop_reason"] is not None or summary["valid_count"] != len(summary["planned_ids"]):

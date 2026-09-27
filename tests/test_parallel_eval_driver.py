@@ -2,6 +2,8 @@ import importlib.util
 import contextlib
 import io
 import json
+import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -338,7 +340,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
         calls = []
         lock = threading.Lock()
 
-        def fake_runner(argv, *, cwd, check, timeout, stop_event=None, launch_lock=None):
+        def fake_runner(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None):
             config = Path(argv[-1])
             output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
                 if line.startswith("output_dir: "))
@@ -434,6 +436,136 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
         self.assertTrue(raised.exception.cleanup_confirmed)
         self.assertEqual(["terminate"], events)
+
+    def test_main_thread_interrupt_cleans_active_processes_and_finalizes_summary(self):
+        events = []
+        processes = []
+        both_started = threading.Event()
+
+        class Process:
+            returncode = None
+            def __init__(self):
+                self.pid = 8000 + len(processes)
+                processes.append(self)
+                if len(processes) == 2:
+                    both_started.set()
+            def wait(self, timeout):
+                if self.returncode is None:
+                    time.sleep(timeout)
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                return self.returncode
+            def terminate(self):
+                events.append(("terminate", self.pid))
+                self.returncode = 143
+            def kill(self):
+                events.append(("kill", self.pid))
+                self.returncode = -9
+
+        def docker(argv, **kwargs):
+            events.append(("docker", argv))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        real_wait = runner_module.wait
+        interrupted = False
+        def interrupt_once(futures, **kwargs):
+            nonlocal interrupted
+            if not interrupted:
+                self.assertTrue(both_started.wait(2))
+                interrupted = True
+                raise KeyboardInterrupt()
+            return real_wait(futures, **kwargs)
+
+        results = self.root / "main-interrupt"
+        real_evaluator = runner_module._run_evaluator_safely
+        def evaluator(*args, **kwargs):
+            return real_evaluator(*args, **kwargs, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        with patch.object(runner_module, "wait", side_effect=interrupt_once), \
+                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator):
+            summary = runner_module.run_mode(upstream_root=self.upstream, project_root=self.project,
+                results_root=results, workers=2, repeats_per_case=8,
+                launch_cutoff_seconds=60, item_timeout_seconds=5)
+        durable = json.loads((results / "m3-workers-2" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual(2, len(summary["results"]))
+        self.assertEqual(2, len(processes))
+        self.assertEqual({process.pid for process in processes},
+            {pid for action, pid in events if action == "terminate"})
+        self.assertFalse(any(action == "kill" for action, _ in events))
+        self.assertEqual(4, len([event for event in events if event[0] == "docker" and "ps" in event[1]]))
+
+    def test_interrupt_with_unconfirmed_docker_cleanup_records_risk(self):
+        started = threading.Event()
+        docker_commands = []
+        class Process:
+            pid = 8123
+            returncode = None
+            def __init__(self):
+                started.set()
+            def wait(self, timeout):
+                if self.returncode is None:
+                    time.sleep(timeout)
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                return self.returncode
+            def terminate(self):
+                self.returncode = 143
+            def kill(self):
+                self.returncode = -9
+
+        def docker(argv, **kwargs):
+            docker_commands.append(argv)
+            return SimpleNamespace(returncode=1, stdout="", stderr="daemon unavailable")
+
+        real_evaluator = runner_module._run_evaluator_safely
+        def evaluator(*args, **kwargs):
+            return real_evaluator(*args, **kwargs, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        real_wait = runner_module.wait
+        interrupted = False
+        def interrupt_once(futures, **kwargs):
+            nonlocal interrupted
+            if not interrupted:
+                self.assertTrue(started.wait(2))
+                interrupted = True
+                raise KeyboardInterrupt()
+            return real_wait(futures, **kwargs)
+        with patch.object(runner_module, "wait", side_effect=interrupt_once), \
+                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator):
+            summary = runner_module.run_mode(upstream_root=self.upstream, project_root=self.project,
+                results_root=self.root / "interrupt-risk", workers=1, repeats_per_case=8,
+                launch_cutoff_seconds=60, item_timeout_seconds=5)
+        self.assertEqual("interrupted_cleanup_risk", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertFalse(summary["results"][0]["cleanup_confirmed"])
+        self.assertIn("daemon unavailable", summary["results"][0]["infrastructure_error"])
+        self.assertIn(["docker", "rm", "-f", "vla-eval-8123"], docker_commands)
+
+    def test_cli_sigterm_handler_requests_stop_and_reports_summary(self):
+        child = f'''
+import importlib.util, signal, sys
+from pathlib import Path
+from types import SimpleNamespace
+spec = importlib.util.spec_from_file_location("run_parallel_eval_child", {str(SCRIPT_PATH)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+module.os = SimpleNamespace(name="posix")
+def fake_run_mode(**kwargs):
+    signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+    assert kwargs["interrupt_event"].is_set()
+    return {{"workers": 1, "planned_ids": ["nominal-01"], "results": [],
+        "valid_count": 0, "stop_reason": "interrupted"}}
+module.run_mode = fake_run_mode
+sys.argv = ["run_parallel_eval.py", "--upstream-root", {str(self.upstream)!r},
+    "--project-root", {str(self.project)!r}, "--results-root", {str(self.root / 'signal-cli')!r},
+    "--workers", "1", "--launch-cutoff-seconds", "60", "--item-timeout-seconds", "5"]
+module.main()
+'''
+        child_result = subprocess.run([sys.executable, "-c", child], capture_output=True, text=True,
+            env={**os.environ, "PYTHONPATH": str(SCRIPT_PATH.parents[1] / "src")}, timeout=10)
+        self.assertEqual(1, child_result.returncode, child_result.stderr)
+        self.assertIn("session_summary.json", child_result.stdout)
+        self.assertIn("interrupted", child_result.stdout)
 
     def test_cli_prints_summary_and_returns_failure_for_partial_mode(self):
         argv = ["run_parallel_eval.py", "--upstream-root", str(self.upstream),
