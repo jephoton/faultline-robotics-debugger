@@ -20,7 +20,10 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from robot_debug.parallel_eval import build_manifest, manifest_hash
+from robot_debug.parallel_eval import build_manifest, manifest_hash, summarize_modes
+
+
+_FROZEN_M3_MANIFEST_HASH = manifest_hash(build_manifest(8))
 
 
 _BASE_PATH = Path(__file__).with_name("run_failure_search.py")
@@ -297,7 +300,193 @@ def run_mode(
     return summary
 
 
+def report_mode_summaries(
+    mode_summary_paths: list[Path | str], *, hourly_rate_usd: float | None = None,
+    billable_seconds: dict[int, float] | None = None, output_dir: Path | str | None = None,
+) -> Path:
+    """Validate three durable summaries and write a comparable M3 report.
+
+    Source files are only read.  A manifest path must be a relative path below
+    its summary directory, so a summary cannot make this command inspect an
+    unrelated filesystem location.
+    """
+    if not isinstance(mode_summary_paths, list) or len(mode_summary_paths) != 3:
+        raise ValueError("exactly three mode summary paths are required")
+    sources = [Path(path).resolve() for path in mode_summary_paths]
+    if len(set(sources)) != 3:
+        raise ValueError("mode summary paths must be distinct")
+    records = [_load_report_record(source) for source in sources]
+    # Validate the full comparison before indexing a record by worker count for
+    # cost attribution.  This keeps malformed worker values fail-closed.
+    summarize_modes([{**record, "cost_usd": None} for record in records])
+    _validate_cost_inputs(hourly_rate_usd, billable_seconds)
+    if hourly_rate_usd is not None:
+        assert billable_seconds is not None
+        for record in records:
+            workers = record["workers"]
+            record["cost_usd"] = hourly_rate_usd * billable_seconds[workers] / 3600
+    else:
+        for record in records:
+            record["cost_usd"] = None
+
+    metrics = summarize_modes(records)
+    by_workers = {record["workers"]: record for record in records}
+    if output_dir is None:
+        output_root = sources[0].parent.parent
+    else:
+        output_root = Path(output_dir).resolve()
+    json_path = output_root / "m3_comparison.json"
+    markdown_path = output_root / "m3_comparison.md"
+    input_paths = set(sources) | {record["_manifest_path"] for record in records}
+    if json_path in input_paths or markdown_path in input_paths:
+        raise ValueError("report output would collide with an input summary or manifest")
+    if json_path.exists() or markdown_path.exists():
+        raise ValueError("report output already exists; choose a new output directory")
+    output_root.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 1,
+        "manifest_hash": records[0]["manifest_hash"],
+        "work_count": len(records[0]["case_ids"]),
+        "cost_rate_basis": "unavailable" if hourly_rate_usd is None else "hourly_rate_usd * billable_seconds / 3600",
+        "modes": [
+            {
+                **metric,
+                "invalid_count": len(by_workers[metric["workers"]]["results"]) - metric["valid_count"],
+                "billable_seconds": None if billable_seconds is None else billable_seconds[metric["workers"]],
+                "cost_usd": by_workers[metric["workers"]]["cost_usd"],
+                "hourly_rate_usd": hourly_rate_usd,
+                "source_summary_path": str(by_workers[metric["workers"]]["_source_path"]),
+            }
+            for metric in metrics
+        ],
+    }
+    base._atomic_write_json(json_path, payload)
+    markdown_path.write_text(_markdown_comparison(payload), encoding="utf-8")
+    return json_path
+
+
+def _load_report_record(source: Path) -> dict[str, Any]:
+    if not source.is_file():
+        raise ValueError(f"mode summary is not a file: {source}")
+    try:
+        record = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read mode summary: {source}") from error
+    if (
+        not isinstance(record, dict)
+        or record.get("stop_reason") is not None
+        or record.get("in_flight_ids", [])
+    ):
+        raise ValueError("mode summary is partial or invalid")
+    manifest_name = record.get("manifest_path")
+    if not isinstance(manifest_name, str) or not manifest_name or Path(manifest_name).is_absolute():
+        raise ValueError("mode summary must name a relative manifest path")
+    manifest_path = (source.parent / manifest_name).resolve()
+    try:
+        manifest_path.relative_to(source.parent)
+    except ValueError as error:
+        raise ValueError("manifest path escapes the mode summary directory") from error
+    if not manifest_path.is_file():
+        raise ValueError("mode manifest is not a file")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        actual_hash = manifest_hash(manifest)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+        raise ValueError("mode manifest is invalid") from error
+    if actual_hash != record.get("manifest_hash"):
+        raise ValueError("mode manifest digest does not match its summary")
+    if actual_hash != _FROZEN_M3_MANIFEST_HASH or manifest != build_manifest(8):
+        raise ValueError("mode manifest is not the frozen M3 workload")
+    manifest_ids = [item.get("case_id") if isinstance(item, dict) else None for item in manifest]
+    if record.get("case_ids") != manifest_ids or record.get("planned_ids") != manifest_ids:
+        raise ValueError("mode summary items do not match its manifest")
+    manifest_kinds = {item["case_id"]: item["kind"] for item in manifest}
+    results = record.get("results")
+    if not isinstance(results, list) or any(
+        not isinstance(result, dict) or result.get("kind") != manifest_kinds.get(result.get("case_id"))
+        for result in results
+    ):
+        raise ValueError("mode result kinds do not match the frozen manifest")
+    record["_source_path"] = source
+    record["_manifest_path"] = manifest_path
+    return record
+
+
+def _validate_cost_inputs(hourly_rate_usd: float | None, billable_seconds: dict[int, float] | None) -> None:
+    if (hourly_rate_usd is None) != (billable_seconds is None):
+        raise ValueError("hourly rate and all billable seconds must be supplied together")
+    if hourly_rate_usd is None:
+        return
+    if isinstance(hourly_rate_usd, bool) or not isinstance(hourly_rate_usd, (int, float)) or not math.isfinite(hourly_rate_usd) or hourly_rate_usd < 0:
+        raise ValueError("hourly_rate_usd must be a finite non-negative number")
+    if set(billable_seconds or {}) != {1, 2, 4}:
+        raise ValueError("billable_seconds must contain workers 1, 2, and 4")
+    for workers, seconds in billable_seconds.items():
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError(f"billable seconds for {workers} must be finite and positive")
+
+
+def _markdown_comparison(payload: dict[str, Any]) -> str:
+    lines = [
+        "# M3 fixed replay comparison",
+        "",
+        f"Manifest: `{payload['manifest_hash']}`; work items: {payload['work_count']}; cost basis: {payload['cost_rate_basis']}.",
+        "",
+        "| Workers | Valid | Invalid | Elapsed (s) | Throughput/hour | Speedup | Efficiency | Billable (s) | Cost (USD) | Cost/valid | Nominal outcomes | Mask outcomes | Drift |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+    ]
+    for mode in payload["modes"]:
+        cost = "unavailable" if mode["cost_usd"] is None else f"{mode['cost_usd']:.6f}"
+        cost_per_valid = "unavailable" if mode["cost_per_valid"] is None else f"{mode['cost_per_valid']:.6f}"
+        billable = "unavailable" if mode["billable_seconds"] is None else f"{mode['billable_seconds']:.3f}"
+        drift = ", ".join(mode["drift_case_ids"]) or "none"
+        nominal = _format_outcomes(mode["outcome_counts"].get("nominal", {}))
+        mask = _format_outcomes(mode["outcome_counts"].get("mask", {}))
+        lines.append(
+            f"| {mode['workers']} | {mode['valid_count']} | {mode['invalid_count']} | {mode['elapsed_seconds']:.3f} | "
+            f"{mode['throughput_per_hour']:.3f} | {mode['speedup']:.3f} | {mode['efficiency']:.3f} | {billable} | {cost} | {cost_per_valid} | {nominal} | {mask} | {drift} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _format_outcomes(counts: dict[str, int]) -> str:
+    return f"success={counts.get('success', 0)}, policy_failure={counts.get('policy_failure', 0)}"
+
+
+def _parse_billable_seconds(value: str) -> tuple[int, float]:
+    try:
+        workers_text, seconds_text = value.split("=", 1)
+        workers = int(workers_text)
+        seconds = float(seconds_text)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("billable seconds must be WORKERS=SECONDS") from error
+    return workers, seconds
+
+
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "report":
+        report_parser = argparse.ArgumentParser(description="Validate and compare three complete M3 replay modes.")
+        report_parser.add_argument("--mode-summary", required=True, action="append", type=Path)
+        report_parser.add_argument("--output-dir", type=Path)
+        report_parser.add_argument("--hourly-rate-usd", type=float)
+        report_parser.add_argument("--billable-seconds", action="append", type=_parse_billable_seconds)
+        report_args = report_parser.parse_args(sys.argv[2:])
+        billable = None
+        if report_args.billable_seconds is not None:
+            billable = {}
+            for workers, seconds in report_args.billable_seconds:
+                if workers in billable:
+                    report_parser.error("billable seconds may name each worker count only once")
+                billable[workers] = seconds
+        try:
+            report_path = report_mode_summaries(
+                report_args.mode_summary, hourly_rate_usd=report_args.hourly_rate_usd,
+                billable_seconds=billable, output_dir=report_args.output_dir,
+            )
+        except ValueError as error:
+            report_parser.error(str(error))
+        print(f"comparison: {report_path}")
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream-root", required=True, type=Path)
     parser.add_argument("--project-root", required=True, type=Path)

@@ -108,3 +108,53 @@ conditions and cease to reproduce the M4 case.
 No harness inspection or this contract authorizes Nebius provisioning,
 spending, or a live run. Those remain behind the separate resource preflight
 and run-cap approval gate in the accepted design.
+
+## Local comparison report
+
+After three complete local or copied mode summaries exist, produce a
+fail-closed comparison from the explicit source files. The reporter recomputes
+the manifest digest from each sibling `manifest.json`, requires identical item
+IDs and complete valid terminal results, and refuses partial or invalid modes.
+
+```powershell
+$env:PYTHONPATH = 'src'
+& 'C:\Windows\py.exe' -3.11 scripts/run_parallel_eval.py report `
+  --mode-summary artifacts/m3-workers-1/session_summary.json `
+  --mode-summary artifacts/m3-workers-2/session_summary.json `
+  --mode-summary artifacts/m3-workers-4/session_summary.json `
+  --output-dir artifacts
+```
+
+This writes `m3_comparison.json` and `m3_comparison.md`. Without pricing
+inputs, their cost fields are `null` and the table labels cost as unavailable.
+Only after a separately approved live run has reconciled billing, provide all
+four values together: one verified full-resource `--hourly-rate-usd` and one
+`--billable-seconds WORKERS=SECONDS` value for each of 1, 2, and 4 workers.
+Cost is rate times measured billable VM seconds divided by 3,600; it is never
+multiplied by the number of evaluator workers.
+
+Each source summary and its per-item `runs/<case-id>/` directory remain the
+audit trail. Copy those artifacts under the local ignored `artifacts/`
+directory, start the existing read-only viewer as documented in `README.md`,
+and select the episode entries to inspect their recorded videos. A missing
+video is not evidence of a replayable result.
+
+## How to interpret an M3 result
+
+The `elapsed_seconds` recorded by a mode is the warm evaluation clock for that
+mode. Keep VM boot, model download/server readiness, setup, teardown, and
+other shared overhead in a separate end-to-end clock and allocate its billing
+explicitly; do not silently treat simulator runtime as billable time.
+
+M3 measures fixed-repeat confirmation and replay throughput for the same known
+M4 case on one shared server. It does **not** measure adaptive reducer speedup,
+failure discovery speedup, or generalization to new initial states. Any outcome
+drift across worker counts prevents an equivalent-work performance claim until
+it is investigated.
+
+## Current live-run status
+
+No M3 live run is authorized. Task 3 also found an unresolved scheduler risk:
+a main-thread `SIGTERM` or `KeyboardInterrupt` can leave stale in-flight state
+and create an orphan-process risk. Do not run the live M3 comparison until that
+behavior has been fixed and independently reviewed.
