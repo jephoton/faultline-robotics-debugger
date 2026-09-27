@@ -241,7 +241,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
-### Current roadmap position — September 16
+### Current roadmap position — September 27
 
 We have completed **M1: reproducible runner** and the engineering gate for
 **M2: first failure** on one exact case:
@@ -254,8 +254,12 @@ We have completed **M1: reproducible runner** and the engineering gate for
   and viewer are now exercised end to end on Nebius.
 - The upper-right 25%-area cell failed in discovery and 5/5 exact replays;
   the nominal sentinel and 5/5 fresh nominal controls succeeded.
-- M2 is complete for that narrow experiment contract. Reduction has not yet
-  shown whether a smaller rectangle preserves the failure, so M4 remains open.
+- M2 is complete for that narrow experiment contract. M4's local implementation
+  is also complete: the bounded reducer, rectangular evaluator configuration,
+  resumable 23-episode session driver, replay manifest, and viewer reduction
+  panel pass the full 126-test Python 3.11 suite. A live Nebius reduction has
+  not run yet, so M4 remains experimentally open and no smaller rectangle is
+  claimed yet.
 - M3 has not started. The accepted happy-path order remains reducer design
   before parallel scaling so the HPC comparison accelerates real diagnosis.
 
@@ -283,15 +287,15 @@ separate user decisions.
 The accepted reducer direction and executable task breakdown are recorded in
 [`2026-09-21-m4-bounded-failure-reducer.md`](docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md).
 It uses nested greedy edge stripping, an adaptive four-of-five repeatability
-gate, and a proposed 23-valid-episode ceiling. Implementation is divided by
-capability and file ownership: DeepSeek Flash may implement only the isolated
-pure kernel after separate explicit authorization, Terra owns evaluator
-integration, Luna owns stable viewer/docs work, and the stronger OpenAI
-coordinator retains design, integration, review, and all cloud spending.
+gate, and a 23-valid-episode ceiling. DeepSeek Flash implemented the isolated
+pure kernel, Terra implemented evaluator integration and the resumable driver,
+and Luna implemented the validated viewer lineage panel and usage guide. Each
+batch received independent specification and quality review before integration.
 
-No paid M4 run is authorized by the plan. Local implementation and fake-runner
-verification come first; live price/resource preflight and a fresh dollar cap
-remain a red checkpoint.
+No paid M4 run is authorized by the plan. Local implementation, fake-runner
+resume/idempotence verification, the 126-test suite, and browser smoke testing
+are complete. Live price/resource preflight and a fresh dollar cap remain the
+next red checkpoint.
 
 ### Record contract
 
@@ -381,10 +385,9 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 The baseline/sweep/replay and fixed-area position-grid sessions are complete.
 The grid produced the first replayable failure and passed the matched nominal
-control gate. The next material decision is the M4 reducer design: choose the
-case-size objective, search algorithm, retry budget, and fresh confirmation
-seeds for shrinking the upper-right rectangle without changing the failure
-definition. Write and approve that plan before implementation or cloud spend.
+control gate. The M4 reducer design and local implementation are complete. The
+next material step is a read-only Nebius preflight, followed by Jethro's fresh
+run-specific dollar-cap decision before one bounded live reduction session.
 After reduction, design M3's equal-work 1/2/4-worker comparison around this real
 diagnostic workload. Existing approvals persist only within their exact scope;
 a reducer algorithm, worker topology, new cap, or account change requires

@@ -25,14 +25,17 @@
 
 ## Next material decision
 
-M4 now has an accepted design direction and a scoped implementation plan at
-`docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md`. The next
-work is local-only: pure reducer, rectangle config support, session driver,
-viewer lineage, and fake-evaluator verification. The isolated DeepSeek kernel
-handoff has now been explicitly authorized. Before any
-live Nebius session, Jethro must approve a fresh dollar cap after current price,
-balance, quota, and resource state are verified. M3's equal-work 1/2/4-worker
-comparison follows the M4 evidence.
+M4 has an accepted design and implementation plan at
+`docs/superpowers/plans/2026-09-21-m4-bounded-failure-reducer.md`. Tasks 1--6
+are complete locally: pure reducer, rectangular config support, resumable
+session driver, replay manifest, validated viewer lineage, fake-evaluator
+resume/idempotence checks, a 126-test Python 3.11 suite, and browser smoke
+testing. No live M4 episode has run and no reduced rectangle is claimed.
+
+The next step is the read-only Nebius preflight in Task 7. Before provisioning
+or running an episode, Jethro must approve a fresh dollar cap after current
+price, balance, quota, capacity, instance, disk, and firewall state are
+verified. M3's equal-work 1/2/4-worker comparison follows the M4 evidence.
 
 Jethro explicitly authorized DeepSeek Flash for the isolated pure reducer
 kernel on September 21. Its durable task handoff is
