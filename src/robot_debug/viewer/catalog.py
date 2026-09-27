@@ -168,7 +168,7 @@ class ArtifactCatalog:
             replay = json.loads(replay_path.read_text(encoding="utf-8"))
             reduction = self._validate_reduction(summary, replay)
             return {"reduction": reduction, "warnings": [] if reduction else ["Reduction evidence is incomplete or mismatched"]}
-        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        except (OSError, OverflowError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             return {"reduction": None, "warnings": ["Reduction evidence is unavailable"]}
 
     @staticmethod

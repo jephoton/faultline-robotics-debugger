@@ -51,38 +51,13 @@ function perturbationPosition(episode) {
     : "";
 }
 
-function rectangleArea(rectangle) {
-  if (!rectangle || typeof rectangle !== "object") return null;
-  const area = Number(rectangle.area);
-  if (Number.isFinite(area) && area > 0) return area;
-  const width = Number(rectangle.width); const height = Number(rectangle.height);
-  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
-    ? width * height : null;
-}
-
-function acceptedReduction(snapshot) {
-  if (snapshot && snapshot.reduction && snapshot.reduction.metrics) return snapshot.reduction;
-  const summary = snapshot && snapshot.session_summary;
-  const replay = snapshot && snapshot.replay_case;
-  const lineage = summary && Array.isArray(summary.lineage) ? summary.lineage : [];
-  if (!summary || !replay || !lineage.length || !replay.acceptance_rule) return null;
-  const parentArea = rectangleArea(summary.geometry && summary.geometry.parent);
-  const reducedArea = rectangleArea(summary.geometry && (summary.geometry.final || summary.geometry.current));
-  const replayArea = rectangleArea(replay.rectangle);
-  const failures = Number(replay.acceptance_rule.failures);
-  const attempts = Number(replay.acceptance_rule.attempts);
-  if (!parentArea || !reducedArea || !replayArea || reducedArea !== replayArea || reducedArea >= parentArea ||
-      !Number.isInteger(failures) || !Number.isInteger(attempts) || failures <= 0 || attempts <= 0) return null;
-  return { parentArea, reducedArea, areaReduction: (parentArea - reducedArea) / parentArea,
-    certification: `${failures}/${attempts} rule passed` };
-}
-
 async function refreshReduction() {
   // The read-only API validates session_summary.json, replay_case.json, and accepted lineage.
   try {
     const response = await fetch("/api/reduction", { cache: "no-store" });
     if (!response.ok) { state.reduction = null; return; }
-    state.reduction = acceptedReduction(await response.json());
+    const payload = await response.json();
+    state.reduction = payload && payload.reduction && payload.reduction.metrics ? payload.reduction : null;
   } catch (_) { state.reduction = null; }
 }
 

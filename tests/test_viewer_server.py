@@ -247,6 +247,12 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
 
         self._write_reduction_fixture()
+        summary = json.loads((reduction / "session_summary.json").read_text(encoding="utf-8"))
+        summary["geometry"]["final"]["width"] = 10 ** 3000
+        (reduction / "session_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+        self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
+
+        self._write_reduction_fixture()
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         summary["geometry"]["final"]["width"] = 0
         summary_path.write_text(json.dumps(summary), encoding="utf-8")
@@ -267,8 +273,11 @@ class ViewerServerTests(unittest.TestCase):
             (outside / "replay_case.json").write_text("{}", encoding="utf-8")
             reduction = self.root / "failure-reduction"
             reduction.mkdir()
-            os.symlink(outside / "session_summary.json", reduction / "session_summary.json")
-            os.symlink(outside / "replay_case.json", reduction / "replay_case.json")
+            try:
+                os.symlink(outside / "session_summary.json", reduction / "session_summary.json")
+                os.symlink(outside / "replay_case.json", reduction / "replay_case.json")
+            except OSError as error:
+                self.skipTest("symlink setup unavailable: {}".format(error))
             self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
         finally:
             for path in (outside / "session_summary.json", outside / "replay_case.json"):
@@ -286,10 +295,6 @@ class ViewerServerTests(unittest.TestCase):
                 "final": dict(rectangle, area=0.1875),
             },
             "lineage": [{"edge": "left", "rectangle": rectangle, "area": 0.1875}],
-            "completed": {"decisions": [{
-                "label": "candidate", "edge": "left", "decision": "pass",
-                "rectangle": rectangle, "outcomes": ["policy_failure"] * 4 + ["success"],
-            }]},
             "stop_reason": stop_reason,
             "completed": {
                 "decisions": [{
