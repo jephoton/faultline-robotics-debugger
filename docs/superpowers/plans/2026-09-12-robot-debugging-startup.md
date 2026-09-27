@@ -367,8 +367,11 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 M2 and the bounded M4 live reduction are complete for one named policy, task,
 initial state, and visual-occlusion family. The next material step is to review
-an M3 equal-work 1/2/4-worker design around the recorded reduction workload.
-No M3 worker topology or paid cap is authorized yet. Tool feedback is now
+the M3 implementation plan at
+`docs/superpowers/plans/2026-09-27-m3-parallel-replay.md` for an equal-work
+1/2/4-worker comparison of fixed replays of the recorded reduction case. The
+single-VM/shared-server topology is accepted, but no paid cap or
+cloud run is authorized yet. Tool feedback is now
 tracked in [FEEDBACK.md](../../../FEEDBACK.md). The video pitch and judge-run
 public repository audit are explicit submission gates after M3, as Jethro
 requested.
