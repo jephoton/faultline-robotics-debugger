@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -8,6 +10,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from robot_debug.parallel_eval import summarize_modes
 
@@ -105,6 +108,9 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 self.assertEqual(1, len(record["results"]))
                 self.assertIn(record["results"][0]["status"], {"infrastructure_error", "invalid_evidence"})
                 self.assertTrue(record["stop_reason"])
+                if name == "timeout":
+                    self.assertFalse(record["results"][0]["cleanup_confirmed"])
+                    self.assertIn("cleanup risk", record["results"][0]["infrastructure_error"])
 
     def test_nested_task_id_mismatch_is_invalid_evidence(self):
         def nested_mismatch(_):
@@ -117,6 +123,333 @@ class ParallelEvalDriverTests(unittest.TestCase):
 
         self.assertEqual(0, record["valid_count"])
         self.assertEqual("invalid_evidence", record["results"][0]["status"])
+
+    def test_real_aggregate_without_top_level_task_id_is_valid(self):
+        def response(_):
+            evidence = aggregate()
+            del evidence["tasks"][0]["task_id"]
+            return 0, evidence
+
+        record = self.run_mode(FakeEvaluator(response=response), results=self.root / "real-task-shape")
+        self.assertEqual(16, record["valid_count"])
+
+    def test_missing_nested_task_id_is_invalid_even_if_top_level_present(self):
+        def response(_):
+            evidence = aggregate()
+            del evidence["tasks"][0]["episodes"][0]["task_id"]
+            return 0, evidence
+
+        record = self.run_mode(FakeEvaluator(response=response), results=self.root / "missing-nested-task")
+        self.assertEqual("invalid_evidence", record["results"][0]["status"])
+
+    def test_top_level_task_id_mismatch_is_invalid_when_present(self):
+        def response(_):
+            evidence = aggregate()
+            evidence["tasks"][0]["task_id"] = 1
+            return 0, evidence
+
+        record = self.run_mode(FakeEvaluator(response=response), results=self.root / "top-task-mismatch")
+        self.assertEqual("invalid_evidence", record["results"][0]["status"])
+
+    def test_null_top_level_task_id_is_invalid_when_present(self):
+        def response(_):
+            evidence = aggregate()
+            evidence["tasks"][0]["task_id"] = None
+            return 0, evidence
+
+        record = self.run_mode(FakeEvaluator(response=response), results=self.root / "null-top-task")
+        self.assertEqual("invalid_evidence", record["results"][0]["status"])
+
+    def test_nonfinite_or_nonpositive_budgets_fail_before_session_creation(self):
+        for key in ("launch_cutoff_seconds", "item_timeout_seconds"):
+            for value in (0, -1, True, float("nan"), float("inf"), -float("inf"), "5"):
+                with self.subTest(key=key, value=value):
+                    results = self.root / f"invalid-{key}-{str(value).replace('-', 'minus')}"
+                    kwargs = dict(upstream_root=self.upstream, project_root=self.project,
+                        results_root=results, workers=1, command_runner=FakeEvaluator(),
+                        launch_cutoff_seconds=60, item_timeout_seconds=5)
+                    kwargs[key] = value
+                    with self.assertRaisesRegex(ValueError, key):
+                        runner_module.run_mode(**kwargs)
+                    self.assertFalse(results.exists())
+
+    def test_default_timeout_terminates_parent_and_confirms_no_container(self):
+        events = []
+
+        class Process:
+            pid = 4321
+            returncode = None
+            def wait(self, timeout):
+                events.append(("wait", timeout))
+                if len([event for event in events if event[0] == "wait"]) == 1:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                events.append(("terminate", self.pid))
+            def kill(self):
+                events.append(("kill", self.pid))
+
+        def docker(argv, **kwargs):
+            events.append(("docker", argv))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with self.assertRaises(subprocess.TimeoutExpired) as raised:
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        self.assertTrue(raised.exception.cleanup_confirmed)
+        self.assertIn(("terminate", 4321), events)
+        self.assertFalse(any(event[0] == "kill" for event in events))
+        self.assertFalse(any(event[0] == "docker" and "rm" in event[1] for event in events))
+
+    def test_stuck_parent_forces_only_its_container_removal_before_reaping(self):
+        events = []
+
+        class Process:
+            pid = 5678
+            returncode = None
+            def wait(self, timeout):
+                events.append(("wait", timeout))
+                if len([event for event in events if event[0] == "wait"]) < 3:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = -9
+                return self.returncode
+            def terminate(self):
+                events.append(("terminate", self.pid))
+            def kill(self):
+                events.append(("kill", self.pid))
+
+        def docker(argv, **kwargs):
+            events.append(("docker", argv))
+            if "ps" in argv:
+                checks = len([event for event in events if event[0] == "docker" and "ps" in event[1]])
+                return SimpleNamespace(returncode=0, stdout="vla-eval-5678\n" if checks == 1 else "", stderr="")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with self.assertRaises(subprocess.TimeoutExpired) as raised:
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        self.assertTrue(raised.exception.cleanup_confirmed)
+        self.assertIn(("kill", 5678), events)
+        self.assertEqual([["docker", "rm", "-f", "vla-eval-5678"]],
+            [event[1] for event in events if event[0] == "docker" and "rm" in event[1]])
+
+    def test_unconfirmed_cleanup_stops_session_and_records_risk(self):
+        def risky_runner(*args, **kwargs):
+            error = subprocess.TimeoutExpired("vla-eval", 5)
+            error.cleanup_confirmed = False
+            error.cleanup_error = "Docker daemon unavailable"
+            raise error
+
+        record = self.run_mode(risky_runner, results=self.root / "cleanup-risk")
+        self.assertEqual("infrastructure_error", record["stop_reason"])
+        self.assertEqual(1, len(record["results"]))
+        self.assertFalse(record["results"][0]["cleanup_confirmed"])
+        self.assertIn("Docker daemon unavailable", record["results"][0]["infrastructure_error"])
+
+    def test_timeout_requests_stop_before_graceful_cleanup_finishes(self):
+        stop = threading.Event()
+        cleanup_started = threading.Event()
+        release_cleanup = threading.Event()
+        errors = []
+
+        class Process:
+            pid = 6789
+            returncode = None
+            def wait(self, timeout):
+                if timeout == 5:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                cleanup_started.set()
+                release_cleanup.wait(2)
+            def kill(self):
+                self.returncode = -9
+
+        def run():
+            try:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                    docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""),
+                    stop_event=stop)
+            except subprocess.TimeoutExpired as error:
+                errors.append(error)
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        try:
+            self.assertTrue(cleanup_started.wait(2))
+            self.assertTrue(stop.is_set())
+        finally:
+            release_cleanup.set()
+            thread.join(2)
+        self.assertEqual(1, len(errors))
+        self.assertTrue(errors[0].cleanup_confirmed)
+
+    def test_stop_gate_prevents_late_process_creation(self):
+        stop = threading.Event()
+        stop.set()
+        launches = []
+        with self.assertRaises(runner_module._LaunchCancelled):
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, stop_event=stop, launch_lock=threading.Lock(),
+                process_factory=lambda *a, **k: launches.append(True))
+        self.assertEqual([], launches)
+
+    def test_stop_gate_serializes_stop_with_process_creation(self):
+        stop = threading.Event()
+        attempting_gate = threading.Event()
+        gate = threading.Lock()
+        launches = []
+        errors = []
+
+        class ObservedGate:
+            def __enter__(self):
+                attempting_gate.set()
+                gate.acquire()
+            def __exit__(self, *args):
+                gate.release()
+
+        def run():
+            try:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, stop_event=stop, launch_lock=ObservedGate(),
+                    process_factory=lambda *a, **k: launches.append(True))
+            except runner_module._LaunchCancelled as error:
+                errors.append(error)
+
+        gate.acquire()
+        thread = threading.Thread(target=run)
+        thread.start()
+        try:
+            self.assertTrue(attempting_gate.wait(2))
+            stop.set()
+        finally:
+            gate.release()
+            thread.join(2)
+        self.assertEqual([], launches)
+        self.assertEqual(1, len(errors))
+
+    def test_two_workers_do_not_launch_third_during_slow_timeout_cleanup(self):
+        both_started = threading.Event()
+        timeout_seen = threading.Event()
+        release_cleanup = threading.Event()
+        calls = []
+        lock = threading.Lock()
+
+        def fake_runner(argv, *, cwd, check, timeout, stop_event=None, launch_lock=None):
+            config = Path(argv[-1])
+            output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
+                if line.startswith("output_dir: "))
+            with lock:
+                calls.append(config.name)
+            if config.stem == "nominal-01":
+                both_started.wait(2)
+                timeout_seen.set()
+                if stop_event is not None:
+                    with launch_lock:
+                        stop_event.set()
+                release_cleanup.wait(2)
+                error = subprocess.TimeoutExpired("vla-eval", timeout)
+                error.cleanup_confirmed = True
+                raise error
+            if config.stem == "nominal-02":
+                both_started.set()
+                timeout_seen.wait(2)
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "fake_aggregate.json").write_text(json.dumps(aggregate()), encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        with patch.object(runner_module, "_run_evaluator_safely", side_effect=fake_runner):
+            try:
+                record = runner_module.run_mode(upstream_root=self.upstream, project_root=self.project,
+                    results_root=self.root / "slow-timeout", workers=2, repeats_per_case=8,
+                    launch_cutoff_seconds=60, item_timeout_seconds=5)
+            finally:
+                release_cleanup.set()
+        self.assertEqual(2, len(calls))
+        self.assertEqual("infrastructure_error", record["stop_reason"])
+        self.assertEqual(2, len(record["results"]))
+
+    def test_docker_query_failure_marks_timeout_cleanup_unconfirmed(self):
+        class Process:
+            pid = 3456
+            returncode = None
+            def wait(self, timeout):
+                if self.returncode is None and timeout == 5:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                pass
+            def kill(self):
+                self.returncode = -9
+
+        with self.assertRaises(subprocess.TimeoutExpired) as raised:
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                docker_runner=lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="daemon unavailable"))
+        self.assertFalse(raised.exception.cleanup_confirmed)
+        self.assertIn("daemon unavailable", raised.exception.cleanup_error)
+
+    def test_unexpected_wait_error_still_cleans_owned_container(self):
+        class Process:
+            pid = 2468
+            returncode = None
+            def wait(self, timeout):
+                if self.returncode is None and timeout == 5:
+                    raise OSError("wait failed")
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                pass
+            def kill(self):
+                self.returncode = -9
+
+        with self.assertRaises(OSError) as raised:
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+        self.assertTrue(raised.exception.cleanup_confirmed)
+
+    def test_interrupted_wait_still_terminates_parent(self):
+        events = []
+        class Process:
+            pid = 1357
+            returncode = None
+            def wait(self, timeout):
+                if timeout == 5:
+                    raise KeyboardInterrupt()
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                events.append("terminate")
+            def kill(self):
+                events.append("kill")
+
+        with self.assertRaises(KeyboardInterrupt) as raised:
+            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+        self.assertTrue(raised.exception.cleanup_confirmed)
+        self.assertEqual(["terminate"], events)
+
+    def test_cli_prints_summary_and_returns_failure_for_partial_mode(self):
+        argv = ["run_parallel_eval.py", "--upstream-root", str(self.upstream),
+            "--project-root", str(self.project), "--results-root", str(self.root / "cli-results"),
+            "--workers", "1", "--launch-cutoff-seconds", "60", "--item-timeout-seconds", "5"]
+        output = io.StringIO()
+        summary = {"workers": 1, "planned_ids": ["nominal-01", "mask-01"],
+            "results": [{"status": "valid"}], "valid_count": 1,
+            "stop_reason": "launch_cutoff_reached"}
+        with patch.object(sys, "argv", argv), patch.object(runner_module, "run_mode", return_value=summary):
+            with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+                runner_module.main()
+        self.assertNotEqual(0, raised.exception.code)
+        self.assertIn("session_summary.json", output.getvalue())
+        self.assertIn("launch_cutoff_reached", output.getvalue())
+        self.assertIn("1/2", output.getvalue())
 
     def test_cutoff_crossing_during_config_preparation_does_not_submit(self):
         class Clock:
