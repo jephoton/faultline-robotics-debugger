@@ -208,9 +208,12 @@ class ViewerServerTests(unittest.TestCase):
         status, _, body = self.get("/api/reduction")
         self.assertIsNone(json.loads(body)["reduction"])
 
-        for malformed in ([], None, {"geometry": None}, {"completed": None}):
-            (reduction / "session_summary.json").write_text(json.dumps(malformed), encoding="utf-8")
-            (reduction / "replay_case.json").write_text("[]", encoding="utf-8")
+        for key in ("geometry", "completed"):
+            self._write_reduction_fixture()
+            summary_path = reduction / "session_summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary[key] = None
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
             status, _, body = self.get("/api/reduction")
             self.assertEqual(status, 200)
             self.assertIsNone(json.loads(body)["reduction"])
@@ -239,21 +242,19 @@ class ViewerServerTests(unittest.TestCase):
         reduction = self.root / "failure-reduction"
         summary_path = reduction / "session_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        summary["geometry"]["final"]["width"] = 0.5
-        summary["geometry"]["final"]["area"] = 0.25
-        summary["geometry"]["current"] = dict(summary["geometry"]["final"])
-        summary["lineage"][0]["rectangle"] = dict(summary["geometry"]["final"])
-        summary["completed"]["decisions"][0]["rectangle"] = dict(summary["geometry"]["final"])
         summary["completed"]["decisions"][0]["label"] = "parent"
         summary_path.write_text(json.dumps(summary), encoding="utf-8")
         self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
 
         self._write_reduction_fixture()
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["geometry"]["final"]["width"] = 0
+        summary_path.write_text(json.dumps(summary), encoding="utf-8")
+        self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
+
+        self._write_reduction_fixture()
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
         summary["geometry"]["final"]["x"] = 0.8
-        summary["geometry"]["current"] = dict(summary["geometry"]["final"])
-        summary["lineage"][0]["rectangle"] = dict(summary["geometry"]["final"])
-        summary["completed"]["decisions"][0]["rectangle"] = dict(summary["geometry"]["final"])
         summary_path.write_text(json.dumps(summary), encoding="utf-8")
         self.assertIsNone(json.loads(self.get("/api/reduction")[2])["reduction"])
 

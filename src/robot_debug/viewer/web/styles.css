@@ -73,7 +73,9 @@ pre { white-space: pre-wrap; font-size: .75rem; color: var(--muted); }
 .reduction-lineage dl { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-2); margin: 0; font-size: .76rem; }
 .reduction-lineage dt { color: var(--muted); }
 .reduction-lineage dd { margin: 0; color: var(--ink); text-align: right; }
-.reduction-lineage p { color: var(--success); font-size: .76rem; }
+.reduction-lineage p { font-size: .76rem; }
+.reduction-certification { color: var(--success); }
+.reduction-warning { color: var(--amber); }
 @media (max-width: 1050px) { .workspace { grid-template-columns: 17rem minmax(0, 1fr); } #diagnostics { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } }
 @media (max-width: 768px) { .masthead { align-items: start; flex-direction: column; } .workspace { display: block; } .run-rail, #diagnostics { border: 0; border-bottom: 1px solid var(--line); } .comparison-deck { grid-template-columns: 1fr; } #demo-guide { align-items: start; flex-direction: column; } #demo-guide ol { display: grid; gap: var(--space-1); } main { padding: var(--space-2); } .transport p { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

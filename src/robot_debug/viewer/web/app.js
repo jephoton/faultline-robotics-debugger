@@ -183,10 +183,11 @@ function renderDiagnostics(episode) {
     });
     reduction.append(heading, facts);
     if (state.reduction.certification) {
-      const certification = document.createElement("p"); certification.textContent = `Certification ${state.reduction.certification}`;
+      const certification = document.createElement("p"); certification.className = "reduction-certification";
+      certification.textContent = `Certification ${state.reduction.certification}`;
       reduction.append(certification);
     } else {
-      const note = document.createElement("p"); note.className = "failure-detail";
+      const note = document.createElement("p"); note.className = "reduction-warning";
       note.textContent = `Uncertified terminal result: ${state.reduction.terminal_outcome}`; reduction.append(note);
     }
     aside.append(reduction);
