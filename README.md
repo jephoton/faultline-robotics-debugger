@@ -10,7 +10,10 @@ this repository does not relicense model weights or assets.
 
 The project has reproduced NVIDIA GR00T on LIBERO using Nebius GPU compute,
 added a controlled agent-view occlusion, and implemented replayable experiment
-records plus a local evidence viewer.
+records plus a local evidence viewer. The September 27 bounded run reduced a
+reproducible 25%-area occlusion to a 14.0625%-area case while matched nominal
+controls succeeded. This is a tested, budget-local reduction, not a proven
+minimum. Parallel cost/performance evaluation is the next milestone.
 
 Collaboration: cloud compute is an available main resource; architectural and design choices are discussed with Jethro before adoption, with explanations to support learning. Work is committed frequently using Conventional Commits. See [project instructions](AGENTS.md).
 
@@ -20,8 +23,10 @@ Collaboration: cloud compute is an available main resource; architectural and de
 - [Diagnostic trace decision](docs/decisions/0001-diagnostic-trace-and-first-fault.md): why the debugger preserves the upstream evaluator and starts with perception faults.
 - [Attempt-record decision](docs/decisions/0002-attempt-record-boundary.md): the portable record shared by future runners, reducers, and reports.
 - [Cloud-pilot preflight](docs/setup/cloud-pilot.md): credential-safe resource, cost, and cleanup checklist.
+- [M4 reduction evidence](docs/experiments/m4-reducer.md): exact candidate outcomes, budget, replay manifest, and claim limits.
+- [Hackathon tool feedback](FEEDBACK.md): observed Nebius and NVIDIA strengths and friction, with Token Factory clearly marked untested.
 
-First milestone: one existing robot policy completes one simulated task and can be replayed. Model training and formal verification are outside the initial scope.
+Model training and formal verification are outside the initial scope.
 
 ## Differentiator
 
@@ -58,8 +63,8 @@ cd "$(git rev-parse --show-toplevel)"
 PYTHONPATH=src python3 -B -m unittest discover -s tests -v
 ```
 
-This checks the portable attempt-record contract before it is connected to the
-cloud evaluator.
+This runs the complete local suite; the current verified Python 3.11 run passes
+126 tests. It does not repeat the paid cloud experiment.
 
 ## Viewer
 
@@ -76,11 +81,11 @@ $env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
 & $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Select a nominal baseline
-as the primary evidence and the global-occlusion episode as the comparison;
-use the paired videos, conclusion line, and timeline to tell the failure
-diagnosis story. An `INFRA ERROR` means the policy was not evaluated, rather
-than that the robot failed the task.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Compare a nominal episode
+with a failed M4 reduction case; the lineage panel shows the parent and reduced
+mask areas, while paired videos and traces show what actually happened. An
+`INFRA ERROR` means the policy was not evaluated, rather than that the robot
+failed the task.
 
 The viewer binds only to loopback by default. Do not use `--host 0.0.0.0` on an
 untrusted network.

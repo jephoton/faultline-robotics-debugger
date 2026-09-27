@@ -10,7 +10,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** The bounded one-L40S Nebius evaluation completed on September 15. The nominal gate passed with 20/20 successes, and fixed episode 0 succeeded at all six centered global-agent-view occlusion severities from 6.25% through 25% image area. On September 16, the fixed-area position grid found a failure at `x=0.50, y=0.00`: the original attempt and all five exact replays failed, while the nominal sentinel and all five matched nominal controls succeeded. All grid attempts have video, trace, aggregate, and SQLite evidence indexed by the local viewer. This completes the engineering evidence gate for M2 on the exact tested case; it does not establish causal diagnosis or general robustness.
+**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3 parallel-performance design is next.
 
 **Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
@@ -255,13 +255,13 @@ We have completed **M1: reproducible runner** and the engineering gate for
 - The upper-right 25%-area cell failed in discovery and 5/5 exact replays;
   the nominal sentinel and 5/5 fresh nominal controls succeeded.
 - M2 is complete for that narrow experiment contract. M4's local implementation
-  is also complete: the bounded reducer, rectangular evaluator configuration,
-  resumable 23-episode session driver, replay manifest, and viewer reduction
-  panel pass the full 126-test Python 3.11 suite. A live Nebius reduction has
-  not run yet, so M4 remains experimentally open and no smaller rectangle is
-  claimed yet.
-- M3 has not started. The accepted happy-path order remains reducer design
-  before parallel scaling so the HPC comparison accelerates real diagnosis.
+  and live experiment are complete for the tested case. The bounded reducer,
+  replay manifest, and viewer lineage panel pass the full 126-test Python 3.11
+  suite. The September 27 live run certified a 14.0625%-area rectangle, then
+  exhausted its 12-attempt candidate budget; see
+  [M4 evidence](docs/experiments/m4-reducer.md).
+- M3 has not started. Its equal-work 1/2/4-worker comparison should accelerate
+  this real diagnostic workload, subject to a new topology and spending gate.
 
 ### Immediate decision after the bounded session
 
@@ -292,10 +292,10 @@ pure kernel, Terra implemented evaluator integration and the resumable driver,
 and Luna implemented the validated viewer lineage panel and usage guide. Each
 batch received independent specification and quality review before integration.
 
-No paid M4 run is authorized by the plan. Local implementation, fake-runner
-resume/idempotence verification, the 126-test suite, and browser smoke testing
-are complete. Live price/resource preflight and a fresh dollar cap remain the
-next red checkpoint.
+The separately approved US$2 M4 session completed September 27 under its cap;
+the plan alone had not authorized spending. Local and live evidence, the
+126-test suite, and viewer validation are complete. Its findings and
+limitations are recorded in [M4 evidence](docs/experiments/m4-reducer.md).
 
 ### Record contract
 
@@ -361,7 +361,7 @@ Assuming work begins around September 12:
 | Sep 12–18 | Startup gates, nominal robot episode, resource decision |
 | Sep 19–25 | First perturbation, failure replay, thin runner |
 | Sep 26–Oct 2 | Profiling and one-GPU parallel evaluation |
-| Oct 3–9 | Reduction and diagnostic report |
+| Oct 3–9 | M3 interpretation and product-flow work; M4 reduction completed September 27 |
 | Oct 10–16 | Held-out experiments and related tasks |
 | Oct 17–23 | Reproducibility, documentation, demo draft |
 | Oct 24–29 | Freeze, public release, final video and submission |
@@ -371,10 +371,12 @@ These are target weeks; access delays consume the buffer. If no real policy epis
 ## 9. Submission checklist
 
 - [ ] Record substantive NVIDIA model usage and Nebius execution with exact model and job identifiers, excluding secrets.
+- [ ] Complete the required tool feedback using [FEEDBACK.md](FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether Jethro would build with it again. Do not imply Token Factory was used unless its pilot runs.
 - [ ] Recheck official Physical AI requirements before finalizing the submission.
-- [ ] Prepare a public repository with an appropriate open-source license, attribution, install instructions, and artifact access.
-- [ ] Include a public YouTube video under three minutes, with at least one minute showing operating modules.
-- [ ] Demonstrate nominal behavior, a failure, its reduction, and the throughput result within the video.
+- [ ] Prepare a public judge-runnable repository: visible Apache-2.0 license, attribution/third-party rights, pinned setup and sample-artifact access, one verified smoke-test path, and a tracked-file/history secret scan before visibility changes.
+- [ ] Pick a human project name and draft a sub-three-minute pitch, not a tutorial: problem and user, nominal robot, reproducible failure, reduction, M3 cost/performance evidence, and honest limits.
+- [ ] Record at least one minute of operating simulator and key viewer modules (the official no-physical-hardware alternative); narrate Nebius AI Cloud and NVIDIA GR00T explicitly and list them under Built With.
+- [ ] Upload a public YouTube demo only after checking media rights and that the video matches the runnable build.
 - [ ] Explain limitations: simulation only, selected task/policy coverage, empirical evidence rather than safety certification.
 - [ ] Preserve a test build and required artifacts for judging through December 15; continuous GPU uptime is not assumed necessary.
 - [ ] Submit by the October 30 Pacific deadline, equivalent to October 31 at 01:00 Singapore time; target October 29 to leave a buffer.
@@ -383,15 +385,12 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 
 ## 10. The next working session
 
-The baseline/sweep/replay and fixed-area position-grid sessions are complete.
-The grid produced the first replayable failure and passed the matched nominal
-control gate. The M4 reducer design and local implementation are complete. The
-next material step is a read-only Nebius preflight, followed by Jethro's fresh
-run-specific dollar-cap decision before one bounded live reduction session.
-After reduction, design M3's equal-work 1/2/4-worker comparison around this real
-diagnostic workload. Existing approvals persist only within their exact scope;
-a reducer algorithm, worker topology, new cap, or account change requires
-Jethro's decision.
+M2 and the bounded M4 live reduction are complete for one named policy, task,
+initial state, and visual-occlusion family. The next material step is to review
+an M3 equal-work 1/2/4-worker design around the recorded reduction workload.
+No M3 worker topology or paid cap is authorized yet. Tool feedback is now
+tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
+repository audit are explicit submission gates after M3, as Jethro requested.
 
 The parallel sample check found no external file in this repository. Upstream
 LIBERO HDF5 does contain actions, observations, simulator states, model XML,

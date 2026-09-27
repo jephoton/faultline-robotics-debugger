@@ -41,6 +41,16 @@ Complete suite when all development dependencies are installed:
 PYTHONPATH=src .venv/bin/python -B -m unittest discover -s tests -v
 ```
 
+Verified Windows Python 3.11 alternative when the WSL environment lacks test
+dependencies:
+
+```powershell
+$env:PYTHONPATH = 'src'
+& 'C:\Windows\py.exe' -3.11 -m unittest discover -s tests -v
+```
+
+Expected at the September 27 M4 checkpoint: 126 tests pass.
+
 Also run `git diff --check` before committing. Use Conventional Commit
 messages and stage only task-related paths.
 
@@ -50,4 +60,3 @@ Before any Nebius start, confirm authentication, tenant/project, balance,
 expiry, GPU quota/capacity, exact rates, VM state, and the user-approved cap.
 Arm independent cleanup, copy evidence before media, and verify the VM is
 stopped and temporary network rules are absent after every attempt.
-
