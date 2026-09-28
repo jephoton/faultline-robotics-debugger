@@ -43,8 +43,15 @@ repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
 fail-closed resume lease. Whole-branch review and merged-result tests passed.
 The 2-worker live pilot and subsequent 1/2/4 comparison remain
-separate paid work. Cloud preflight, an external exact-VM stop watchdog, and a
-calculated run-specific cap still need explicit approval. The root
+separate paid work. Jethro accepted designs for a separately labeled two-case
+pilot and a detached exact-VM workstation watchdog; their implementation plans
+are in `docs/superpowers/plans/` and await implementation approval. Neither
+design authorizes paid work. Read-only Nebius preflight found the existing
+one-L40S VM stopped, with a 200 GiB retained boot disk. The CLI calculator
+reported $1.7468/hour for that VM shape and $0.0194444/hour for the disk,
+pre-tax, on September 29; refresh prices before a run. Credit balance/expiry
+and restart capacity remain unverified. A live, numeric run-specific cap still
+needs Jethro's separate approval. The root
 `FEEDBACK.md` tracks submission feedback by actual tool.
 
 The M4 reducer kernel's September 21 external-provider handoff is historical
