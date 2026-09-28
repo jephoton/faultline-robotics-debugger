@@ -235,7 +235,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, signal.SIGKILL)],
             [event for event in events if event[0] == "signal"])
         removal = ("docker", ["docker", "rm", "-f", "vla-eval-5678"])
-        self.assertIn(removal, events)
+        self.assertEqual([removal], [event for event in events if event[0] == "docker" and "rm" in event[1]])
         self.assertLess(events.index(("signal", 5678, signal.SIGKILL)), events.index(removal))
 
     def test_docker_inspection_exception_makes_cleanup_uncertain(self):
