@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from robot_debug.attempt_ledger import AttemptLedger
@@ -50,8 +51,11 @@ class AttemptLedgerTests(unittest.TestCase):
 
         self.ledger.capture_result("nominal-01", result("nominal-01"), interrupted=False)
         self.ledger.finish("nominal-01")
+        self.ledger.capture_result("nominal-01", result("nominal-01"), interrupted=False)
         with self.assertRaises(ValueError):
-            self.ledger.capture_result("nominal-01", result("nominal-01"), interrupted=False)
+            self.ledger.capture_result(
+                "nominal-01", result("nominal-01", outcome="policy_failure"), interrupted=False
+            )
 
     def test_finishing_an_exact_same_terminal_is_idempotent(self) -> None:
         self.ledger.begin_submit("nominal-01")
@@ -112,6 +116,20 @@ class AttemptLedgerTests(unittest.TestCase):
         snapshot = self.ledger.snapshot()
         self.assertEqual("prepared", snapshot["attempt_states"]["mask-01"])
         self.assertEqual([], snapshot["in_flight_ids"])
+
+    def test_snapshot_makes_pending_completion_record_durable_json(self) -> None:
+        self.ledger.begin_submit("nominal-01")
+        self.ledger.register_active("nominal-01")
+        captured = result("nominal-01", evidence={"artifact": "runs/nominal-01/results.json"})
+        self.ledger.capture_result("nominal-01", captured, interrupted=False)
+
+        serialized = json.dumps(self.ledger.snapshot())
+        durable = json.loads(serialized)
+        self.assertEqual(
+            {"state": "completing_pending", "result": captured},
+            durable["attempt_records"]["nominal-01"],
+        )
+        self.assertEqual({"state": "prepared"}, durable["attempt_records"]["mask-01"])
 
 
 if __name__ == "__main__":

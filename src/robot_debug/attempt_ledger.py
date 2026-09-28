@@ -67,6 +67,9 @@ class AttemptLedger:
         elif state == _COMPLETING_PENDING:
             if self._attempts[case_id]["result"] != copied:
                 self._illegal(case_id, "capture_result with a different result")
+        elif state == _TERMINAL:
+            if self._attempts[case_id]["result"] != copied:
+                self._illegal(case_id, "capture_result with a different terminal result")
         else:
             self._illegal(case_id, "capture_result")
 
@@ -93,6 +96,7 @@ class AttemptLedger:
         ]
         return {
             "attempt_states": states,
+            "attempt_records": _json_copy(self._attempts),
             "results": results,
             "valid_count": sum(result.get("status") == "valid" for result in results),
             "in_flight_ids": [
