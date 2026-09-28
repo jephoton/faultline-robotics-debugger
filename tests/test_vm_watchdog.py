@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import importlib.util
 from pathlib import Path
+import sys
 import tempfile
+import time
+from types import SimpleNamespace
 import unittest
 
 from robot_debug.vm_watchdog import GuardRecord, RecordError, load_record, watch
@@ -149,6 +153,100 @@ class WatchStateMachineTests(unittest.TestCase):
             self.assertEqual(result, "stop_unconfirmed")
             self.assertEqual(calls, 3)
             self.assertEqual(self._events(record)[-1]["event"], "stop_unconfirmed")
+
+
+class ArmWrapperTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        script_path = Path(__file__).parents[1] / "scripts" / "run_vm_watchdog.py"
+        spec = importlib.util.spec_from_file_location("vm_watchdog_runner", script_path)
+        cls.runner = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.runner
+        assert spec.loader is not None
+        spec.loader.exec_module(cls.runner)
+
+    def _payload(self, root: Path, *, deadline_utc: str = "2030-01-02T03:04:05Z") -> Path:
+        control = root / "control"
+        record = control / "record.json"
+        record.parent.mkdir(parents=True)
+        record.write_text(json.dumps({
+            "schema_version": 1,
+            "instance_id": "computeinstance-test123",
+            "project_id": "project-test123",
+            "deadline_utc": deadline_utc,
+            "run_label": "m3-pilot",
+            "wsl_cli_path": "/home/test/.nebius/bin/nebius",
+            "log_path": str(control / "m3-pilot" / "watchdog.jsonl"),
+        }), encoding="utf-8")
+        return record
+
+    def test_check_uses_exact_get_only_and_rejects_malformed_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            calls: list[list[str]] = []
+            result = self.runner.check(record, root / "control", invoke=lambda argv: calls.append(argv) or {
+                "metadata": {"parent_id": "project-test123"}, "status": {"state": "STOPPED"},
+            })
+            self.assertEqual(result, "checked")
+            self.assertEqual(len(calls), 1)
+            self.assertNotIn("stop", calls[0])
+            with self.assertRaises(RecordError):
+                self.runner.check(record, root / "control", invoke=lambda _: "not json")
+
+    def test_arm_refuses_existing_or_stale_lock_without_spawning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            lock = root / "control" / "m3-pilot" / "arm.lock"
+            lock.parent.mkdir()
+            lock.write_text("999", encoding="utf-8")
+            with self.assertRaises(self.runner.ArmError):
+                self.runner.arm(record, root / "control", local_test=True, fake_cli=root / "fake.json")
+
+    def test_arm_requires_live_child_and_durable_armed_event(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            fake = root / "fake.json"
+            fake.write_text("[]", encoding="utf-8")
+            with self.assertRaises(self.runner.ArmError):
+                self.runner.arm(
+                    record, root / "control", local_test=True, fake_cli=fake,
+                    process_factory=lambda *args, **kwargs: SimpleNamespace(pid=5, poll=lambda: 1),
+                    handshake_seconds=0,
+                )
+
+    def test_arm_production_mode_can_launch_a_watch_child_without_fake_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            with self.assertRaisesRegex(self.runner.ArmError, "child exited"):
+                self.runner.arm(
+                    record, root / "control",
+                    process_factory=lambda *args, **kwargs: SimpleNamespace(pid=6, poll=lambda: 1),
+                    handshake_seconds=0,
+                )
+
+    def test_local_fake_arm_detaches_then_confirms_stop_without_nebius(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            deadline = (datetime.now(UTC) + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+            record = self._payload(root, deadline_utc=deadline)
+            fake = root / "fake.json"
+            fake.write_text(json.dumps([
+                {"metadata": {"parent_id": "project-test123"}, "status": {"state": "RUNNING"}},
+                {},
+                {"metadata": {"parent_id": "project-test123"}, "status": {"state": "STOPPED"}},
+            ]), encoding="utf-8")
+            pid = self.runner.arm(record, root / "control", local_test=True, fake_cli=fake, handshake_seconds=5)
+            log_path = root / "control" / "m3-pilot" / "watchdog.jsonl"
+            limit = time.monotonic() + 5
+            while not self.runner._has_event(log_path, "stop_confirmed") and time.monotonic() < limit:
+                time.sleep(0.05)
+            self.assertGreater(pid, 0)
+            self.assertTrue(self.runner._has_event(log_path, "armed"))
+            self.assertTrue(self.runner._has_event(log_path, "stop_confirmed"))
 
 
 if __name__ == "__main__":
