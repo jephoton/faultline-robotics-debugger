@@ -29,9 +29,11 @@
 - M3 local work is isolated on `codex/m3-parallel-replay`, not merged into
   `main`. The fixed 16-item manifest, bounded 1/2/4-worker scheduler, evidence
   validation, fail-closed comparison reporter, process-group containment, and
-  durable per-case attempt ledger are implemented. Windows Python 3.11 passed
-  199 tests (2 POSIX-only skips); the focused WSL signal/driver suites passed
-  45 tests. No M3 Nebius run exists.
+  durable per-case attempt ledger are implemented. Exact evaluator launch
+  identity is written before waiting, and safe partial sessions can resume
+  only proven-prepared cases. Windows Python 3.11 passed 212 tests (2
+  POSIX-only skips); the focused WSL signal/driver suites passed 57 tests.
+  No M3 Nebius run exists.
 
 ## Next material decision
 
@@ -39,8 +41,9 @@ M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
 1/2/4-worker design on one GPU VM with a shared GR00T server, using fixed
 repeats of the real M4 case. The M3 local implementation now uses the accepted
-durable attempt-ownership design; final whole-branch review and integration
-are next. The 2-worker live pilot and subsequent 1/2/4 comparison remain
+durable attempt-ownership design, exact launch-identity sidecars, and a
+fail-closed resume lease. Final whole-branch review and integration are next.
+The 2-worker live pilot and subsequent 1/2/4 comparison remain
 separate paid work. Cloud preflight, an external exact-VM stop watchdog, and a
 calculated run-specific cap still need explicit approval. The root
 `FEEDBACK.md` tracks submission feedback by actual tool.
@@ -65,9 +68,11 @@ only when investigating M4 history; do not treat it as an active instruction.
 - The M3 ledger persists `prepared`, `submitting_unknown`, `active`,
   `completing_pending`, and `terminal` per case; results and counts are derived
   from that authority. An interrupted or late completion is not counted as a
-  valid replay. Process-group containment was tested with a delayed POSIX
-  child, but local tests cannot prove a Docker daemon has no outstanding
-  request. An absent-container check is only a local observation. After any
-  uncertainty, stop and verify the exact VM before another mode. A stuck
-  thread can outlive the CLI's partial-summary deadline; the independent VM
-  watchdog is still the cost boundary.
+  valid replay. Resume refuses uncertain ownership, nonvalid terminal results,
+  stale prepared-case artifacts, and concurrent invocations. Resumed modes
+  cannot enter the throughput comparison. Process-group containment was tested
+  with a delayed POSIX child, but local tests cannot prove a Docker daemon has
+  no outstanding request. An absent-container check is only a local
+  observation. After any uncertainty, stop and verify the exact VM before
+  another mode. A stuck thread can outlive the CLI's partial-summary deadline;
+  the independent VM watchdog is still the cost boundary.

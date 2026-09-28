@@ -49,9 +49,9 @@ $env:PYTHONPATH = 'src'
 & 'C:\Windows\py.exe' -3.11 -m unittest discover -s tests -v
 ```
 
-Verified after the local M3 attempt-ledger implementation: 199 tests pass,
+Verified after the local M3 recovery implementation: 212 tests pass,
 with 2 POSIX-only skips, on Windows Python 3.11. The focused lifecycle and
-driver suites also pass under WSL (45 tests), including real POSIX signals:
+driver suites also pass under WSL (57 tests), including real POSIX signals:
 
 ```bash
 PYTHONPATH=src python3 -m unittest \
@@ -62,7 +62,19 @@ The ledger writes `submitting_unknown` before enqueueing a case and
 `completing_pending` with its full result before releasing Future ownership.
 This preserves conservative evidence if interruption lands at a save boundary;
 `results`, `valid_count`, and `in_flight_ids` are derived from the ledger.
-These tests do not prove Docker-daemon-level containment.
+For the production launcher, `launches/<case-id>.json` records the exact
+evaluator PID and expected `vla-eval-<pid>` container name immediately after
+`Popen`, before waiting. These tests do not prove Docker-daemon-level
+containment.
+
+An explicit `scripts/run_parallel_eval.py ... --resume` is only for a partial
+session whose existing manifest and ledger validate, all attempted cases are
+terminal-valid, and the remaining cases are proven `prepared` with no stale
+output or launch sidecar. A per-session exclusive lease prevents concurrent
+resumes; a stale lease after a crash is intentionally not stolen automatically.
+Resolve it only after verifying the exact evaluator/VM state. A resumed mode is
+marked and rejected by the throughput reporter; rerun a fresh mode for a fair
+1/2/4-worker comparison.
 
 Also run `git diff --check` before committing. Use Conventional Commit
 messages and stage only task-related paths.

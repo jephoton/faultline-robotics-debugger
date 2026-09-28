@@ -161,7 +161,16 @@ and visible results from terminal ledger records. On interruption, a late
 completion is nonvalid; a possibly submitted case is never silently treated
 as untouched. See the [accepted attempt-ownership design](../superpowers/specs/2026-09-28-m3-attempt-ownership-design.md).
 
-Local verification passed 199 Windows tests (2 POSIX-only skips) and 45
+The production launcher atomically records each evaluator's exact PID and
+expected container name before waiting. An explicit resume path accepts only
+a validated partial session with terminal-valid and proven-prepared cases;
+uncertain attempts, stale prepared-case outputs/launch sidecars, symlinked
+paths, and concurrent resumes fail closed. A matching pre-submit config may
+be reused. Resumed runs retain terminal evidence once but are excluded from
+throughput comparison, so the benchmark remains based on fresh uninterrupted
+modes. See the [recovery plan](../superpowers/plans/2026-09-28-m3-launch-identity-and-resume.md).
+
+Local verification passed 212 Windows tests (2 POSIX-only skips) and 57
 focused WSL lifecycle/driver tests, including actual process signals and a
 delayed-child containment case. This does not prove daemon-level Docker
 containment: the pinned harness can spawn `docker run`, and a daemon request
