@@ -112,6 +112,118 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertTrue(all(result["evaluator_pid"] == 31337 for result in record["results"]))
         self.assertTrue(all(result["expected_container"] == "vla-eval-31337" for result in record["results"]))
 
+    def test_launch_observer_receives_exact_identity_before_wait_finishes(self):
+        observer_called = threading.Event()
+        release_observer = threading.Event()
+        wait_started = threading.Event()
+        release_wait = threading.Event()
+        finished = threading.Event()
+        observations = []
+        errors = []
+
+        class Process:
+            pid = 9137
+            returncode = None
+
+            def wait(self, timeout):
+                wait_started.set()
+                release_wait.wait(2)
+                self.returncode = 0
+                return 0
+
+        def observer(pid, container):
+            observations.append((pid, container))
+            observer_called.set()
+            release_observer.wait(2)
+
+        def run():
+            try:
+                runner_module._run_evaluator_safely(
+                    ["vla-eval"], cwd=self.upstream, check=False, timeout=5,
+                    process_factory=lambda *args, **kwargs: Process(),
+                    launch_observer=observer,
+                )
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                finished.set()
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        try:
+            self.assertTrue(observer_called.wait(2))
+            self.assertEqual([(9137, "vla-eval-9137")], observations)
+            self.assertFalse(wait_started.is_set(), "observer must run before wait")
+            self.assertFalse(finished.is_set(), "wait must still be blocking")
+        finally:
+            release_observer.set()
+            release_wait.set()
+            thread.join(2)
+        self.assertEqual([], errors)
+
+    def test_launch_observer_failure_uses_cleanup_and_surfaces_uncertainty(self):
+        cleanup_calls = []
+
+        class Process:
+            pid = 9138
+            returncode = None
+
+            def wait(self, timeout):
+                self.returncode = 143
+                return self.returncode
+
+            def terminate(self):
+                cleanup_calls.append("terminate")
+
+        def docker(*args, **kwargs):
+            cleanup_calls.append(args[0][1])
+            return SimpleNamespace(returncode=1, stdout="", stderr="daemon unavailable")
+
+        with self.assertRaisesRegex(RuntimeError, "sidecar write failed") as raised:
+            runner_module._run_evaluator_safely(
+                ["vla-eval"], cwd=self.upstream, check=False, timeout=5,
+                process_factory=lambda *args, **kwargs: Process(), docker_runner=docker,
+                launch_observer=lambda pid, container: (_ for _ in ()).throw(RuntimeError("sidecar write failed")),
+            )
+
+        self.assertEqual(9138, raised.exception.evaluator_pid)
+        self.assertEqual("vla-eval-9138", raised.exception.expected_container)
+        self.assertFalse(raised.exception.cleanup_confirmed)
+        self.assertIn("Docker inspection failed", raised.exception.cleanup_error)
+        self.assertTrue(cleanup_calls)
+
+    def test_production_runner_persists_launch_identity_sidecars_before_evidence(self):
+        results = self.root / "launch-sidecars"
+        observed_sidecars = []
+
+        def launched_runner(argv, *, cwd, check, timeout, launch_observer, **kwargs):
+            config = Path(argv[-1])
+            case_id = config.stem
+            launch_observer(7000 + len(observed_sidecars), f"vla-eval-{7000 + len(observed_sidecars)}")
+            sidecar = results / "m3-workers-1" / "launches" / f"{case_id}.json"
+            observed_sidecars.append(json.loads(sidecar.read_text(encoding="utf-8")))
+            output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
+                if line.startswith("output_dir: "))
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "fake_aggregate.json").write_text(json.dumps(aggregate()), encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        with patch.object(runner_module, "_run_evaluator_safely", side_effect=launched_runner):
+            record = runner_module.run_mode(
+                upstream_root=self.upstream, project_root=self.project, results_root=results,
+                workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+            )
+
+        self.assertEqual(16, record["valid_count"])
+        self.assertEqual(16, len(observed_sidecars))
+        self.assertEqual(
+            {"schema_version", "case_id", "evaluator_pid", "expected_container"},
+            set(observed_sidecars[0]),
+        )
+        self.assertEqual("nominal-01", observed_sidecars[0]["case_id"])
+        self.assertEqual(7000, observed_sidecars[0]["evaluator_pid"])
+        self.assertEqual("vla-eval-7000", observed_sidecars[0]["expected_container"])
+
     def test_bad_attempts_stop_new_launches_and_remain_nonvalid(self):
         cases = {
             "nonzero": lambda _: (9, aggregate()),

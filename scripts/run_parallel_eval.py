@@ -83,6 +83,7 @@ def _run_evaluator_safely(
     stop_event: threading.Event | None = None,
     interrupt_event: threading.Event | None = None,
     launch_lock: threading.Lock | None = None,
+    launch_observer: Callable[[int, str], None] | None = None,
     graceful_group_wait_seconds: float = 20,
     forced_cleanup_wait_seconds: float = 5,
 ) -> Any:
@@ -111,6 +112,8 @@ def _run_evaluator_safely(
         # fakes usable even when they intentionally expose a narrower API.
         pass
     try:
+        if launch_observer is not None:
+            launch_observer(evaluator_pid, container)
         if interrupt_event is None:
             process.wait(timeout=timeout)
         else:
@@ -271,10 +274,15 @@ def run_mode(
         with launch_lock:
             stop_requested.set()
 
-    if command_runner is None:
-        def command_runner(argv: list[str], *, cwd: Path, check: bool, timeout: float) -> Any:
+    production_command_runner = command_runner is None
+    if production_command_runner:
+        def command_runner(
+            argv: list[str], *, cwd: Path, check: bool, timeout: float,
+            launch_observer: Callable[[int, str], None],
+        ) -> Any:
             return _run_evaluator_safely(argv, cwd=cwd, check=check, timeout=timeout,
-                stop_event=stop_requested, interrupt_event=interrupt_event, launch_lock=launch_lock)
+                stop_event=stop_requested, interrupt_event=interrupt_event, launch_lock=launch_lock,
+                launch_observer=launch_observer)
     upstream_root = Path(upstream_root).resolve()
     project_root = Path(project_root).resolve()
     started = monotonic_clock()
@@ -302,8 +310,10 @@ def run_mode(
         )
         configs = session / "configs"
         runs = session / "runs"
+        launches = session / "launches"
         configs.mkdir()
         runs.mkdir()
+        launches.mkdir()
         manifest_path = session / "manifest.json"
         manifest_path.write_text(json.dumps(items, sort_keys=True, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     except KeyboardInterrupt:
@@ -327,6 +337,23 @@ def run_mode(
             except ValueError as error:
                 raise ValueError("item path escapes session") from error
         return config, output
+
+    def launch_identity_observer(case_id: str) -> Callable[[int, str], None]:
+        sidecar = launches / f"{case_id}.json"
+        try:
+            sidecar.resolve().relative_to(session)
+        except ValueError as error:
+            raise ValueError("launch identity path escapes session") from error
+
+        def observe(evaluator_pid: int, expected_container: str) -> None:
+            base._atomic_write_json(sidecar, {
+                "schema_version": 1,
+                "case_id": case_id,
+                "evaluator_pid": evaluator_pid,
+                "expected_container": expected_container,
+            })
+
+        return observe
 
     def execute(item: dict[str, Any], config: Path, output: Path, attempt_started: float) -> dict[str, Any] | None:
         with launch_lock:
@@ -354,8 +381,14 @@ def run_mode(
                 record["expected_container"] = expected_container
 
         try:
-            process = command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config)],
-                cwd=upstream_root, check=False, timeout=item_timeout_seconds)
+            arguments = [base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config)]
+            if production_command_runner:
+                process = command_runner(arguments, cwd=upstream_root, check=False,
+                    timeout=item_timeout_seconds,
+                    launch_observer=launch_identity_observer(item["case_id"]))
+            else:
+                process = command_runner(arguments, cwd=upstream_root, check=False,
+                    timeout=item_timeout_seconds)
         except _LaunchCancelled:
             return None
         except _EvaluatorInterrupted as error:
