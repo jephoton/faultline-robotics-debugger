@@ -718,6 +718,58 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertTrue("nominal-01" in summary["in_flight_ids"]
             or any(record["case_id"] == "nominal-01" for record in summary["results"]))
 
+    def test_submit_that_enqueues_then_interrupts_retains_uncertain_case(self):
+        """submit() may have started work even when it raises before returning a future."""
+        original_submit = runner_module.ThreadPoolExecutor.submit
+
+        def enqueue_then_interrupt(executor, *args, **kwargs):
+            original_submit(executor, *args, **kwargs)
+            raise KeyboardInterrupt()
+
+        results = self.root / "submit-return-interrupt"
+        with patch.object(runner_module.ThreadPoolExecutor, "submit", new=enqueue_then_interrupt):
+            summary = self.run_mode(FakeEvaluator(), results=results)
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted_cleanup_risk", summary["stop_reason"])
+        self.assertEqual(["nominal-01"], summary["in_flight_ids"])
+        self.assertEqual(0, summary["valid_count"])
+
+    def test_completed_future_after_interrupt_is_not_counted_as_valid(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        def completes_after_interrupt(argv, *, cwd, check, timeout):
+            config = Path(argv[-1])
+            output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
+                if line.startswith("output_dir: "))
+            started.set()
+            release.wait(2)
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "fake_aggregate.json").write_text(json.dumps(aggregate()), encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        real_wait = runner_module.wait
+        interrupted = False
+
+        def interrupt_after_completion(futures, **kwargs):
+            nonlocal interrupted
+            if not interrupted:
+                self.assertTrue(started.wait(2))
+                release.set()
+                time.sleep(.02)
+                interrupted = True
+                raise KeyboardInterrupt()
+            return real_wait(futures, **kwargs)
+
+        with patch.object(runner_module, "wait", side_effect=interrupt_after_completion):
+            summary = self.run_mode(completes_after_interrupt,
+                results=self.root / "completed-after-interrupt")
+        self.assertIn(summary["stop_reason"], {"interrupted", "interrupted_cleanup_risk"})
+        self.assertEqual(0, summary["valid_count"])
+        self.assertTrue(summary["in_flight_ids"]
+            or any(record["status"] != "valid" for record in summary["results"]))
+
     def test_interrupt_during_session_setup_writes_partial_summary_when_directory_exists(self):
         results = self.root / "setup-interrupt"
         session = results / "m3-workers-1"

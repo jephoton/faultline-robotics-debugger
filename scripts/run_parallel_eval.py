@@ -414,6 +414,7 @@ def run_mode(
     pending = iter(items)
     active: dict[Any, str] = {}
     uncertain_active: list[tuple[Any, str]] = []
+    submitting_case_ids: set[str] = set()
     stopped = False
     executor = ThreadPoolExecutor(max_workers=workers)
     interrupted = False
@@ -443,9 +444,14 @@ def run_mode(
                     if stop_requested.is_set() or interrupt_event.is_set():
                         cancelled = True
                     else:
+                        # This durable-state companion is installed before
+                        # submit(): an interrupt can occur after a worker has
+                        # been enqueued but before Python returns its Future.
+                        submitting_case_ids.add(item["case_id"])
                         future = executor.submit(execute, item, config, output, attempt_started)
                         try:
                             active[future] = item["case_id"]
+                            submitting_case_ids.discard(item["case_id"])
                         except BaseException:
                             # submit() has already handed this case to a worker.
                             # Keep a conservative ownership record when an async
@@ -488,7 +494,8 @@ def run_mode(
             interrupt_event.set()
             request_stop()
             summary["stop_reason"] = "interrupted"
-            owned_case_ids = set(active.values()) | {case_id for _, case_id in uncertain_active}
+            owned_case_ids = (set(active.values()) | {case_id for _, case_id in uncertain_active}
+                | submitting_case_ids)
             summary["in_flight_ids"][:] = [case_id for case_id in summary["in_flight_ids"]
                 if case_id in owned_case_ids]
             for future, case_id in list(active.items()):
@@ -528,6 +535,13 @@ def run_mode(
                         record = {"case_id": case_id, "status": "infrastructure_error",
                             "cleanup_confirmed": False,
                             "infrastructure_error": "cleanup risk: interrupted after submission before future registration"}
+                    if record is not None and record["status"] == "valid":
+                        # Interruption preceded normal completion accounting.
+                        # Preserve the observed files/metadata but never let a
+                        # late result make this partial mode comparable.
+                        record = {**record, "status": "infrastructure_error",
+                            "cleanup_confirmed": False,
+                            "infrastructure_error": "interrupted before completion could be classified"}
                     if record is not None:
                         summary["results"].append(record)
                         if record["status"] == "valid":
@@ -536,10 +550,14 @@ def run_mode(
                                 and record.get("cleanup_confirmed") is not True):
                             summary["stop_reason"] = "interrupted_cleanup_risk"
                     save()
-            if active or uncertain_active:
+            cleanup_incomplete = bool(active or uncertain_active or submitting_case_ids)
+            if cleanup_incomplete:
                 summary["stop_reason"] = "interrupted_cleanup_risk"
                 save()
-            executor.shutdown(wait=False, cancel_futures=True)
+            # wait=False cannot bound interpreter lifetime.  Join only when
+            # every owned worker reached a known terminal state; otherwise the
+            # durable cleanup-risk summary is the explicit incomplete result.
+            executor.shutdown(wait=not cleanup_incomplete, cancel_futures=True)
         else:
             executor.shutdown(wait=True)
     if summary["stop_reason"] is None and len(summary["results"]) != len(items):
