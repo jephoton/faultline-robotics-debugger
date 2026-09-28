@@ -75,6 +75,15 @@ class M3ReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner_module.report_mode_summaries([paths[0], paths[1], partial], output_dir=self.root)
 
+    def test_report_rejects_completed_resumed_mode_from_throughput_comparison(self) -> None:
+        paths = [self._write_mode(1, 160), self._write_mode(2, 100), self._write_mode(4, 80)]
+        resumed = json.loads(paths[1].read_text(encoding="utf-8"))
+        resumed["resumed"] = True
+        paths[1].write_text(json.dumps(resumed), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "resumed"):
+            runner_module.report_mode_summaries(paths, output_dir=self.root)
+
     def test_report_rejects_manifest_file_that_does_not_match_summary_digest(self) -> None:
         paths = [self._write_mode(1, 160), self._write_mode(2, 100), self._write_mode(4, 80)]
         manifest_path = paths[2].parent / "manifest.json"

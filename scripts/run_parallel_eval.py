@@ -259,8 +259,9 @@ def run_mode(
     command_runner: Callable[..., Any] | None = None,
     monotonic_clock: Callable[[], float] = time.monotonic,
     interrupt_event: threading.Event | None = None,
+    resume: bool = False,
 ) -> dict[str, Any]:
-    """Run a fixed manifest once, stopping future launches on unsafe evidence."""
+    """Run a fixed manifest once, or resume only proven-safe prepared work."""
     if isinstance(workers, bool) or not isinstance(workers, int) or workers not in (1, 2, 4):
         raise ValueError("workers must be one of 1, 2, or 4")
     _positive_finite_seconds("launch_cutoff_seconds", launch_cutoff_seconds)
@@ -287,17 +288,81 @@ def run_mode(
     project_root = Path(project_root).resolve()
     started = monotonic_clock()
     items = build_manifest(repeats_per_case)
-    ledger = AttemptLedger([item["case_id"] for item in items])
+    case_ids = [item["case_id"] for item in items]
+    expected_manifest_bytes = json.dumps(
+        items, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
     session = Path(results_root).resolve() / f"m3-workers-{workers}"
     summary: dict[str, Any] = {
         "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
-        "case_ids": [item["case_id"] for item in items], "planned_ids": [item["case_id"] for item in items],
+        "case_ids": case_ids, "planned_ids": case_ids,
         "in_flight_ids": [], "results": [], "valid_count": 0, "cost_usd": None,
         "elapsed_seconds": 0.0, "stop_reason": None,
     }
+    previous_elapsed = 0.0
+
+    if not isinstance(resume, bool):
+        raise ValueError("resume must be a boolean")
+    if resume:
+        if not session.is_dir():
+            raise ValueError("cannot resume: no prior session exists")
+        manifest_path = session / "manifest.json"
+        summary_path = session / "session_summary.json"
+        if not manifest_path.is_file() or not summary_path.is_file():
+            raise ValueError("cannot resume: partial session is missing manifest or summary")
+        try:
+            manifest_bytes = manifest_path.read_bytes()
+            prior_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError("cannot resume: partial summary or manifest is malformed") from error
+        if manifest_bytes != expected_manifest_bytes:
+            raise ValueError("cannot resume: manifest bytes do not match the frozen workload")
+        if not isinstance(prior_summary, dict):
+            raise ValueError("cannot resume: partial summary is malformed")
+        required_summary_fields = {
+            "workers", "manifest_hash", "manifest_path", "case_ids", "planned_ids",
+            "elapsed_seconds", "stop_reason", "attempt_states", "attempt_records",
+            "results", "valid_count", "in_flight_ids",
+        }
+        if not required_summary_fields.issubset(prior_summary):
+            raise ValueError("cannot resume: partial summary is malformed")
+        if prior_summary.get("workers") != workers:
+            raise ValueError("cannot resume: worker count does not match the partial session")
+        if (prior_summary.get("manifest_hash") != manifest_hash(items)
+                or prior_summary.get("manifest_path") != "manifest.json"):
+            raise ValueError("cannot resume: manifest digest does not match the partial session")
+        if prior_summary.get("case_ids") != case_ids or prior_summary.get("planned_ids") != case_ids:
+            raise ValueError("cannot resume: case IDs do not match the frozen workload")
+        if prior_summary.get("stop_reason") not in {"partial", "interrupted", "launch_cutoff_reached"}:
+            raise ValueError("cannot resume: partial summary has an unsafe stop reason")
+        try:
+            ledger = AttemptLedger.from_snapshot(case_ids, prior_summary)
+        except ValueError as error:
+            raise ValueError("cannot resume: partial summary ledger is malformed") from error
+        authoritative = ledger.snapshot()
+        states = authoritative["attempt_states"]
+        if any(state not in {"prepared", "terminal"} for state in states.values()):
+            raise ValueError("cannot resume: partial session has in-flight or uncertain attempts")
+        if any(result.get("status") != "valid" for result in authoritative["results"]):
+            raise ValueError("cannot resume: partial session has nonvalid terminal evidence")
+        if any(prior_summary.get(field) != value for field, value in authoritative.items()):
+            raise ValueError("cannot resume: partial summary does not match its ledger")
+        previous_elapsed = prior_summary.get("elapsed_seconds")
+        if (isinstance(previous_elapsed, bool)
+                or not isinstance(previous_elapsed, (int, float))
+                or not math.isfinite(previous_elapsed) or previous_elapsed < 0):
+            raise ValueError("cannot resume: partial summary elapsed time is malformed")
+        for directory in (session / "configs", session / "runs", session / "launches"):
+            if not directory.is_dir():
+                raise ValueError("cannot resume: partial session layout is malformed")
+        summary = prior_summary
+        summary["resumed"] = True
+        summary["stop_reason"] = None
+    else:
+        ledger = AttemptLedger(case_ids)
 
     def elapsed() -> float:
-        return monotonic_clock() - started
+        return previous_elapsed + monotonic_clock() - started
 
     def save() -> None:
         summary.update(ledger.snapshot())
@@ -305,17 +370,20 @@ def run_mode(
         base._atomic_write_json(session / "session_summary.json", summary)
 
     try:
-        session = base._prepare_session_directory(
-            Path(results_root).resolve(), session_directory_name=f"m3-workers-{workers}"
-        )
+        if not resume:
+            session = base._prepare_session_directory(
+                Path(results_root).resolve(), session_directory_name=f"m3-workers-{workers}"
+            )
         configs = session / "configs"
         runs = session / "runs"
         launches = session / "launches"
-        configs.mkdir()
-        runs.mkdir()
-        launches.mkdir()
+        if not resume:
+            configs.mkdir()
+            runs.mkdir()
+            launches.mkdir()
         manifest_path = session / "manifest.json"
-        manifest_path.write_text(json.dumps(items, sort_keys=True, separators=(",", ":"), allow_nan=False), encoding="utf-8")
+        if not resume:
+            manifest_path.write_bytes(expected_manifest_bytes)
     except KeyboardInterrupt:
         # A directory can exist before session setup reaches its first normal
         # save.  Preserve an explicitly non-comparable durable record rather
@@ -447,7 +515,7 @@ def run_mode(
         record["duration_seconds"] = record["ended_seconds"] - attempt_started
         return record
 
-    pending = iter(items)
+    pending = iter(item for item in items if ledger.attempts[item["case_id"]]["state"] == "prepared")
     active: dict[Any, str] = {}
     stopped = False
     executor = ThreadPoolExecutor(max_workers=workers)
@@ -701,6 +769,8 @@ def _load_report_record(source: Path) -> dict[str, Any]:
         or record.get("in_flight_ids", [])
     ):
         raise ValueError("mode summary is partial or invalid")
+    if record.get("resumed") is True:
+        raise ValueError("resumed mode summaries cannot be used for throughput comparison")
     manifest_name = record.get("manifest_path")
     if not isinstance(manifest_name, str) or not manifest_name or Path(manifest_name).is_absolute():
         raise ValueError("mode summary must name a relative manifest path")
@@ -817,6 +887,8 @@ def main() -> None:
     parser.add_argument("--workers", required=True, type=int, choices=(1, 2, 4))
     parser.add_argument("--launch-cutoff-seconds", required=True, type=float)
     parser.add_argument("--item-timeout-seconds", required=True, type=float)
+    parser.add_argument("--resume", action="store_true",
+        help="resume only a validated partial session with prepared work")
     args = parser.parse_args()
     interrupt_event = threading.Event()
     previous_handlers = {}

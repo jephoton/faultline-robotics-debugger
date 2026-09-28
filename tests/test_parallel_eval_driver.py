@@ -16,6 +16,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from robot_debug.parallel_eval import summarize_modes
+from robot_debug.attempt_ledger import AttemptLedger
+from robot_debug.parallel_eval import build_manifest, manifest_hash
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "run_parallel_eval.py"
@@ -79,6 +81,31 @@ class ParallelEvalDriverTests(unittest.TestCase):
             results_root=results or self.root / "results", workers=workers, repeats_per_case=8,
             launch_cutoff_seconds=cutoff, item_timeout_seconds=5, command_runner=fake,
             monotonic_clock=clock)
+
+    def write_safe_partial_session(self, results, *, workers=1):
+        items = build_manifest(8)
+        session = results / f"m3-workers-{workers}"
+        (session / "configs").mkdir(parents=True)
+        (session / "runs").mkdir()
+        (session / "launches").mkdir()
+        (session / "manifest.json").write_text(
+            json.dumps(items, sort_keys=True, separators=(",", ":")), encoding="utf-8"
+        )
+        ledger = AttemptLedger([item["case_id"] for item in items])
+        first = items[0]
+        terminal = {"case_id": first["case_id"], "kind": first["kind"], "task_id": 0,
+            "episode_index": 0, "status": "valid", "outcome": "success", "replayable": False}
+        ledger.begin_submit(first["case_id"])
+        ledger.register_active(first["case_id"])
+        ledger.capture_result(first["case_id"], terminal, interrupted=False)
+        ledger.finish(first["case_id"])
+        summary = {
+            "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
+            "case_ids": [item["case_id"] for item in items], "planned_ids": [item["case_id"] for item in items],
+            "cost_usd": None, "elapsed_seconds": 2.5, "stop_reason": "partial", **ledger.snapshot(),
+        }
+        (session / "session_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+        return session, summary
 
     def test_runs_unique_cases_with_bounded_concurrency_and_reportable_records(self):
         records = []
@@ -1320,6 +1347,53 @@ module.main()
         (session / "old.json").write_text("old", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "nonempty"):
             self.run_mode(FakeEvaluator(), results=results)
+
+    def test_resume_runs_only_prepared_cases_and_preserves_terminal_evidence_once(self):
+        results = self.root / "resume"
+        _, original = self.write_safe_partial_session(results)
+        fake = FakeEvaluator()
+
+        summary = runner_module.run_mode(
+            upstream_root=self.upstream, project_root=self.project, results_root=results,
+            workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+            command_runner=fake, resume=True,
+        )
+
+        self.assertEqual(15, len(fake.commands))
+        self.assertEqual(["nominal-01"], [item["case_id"] for item in summary["results"][:1]])
+        self.assertEqual(original["results"][0], summary["results"][0])
+        self.assertEqual(16, summary["valid_count"])
+        self.assertTrue(summary["resumed"])
+        self.assertGreaterEqual(summary["elapsed_seconds"], original["elapsed_seconds"])
+
+    def test_resume_refuses_unsafe_or_mismatched_partial_sessions(self):
+        for mutation, message in (
+            (lambda summary: summary["attempt_records"]["mask-01"].update(state="active"), "in-flight"),
+            (lambda summary: summary["attempt_records"]["nominal-01"]["result"].update(status="invalid_evidence"), "terminal"),
+            (lambda summary: summary.update(manifest_hash="wrong"), "manifest"),
+            (lambda summary: summary.update(workers=2), "workers"),
+            (lambda summary: summary.update(case_ids=[]), "case IDs"),
+            (lambda summary: summary.clear(), "summary"),
+        ):
+            with self.subTest(message=message):
+                results = self.root / f"unsafe-{message}"
+                session, summary = self.write_safe_partial_session(results)
+                mutation(summary)
+                (session / "session_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    runner_module.run_mode(
+                        upstream_root=self.upstream, project_root=self.project, results_root=results,
+                        workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                        command_runner=FakeEvaluator(), resume=True,
+                    )
+
+    def test_resume_requires_an_existing_partial_session(self):
+        with self.assertRaisesRegex(ValueError, "resume"):
+            runner_module.run_mode(
+                upstream_root=self.upstream, project_root=self.project, results_root=self.root / "missing",
+                workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                command_runner=FakeEvaluator(), resume=True,
+            )
 
 
 if __name__ == "__main__":
