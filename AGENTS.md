@@ -43,6 +43,19 @@ These preferences were explicitly provided by Jethro on September 12, 2026. Appl
 - Measure the differentiator against explicit baselines such as grid or random search using time to first apparent failure, time to first reproducible failure, time/cost to a reduced failure, and final perturbation size.
 - Do not claim coverage of all possible failure modes, causal proof, or research novelty until experiments support it. State the tested perturbation family and search space explicitly.
 
+## Hackathon tool feedback
+
+- Maintain the repository-root `FEEDBACK.md` as the submission's working log
+  for Nebius AI Cloud, Token Factory, and NVIDIA models actually used.
+- After a material tool interaction or experiment, add specific observed
+  strengths, friction, onboarding steps, and whether the tool merits reuse.
+  Attribute project setup mistakes and upstream-harness defects separately
+  from provider behavior; link to the relevant experiment note when useful.
+- Keep untested tools explicitly marked untested. Reconcile cost estimates
+  against billing before making final claims, and ask Jethro for first-hand
+  experience before submission. Do not record secrets, account IDs, or private
+  infrastructure details in the log.
+
 ## Multi-agent development with human learning
 
 Use **parallel work between learning checkpoints** as the default operating
