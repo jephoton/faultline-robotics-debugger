@@ -91,6 +91,9 @@ class ParallelEvalDriverTests(unittest.TestCase):
             self.assertEqual(16, len({call[4] for call in fake.commands}))
             self.assertEqual(16, len({call[5] for call in fake.commands}))
             self.assertEqual(16, record["valid_count"])
+            self.assertEqual([], record["in_flight_ids"])
+            self.assertEqual(16, len(record["attempt_states"]))
+            self.assertTrue(all(state == "terminal" for state in record["attempt_states"].values()))
             self.assertIsNone(record["cost_usd"])
             self.assertTrue(all(result["task_id"] == result["episode_index"] == 0 for result in record["results"]))
         self.assertEqual([1, 2, 4], [row["workers"] for row in summarize_modes(records)])
@@ -125,9 +128,37 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 self.assertEqual(1, len(record["results"]))
                 self.assertIn(record["results"][0]["status"], {"infrastructure_error", "invalid_evidence"})
                 self.assertTrue(record["stop_reason"])
+                self.assertEqual("terminal", record["attempt_states"]["nominal-01"])
+                self.assertTrue(all(state == "prepared" for case_id, state in record["attempt_states"].items()
+                    if case_id != "nominal-01"))
                 if name == "timeout":
                     self.assertFalse(record["results"][0]["cleanup_confirmed"])
                     self.assertIn("cleanup risk", record["results"][0]["infrastructure_error"])
+
+    def test_each_atomic_summary_is_derived_from_its_attempt_ledger(self):
+        saved = []
+        original_write = runner_module.base._atomic_write_json
+
+        def capture_write(path, value):
+            if path.name == "session_summary.json":
+                saved.append(json.loads(json.dumps(value)))
+            return original_write(path, value)
+
+        with patch.object(runner_module.base, "_atomic_write_json", side_effect=capture_write):
+            record = self.run_mode(FakeEvaluator(), results=self.root / "ledger-derived")
+
+        self.assertGreater(len(saved), 1)
+        self.assertEqual(record, saved[-1])
+        for summary in saved:
+            attempts = summary["attempt_records"]
+            states = {case_id: attempt["state"] for case_id, attempt in attempts.items()}
+            results = [attempt["result"] for attempt in attempts.values() if attempt["state"] == "terminal"]
+            in_flight = [case_id for case_id, state in states.items()
+                if state not in {"prepared", "terminal"}]
+            self.assertEqual(states, summary["attempt_states"])
+            self.assertEqual(results, summary["results"])
+            self.assertEqual(sum(item["status"] == "valid" for item in results), summary["valid_count"])
+            self.assertEqual(in_flight, summary["in_flight_ids"])
 
     def test_nested_task_id_mismatch_is_invalid_evidence(self):
         def nested_mismatch(_):
@@ -734,6 +765,39 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual("interrupted_cleanup_risk", summary["stop_reason"])
         self.assertEqual(["nominal-01"], summary["in_flight_ids"])
         self.assertEqual(0, summary["valid_count"])
+
+    def test_known_future_after_registration_interrupt_is_reconciled_and_joined(self):
+        original_hash = Future.__hash__
+        interrupted = False
+        shutdown_waits = []
+
+        def interrupt_registration(future):
+            nonlocal interrupted
+            if not interrupted:
+                interrupted = True
+                raise KeyboardInterrupt()
+            return original_hash(future)
+
+        original_shutdown = runner_module.ThreadPoolExecutor.shutdown
+
+        def observe_shutdown(executor, wait=True, *, cancel_futures=False):
+            shutdown_waits.append(wait)
+            return original_shutdown(executor, wait=wait, cancel_futures=cancel_futures)
+
+        def interrupted_evaluator(*args, **kwargs):
+            error = runner_module._EvaluatorInterrupted("interrupted")
+            error.cleanup_confirmed = True
+            error.cleanup_error = None
+            raise error
+
+        with patch.object(Future, "__hash__", new=interrupt_registration), \
+                patch.object(runner_module.ThreadPoolExecutor, "shutdown", new=observe_shutdown):
+            summary = self.run_mode(interrupted_evaluator,
+                results=self.root / "registered-future-interrupt")
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual(1, len(summary["results"]))
+        self.assertEqual([True], shutdown_waits)
 
     def test_completed_future_after_interrupt_is_not_counted_as_valid(self):
         started = threading.Event()

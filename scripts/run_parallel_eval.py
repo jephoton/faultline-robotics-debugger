@@ -22,6 +22,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
+from robot_debug.attempt_ledger import AttemptLedger
 from robot_debug.parallel_eval import build_manifest, manifest_hash, summarize_modes
 
 
@@ -278,6 +279,7 @@ def run_mode(
     project_root = Path(project_root).resolve()
     started = monotonic_clock()
     items = build_manifest(repeats_per_case)
+    ledger = AttemptLedger([item["case_id"] for item in items])
     session = Path(results_root).resolve() / f"m3-workers-{workers}"
     summary: dict[str, Any] = {
         "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
@@ -290,6 +292,7 @@ def run_mode(
         return monotonic_clock() - started
 
     def save() -> None:
+        summary.update(ledger.snapshot())
         summary["elapsed_seconds"] = elapsed()
         base._atomic_write_json(session / "session_summary.json", summary)
 
@@ -413,11 +416,10 @@ def run_mode(
 
     pending = iter(items)
     active: dict[Any, str] = {}
-    uncertain_active: list[tuple[Any, str]] = []
-    submitting_case_ids: set[str] = set()
     stopped = False
     executor = ThreadPoolExecutor(max_workers=workers)
     interrupted = False
+    submission_call_case_id: str | None = None
     try:
         save()
         while True:
@@ -431,36 +433,42 @@ def run_mode(
                 config, output = item_paths(item)
                 base._write_config(config_path=config, output_dir=output, project_root=project_root,
                     stage_name=f"m3-{item['case_id']}", episode_indices=(0,), **({} if item["rectangle"] is None else item["rectangle"]))
-                attempt_started = elapsed()
-                summary["in_flight_ids"].append(item["case_id"]); save()
                 if elapsed() >= launch_cutoff_seconds or stop_requested.is_set() or interrupt_event.is_set():
-                    summary["in_flight_ids"].remove(item["case_id"])
                     if not stop_requested.is_set():
                         stopped = True
                         summary["stop_reason"] = "launch_cutoff_reached"
                     save()
                     break
+                attempt_started = elapsed()
                 with launch_lock:
                     if stop_requested.is_set() or interrupt_event.is_set():
                         cancelled = True
                     else:
-                        # This durable-state companion is installed before
-                        # submit(): an interrupt can occur after a worker has
-                        # been enqueued but before Python returns its Future.
-                        submitting_case_ids.add(item["case_id"])
+                        # Persist intent before submit: a signal during submit
+                        # leaves conservative, durable submission uncertainty.
+                        ledger.begin_submit(item["case_id"])
+                        save()
+                        submission_call_case_id = item["case_id"]
                         future = executor.submit(execute, item, config, output, attempt_started)
                         try:
                             active[future] = item["case_id"]
-                            submitting_case_ids.discard(item["case_id"])
+                            ledger.register_active(item["case_id"])
+                            save()
+                            submission_call_case_id = None
                         except BaseException:
-                            # submit() has already handed this case to a worker.
-                            # Keep a conservative ownership record when an async
-                            # interrupt lands before normal future registration.
-                            uncertain_active.append((future, item["case_id"]))
+                            # A test or signal can interrupt dictionary hashing
+                            # after Future return.  Retry the runtime index once
+                            # so known work remains observable; otherwise the
+                            # durable submitting_unknown record is conservative.
+                            try:
+                                active[future] = item["case_id"]
+                                ledger.register_active(item["case_id"])
+                                save()
+                            except BaseException:
+                                pass
                             raise
                         cancelled = False
                 if cancelled:
-                    summary["in_flight_ids"].remove(item["case_id"])
                     save()
                     break
             if not active:
@@ -472,18 +480,20 @@ def run_mode(
             for future in done:
                 case_id = active[future]
                 record = future.result()
-                active.pop(future)
-                summary["in_flight_ids"].remove(case_id)
                 if record is None:
+                    ledger.cancel_unstarted(case_id)
+                    active.pop(future)
                     save()
                     continue
-                summary["results"].append(record)
-                if record["status"] == "valid":
-                    summary["valid_count"] += 1
-                else:
+                # Result durability precedes releasing the Future index.
+                ledger.capture_result(case_id, record, interrupted=False)
+                save()
+                ledger.finish(case_id)
+                save()
+                active.pop(future)
+                if record["status"] != "valid":
                     stopped = True
                     summary["stop_reason"] = record["status"]
-                save()
         if interrupt_event.is_set():
             interrupted = True
     except KeyboardInterrupt:
@@ -494,63 +504,47 @@ def run_mode(
             interrupt_event.set()
             request_stop()
             summary["stop_reason"] = "interrupted"
-            owned_case_ids = (set(active.values()) | {case_id for _, case_id in uncertain_active}
-                | submitting_case_ids)
-            summary["in_flight_ids"][:] = [case_id for case_id in summary["in_flight_ids"]
-                if case_id in owned_case_ids]
+            # A failed intent save occurs before executor.submit is entered,
+            # so this one case is proven unlaunched and may return prepared.
+            # Once the submit call starts, the ledger deliberately remains
+            # conservative even when Python never returns a Future.
+            if submission_call_case_id is None:
+                for case_id, state in ledger.snapshot()["attempt_states"].items():
+                    if state == "submitting_unknown":
+                        ledger.cancel_unstarted(case_id)
             for future, case_id in list(active.items()):
                 if future.cancel():
                     active.pop(future)
-                    summary["in_flight_ids"].remove(case_id)
-            for future, case_id in list(uncertain_active):
-                if future.cancel():
-                    uncertain_active.remove((future, case_id))
-                    summary["in_flight_ids"].remove(case_id)
+                    ledger.cancel_unstarted(case_id)
             save()
             # This is a bounded cleanup observation window, not a bound on
             # interpreter lifetime: shutdown(wait=False) cannot force a worker
             # thread to exit. Keep every ambiguous worker in_flight.
             deadline = time.monotonic() + 90
-            while (active or uncertain_active) and time.monotonic() < deadline:
-                tracked = list(active) + [future for future, _ in uncertain_active]
-                done, _ = wait(tracked, timeout=min(0.2, max(0, deadline - time.monotonic())),
+            while active and time.monotonic() < deadline:
+                done, _ = wait(active, timeout=min(0.2, max(0, deadline - time.monotonic())),
                     return_when=FIRST_COMPLETED)
                 for future in done:
-                    uncertain_submission = False
-                    if future in active:
-                        case_id = active.pop(future)
-                    else:
-                        future_pair = next(pair for pair in uncertain_active if pair[0] is future)
-                        uncertain_active.remove(future_pair)
-                        case_id = future_pair[1]
-                        uncertain_submission = True
-                    summary["in_flight_ids"].remove(case_id)
+                    case_id = active[future]
                     try:
                         record = future.result()
                     except BaseException as error:
                         record = {"case_id": case_id, "status": "infrastructure_error",
                             "cleanup_confirmed": False,
                             "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
-                    if uncertain_submission and record is None:
-                        record = {"case_id": case_id, "status": "infrastructure_error",
-                            "cleanup_confirmed": False,
-                            "infrastructure_error": "cleanup risk: interrupted after submission before future registration"}
-                    if record is not None and record["status"] == "valid":
-                        # Interruption preceded normal completion accounting.
-                        # Preserve the observed files/metadata but never let a
-                        # late result make this partial mode comparable.
-                        record = {**record, "status": "infrastructure_error",
-                            "cleanup_confirmed": False,
-                            "infrastructure_error": "interrupted before completion could be classified"}
                     if record is not None:
-                        summary["results"].append(record)
-                        if record["status"] == "valid":
-                            summary["valid_count"] += 1
+                        ledger.capture_result(case_id, record, interrupted=True)
+                        save()
+                        ledger.finish(case_id)
+                        save()
                         if (record["status"] == "infrastructure_error"
                                 and record.get("cleanup_confirmed") is not True):
                             summary["stop_reason"] = "interrupted_cleanup_risk"
+                    else:
+                        ledger.cancel_unstarted(case_id)
+                    active.pop(future)
                     save()
-            cleanup_incomplete = bool(active or uncertain_active or submitting_case_ids)
+            cleanup_incomplete = bool(active or ledger.snapshot()["in_flight_ids"])
             if cleanup_incomplete:
                 summary["stop_reason"] = "interrupted_cleanup_risk"
                 save()
