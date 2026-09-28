@@ -327,7 +327,7 @@ def run_mode(
         if not required_summary_fields.issubset(prior_summary):
             raise ValueError("cannot resume: partial summary is malformed")
         if prior_summary.get("workers") != workers:
-            raise ValueError("cannot resume: worker count does not match the partial session")
+            raise ValueError("cannot resume: workers do not match the partial session")
         if (prior_summary.get("manifest_hash") != manifest_hash(items)
                 or prior_summary.get("manifest_path") != "manifest.json"):
             raise ValueError("cannot resume: manifest digest does not match the partial session")
