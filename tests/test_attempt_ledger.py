@@ -131,6 +131,38 @@ class AttemptLedgerTests(unittest.TestCase):
         )
         self.assertEqual({"state": "prepared"}, durable["attempt_records"]["mask-01"])
 
+    def test_json_round_trip_restores_pending_result_for_reconciliation(self) -> None:
+        self.ledger.begin_submit("nominal-01")
+        self.ledger.register_active("nominal-01")
+        captured = result("nominal-01", evidence={"artifact": "runs/nominal-01/results.json"})
+        self.ledger.capture_result("nominal-01", captured, interrupted=False)
+
+        restored = AttemptLedger.from_snapshot(
+            ["nominal-01", "mask-01"], json.loads(json.dumps(self.ledger.snapshot()))
+        )
+        self.assertEqual("completing_pending", restored.snapshot()["attempt_states"]["nominal-01"])
+        restored.finish("nominal-01")
+        self.assertEqual([captured], restored.snapshot()["results"])
+
+    def test_restore_rejects_corrupt_attempt_records(self) -> None:
+        snapshot = self.ledger.snapshot()
+        with self.assertRaises(ValueError):
+            AttemptLedger.from_snapshot(["nominal-01", "mask-01"], {"attempt_records": {}})
+        with self.assertRaises(ValueError):
+            AttemptLedger.from_snapshot(
+                ["nominal-01", "mask-01"],
+                {"attempt_records": {"nominal-01": {"state": "prepared"}, "other": {"state": "prepared"}}},
+            )
+        snapshot["attempt_records"]["nominal-01"] = {"state": "invented_success"}
+        with self.assertRaises(ValueError):
+            AttemptLedger.from_snapshot(["nominal-01", "mask-01"], snapshot)
+        snapshot = self.ledger.snapshot()
+        snapshot["attempt_records"]["nominal-01"] = {
+            "state": "terminal", "result": {"case_id": "nominal-01", "status": "valid", "bad": object()},
+        }
+        with self.assertRaises(ValueError):
+            AttemptLedger.from_snapshot(["nominal-01", "mask-01"], snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()

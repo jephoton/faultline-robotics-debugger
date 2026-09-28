@@ -31,6 +31,35 @@ class AttemptLedger:
             case_id: {"state": _PREPARED} for case_id in case_ids
         }
 
+    @classmethod
+    def from_snapshot(cls, case_ids: list[str], snapshot: dict[str, Any]) -> "AttemptLedger":
+        """Restore a validated ledger from its authoritative durable records."""
+        ledger = cls(case_ids)
+        if not isinstance(snapshot, dict):
+            raise ValueError("snapshot must be a dictionary")
+        records = snapshot.get("attempt_records")
+        if not isinstance(records, dict) or set(records) != set(ledger._attempts):
+            raise ValueError("attempt_records must contain exactly the manifest case_ids")
+        for case_id in ledger._attempts:
+            record = records[case_id]
+            if not isinstance(record, dict):
+                raise ValueError("attempt record must be a dictionary")
+            state = record.get("state")
+            if state in {_PREPARED, _SUBMITTING_UNKNOWN, _ACTIVE}:
+                if set(record) != {"state"}:
+                    raise ValueError("nonterminal attempt record has unexpected fields")
+                ledger._attempts[case_id] = {"state": state}
+            elif state in {_COMPLETING_PENDING, _TERMINAL}:
+                if set(record) != {"state", "result"}:
+                    raise ValueError("completed attempt record requires exactly one result")
+                ledger._attempts[case_id] = {
+                    "state": state,
+                    "result": _result_copy(case_id, record["result"]),
+                }
+            else:
+                raise ValueError("attempt record has an invalid state")
+        return ledger
+
     @property
     def attempts(self) -> dict[str, dict[str, Any]]:
         """Return a copy for inspection without exposing ledger ownership."""
