@@ -27,15 +27,19 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             marker = root / "descendant-ran"
+            ready = root / "parent-ready"
             child = (
                 "import pathlib, time; "
                 "time.sleep(0.5); "
-                f"pathlib.Path({str(marker)!r}).write_text('ran', encoding='utf-8')"
+                f"pathlib.Path({str(marker)!r}).write_text('ran', encoding='utf-8'); "
+                "time.sleep(10)"
             )
             parent = (
-                "import signal, subprocess, sys, time; "
+                "import os, pathlib, signal, subprocess, sys, time; "
+                "\ntry: os.setpgrp()\nexcept PermissionError: pass\n"
                 f"subprocess.Popen([sys.executable, '-c', {child!r}]); "
                 "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0)); "
+                f"pathlib.Path({str(ready)!r}).write_text('ready', encoding='utf-8'); "
                 "time.sleep(10)"
             )
             processes = []
@@ -43,6 +47,13 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
             def process_factory(*args, **kwargs):
                 process = subprocess.Popen(*args, **kwargs)
                 processes.append(process)
+                deadline = time.monotonic() + 2
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not ready.exists():
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=1)
+                    self.fail("evaluator parent did not install its SIGTERM handler")
                 return process
 
             try:
@@ -58,11 +69,12 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
             finally:
                 for process in processes:
                     try:
-                        if process.poll() is None:
-                            os.killpg(process.pid, signal.SIGKILL)
+                        # The evaluator made itself a process-group leader before
+                        # signalling readiness, so this group is ours even after
+                        # its parent has already been reaped.
+                        os.killpg(process.pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
                     except PermissionError:
                         pass
                     process.wait(timeout=1)
-
