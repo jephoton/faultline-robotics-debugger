@@ -653,7 +653,13 @@ class ParallelEvalDriverTests(unittest.TestCase):
         calls = []
         lock = threading.Lock()
 
-        def fake_runner(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None):
+        def fake_runner(
+            argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None,
+            launch_lock=None, launch_observer=None,
+        ):
+            # This test replaces the production containment helper to control
+            # its cleanup timing. It deliberately has no real PID to persist.
+            self.assertIsNotNone(launch_observer)
             config = Path(argv[-1])
             output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
                 if line.startswith("output_dir: "))
