@@ -61,6 +61,7 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
                     runner._run_evaluator_safely(
                         [sys.executable, "-c", parent], cwd=root, check=False, timeout=0.1,
                         process_factory=process_factory,
+                        graceful_group_wait_seconds=0.2,
                         docker_runner=lambda *args, **kwargs: SimpleNamespace(
                             returncode=0, stdout="", stderr=""),
                     )

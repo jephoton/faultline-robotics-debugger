@@ -63,6 +63,18 @@ def _owned_group_present(group_id: int, problems: list[str]) -> bool | None:
     return True
 
 
+def _wait_for_group_absence(group_id: int, *, deadline: float, problems: list[str]) -> bool | None:
+    """Observe one owned group until absent, without sending another signal."""
+    while True:
+        present = _owned_group_present(group_id, problems)
+        if present is not True:
+            return present
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return True
+        time.sleep(min(0.2, remaining))
+
+
 def _run_evaluator_safely(
     argv: list[str], *, cwd: Path, check: bool, timeout: float,
     process_factory: Callable[..., Any] = subprocess.Popen,
@@ -70,6 +82,8 @@ def _run_evaluator_safely(
     stop_event: threading.Event | None = None,
     interrupt_event: threading.Event | None = None,
     launch_lock: threading.Lock | None = None,
+    graceful_group_wait_seconds: float = 20,
+    forced_cleanup_wait_seconds: float = 5,
 ) -> Any:
     """Own an evaluator process group and its exact PID-named container.
 
@@ -86,6 +100,15 @@ def _run_evaluator_safely(
                 or (interrupt_event is not None and interrupt_event.is_set())):
             raise _LaunchCancelled()
         process = process_factory(argv, cwd=cwd, start_new_session=True)
+    evaluator_pid = process.pid
+    container = f"vla-eval-{evaluator_pid}"
+    try:
+        process.evaluator_pid = evaluator_pid
+        process.expected_container = container
+    except Exception:
+        # Production Popen instances accept these attributes.  Keep injected
+        # fakes usable even when they intentionally expose a narrower API.
+        pass
     try:
         if interrupt_event is None:
             process.wait(timeout=timeout)
@@ -108,8 +131,6 @@ def _run_evaluator_safely(
         if stop_event is not None:
             with launch_lock if launch_lock is not None else nullcontext():
                 stop_event.set()
-        evaluator_pid = process.pid
-        container = f"vla-eval-{evaluator_pid}"
         error.evaluator_pid = evaluator_pid
         error.expected_container = container
         problems: list[str] = []
@@ -126,16 +147,15 @@ def _run_evaluator_safely(
                     problems.append(
                         f"process-group SIGTERM failed: {type(cleanup_error).__name__}: {cleanup_error}"
                     )
-            try:
-                process.wait(timeout=20)  # Upstream docker stop -t 10 has a 15-second CLI timeout.
-                reaped = True
-            except subprocess.TimeoutExpired:
-                problems.append("evaluator parent did not exit after process-group SIGTERM")
-            except Exception as cleanup_error:
-                problems.append(f"evaluator wait failed: {type(cleanup_error).__name__}: {cleanup_error}")
-
-            group_present = _owned_group_present(evaluator_pid, problems)
-            if group_present:
+            if group_present is True:
+                # Do not reap the leader yet: its unreaped PID prevents numeric
+                # PGID reuse before the final possible group signal.
+                group_present = _wait_for_group_absence(
+                    evaluator_pid,
+                    deadline=time.monotonic() + graceful_group_wait_seconds,
+                    problems=problems,
+                )
+            if group_present is True:
                 try:
                     os.killpg(evaluator_pid, _SIGKILL)
                 except ProcessLookupError:
@@ -144,14 +164,21 @@ def _run_evaluator_safely(
                     problems.append(
                         f"process-group SIGKILL failed: {type(cleanup_error).__name__}: {cleanup_error}"
                     )
+                cleanup_deadline = time.monotonic() + forced_cleanup_wait_seconds
                 try:
-                    process.wait(timeout=5)
+                    process.wait(timeout=max(0.001, cleanup_deadline - time.monotonic()))
                     reaped = True
                 except subprocess.TimeoutExpired:
                     problems.append("evaluator parent did not exit after process-group SIGKILL")
                 except Exception as cleanup_error:
                     problems.append(f"evaluator reap failed: {type(cleanup_error).__name__}: {cleanup_error}")
-                group_present = _owned_group_present(evaluator_pid, problems)
+                if reaped:
+                    # After reap, a numeric PGID might be reused.  Observe it
+                    # only; a present/uncertain result must never receive a
+                    # further signal.
+                    group_present = _wait_for_group_absence(
+                        evaluator_pid, deadline=cleanup_deadline, problems=problems
+                    )
         else:
             # This branch is only for injected test runners on non-POSIX hosts.
             # The production launcher above has already refused such a host.
@@ -165,7 +192,7 @@ def _run_evaluator_safely(
             except Exception as cleanup_error:
                 problems.append(f"SIGTERM/wait failed: {type(cleanup_error).__name__}: {cleanup_error}")
 
-        if not reaped and group_present is False:
+        if not reaped and group_present is not True:
             try:
                 process.wait(timeout=5)
                 reaped = True
@@ -173,7 +200,7 @@ def _run_evaluator_safely(
                 problems.append(f"evaluator reap failed: {type(cleanup_error).__name__}: {cleanup_error}")
 
         if group_present is True:
-            problems.append("owned evaluator process group survived SIGKILL")
+            problems.append("owned evaluator process group was still present after bounded cleanup")
 
         def container_present() -> bool | None:
             try:
@@ -204,7 +231,7 @@ def _run_evaluator_safely(
         else:
             problems.append("owned evaluator process group was not confirmed quiescent")
 
-        error.cleanup_confirmed = reaped and group_present is False and absent
+        error.cleanup_confirmed = reaped and group_present is False and absent and not problems
         error.cleanup_error = "; ".join(problems) if not error.cleanup_confirmed else None
         if not error.cleanup_confirmed and not error.cleanup_error:
             error.cleanup_error = f"cannot confirm {container} was removed"
@@ -303,6 +330,14 @@ def run_mode(
             if expected_container is not None:
                 record["expected_container"] = expected_container
 
+        def record_process_identity(process: Any) -> None:
+            evaluator_pid = getattr(process, "evaluator_pid", None)
+            expected_container = getattr(process, "expected_container", None)
+            if evaluator_pid is not None:
+                record["evaluator_pid"] = evaluator_pid
+            if expected_container is not None:
+                record["expected_container"] = expected_container
+
         try:
             process = command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config)],
                 cwd=upstream_root, check=False, timeout=item_timeout_seconds)
@@ -334,6 +369,7 @@ def run_mode(
                 infrastructure_error=f"command_runner: {type(error).__name__}: {error}"
                 + (f"; cleanup risk: {cleanup_error}" if cleanup_error else ""))
         else:
+            record_process_identity(process)
             returncode = getattr(process, "returncode", 0)
             record["returncode"] = returncode
             if returncode not in (0, None):
