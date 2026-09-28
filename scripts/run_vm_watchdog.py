@@ -54,6 +54,8 @@ def arm(
     run_dir = record.log_path.parent
     run_dir.mkdir(parents=True, exist_ok=True)
     lock_path = run_dir / "arm.lock"
+    if record.log_path.exists():
+        raise ArmError("watchdog log already exists; use a fresh run directory after verifying the exact VM")
     _create_lock(lock_path)
     stdout_path = run_dir / "watchdog.stdout.log"
     stderr_path = run_dir / "watchdog.stderr.log"
@@ -116,7 +118,7 @@ def _has_event(path: Path, expected: str) -> bool:
 
 
 def _real_invoke(argv: list[str]) -> Any:
-    completed = subprocess.run(argv, check=True, capture_output=True, text=True)
+    completed = subprocess.run(argv, check=True, capture_output=True, text=True, timeout=45)
     return completed.stdout
 
 
@@ -160,7 +162,10 @@ def main(argv: list[str] | None = None) -> int:
             arm(args.record, args.control_root, local_test=args.local_test, fake_cli=args.fake_cli)
         else:
             record = load_record(args.record, control_root=args.control_root, now_utc=datetime.now(timezone.utc))
-            watch(record, invoke=invoke)
+            result = watch(record, invoke=invoke)
+            if result == "stop_unconfirmed":
+                print("URGENT: exact VM stop is unconfirmed; inspect the Nebius console and stop it manually", file=sys.stderr)
+                return 2
     except (ArmError, RecordError, OSError, subprocess.SubprocessError) as error:
         print("watchdog failed closed: {}".format(error), file=sys.stderr)
         return 2

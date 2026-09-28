@@ -56,8 +56,9 @@ class GuardRecord:
 def load_record(path: Path, *, control_root: Path, now_utc: datetime) -> GuardRecord:
     """Validate a run record without accepting secrets or broad targets."""
 
+    record_path = _contained_absolute_path(str(Path(path).resolve()), Path(control_root))
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw = json.loads(record_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise RecordError("record must be readable JSON") from error
     if not isinstance(raw, dict) or set(raw) != _EXPECTED_KEYS:
@@ -124,6 +125,7 @@ def watch(
     invoke: Any,
     now: Any = lambda: datetime.now(timezone.utc),
     sleep: Any = time.sleep,
+    monotonic: Any = time.monotonic,
     poll_seconds: float = 5.0,
     retries: int = 3,
 ) -> str:
@@ -137,12 +139,13 @@ def watch(
     try:
         initial = _get_verified(record, invoke)
         audit.write("verified", state=_state(initial))
-        if _state(initial) == "STOPPED":
+        audit.write("armed", deadline_utc=_timestamp(record.deadline_utc))
+        _wait_until(record.deadline_utc, now, sleep, monotonic)
+        audit.write("deadline_reached")
+        deadline_state = _get_verified(record, invoke)
+        if _state(deadline_state) == "STOPPED":
             audit.write("already_stopped")
             return "already_stopped"
-        audit.write("armed", deadline_utc=_timestamp(record.deadline_utc))
-        _wait_until(record.deadline_utc, now, sleep)
-        audit.write("deadline_reached")
         if not _retry_stop(record, invoke, retries, audit):
             audit.write("stop_unconfirmed", reason="stop_command_failed")
             return "stop_unconfirmed"
@@ -166,9 +169,11 @@ def watch(
         raise
 
 
-def _wait_until(deadline: datetime, now: Any, sleep: Any) -> None:
+def _wait_until(deadline: datetime, now: Any, sleep: Any, monotonic: Any) -> None:
+    remaining = max(0.0, (deadline - _as_utc(now())).total_seconds())
+    target = monotonic() + remaining
     while True:
-        remaining = (deadline - _as_utc(now())).total_seconds()
+        remaining = target - monotonic()
         if remaining <= 0:
             return
         sleep(min(remaining, 5.0))
@@ -189,7 +194,10 @@ def _retry_stop(record: GuardRecord, invoke: Any, retries: int, audit: "_AuditLo
 def _get_verified(record: GuardRecord, invoke: Any) -> dict[str, Any]:
     result = _decode_result(invoke(record.get_command()))
     metadata = result.get("metadata")
+    instance_id = metadata.get("id") if isinstance(metadata, dict) else None
     parent_id = metadata.get("parent_id") if isinstance(metadata, dict) else None
+    if instance_id != record.instance_id:
+        raise RecordError("exact instance read-back ID does not match target")
     if parent_id != record.project_id:
         raise RecordError("exact instance read-back parent does not match project")
     return result

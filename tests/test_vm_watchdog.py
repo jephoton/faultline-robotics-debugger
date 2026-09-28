@@ -11,6 +11,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from robot_debug.vm_watchdog import GuardRecord, RecordError, load_record, watch
 
@@ -77,6 +78,14 @@ class GuardRecordTests(unittest.TestCase):
             with self.assertRaises(RecordError):
                 self._load(payload, root)
 
+    def test_rejects_record_outside_control_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record_path = root / "record.json"
+            record_path.write_text(json.dumps(self._payload(root)), encoding="utf-8")
+            with self.assertRaises(RecordError):
+                load_record(record_path, control_root=root / "control", now_utc=datetime(2030, 1, 1, tzinfo=UTC))
+
 
 class WatchStateMachineTests(unittest.TestCase):
     def _record(self, root: Path, deadline: datetime) -> GuardRecord:
@@ -86,8 +95,8 @@ class WatchStateMachineTests(unittest.TestCase):
         )
 
     @staticmethod
-    def _instance(state: str = "RUNNING", project: str = "project-test123") -> dict[str, object]:
-        return {"metadata": {"parent_id": project}, "status": {"state": state}}
+    def _instance(state: str = "RUNNING", project: str = "project-test123", instance_id: str = "computeinstance-test123") -> dict[str, object]:
+        return {"metadata": {"id": instance_id, "parent_id": project}, "status": {"state": state}}
 
     def _events(self, record: GuardRecord) -> list[dict[str, object]]:
         return [json.loads(line) for line in record.log_path.read_text(encoding="utf-8").splitlines()]
@@ -103,6 +112,15 @@ class WatchStateMachineTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertIn("exception", [event["event"] for event in self._events(record)])
 
+    def test_refuses_readback_for_different_instance_without_stop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = self._record(Path(directory), datetime(2030, 1, 2, tzinfo=UTC))
+            calls: list[list[str]] = []
+            with self.assertRaises(RecordError):
+                watch(record, invoke=lambda argv: calls.append(argv) or self._instance(instance_id="computeinstance-other"),
+                      now=lambda: datetime(2030, 1, 3, tzinfo=UTC), sleep=lambda _: None)
+            self.assertEqual(len(calls), 1)
+
     def test_arms_before_deadline_then_stops_exact_id_and_polls_to_stopped(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -110,7 +128,7 @@ class WatchStateMachineTests(unittest.TestCase):
             deadline = clock[0] + timedelta(seconds=2)
             record = self._record(root, deadline)
             calls: list[list[str]] = []
-            replies = iter([self._instance(), {}, self._instance("STOPPING"), self._instance("STOPPED")])
+            replies = iter([self._instance(), self._instance(), {}, self._instance("STOPPING"), self._instance("STOPPED")])
             def invoke(argv: list[str]) -> object:
                 calls.append(argv)
                 return next(replies)
@@ -119,8 +137,8 @@ class WatchStateMachineTests(unittest.TestCase):
             result = watch(record, invoke=invoke, now=lambda: clock[0], sleep=sleep, poll_seconds=1)
             self.assertEqual(result, "stop_confirmed")
             self.assertNotIn("stop", calls[0])
-            self.assertEqual(calls[1][3:7], ["compute", "instance", "stop", "--id"])
-            self.assertEqual(calls[1][7], "computeinstance-test123")
+            self.assertEqual(calls[2][3:7], ["compute", "instance", "stop", "--id"])
+            self.assertEqual(calls[2][7], "computeinstance-test123")
             self.assertEqual([item["event"] for item in self._events(record)], [
                 "verified", "armed", "deadline_reached", "stop_requested", "polling", "stop_confirmed",
             ])
@@ -128,13 +146,15 @@ class WatchStateMachineTests(unittest.TestCase):
     def test_already_stopped_never_sends_stop(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            now = datetime(2030, 1, 1, tzinfo=UTC)
-            record = self._record(root, now + timedelta(seconds=1))
+            clock = [datetime(2030, 1, 1, tzinfo=UTC)]
+            record = self._record(root, clock[0] + timedelta(seconds=1))
             calls: list[list[str]] = []
             result = watch(record, invoke=lambda argv: calls.append(argv) or self._instance("STOPPED"),
-                           now=lambda: now, sleep=lambda _: None)
+                           now=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + timedelta(seconds=seconds)))
             self.assertEqual(result, "already_stopped")
-            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(calls), 2)
+            self.assertIn("armed", [event["event"] for event in self._events(record)])
+            self.assertTrue(all("stop" not in call for call in calls))
 
     def test_retries_cli_failures_then_logs_unconfirmed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -145,13 +165,13 @@ class WatchStateMachineTests(unittest.TestCase):
             def invoke(argv: list[str]) -> object:
                 nonlocal calls
                 calls += 1
-                if calls == 1:
+                if calls <= 2:
                     return self._instance()
                 raise OSError("fake CLI unavailable")
             result = watch(record, invoke=invoke, now=lambda: now + timedelta(seconds=2),
                            sleep=lambda _: None, retries=2)
             self.assertEqual(result, "stop_unconfirmed")
-            self.assertEqual(calls, 3)
+            self.assertEqual(calls, 4)
             self.assertEqual(self._events(record)[-1]["event"], "stop_unconfirmed")
 
 
@@ -186,7 +206,7 @@ class ArmWrapperTests(unittest.TestCase):
             record = self._payload(root)
             calls: list[list[str]] = []
             result = self.runner.check(record, root / "control", invoke=lambda argv: calls.append(argv) or {
-                "metadata": {"parent_id": "project-test123"}, "status": {"state": "STOPPED"},
+                "metadata": {"id": "computeinstance-test123", "parent_id": "project-test123"}, "status": {"state": "STOPPED"},
             })
             self.assertEqual(result, "checked")
             self.assertEqual(len(calls), 1)
@@ -217,6 +237,32 @@ class ArmWrapperTests(unittest.TestCase):
                     handshake_seconds=0,
                 )
 
+    def test_arm_refuses_historical_log_even_after_lock_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            log_path = root / "control" / "m3-pilot" / "watchdog.jsonl"
+            log_path.parent.mkdir()
+            log_path.write_text('{"event":"armed"}\n', encoding="utf-8")
+            fake = root / "fake.json"
+            fake.write_text("[]", encoding="utf-8")
+            with self.assertRaises(self.runner.ArmError):
+                self.runner.arm(record, root / "control", local_test=True, fake_cli=fake)
+
+    def test_real_cli_subprocess_has_host_timeout(self):
+        with patch.object(self.runner.subprocess, "run") as run:
+            run.return_value.stdout = "{}"
+            self.runner._real_invoke(["fake"])
+            self.assertGreater(run.call_args.kwargs["timeout"], 0)
+
+    def test_unconfirmed_watch_returns_nonzero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self._payload(root)
+            with patch.object(self.runner, "watch", return_value="stop_unconfirmed"):
+                self.assertNotEqual(self.runner.main(["watch", "--record", str(record),
+                                                      "--control-root", str(root / "control")]), 0)
+
     def test_arm_production_mode_can_launch_a_watch_child_without_fake_cli(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -235,9 +281,10 @@ class ArmWrapperTests(unittest.TestCase):
             record = self._payload(root, deadline_utc=deadline)
             fake = root / "fake.json"
             fake.write_text(json.dumps([
-                {"metadata": {"parent_id": "project-test123"}, "status": {"state": "RUNNING"}},
+                {"metadata": {"id": "computeinstance-test123", "parent_id": "project-test123"}, "status": {"state": "STOPPED"}},
+                {"metadata": {"id": "computeinstance-test123", "parent_id": "project-test123"}, "status": {"state": "RUNNING"}},
                 {},
-                {"metadata": {"parent_id": "project-test123"}, "status": {"state": "STOPPED"}},
+                {"metadata": {"id": "computeinstance-test123", "parent_id": "project-test123"}, "status": {"state": "STOPPED"}},
             ]), encoding="utf-8")
             pid = self.runner.arm(record, root / "control", local_test=True, fake_cli=fake, handshake_seconds=5)
             log_path = root / "control" / "m3-pilot" / "watchdog.jsonl"
@@ -247,6 +294,9 @@ class ArmWrapperTests(unittest.TestCase):
             self.assertGreater(pid, 0)
             self.assertTrue(self.runner._has_event(log_path, "armed"))
             self.assertTrue(self.runner._has_event(log_path, "stop_confirmed"))
+            # The detached child closes inherited stdout/stderr handles as it
+            # exits; the fsynced final event can precede that exit on Windows.
+            time.sleep(0.5)
 
 
 if __name__ == "__main__":
