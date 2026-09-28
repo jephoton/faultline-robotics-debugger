@@ -82,6 +82,90 @@ class ParallelEvalDriverTests(unittest.TestCase):
             launch_cutoff_seconds=cutoff, item_timeout_seconds=5, command_runner=fake,
             monotonic_clock=clock)
 
+    def test_pilot_runs_only_the_fixed_nominal_and_mask_cases(self):
+        fake = FakeEvaluator(barrier_size=2)
+
+        summary = runner_module.run_pilot_mode(
+            upstream_root=self.upstream, project_root=self.project,
+            results_root=self.root / "pilot-results", launch_cutoff_seconds=60,
+            item_timeout_seconds=5, command_runner=fake,
+        )
+
+        self.assertEqual("pilot", summary["purpose"])
+        self.assertEqual(2, summary["workers"])
+        self.assertEqual(build_manifest(1), json.loads(
+            (self.root / "pilot-results" / "m3-pilot-workers-2" / "manifest.json").read_text(encoding="utf-8")
+        ))
+        self.assertEqual(["nominal-01", "mask-01"], summary["planned_ids"])
+        self.assertEqual(2, len(fake.commands))
+        self.assertEqual(2, fake.maximum_active)
+        self.assertEqual(
+            {"x": 0.625, "y": 0.0, "width": 0.375, "height": 0.375},
+            build_manifest(1)[1]["rectangle"],
+        )
+        self.assertTrue(all("m3-pilot-workers-2" in str(call[4]) for call in fake.commands))
+        self.assertEqual(2, len({call[4] for call in fake.commands}))
+        self.assertEqual(2, len({call[5] for call in fake.commands}))
+
+    def test_benchmark_runner_refuses_non_frozen_repeat_count(self):
+        with self.assertRaisesRegex(ValueError, "eight repeats"):
+            runner_module.run_mode(
+                upstream_root=self.upstream, project_root=self.project,
+                results_root=self.root / "non-frozen", workers=1, repeats_per_case=1,
+                launch_cutoff_seconds=60, item_timeout_seconds=5, command_runner=FakeEvaluator(),
+            )
+
+    def test_pilot_persists_non_comparable_partial_evidence_on_invalid_or_timeout(self):
+        for name, response in {
+            "invalid": lambda _: (0, None),
+            "timeout": lambda _: (_ for _ in ()).throw(subprocess.TimeoutExpired("vla-eval", 5)),
+        }.items():
+            with self.subTest(name=name):
+                summary = runner_module.run_pilot_mode(
+                    upstream_root=self.upstream, project_root=self.project,
+                    results_root=self.root / name, launch_cutoff_seconds=60,
+                    item_timeout_seconds=5, command_runner=FakeEvaluator(response=response),
+                )
+                self.assertEqual("pilot", summary["purpose"])
+                self.assertIsNotNone(summary["stop_reason"])
+                self.assertLess(summary["valid_count"], 2)
+                self.assertTrue(summary["attempt_records"])
+                self.assertTrue(any(state == "terminal" for state in summary["attempt_states"].values()))
+
+    def test_interrupted_pilot_writes_a_durable_partial_summary_without_launching(self):
+        interrupted = threading.Event()
+        interrupted.set()
+        fake = FakeEvaluator()
+        results = self.root / "interrupted-pilot"
+
+        summary = runner_module.run_pilot_mode(
+            upstream_root=self.upstream, project_root=self.project, results_root=results,
+            launch_cutoff_seconds=60, item_timeout_seconds=5, command_runner=fake,
+            interrupt_event=interrupted,
+        )
+
+        self.assertEqual("pilot", summary["purpose"])
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], fake.commands)
+        saved = json.loads((results / "m3-pilot-workers-2" / "session_summary.json").read_text(encoding="utf-8"))
+        self.assertEqual("pilot", saved["purpose"])
+        self.assertEqual("interrupted", saved["stop_reason"])
+
+    def test_pilot_cli_uses_fixed_two_worker_session_without_resume_flag(self):
+        results = self.root / "cli-results"
+        expected = {"purpose": "pilot", "stop_reason": None, "valid_count": 2,
+                    "planned_ids": ["nominal-01", "mask-01"], "results": [{}, {}]}
+        output = io.StringIO()
+        argv = ["run_parallel_eval.py", "pilot", "--upstream-root", str(self.upstream),
+                "--project-root", str(self.project), "--results-root", str(results),
+                "--launch-cutoff-seconds", "60", "--item-timeout-seconds", "5"]
+        with patch.object(runner_module, "run_pilot_mode", return_value=expected) as run_pilot, \
+                patch.object(sys, "argv", argv), contextlib.redirect_stdout(output):
+            runner_module.main()
+        self.assertFalse(run_pilot.call_args.kwargs["interrupt_event"].is_set())
+        self.assertNotIn("workers", run_pilot.call_args.kwargs)
+        self.assertIn("m3-pilot-workers-2", output.getvalue())
+
     def write_safe_partial_session(self, results, *, workers=1):
         items = build_manifest(8)
         session = results / f"m3-workers-{workers}"

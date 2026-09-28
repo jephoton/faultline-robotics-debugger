@@ -294,10 +294,23 @@ def run_mode(
     monotonic_clock: Callable[[], float] = time.monotonic,
     interrupt_event: threading.Event | None = None,
     resume: bool = False,
+    _purpose: str = "benchmark",
+    _session_directory_name: str | None = None,
 ) -> dict[str, Any]:
     """Run a fixed manifest once, or resume only proven-safe prepared work."""
     if isinstance(workers, bool) or not isinstance(workers, int) or workers not in (1, 2, 4):
         raise ValueError("workers must be one of 1, 2, or 4")
+    if _purpose not in {"benchmark", "pilot"}:
+        raise ValueError("purpose must be benchmark or pilot")
+    expected_session_name = f"m3-workers-{workers}" if _purpose == "benchmark" else "m3-pilot-workers-2"
+    if _session_directory_name is None:
+        _session_directory_name = expected_session_name
+    if _session_directory_name != expected_session_name:
+        raise ValueError("session directory does not match the fixed workload purpose")
+    if _purpose == "benchmark" and repeats_per_case != 8:
+        raise ValueError("benchmark requires the frozen eight repeats per case")
+    if _purpose == "pilot" and (workers != 2 or repeats_per_case != 1 or resume):
+        raise ValueError("pilot requires exactly two workers, one repeat, and no resume")
     _positive_finite_seconds("launch_cutoff_seconds", launch_cutoff_seconds)
     _positive_finite_seconds("item_timeout_seconds", item_timeout_seconds)
     stop_requested = threading.Event()
@@ -327,9 +340,9 @@ def run_mode(
         items, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode("utf-8")
     resolved_results_root = Path(results_root).resolve()
-    session = resolved_results_root / f"m3-workers-{workers}"
+    session = resolved_results_root / _session_directory_name
     summary: dict[str, Any] = {
-        "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
+        "purpose": _purpose, "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
         "case_ids": case_ids, "planned_ids": case_ids,
         "in_flight_ids": [], "results": [], "valid_count": 0, "cost_usd": None,
         "elapsed_seconds": 0.0, "stop_reason": None,
@@ -424,7 +437,7 @@ def run_mode(
     try:
         if not resume:
             session = base._prepare_session_directory(
-                Path(results_root).resolve(), session_directory_name=f"m3-workers-{workers}"
+                Path(results_root).resolve(), session_directory_name=_session_directory_name
             )
         configs = session / "configs"
         runs = session / "runs"
@@ -774,6 +787,35 @@ def run_mode(
     return summary
 
 
+def run_pilot_mode(
+    *,
+    upstream_root: Path | str,
+    project_root: Path | str,
+    results_root: Path | str,
+    launch_cutoff_seconds: float = 1560,
+    item_timeout_seconds: float = 300,
+    command_runner: Callable[..., Any] | None = None,
+    monotonic_clock: Callable[[], float] = time.monotonic,
+    interrupt_event: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Run the fixed two-case compatibility pilot without retry or resume."""
+    return run_mode(
+        upstream_root=upstream_root,
+        project_root=project_root,
+        results_root=results_root,
+        workers=2,
+        repeats_per_case=1,
+        launch_cutoff_seconds=launch_cutoff_seconds,
+        item_timeout_seconds=item_timeout_seconds,
+        command_runner=command_runner,
+        monotonic_clock=monotonic_clock,
+        interrupt_event=interrupt_event,
+        resume=False,
+        _purpose="pilot",
+        _session_directory_name="m3-pilot-workers-2",
+    )
+
+
 def report_mode_summaries(
     mode_summary_paths: list[Path | str], *, hourly_rate_usd: float | None = None,
     billable_seconds: dict[int, float] | None = None, output_dir: Path | str | None = None,
@@ -854,6 +896,8 @@ def _load_report_record(source: Path) -> dict[str, Any]:
         raise ValueError("mode summary is partial or invalid")
     if record.get("resumed") is True:
         raise ValueError("resumed mode summaries cannot be used for throughput comparison")
+    if "purpose" in record and record["purpose"] != "benchmark":
+        raise ValueError("only benchmark summaries can be used for throughput comparison")
     manifest_name = record.get("manifest_path")
     if not isinstance(manifest_name, str) or not manifest_name or Path(manifest_name).is_absolute():
         raise ValueError("mode summary must name a relative manifest path")
@@ -963,16 +1007,19 @@ def main() -> None:
             report_parser.error(str(error))
         print(f"comparison: {report_path}")
         return
+    command = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in {"run", "pilot"} else "run"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream-root", required=True, type=Path)
     parser.add_argument("--project-root", required=True, type=Path)
     parser.add_argument("--results-root", required=True, type=Path)
-    parser.add_argument("--workers", required=True, type=int, choices=(1, 2, 4))
+    if command == "run":
+        parser.add_argument("--workers", required=True, type=int, choices=(1, 2, 4))
     parser.add_argument("--launch-cutoff-seconds", required=True, type=float)
     parser.add_argument("--item-timeout-seconds", required=True, type=float)
-    parser.add_argument("--resume", action="store_true",
-        help="resume only a validated partial session with prepared work")
-    args = parser.parse_args()
+    if command == "run":
+        parser.add_argument("--resume", action="store_true",
+            help="resume only a validated partial session with prepared work")
+    args = parser.parse_args(sys.argv[2:] if sys.argv[1:2] == [command] else sys.argv[1:])
     interrupt_event = threading.Event()
     previous_handlers = {}
     if os.name == "posix" and threading.current_thread() is threading.main_thread():
@@ -981,11 +1028,16 @@ def main() -> None:
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous_handlers[signum] = signal.signal(signum, request_interrupt)
     try:
-        summary = run_mode(**vars(args), interrupt_event=interrupt_event)
+        if command == "pilot":
+            summary = run_pilot_mode(**vars(args), interrupt_event=interrupt_event)
+            session_name = "m3-pilot-workers-2"
+        else:
+            summary = run_mode(**vars(args), interrupt_event=interrupt_event)
+            session_name = f"m3-workers-{args.workers}"
     finally:
         for signum, previous in previous_handlers.items():
             signal.signal(signum, previous)
-    path = args.results_root.resolve() / f"m3-workers-{args.workers}" / "session_summary.json"
+    path = args.results_root.resolve() / session_name / "session_summary.json"
     print(f"summary: {path} | stop: {summary['stop_reason'] or 'complete'} | valid: {summary['valid_count']}/{len(summary['planned_ids'])} | attempts: {len(summary['results'])}")
     if summary["stop_reason"] is not None or summary["valid_count"] != len(summary["planned_ids"]):
         sys.exit(1)
