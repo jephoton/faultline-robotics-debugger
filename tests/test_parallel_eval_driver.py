@@ -495,6 +495,43 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertFalse(any(action == "kill" for action, _ in events))
         self.assertEqual(4, len([event for event in events if event[0] == "docker" and "ps" in event[1]]))
 
+    def test_interrupt_during_initial_summary_write_finalizes_without_launch(self):
+        original_write = runner_module.base._atomic_write_json
+        writes = 0
+        def interrupt_first_write(path, value):
+            nonlocal writes
+            writes += 1
+            if writes == 1:
+                raise KeyboardInterrupt()
+            return original_write(path, value)
+
+        results = self.root / "initial-write-interrupt"
+        fake = FakeEvaluator()
+        with patch.object(runner_module.base, "_atomic_write_json", side_effect=interrupt_first_write):
+            summary = self.run_mode(fake, results=results)
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual([], fake.commands)
+
+    def test_interrupt_before_submit_does_not_leave_unlaunched_id_in_flight(self):
+        original_write = runner_module.base._atomic_write_json
+        def interrupt_in_flight_write(path, value):
+            if value["in_flight_ids"] and not value["results"]:
+                raise KeyboardInterrupt()
+            return original_write(path, value)
+
+        results = self.root / "pre-submit-interrupt"
+        fake = FakeEvaluator()
+        with patch.object(runner_module.base, "_atomic_write_json", side_effect=interrupt_in_flight_write):
+            summary = self.run_mode(fake, results=results)
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual([], fake.commands)
+
     def test_interrupt_with_unconfirmed_docker_cleanup_records_risk(self):
         started = threading.Event()
         docker_commands = []

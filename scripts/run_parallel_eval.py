@@ -278,10 +278,10 @@ def run_mode(
     pending = iter(items)
     active: dict[Any, str] = {}
     stopped = False
-    save()
     executor = ThreadPoolExecutor(max_workers=workers)
     interrupted = False
     try:
+        save()
         while True:
             while not stopped and not stop_requested.is_set() and not interrupt_event.is_set() and len(active) < workers:
                 if elapsed() >= launch_cutoff_seconds:
@@ -343,6 +343,8 @@ def run_mode(
             interrupt_event.set()
             request_stop()
             summary["stop_reason"] = "interrupted"
+            summary["in_flight_ids"][:] = [case_id for case_id in summary["in_flight_ids"]
+                if case_id in active.values()]
             for future, case_id in list(active.items()):
                 if future.cancel():
                     active.pop(future)
