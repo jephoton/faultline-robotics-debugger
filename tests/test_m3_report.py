@@ -59,12 +59,13 @@ class M3ReportTests(unittest.TestCase):
 
     def test_report_rejects_pilot_summary_before_computing_comparison_metrics(self) -> None:
         paths = [self._write_mode(1, 160), self._write_mode(2, 100), self._write_mode(4, 80)]
-        pilot = json.loads(paths[1].read_text(encoding="utf-8"))
+        pilot_path = self._write_mode(2, 10, directory="m3-pilot-workers-2", manifest=build_manifest(1))
+        pilot = json.loads(pilot_path.read_text(encoding="utf-8"))
         pilot["purpose"] = "pilot"
-        paths[1].write_text(json.dumps(pilot), encoding="utf-8")
+        pilot_path.write_text(json.dumps(pilot), encoding="utf-8")
 
         with self.assertRaisesRegex(ValueError, "pilot|benchmark"):
-            runner_module.report_mode_summaries(paths, output_dir=self.root)
+            runner_module.report_mode_summaries([paths[0], pilot_path, paths[2]], output_dir=self.root)
 
     def test_report_rejects_duplicate_workers_digest_mismatch_and_incomplete_modes(self) -> None:
         paths = [self._write_mode(1, 160), self._write_mode(2, 100), self._write_mode(4, 80)]

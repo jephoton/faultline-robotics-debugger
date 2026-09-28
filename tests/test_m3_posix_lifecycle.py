@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import signal
@@ -68,3 +69,75 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
             # its session leader.
             time.sleep(0.7)
             self.assertFalse(marker.exists(), "a descendant survived evaluator cleanup")
+
+    def test_pilot_cli_sigterm_persists_partial_summary_and_cleans_active_child(self):
+        """The pilot command retains its partial record after SIGTERM cleanup."""
+        script_path = Path(__file__).parents[1] / "scripts" / "run_parallel_eval.py"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            upstream = root / "upstream"; upstream.mkdir()
+            project = root / "project"; project.mkdir()
+            results = root / "results"
+            ready = root / "evaluator-ready"
+            stopped = root / "evaluator-stopped"
+            child = f'''
+import importlib.util, subprocess, sys, time
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pilot_signal_child", {str(script_path)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+ready = Path({str(ready)!r})
+stopped = Path({str(stopped)!r})
+def fake_evaluator(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None, launch_observer=None):
+    evaluator = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    launch_observer(evaluator.pid, f"vla-eval-{{evaluator.pid}}")
+    ready.write_text(str(evaluator.pid), encoding="utf-8")
+    while not interrupt_event.is_set():
+        time.sleep(.01)
+    evaluator.terminate()
+    evaluator.wait(timeout=2)
+    stopped.write_text("stopped", encoding="utf-8")
+    error = module._EvaluatorInterrupted("session interrupted")
+    error.cleanup_confirmed = True
+    error.cleanup_error = None
+    error.evaluator_pid = evaluator.pid
+    error.expected_container = f"vla-eval-{{evaluator.pid}}"
+    raise error
+module._run_evaluator_safely = fake_evaluator
+sys.argv = ["run_parallel_eval.py", "pilot", "--upstream-root", {str(upstream)!r},
+    "--project-root", {str(project)!r}, "--results-root", {str(results)!r},
+    "--launch-cutoff-seconds", "60", "--item-timeout-seconds", "5"]
+module.main()
+'''
+            runner = subprocess.Popen([sys.executable, "-c", child], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True,
+                env={**os.environ, "PYTHONPATH": str(script_path.parents[1] / "src")})
+            evaluator_pid = None
+            try:
+                deadline = time.monotonic() + 5
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(.02)
+                self.assertTrue(ready.exists(), "fake evaluator did not become active")
+                evaluator_pid = int(ready.read_text(encoding="utf-8"))
+                os.kill(runner.pid, signal.SIGTERM)
+                stdout, stderr = runner.communicate(timeout=10)
+            finally:
+                if runner.poll() is None:
+                    runner.kill()
+                    runner.communicate(timeout=2)
+                if evaluator_pid is not None and not stopped.exists():
+                    try:
+                        os.kill(evaluator_pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+            self.assertEqual(1, runner.returncode, stderr)
+            self.assertTrue(stopped.exists())
+            self.assertIn("stop: interrupted", stdout)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(evaluator_pid, 0)
+            summary = json.loads((results / "m3-pilot-workers-2" / "session_summary.json").read_text())
+            self.assertEqual("pilot", summary["purpose"])
+            self.assertEqual("interrupted", summary["stop_reason"])
+            self.assertEqual([], summary["in_flight_ids"])
+            self.assertEqual(0, summary["valid_count"])

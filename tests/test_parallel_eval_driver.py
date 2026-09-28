@@ -35,9 +35,10 @@ def aggregate(*, success=True, episode_index=0, task_id=0):
 
 
 class FakeEvaluator:
-    def __init__(self, *, barrier_size=1, response=None):
+    def __init__(self, *, barrier_size=1, response=None, pilot_evidence=False):
         self.barrier_size = barrier_size
-        self.response = response or (lambda _: (0, aggregate()))
+        self.response = response
+        self.pilot_evidence = pilot_evidence
         self.lock = threading.Lock()
         self.active = self.maximum_active = 0
         self.commands = []
@@ -56,10 +57,17 @@ class FakeEvaluator:
             self.ready.wait(2)
         time.sleep(.005)
         try:
-            code, evidence = self.response(len(self.commands))
+            if self.response is None:
+                evidence = aggregate(success=config.stem == "nominal-01") if self.pilot_evidence else aggregate()
+                code = 0
+            else:
+                code, evidence = self.response(len(self.commands))
             output.mkdir(parents=True, exist_ok=True)
             if evidence is not None:
                 (output / "fake_aggregate.json").write_text(json.dumps(evidence), encoding="utf-8")
+            if self.pilot_evidence:
+                (output / "fake_trace.jsonl").write_text('{"step": 0}\n', encoding="utf-8")
+                (output / "fake_video.mp4").write_bytes(b"video")
             return SimpleNamespace(returncode=code)
         finally:
             with self.lock:
@@ -83,7 +91,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
             monotonic_clock=clock)
 
     def test_pilot_runs_only_the_fixed_nominal_and_mask_cases(self):
-        fake = FakeEvaluator(barrier_size=2)
+        fake = FakeEvaluator(barrier_size=2, pilot_evidence=True)
 
         summary = runner_module.run_pilot_mode(
             upstream_root=self.upstream, project_root=self.project,
@@ -106,6 +114,62 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertTrue(all("m3-pilot-workers-2" in str(call[4]) for call in fake.commands))
         self.assertEqual(2, len({call[4] for call in fake.commands}))
         self.assertEqual(2, len({call[5] for call in fake.commands}))
+
+    def test_pilot_rejects_missing_trace_or_video_evidence(self):
+        summary = runner_module.run_pilot_mode(
+            upstream_root=self.upstream, project_root=self.project,
+            results_root=self.root / "missing-media", launch_cutoff_seconds=60,
+            item_timeout_seconds=5, command_runner=FakeEvaluator(),
+        )
+
+        self.assertEqual("invalid_evidence", summary["stop_reason"])
+        self.assertLess(summary["valid_count"], 2)
+        self.assertIn("trace", summary["results"][0]["invalid_evidence"])
+
+    def test_pilot_rejects_outcome_drift_even_with_trace_and_video(self):
+        summary = runner_module.run_pilot_mode(
+            upstream_root=self.upstream, project_root=self.project,
+            results_root=self.root / "outcome-drift", launch_cutoff_seconds=60,
+            item_timeout_seconds=5, command_runner=FakeEvaluator(pilot_evidence=True,
+                response=lambda _: (0, aggregate(success=True))),
+        )
+
+        self.assertEqual("invalid_evidence", summary["stop_reason"])
+        self.assertLess(summary["valid_count"], 2)
+        self.assertTrue(any("expected policy_failure" in result.get("invalid_evidence", "")
+                            for result in summary["results"]))
+
+    def test_pilot_persists_unique_launch_sidecars_and_evaluator_ids(self):
+        results = self.root / "pilot-launch-identities"
+        seen_pids = []
+        lock = threading.Lock()
+
+        def launched_runner(argv, *, cwd, check, timeout, launch_observer, **kwargs):
+            config = Path(argv[-1])
+            output = next(Path(json.loads(line.split(": ", 1)[1])) for line in config.read_text().splitlines()
+                          if line.startswith("output_dir: "))
+            with lock:
+                pid = 7000 + len(seen_pids)
+                seen_pids.append(pid)
+            launch_observer(pid, f"vla-eval-{pid}")
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "fake_aggregate.json").write_text(json.dumps(aggregate(success=config.stem == "nominal-01")), encoding="utf-8")
+            (output / "trace.jsonl").write_text('{"step": 0}\n', encoding="utf-8")
+            (output / "video.mp4").write_bytes(b"video")
+            return SimpleNamespace(returncode=0, evaluator_pid=pid, expected_container=f"vla-eval-{pid}")
+
+        with patch.object(runner_module, "_run_evaluator_safely", side_effect=launched_runner):
+            summary = runner_module.run_pilot_mode(
+                upstream_root=self.upstream, project_root=self.project, results_root=results,
+                launch_cutoff_seconds=60, item_timeout_seconds=5,
+            )
+
+        launch_dir = results / "m3-pilot-workers-2" / "launches"
+        sidecars = [json.loads(path.read_text(encoding="utf-8")) for path in sorted(launch_dir.glob("*.json"))]
+        self.assertEqual(2, summary["valid_count"])
+        self.assertEqual({"nominal-01", "mask-01"}, {sidecar["case_id"] for sidecar in sidecars})
+        self.assertEqual(2, len({sidecar["evaluator_pid"] for sidecar in sidecars}))
+        self.assertEqual(2, len({result["evaluator_pid"] for result in summary["results"]}))
 
     def test_benchmark_runner_refuses_non_frozen_repeat_count(self):
         with self.assertRaisesRegex(ValueError, "eight repeats"):

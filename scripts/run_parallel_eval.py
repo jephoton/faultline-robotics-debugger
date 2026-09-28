@@ -614,8 +614,25 @@ def run_mode(
                         raise ValueError("aggregate task_id or episode_index does not match M3 item")
                     if result.outcome not in {"success", "policy_failure"}:
                         raise ValueError("aggregate did not contain a completed policy outcome")
+                    if _purpose == "pilot":
+                        traces = [path for path in output.rglob("*.jsonl")
+                                  if path.is_file() and path.stat().st_size > 0]
+                        videos = [path for path in output.rglob("*.mp4")
+                                  if path.is_file() and path.stat().st_size > 0]
+                        if not traces:
+                            raise ValueError("pilot evidence is missing a non-empty trace")
+                        if not videos:
+                            raise ValueError("pilot evidence is missing a non-empty MP4")
+                        expected_outcome = "success" if item["kind"] == "nominal" else "policy_failure"
+                        if result.outcome != expected_outcome:
+                            raise ValueError(
+                                f"pilot {item['case_id']} expected {expected_outcome}, got {result.outcome}"
+                            )
                     record.update(status="valid", outcome=result.outcome,
                         replayable=any(path.is_file() for path in output.rglob("*.mp4")))
+                    if _purpose == "pilot":
+                        record["trace_path"] = str(traces[0].relative_to(session))
+                        record["video_path"] = str(videos[0].relative_to(session))
                 except Exception as error:
                     request_stop()
                     record.update(status="invalid_evidence", invalid_evidence=f"aggregate evidence error: {type(error).__name__}: {error}")
