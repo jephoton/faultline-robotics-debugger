@@ -30,10 +30,11 @@ items. Each item has exactly one state and, when known, one terminal result:
 The ledger's serialized `attempt_records` map is authoritative and includes
 the captured result for `completing_pending` as well as `terminal` entries.
 An `attempt_states` map of short state names is only a derived audit view;
-persisting that map alone would lose a pending result. The existing summary fields
-(`results`, `valid_count`, `in_flight_ids`, `stop_reason`) are derived from it
-on every atomic save, preserving the reporter's contract; they must not be
-independently mutated. A runtime `Future -> case_id` map is an index, not a
+persisting that map alone would lose a pending result. The per-attempt summary
+fields (`results`, `valid_count`, `in_flight_ids`) are derived from the ledger
+on every atomic save and must not be independently mutated. `stop_reason` is
+separate mode-level control state (for example cutoff or interruption); it is
+not an attempt-ownership field. A runtime `Future -> case_id` map is an index, not a
 second ownership authority. Each transition must be idempotent by `case_id`
 and reject illegal backward transitions or duplicate terminal records.
 
