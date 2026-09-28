@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -696,6 +697,43 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual([], summary["in_flight_ids"])
         self.assertEqual([], fake.commands)
 
+    def test_interrupt_after_submit_retains_launched_case_as_in_flight(self):
+        """A signal between submit() and active registration must not lose ownership."""
+        original_hash = Future.__hash__
+        interrupted = False
+
+        def interrupt_registration(future):
+            nonlocal interrupted
+            if not interrupted:
+                interrupted = True
+                raise KeyboardInterrupt()
+            return original_hash(future)
+
+        results = self.root / "submit-registration-interrupt"
+        with patch.object(Future, "__hash__", new=interrupt_registration):
+            summary = self.run_mode(FakeEvaluator(), results=results)
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertIn(summary["stop_reason"], {"interrupted", "interrupted_cleanup_risk"})
+        self.assertTrue("nominal-01" in summary["in_flight_ids"]
+            or any(record["case_id"] == "nominal-01" for record in summary["results"]))
+
+    def test_interrupt_during_session_setup_writes_partial_summary_when_directory_exists(self):
+        results = self.root / "setup-interrupt"
+        session = results / "m3-workers-1"
+
+        def create_then_interrupt(*args, **kwargs):
+            session.mkdir(parents=True)
+            raise KeyboardInterrupt()
+
+        with patch.object(runner_module.base, "_prepare_session_directory", side_effect=create_then_interrupt):
+            summary = self.run_mode(FakeEvaluator(), results=results)
+        durable = json.loads((session / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual([], summary["results"])
+
     def test_interrupt_before_submit_does_not_leave_unlaunched_id_in_flight(self):
         original_write = runner_module.base._atomic_write_json
         def interrupt_in_flight_write(path, value):
@@ -793,6 +831,59 @@ module.main()
         self.assertEqual(1, child_result.returncode, child_result.stderr)
         self.assertIn("session_summary.json", child_result.stdout)
         self.assertIn("interrupted", child_result.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "requires real POSIX SIGTERM delivery")
+    def test_cli_sigterm_interrupts_a_separate_runner_while_fake_evaluator_is_active(self):
+        results = self.root / "real-sigterm-cli"
+        ready = self.root / "fake-evaluator-ready"
+        stopped = self.root / "fake-evaluator-stopped"
+        child = f'''
+import importlib.util, os, subprocess, sys, time
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("run_parallel_eval_signal_child", {str(SCRIPT_PATH)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+ready = Path({str(ready)!r})
+stopped = Path({str(stopped)!r})
+evaluator = None
+def fake_evaluator(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None):
+    global evaluator
+    evaluator = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    ready.write_text(str(evaluator.pid), encoding="utf-8")
+    while not interrupt_event.is_set():
+        time.sleep(.01)
+    evaluator.terminate()
+    evaluator.wait(timeout=2)
+    stopped.write_text("stopped", encoding="utf-8")
+    error = module._EvaluatorInterrupted("session interrupted")
+    error.cleanup_confirmed = True
+    error.cleanup_error = None
+    error.evaluator_pid = evaluator.pid
+    error.expected_container = f"vla-eval-{{evaluator.pid}}"
+    raise error
+module._run_evaluator_safely = fake_evaluator
+sys.argv = ["run_parallel_eval.py", "--upstream-root", {str(self.upstream)!r},
+    "--project-root", {str(self.project)!r}, "--results-root", {str(results)!r},
+    "--workers", "1", "--launch-cutoff-seconds", "60", "--item-timeout-seconds", "5"]
+module.main()
+'''
+        runner = subprocess.Popen([sys.executable, "-c", child], stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(SCRIPT_PATH.parents[1] / "src")})
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertTrue(ready.exists(), "fake evaluator did not become active")
+            os.kill(runner.pid, signal.SIGTERM)
+            stdout, stderr = runner.communicate(timeout=10)
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.communicate(timeout=2)
+        self.assertEqual(1, runner.returncode, stderr)
+        self.assertTrue(stopped.exists())
+        self.assertIn("stop: interrupted", stdout)
 
     def test_cli_prints_summary_and_returns_failure_for_partial_mode(self):
         argv = ["run_parallel_eval.py", "--upstream-root", str(self.upstream),

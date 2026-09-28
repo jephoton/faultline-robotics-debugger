@@ -278,16 +278,7 @@ def run_mode(
     project_root = Path(project_root).resolve()
     started = monotonic_clock()
     items = build_manifest(repeats_per_case)
-    session = base._prepare_session_directory(
-        Path(results_root).resolve(), session_directory_name=f"m3-workers-{workers}"
-    )
-    configs = session / "configs"
-    runs = session / "runs"
-    configs.mkdir()
-    runs.mkdir()
-    manifest_path = session / "manifest.json"
-    manifest_path.write_text(json.dumps(items, sort_keys=True, separators=(",", ":"), allow_nan=False), encoding="utf-8")
-
+    session = Path(results_root).resolve() / f"m3-workers-{workers}"
     summary: dict[str, Any] = {
         "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
         "case_ids": [item["case_id"] for item in items], "planned_ids": [item["case_id"] for item in items],
@@ -301,6 +292,27 @@ def run_mode(
     def save() -> None:
         summary["elapsed_seconds"] = elapsed()
         base._atomic_write_json(session / "session_summary.json", summary)
+
+    try:
+        session = base._prepare_session_directory(
+            Path(results_root).resolve(), session_directory_name=f"m3-workers-{workers}"
+        )
+        configs = session / "configs"
+        runs = session / "runs"
+        configs.mkdir()
+        runs.mkdir()
+        manifest_path = session / "manifest.json"
+        manifest_path.write_text(json.dumps(items, sort_keys=True, separators=(",", ":"), allow_nan=False), encoding="utf-8")
+    except KeyboardInterrupt:
+        # A directory can exist before session setup reaches its first normal
+        # save.  Preserve an explicitly non-comparable durable record rather
+        # than making this look like a session that never started.
+        interrupt_event.set()
+        request_stop()
+        summary["stop_reason"] = "interrupted"
+        if session.is_dir():
+            save()
+        return summary
 
     def item_paths(item: dict[str, Any]) -> tuple[Path, Path]:
         case_id = item["case_id"]
@@ -401,6 +413,7 @@ def run_mode(
 
     pending = iter(items)
     active: dict[Any, str] = {}
+    uncertain_active: list[tuple[Any, str]] = []
     stopped = False
     executor = ThreadPoolExecutor(max_workers=workers)
     interrupted = False
@@ -430,7 +443,15 @@ def run_mode(
                     if stop_requested.is_set() or interrupt_event.is_set():
                         cancelled = True
                     else:
-                        active[executor.submit(execute, item, config, output, attempt_started)] = item["case_id"]
+                        future = executor.submit(execute, item, config, output, attempt_started)
+                        try:
+                            active[future] = item["case_id"]
+                        except BaseException:
+                            # submit() has already handed this case to a worker.
+                            # Keep a conservative ownership record when an async
+                            # interrupt lands before normal future registration.
+                            uncertain_active.append((future, item["case_id"]))
+                            raise
                         cancelled = False
                 if cancelled:
                     summary["in_flight_ids"].remove(item["case_id"])
@@ -467,21 +488,35 @@ def run_mode(
             interrupt_event.set()
             request_stop()
             summary["stop_reason"] = "interrupted"
+            owned_case_ids = set(active.values()) | {case_id for _, case_id in uncertain_active}
             summary["in_flight_ids"][:] = [case_id for case_id in summary["in_flight_ids"]
-                if case_id in active.values()]
+                if case_id in owned_case_ids]
             for future, case_id in list(active.items()):
                 if future.cancel():
                     active.pop(future)
                     summary["in_flight_ids"].remove(case_id)
+            for future, case_id in list(uncertain_active):
+                if future.cancel():
+                    uncertain_active.remove((future, case_id))
+                    summary["in_flight_ids"].remove(case_id)
             save()
-            # The default evaluator's graceful and forced cleanup is bounded by
-            # its subprocess/Docker timeouts. Keep uncertain workers in_flight.
+            # This is a bounded cleanup observation window, not a bound on
+            # interpreter lifetime: shutdown(wait=False) cannot force a worker
+            # thread to exit. Keep every ambiguous worker in_flight.
             deadline = time.monotonic() + 90
-            while active and time.monotonic() < deadline:
-                done, _ = wait(active, timeout=min(0.2, max(0, deadline - time.monotonic())),
+            while (active or uncertain_active) and time.monotonic() < deadline:
+                tracked = list(active) + [future for future, _ in uncertain_active]
+                done, _ = wait(tracked, timeout=min(0.2, max(0, deadline - time.monotonic())),
                     return_when=FIRST_COMPLETED)
                 for future in done:
-                    case_id = active.pop(future)
+                    uncertain_submission = False
+                    if future in active:
+                        case_id = active.pop(future)
+                    else:
+                        future_pair = next(pair for pair in uncertain_active if pair[0] is future)
+                        uncertain_active.remove(future_pair)
+                        case_id = future_pair[1]
+                        uncertain_submission = True
                     summary["in_flight_ids"].remove(case_id)
                     try:
                         record = future.result()
@@ -489,6 +524,10 @@ def run_mode(
                         record = {"case_id": case_id, "status": "infrastructure_error",
                             "cleanup_confirmed": False,
                             "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
+                    if uncertain_submission and record is None:
+                        record = {"case_id": case_id, "status": "infrastructure_error",
+                            "cleanup_confirmed": False,
+                            "infrastructure_error": "cleanup risk: interrupted after submission before future registration"}
                     if record is not None:
                         summary["results"].append(record)
                         if record["status"] == "valid":
@@ -497,7 +536,7 @@ def run_mode(
                                 and record.get("cleanup_confirmed") is not True):
                             summary["stop_reason"] = "interrupted_cleanup_risk"
                     save()
-            if active:
+            if active or uncertain_active:
                 summary["stop_reason"] = "interrupted_cleanup_risk"
                 save()
             executor.shutdown(wait=False, cancel_futures=True)
