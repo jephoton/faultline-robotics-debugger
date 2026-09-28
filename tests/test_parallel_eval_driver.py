@@ -859,6 +859,55 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertTrue(summary["in_flight_ids"]
             or any(record["status"] != "valid" for record in summary["results"]))
 
+    def test_event_after_wait_before_capture_makes_completed_result_nonvalid(self):
+        """A handler event between wait and capture closes valid accounting."""
+        interrupt_event = threading.Event()
+        real_wait = runner_module.wait
+        injected = False
+
+        def signal_after_wait(futures, **kwargs):
+            nonlocal injected
+            done, pending = real_wait(futures, **kwargs)
+            if done and not injected:
+                injected = True
+                interrupt_event.set()
+            return done, pending
+
+        with patch.object(runner_module, "wait", side_effect=signal_after_wait):
+            summary = runner_module.run_mode(
+                upstream_root=self.upstream,
+                project_root=self.project,
+                results_root=self.root / "event-after-wait",
+                workers=1,
+                repeats_per_case=8,
+                launch_cutoff_seconds=60,
+                item_timeout_seconds=5,
+                command_runner=FakeEvaluator(),
+                interrupt_event=interrupt_event,
+            )
+
+        self.assertTrue(injected)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual(0, summary["valid_count"])
+        self.assertEqual(1, len(summary["results"]))
+        self.assertEqual("infrastructure_error", summary["results"][0]["status"])
+
+    def test_worker_base_exception_becomes_one_durable_infrastructure_record(self):
+        """An unexpected worker exit cannot abandon an active ledger record."""
+        def exits_worker(*args, **kwargs):
+            raise SystemExit("fake worker exit")
+
+        summary = self.run_mode(
+            exits_worker, results=self.root / "worker-base-exception"
+        )
+
+        self.assertEqual("infrastructure_error", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertEqual(0, summary["valid_count"])
+        self.assertEqual(1, len(summary["results"]))
+        self.assertEqual("infrastructure_error", summary["results"][0]["status"])
+        self.assertIn("SystemExit", summary["results"][0]["infrastructure_error"])
+
     def test_interrupted_save_after_capture_preserves_pending_result_without_duplication(self):
         """A captured result survives an interrupt before its terminal save."""
         original_write = runner_module.base._atomic_write_json

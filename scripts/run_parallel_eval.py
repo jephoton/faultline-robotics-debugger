@@ -479,14 +479,31 @@ def run_mode(
             done, _ = wait(active, timeout=0.2, return_when=FIRST_COMPLETED)
             for future in done:
                 case_id = active[future]
-                record = future.result()
+                try:
+                    record = future.result()
+                except KeyboardInterrupt:
+                    # Preserve the caller's interrupt semantics; finalization
+                    # below will reconcile the still-owned Future.
+                    raise
+                except BaseException as error:
+                    record = {
+                        "case_id": case_id,
+                        "status": "infrastructure_error",
+                        "cleanup_confirmed": False,
+                        "infrastructure_error": (
+                            "worker ended with "
+                            f"{type(error).__name__}: {error}"
+                        ),
+                    }
                 if record is None:
                     ledger.cancel_unstarted(case_id)
                     active.pop(future)
                     save()
                     continue
                 # Result durability precedes releasing the Future index.
-                ledger.capture_result(case_id, record, interrupted=False)
+                ledger.capture_result(
+                    case_id, record, interrupted=interrupt_event.is_set()
+                )
                 save()
                 ledger.finish(case_id)
                 save()
