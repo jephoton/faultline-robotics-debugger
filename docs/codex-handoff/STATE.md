@@ -32,7 +32,13 @@
   safe partial sessions can resume only proven-prepared cases. Windows Python
   3.11 passed 212 tests (2 POSIX-only skips); the focused WSL signal/driver
   suites passed 57 tests.
-  No M3 Nebius run exists.
+  A separately labeled two-case pilot command and exact-VM workstation
+  watchdog are also implemented. The pilot requires trace, MP4, and expected
+  nominal/failure outcomes; the benchmark reporter rejects pilot summaries.
+  The guard arms while the VM is stopped, keeps an immutable exact target,
+  bounds individual CLI calls, and reports unconfirmed stops as errors.
+  Integrated Windows Python 3.11 passed 239 tests (3 POSIX-only skips), and
+  focused WSL driver/lifecycle tests passed 66. No M3 Nebius run exists.
 
 ## Next material decision
 
@@ -43,10 +49,11 @@ repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
 fail-closed resume lease. Whole-branch review and merged-result tests passed.
 The 2-worker live pilot and subsequent 1/2/4 comparison remain
-separate paid work. Jethro accepted designs for a separately labeled two-case
-pilot and a detached exact-VM workstation watchdog; their implementation plans
-are in `docs/superpowers/plans/` and await implementation approval. Neither
-design authorizes paid work. Read-only Nebius preflight found the existing
+separate paid work. Jethro approved and the project implemented the local
+pilot/watchdog plans in `docs/superpowers/plans/`. A real read-only watchdog
+`check` succeeded against the exact stopped VM; the guard has not been armed
+against Nebius. Local fake tests do not prove the detached guard survives
+workstation sleep, lost network, or expired auth. Read-only preflight found the existing
 one-L40S VM stopped, with a 200 GiB retained boot disk. The CLI calculator
 reported $1.7468/hour for that VM shape and $0.0194444/hour for the disk,
 pre-tax, on September 29; refresh prices before a run. Credit balance/expiry

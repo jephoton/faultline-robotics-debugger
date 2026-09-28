@@ -1,6 +1,6 @@
 # M3 fixed replay workload contract
 
-**Status:** workload identity frozen; no cloud run or spending authorized
+**Status:** workload identity frozen; local pilot/watchdog ready for gated live validation; no cloud run or spending authorized
 
 **Harness:** `allenai/vla-evaluation-harness` commit `35f1200eb15608aa898f727a3722f7eef889c6cd`
 
@@ -170,7 +170,7 @@ be reused. Resumed runs retain terminal evidence once but are excluded from
 throughput comparison, so the benchmark remains based on fresh uninterrupted
 modes. See the [recovery plan](../superpowers/plans/2026-09-28-m3-launch-identity-and-resume.md).
 
-Local verification passed 212 Windows tests (2 POSIX-only skips) and 57
+Local verification passed 239 Windows tests (3 POSIX-only skips) and 66
 focused WSL lifecycle/driver tests, including actual process signals and a
 delayed-child containment case. This does not prove daemon-level Docker
 containment: the pinned harness can spawn `docker run`, and a daemon request
@@ -180,3 +180,15 @@ partial-summary deadline. The runner's cleanup observation is not permission
 to resume after uncertainty. An independent exact-VM stop watchdog remains
 the final cost boundary for the later pilot, together with refreshed resource
 preflight and a separately approved run-specific cap.
+
+The separately labeled `pilot` command now runs only `build_manifest(1)` with
+two workers in `m3-pilot-workers-2/`. It requires nominal success and reduced
+mask failure, plus non-empty trace and MP4 evidence per case; incomplete or
+drifted results are non-comparable. The reporter refuses pilot summaries.
+The detached Windows exact-VM watchdog has local fake tests and passed a real
+read-only `check` while the target was stopped. It has not been armed against
+the real VM, and no M3 pilot episodes have run. Before that transition,
+verify remaining credit and expiry, restart capacity, current full-resource
+rate and tax, set an exact UTC deadline with guest backup, and obtain Jethro's
+numeric cap approval. Pilot success does not authorize the 48-episode
+comparison.

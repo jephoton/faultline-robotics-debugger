@@ -49,9 +49,9 @@ $env:PYTHONPATH = 'src'
 & 'C:\Windows\py.exe' -3.11 -m unittest discover -s tests -v
 ```
 
-Verified after the local M3 recovery implementation: 212 tests pass,
-with 2 POSIX-only skips, on Windows Python 3.11. The focused lifecycle and
-driver suites also pass under WSL (57 tests), including real POSIX signals:
+Verified after pilot/watchdog integration: 239 tests pass,
+with 3 POSIX-only skips, on Windows Python 3.11. The focused lifecycle and
+driver suites also pass under WSL (66 tests), including real POSIX signals:
 
 ```bash
 PYTHONPATH=src python3 -m unittest \
@@ -87,7 +87,33 @@ Arm independent cleanup, copy evidence before media, and verify the VM is
 stopped and temporary network rules are absent after every attempt.
 Do not start the M3 live session merely because local tests pass. The runner
 has POSIX process-group termination plus exact-container cleanup checks, but
-cannot rule out a Docker daemon request still in flight. The pilot still
-needs an external exact-VM stop watchdog and a separately approved run-specific
-cap. After any uncertain timeout or interruption, stop and verify the exact
+cannot rule out a Docker daemon request still in flight. The pilot requires
+arming the implemented exact-VM stop watchdog and a separately approved
+run-specific cap. After any uncertain timeout or interruption, stop and verify the exact
 VM before another mode; do not rely on a momentary absent-container check.
+
+The local M3 pilot command is `PYTHONPATH=src python3 scripts/run_parallel_eval.py
+pilot --upstream-root <pinned-harness> --project-root <repo> --results-root
+<ignored-results> --launch-cutoff-seconds <seconds> --item-timeout-seconds
+<seconds>`. It fixes two workers and one nominal plus one M4 reduced-mask
+case, writes `m3-pilot-workers-2/`, and cannot resume. A valid pilot requires
+both expected outcomes and non-empty traces and MP4s. It is not accepted by
+the benchmark reporter. No live pilot has been run.
+
+The workstation watchdog is `PYTHONPATH=src python3 scripts/run_vm_watchdog.py
+check|arm|watch --record <ignored-record.json> --control-root
+<ignored-control-root>`. The JSON record contains only schema version, one
+exact instance ID, one exact project ID, future UTC deadline, run label,
+absolute WSL CLI path, and absolute JSONL log path under the control root.
+Use a fresh ignored run directory for each arm; an existing lock or log is a
+fail-closed refusal. Never clear a stale lock without checking the exact VM
+in Nebius first. `check` is read-only; `arm` starts a detached Windows guard
+and requires a durable `armed` event before the execution owner may start
+the VM. The guard stops/polls the exact VM at its deadline. An unconfirmed
+stop is urgent manual-console action, not success. Do not use `arm` until a
+fresh balance/expiry, quota/capacity, full-rate, deadline, guest-backup, and
+Jethro-approved numeric cap gate is satisfied. Windows must stay awake and
+network/WSL authentication must remain available; the guest timer is backup.
+The retained disk bills even after the VM stops. The September 29 real
+read-only `check` returned zero and the VM remained `STOPPED`; no real arm or
+stop was tested.
