@@ -728,8 +728,8 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual([], summary["in_flight_ids"])
         self.assertEqual([], fake.commands)
 
-    def test_interrupt_after_submit_retains_launched_case_as_in_flight(self):
-        """A signal between submit() and active registration must not lose ownership."""
+    def test_interrupt_after_future_return_reconciles_the_known_future(self):
+        """A Future returned before registration is never lost across interruption."""
         original_hash = Future.__hash__
         interrupted = False
 
@@ -740,14 +740,28 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 raise KeyboardInterrupt()
             return original_hash(future)
 
+        fake = FakeEvaluator()
         results = self.root / "submit-registration-interrupt"
         with patch.object(Future, "__hash__", new=interrupt_registration):
-            summary = self.run_mode(FakeEvaluator(), results=results)
+            summary = self.run_mode(fake, results=results)
         durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
         self.assertEqual(summary, durable)
-        self.assertIn(summary["stop_reason"], {"interrupted", "interrupted_cleanup_risk"})
-        self.assertTrue("nominal-01" in summary["in_flight_ids"]
-            or any(record["case_id"] == "nominal-01" for record in summary["results"]))
+        self.assertEqual("interrupted", summary["stop_reason"])
+        state = summary["attempt_states"]["nominal-01"]
+        if state == "prepared":
+            # Cancellation won the race before execute entered the fake.
+            self.assertEqual([], fake.commands)
+        else:
+            # execute won the race after launch_lock unwound.  The known
+            # Future must still be either durable terminal or explicitly
+            # in-flight, and any result first reconciled after interruption
+            # cannot be benchmark-valid.
+            self.assertIn(state, {"terminal", "active", "completing_pending"})
+            records = [record for record in summary["results"]
+                if record["case_id"] == "nominal-01"]
+            self.assertLessEqual(len(records), 1)
+            if records:
+                self.assertNotEqual("valid", records[0]["status"])
 
     def test_submit_that_enqueues_then_interrupts_retains_uncertain_case(self):
         """submit() may have started work even when it raises before returning a future."""
