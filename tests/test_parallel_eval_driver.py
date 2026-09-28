@@ -1236,9 +1236,10 @@ spec.loader.exec_module(module)
 ready = Path({str(ready)!r})
 stopped = Path({str(stopped)!r})
 evaluator = None
-def fake_evaluator(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None):
+def fake_evaluator(argv, *, cwd, check, timeout, stop_event=None, interrupt_event=None, launch_lock=None, launch_observer=None):
     global evaluator
     evaluator = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    launch_observer(evaluator.pid, f"vla-eval-{{evaluator.pid}}")
     ready.write_text(str(evaluator.pid), encoding="utf-8")
     while not interrupt_event.is_set():
         time.sleep(.01)
