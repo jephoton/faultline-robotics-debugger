@@ -1512,6 +1512,58 @@ module.main()
                 )
         self.assertFalse((session / ".resume.lock").exists())
 
+    def test_resume_rejects_prepared_artifacts_that_could_be_stale_or_aliased(self):
+        for kind in ("config-symlink", "output-symlink", "output-dir", "launch-sidecar"):
+            with self.subTest(kind=kind):
+                results = self.root / f"prepared-{kind}"
+                session, _ = self.write_safe_partial_session(results)
+                case_id = "nominal-02"
+                if kind == "config-symlink":
+                    target = session / "configs" / f"{case_id}.yaml"
+                    other = session / "configs" / "nominal-03.yaml"
+                    other.write_text("other", encoding="utf-8")
+                    try:
+                        target.symlink_to(other)
+                    except OSError as error:
+                        self.skipTest(f"symlinks unavailable: {error}")
+                elif kind == "output-symlink":
+                    target = session / "runs" / case_id
+                    other = session / "runs" / "nominal-03"
+                    other.mkdir()
+                    try:
+                        target.symlink_to(other, target_is_directory=True)
+                    except OSError as error:
+                        self.skipTest(f"symlinks unavailable: {error}")
+                elif kind == "output-dir":
+                    (session / "runs" / case_id).mkdir()
+                else:
+                    (session / "launches" / f"{case_id}.json").write_text("{}", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "prepared|symlink"):
+                    runner_module.run_mode(
+                        upstream_root=self.upstream, project_root=self.project, results_root=results,
+                        workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                        command_runner=FakeEvaluator(), resume=True,
+                    )
+
+    def test_resume_accepts_an_exact_prepared_config_from_a_pre_submit_cutoff(self):
+        results = self.root / "prepared-matching-config"
+        session, _ = self.write_safe_partial_session(results)
+        item = build_manifest(8)[1]
+        config = session / "configs" / f"{item['case_id']}.yaml"
+        output = session / "runs" / item["case_id"]
+        runner_module.base._write_config(
+            config_path=config, output_dir=output, project_root=self.project,
+            stage_name=f"m3-{item['case_id']}", episode_indices=(0,),
+        )
+
+        summary = runner_module.run_mode(
+            upstream_root=self.upstream, project_root=self.project, results_root=results,
+            workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+            command_runner=FakeEvaluator(), resume=True,
+        )
+
+        self.assertEqual(16, summary["valid_count"])
+
 
 if __name__ == "__main__":
     unittest.main()

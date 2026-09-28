@@ -13,6 +13,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import Any, Callable
@@ -457,14 +458,51 @@ def run_mode(
         config = configs / f"{case_id}.yaml"
         output = runs / case_id
         for path in (config, output):
+            if path.is_symlink():
+                raise ValueError("item path must not be a symlink")
             try:
                 path.resolve().relative_to(session)
             except ValueError as error:
                 raise ValueError("item path escapes session") from error
         return config, output
 
+    def expected_config_bytes(item: dict[str, Any], output: Path) -> bytes:
+        """Render the deterministic config outside the durable session."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            expected = Path(temporary_directory) / "expected.yaml"
+            base._write_config(
+                config_path=expected, output_dir=output, project_root=project_root,
+                stage_name=f"m3-{item['case_id']}", episode_indices=(0,),
+                **({} if item["rectangle"] is None else item["rectangle"]),
+            )
+            return expected.read_bytes()
+
+    def validate_prepared_artifacts(item: dict[str, Any], config: Path, output: Path) -> bool:
+        """Reject stale work; permit only an exact pre-submit config."""
+        sidecar = launches / f"{item['case_id']}.json"
+        for path, label in ((config, "config"), (output, "output"), (sidecar, "launch sidecar")):
+            if path.is_symlink():
+                raise ValueError(f"prepared {label} must not be a symlink")
+            try:
+                path.resolve().relative_to(session)
+            except ValueError as error:
+                raise ValueError(f"prepared {label} escapes session") from error
+        if output.exists():
+            raise ValueError("prepared output already exists")
+        if sidecar.exists():
+            raise ValueError("prepared launch sidecar already exists")
+        if not config.exists():
+            return False
+        if not config.is_file():
+            raise ValueError("prepared config must be a regular file")
+        if config.read_bytes() != expected_config_bytes(item, output):
+            raise ValueError("prepared config does not match the frozen item")
+        return True
+
     def launch_identity_observer(case_id: str) -> Callable[[int, str], None]:
         sidecar = launches / f"{case_id}.json"
+        if sidecar.is_symlink():
+            raise ValueError("launch identity path must not be a symlink")
         try:
             sidecar.resolve().relative_to(session)
         except ValueError as error:
@@ -589,8 +627,9 @@ def run_mode(
                 except StopIteration:
                     break
                 config, output = item_paths(item)
-                base._write_config(config_path=config, output_dir=output, project_root=project_root,
-                    stage_name=f"m3-{item['case_id']}", episode_indices=(0,), **({} if item["rectangle"] is None else item["rectangle"]))
+                if not validate_prepared_artifacts(item, config, output):
+                    base._write_config(config_path=config, output_dir=output, project_root=project_root,
+                        stage_name=f"m3-{item['case_id']}", episode_indices=(0,), **({} if item["rectangle"] is None else item["rectangle"]))
                 if elapsed() >= launch_cutoff_seconds or stop_requested.is_set() or interrupt_event.is_set():
                     if not stop_requested.is_set():
                         stopped = True
