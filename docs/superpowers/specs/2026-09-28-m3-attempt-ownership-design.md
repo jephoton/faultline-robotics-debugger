@@ -27,7 +27,10 @@ items. Each item has exactly one state and, when known, one terminal result:
 | `completing_pending` | Finished Future's result has been captured in the ledger, but terminal accounting is not yet durably acknowledged | No |
 | `terminal` | Exactly one durable valid, invalid-evidence, or infrastructure result exists | Only if normal completion before stop |
 
-The ledger's serialized state is authoritative. The existing summary fields
+The ledger's serialized `attempt_records` map is authoritative and includes
+the captured result for `completing_pending` as well as `terminal` entries.
+An `attempt_states` map of short state names is only a derived audit view;
+persisting that map alone would lose a pending result. The existing summary fields
 (`results`, `valid_count`, `in_flight_ids`, `stop_reason`) are derived from it
 on every atomic save, preserving the reporter's contract; they must not be
 independently mutated. A runtime `Future -> case_id` map is an index, not a
