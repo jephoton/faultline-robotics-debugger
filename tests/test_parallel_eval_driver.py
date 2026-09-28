@@ -175,7 +175,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
                         runner_module.run_mode(**kwargs)
                     self.assertFalse(results.exists())
 
-    def test_default_timeout_terminates_parent_and_confirms_no_container(self):
+    def test_timeout_starts_evaluator_session_and_signals_its_process_group(self):
         events = []
 
         class Process:
@@ -187,22 +187,76 @@ class ParallelEvalDriverTests(unittest.TestCase):
                     raise subprocess.TimeoutExpired("vla-eval", timeout)
                 self.returncode = 143
                 return self.returncode
-            def terminate(self):
-                events.append(("terminate", self.pid))
-            def kill(self):
-                events.append(("kill", self.pid))
-
         def docker(argv, **kwargs):
             events.append(("docker", argv))
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
+        def process_factory(*args, **kwargs):
+            events.append(("launch", kwargs))
+            return Process()
+
+        with patch.object(runner_module.os, "killpg", create=True,
+                side_effect=lambda pid, signum: events.append(("signal", pid, signum))):
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, process_factory=process_factory, docker_runner=docker)
+        self.assertTrue(raised.exception.cleanup_confirmed)
+        launches = [event[1] for event in events if event[0] == "launch"]
+        self.assertEqual(1, len(launches))
+        self.assertTrue(launches[0]["start_new_session"])
+        self.assertIn(("signal", 4321, signal.SIGTERM), events)
+        self.assertFalse(any(event[0] == "signal" and event[2] == signal.SIGKILL for event in events))
+        self.assertFalse(any(event[0] == "docker" and "rm" in event[1] for event in events))
+
+    def test_timeout_escalates_owned_process_group_before_exact_container_removal(self):
+        events = []
+
+        class Process:
+            pid = 5678
+            returncode = None
+            def wait(self, timeout):
+                events.append(("wait", timeout))
+                if len([event for event in events if event[0] == "wait"]) < 3:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = -9
+                return self.returncode
+
+        def docker(argv, **kwargs):
+            events.append(("docker", argv))
+            checks = len([event for event in events if event[0] == "docker" and "ps" in event[1]])
+            return SimpleNamespace(returncode=0, stdout="vla-eval-5678\n" if checks == 1 else "", stderr="")
+
+        with patch.object(runner_module.os, "killpg", create=True,
+                side_effect=lambda pid, signum: events.append(("signal", pid, signum))):
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        self.assertTrue(raised.exception.cleanup_confirmed)
+        self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, signal.SIGKILL)],
+            [event for event in events if event[0] == "signal"])
+        self.assertEqual([["docker", "rm", "-f", "vla-eval-5678"]],
+            [event[1] for event in events if event[0] == "docker" and "rm" in event[1]])
+
+    def test_docker_inspection_exception_makes_cleanup_uncertain(self):
+        class Process:
+            pid = 7654
+            returncode = None
+            def wait(self, timeout):
+                if self.returncode is None and timeout == 5:
+                    raise subprocess.TimeoutExpired("vla-eval", timeout)
+                self.returncode = 143
+                return self.returncode
+            def terminate(self):
+                pass
+            def kill(self):
+                self.returncode = -9
+
         with self.assertRaises(subprocess.TimeoutExpired) as raised:
             runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
-                check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
-        self.assertTrue(raised.exception.cleanup_confirmed)
-        self.assertIn(("terminate", 4321), events)
-        self.assertFalse(any(event[0] == "kill" for event in events))
-        self.assertFalse(any(event[0] == "docker" and "rm" in event[1] for event in events))
+                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                docker_runner=lambda *a, **k: (_ for _ in ()).throw(OSError("daemon unavailable")))
+        self.assertFalse(raised.exception.cleanup_confirmed)
+        self.assertIn("Docker inspection failed", raised.exception.cleanup_error)
 
     def test_stuck_parent_forces_only_its_container_removal_before_reaping(self):
         events = []
