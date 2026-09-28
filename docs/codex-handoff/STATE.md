@@ -24,15 +24,14 @@
 - The viewer deduplicates copied aggregates, prefers media-bearing records,
   and displays accepted reduction lineage. Its M4 catalog indexes all 22
   episodes with no missing media or warnings.
-- The main branch was synced with the private remote before this documentation
-  update. Public release remains a separate user-controlled action.
-- M3 local work is isolated on `codex/m3-parallel-replay`, not merged into
-  `main`. The fixed 16-item manifest, bounded 1/2/4-worker scheduler, evidence
-  validation, fail-closed comparison reporter, process-group containment, and
-  durable per-case attempt ledger are implemented. Exact evaluator launch
-  identity is written before waiting, and safe partial sessions can resume
-  only proven-prepared cases. Windows Python 3.11 passed 212 tests (2
-  POSIX-only skips); the focused WSL signal/driver suites passed 57 tests.
+- M3 local work is integrated into `main`; publication remains a separate
+  user-controlled action. The fixed 16-item manifest, bounded 1/2/4-worker
+  scheduler, evidence validation, fail-closed comparison reporter,
+  process-group containment, and durable per-case attempt ledger are
+  implemented. Exact evaluator launch identity is written before waiting, and
+  safe partial sessions can resume only proven-prepared cases. Windows Python
+  3.11 passed 212 tests (2 POSIX-only skips); the focused WSL signal/driver
+  suites passed 57 tests.
   No M3 Nebius run exists.
 
 ## Next material decision
@@ -42,7 +41,7 @@ M4's bounded live run and evidence validation are complete; details are in
 1/2/4-worker design on one GPU VM with a shared GR00T server, using fixed
 repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
-fail-closed resume lease. Final whole-branch review and integration are next.
+fail-closed resume lease. Whole-branch review and merged-result tests passed.
 The 2-worker live pilot and subsequent 1/2/4 comparison remain
 separate paid work. Cloud preflight, an external exact-VM stop watchdog, and a
 calculated run-specific cap still need explicit approval. The root

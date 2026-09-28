@@ -10,7 +10,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3 parallel-performance design is next.
+**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's fixed-workload runner, durable interruption/recovery, and comparison reporter are implemented and locally reviewed; the live pilot and measured 1/2/4-worker comparison have not run.
 
 **Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
@@ -386,11 +386,15 @@ See [official rules](https://nebiusglobalaihackathon.devpost.com/rules). Publish
 ## 10. The next working session
 
 M2 and the bounded M4 live reduction are complete for one named policy, task,
-initial state, and visual-occlusion family. The next material step is to review
-the [M3 implementation plan](docs/superpowers/plans/2026-09-27-m3-parallel-replay.md)
-for an equal-work 1/2/4-worker comparison of fixed replays of the recorded
-reduction case. The single-VM/shared-server topology is accepted, but no
-paid cap or cloud run is authorized yet. Tool feedback is now
+initial state, and visual-occlusion family. M3's local runner and safety work
+are integrated in `main`; the fixed 16-item workload, evidence contract, and
+recovery boundary are recorded in [M3 experiment notes](docs/experiments/m3-parallel.md).
+The next material step is the bounded live 2-worker pilot, followed only after
+valid evidence by the equal-work 1/2/4-worker comparison. The accepted
+single-VM/shared-server topology does not authorize spending: first refresh
+Nebius account, credit, quota, capacity, exact price and VM state; arm an
+independent exact-VM stop watchdog; calculate a run-specific cap and obtain
+Jethro's separate approval. Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
 repository audit are explicit submission gates after M3, as Jethro requested.
 
