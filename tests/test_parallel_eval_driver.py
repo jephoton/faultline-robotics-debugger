@@ -1454,8 +1454,62 @@ module.main()
                     runner_module.run_mode(
                         upstream_root=self.upstream, project_root=self.project, results_root=results,
                         workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                    command_runner=FakeEvaluator(), resume=True,
+                    )
+
+    def test_resume_lease_stays_held_during_shutdown_cleanup(self):
+        results = self.root / "resume-cleanup-lease"
+        self.write_safe_partial_session(results)
+        cleanup_started = threading.Event()
+        release_cleanup = threading.Event()
+        interrupted = threading.Event()
+        interrupted.set()
+        errors = []
+        original_shutdown = runner_module.ThreadPoolExecutor.shutdown
+
+        def blocking_shutdown(executor, wait=True, *, cancel_futures=False):
+            cleanup_started.set()
+            release_cleanup.wait(2)
+            return original_shutdown(executor, wait=wait, cancel_futures=cancel_futures)
+
+        def run_first():
+            try:
+                runner_module.run_mode(
+                    upstream_root=self.upstream, project_root=self.project, results_root=results,
+                    workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                    command_runner=FakeEvaluator(), interrupt_event=interrupted, resume=True,
+                )
+            except BaseException as error:
+                errors.append(error)
+
+        with patch.object(runner_module.ThreadPoolExecutor, "shutdown", new=blocking_shutdown):
+            first = threading.Thread(target=run_first)
+            first.start()
+            try:
+                self.assertTrue(cleanup_started.wait(2))
+                with self.assertRaisesRegex(ValueError, "resume lease"):
+                    runner_module.run_mode(
+                        upstream_root=self.upstream, project_root=self.project, results_root=results,
+                        workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
                         command_runner=FakeEvaluator(), resume=True,
                     )
+            finally:
+                release_cleanup.set()
+                first.join(5)
+        self.assertFalse(first.is_alive())
+        self.assertEqual([], errors)
+
+    def test_resume_releases_lease_after_exception(self):
+        results = self.root / "resume-exception-lease"
+        session, _ = self.write_safe_partial_session(results)
+        with patch.object(runner_module.base, "_write_config", side_effect=RuntimeError("write failed")):
+            with self.assertRaisesRegex(RuntimeError, "write failed"):
+                runner_module.run_mode(
+                    upstream_root=self.upstream, project_root=self.project, results_root=results,
+                    workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                    command_runner=FakeEvaluator(), resume=True,
+                )
+        self.assertFalse((session / ".resume.lock").exists())
 
 
 if __name__ == "__main__":

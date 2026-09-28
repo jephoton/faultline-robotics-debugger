@@ -442,9 +442,11 @@ def run_mode(
         interrupt_event.set()
         request_stop()
         summary["stop_reason"] = "interrupted"
-        if session.is_dir():
-            save()
-        _release_resume_lease(resume_lease)
+        try:
+            if session.is_dir():
+                save()
+        finally:
+            _release_resume_lease(resume_lease)
         return summary
     except BaseException:
         _release_resume_lease(resume_lease)
@@ -672,85 +674,65 @@ def run_mode(
     except KeyboardInterrupt:
         interrupted = True
         interrupt_event.set()
-    except BaseException:
-        _release_resume_lease(resume_lease)
-        resume_lease = None
-        raise
     finally:
-        if interrupted or interrupt_event.is_set():
-            interrupt_event.set()
-            request_stop()
-            summary["stop_reason"] = "interrupted"
-            # A failed intent save occurs before executor.submit is entered,
-            # so this one case is proven unlaunched and may return prepared.
-            # Once the submit call starts, the ledger deliberately remains
-            # conservative even when Python never returns a Future.
-            if submission_call_case_id is None:
-                for case_id, state in ledger.snapshot()["attempt_states"].items():
-                    if state == "submitting_unknown":
+        try:
+            if interrupted or interrupt_event.is_set():
+                interrupt_event.set()
+                request_stop()
+                summary["stop_reason"] = "interrupted"
+                if submission_call_case_id is None:
+                    for case_id, state in ledger.snapshot()["attempt_states"].items():
+                        if state == "submitting_unknown":
+                            ledger.cancel_unstarted(case_id)
+                for future, case_id in list(active.items()):
+                    if future.cancel():
+                        active.pop(future)
                         ledger.cancel_unstarted(case_id)
-            for future, case_id in list(active.items()):
-                if future.cancel():
-                    active.pop(future)
-                    ledger.cancel_unstarted(case_id)
-            save()
-            # This is a bounded cleanup observation window, not a bound on
-            # interpreter lifetime: shutdown(wait=False) cannot force a worker
-            # thread to exit. Keep every ambiguous worker in_flight.
-            deadline = time.monotonic() + 90
-            while active and time.monotonic() < deadline:
-                done, _ = wait(active, timeout=min(0.2, max(0, deadline - time.monotonic())),
-                    return_when=FIRST_COMPLETED)
-                for future in done:
-                    case_id = active[future]
-                    try:
-                        record = future.result()
-                    except BaseException as error:
-                        record = {"case_id": case_id, "status": "infrastructure_error",
-                            "cleanup_confirmed": False,
-                            "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
-                    if record is not None:
-                        # A save may have been interrupted after normal-path
-                        # capture but before Future release.  That pending
-                        # record is already the ledger's single result; do not
-                        # recapture a downgraded copy and corrupt its identity.
-                        # The mode-level interrupted stop reason still makes
-                        # this summary non-comparable.
-                        attempt_state = ledger.attempts[case_id]["state"]
-                        if attempt_state == "active":
-                            ledger.capture_result(case_id, record, interrupted=True)
-                        elif attempt_state not in {"completing_pending", "terminal"}:
-                            raise RuntimeError(
-                                f"known Future {case_id} has unexpected ledger state {attempt_state}"
-                            )
-                        save()
-                        if ledger.attempts[case_id]["state"] == "completing_pending":
-                            ledger.finish(case_id)
-                            save()
-                        if (record["status"] == "infrastructure_error"
-                                and record.get("cleanup_confirmed") is not True):
-                            summary["stop_reason"] = "interrupted_cleanup_risk"
-                    else:
-                        ledger.cancel_unstarted(case_id)
-                    active.pop(future)
-                    save()
-            cleanup_incomplete = bool(active or ledger.snapshot()["in_flight_ids"])
-            if cleanup_incomplete:
-                summary["stop_reason"] = "interrupted_cleanup_risk"
                 save()
-            # wait=False cannot bound interpreter lifetime.  Join only when
-            # every owned worker reached a known terminal state; otherwise the
-            # durable cleanup-risk summary is the explicit incomplete result.
-            executor.shutdown(wait=not cleanup_incomplete, cancel_futures=True)
-        else:
-            executor.shutdown(wait=True)
-    try:
-        if summary["stop_reason"] is None and len(summary["results"]) != len(items):
-            summary["stop_reason"] = "partial"
-        save()
-        return summary
-    finally:
-        _release_resume_lease(resume_lease)
+                deadline = time.monotonic() + 90
+                while active and time.monotonic() < deadline:
+                    done, _ = wait(active, timeout=min(0.2, max(0, deadline - time.monotonic())),
+                        return_when=FIRST_COMPLETED)
+                    for future in done:
+                        case_id = active[future]
+                        try:
+                            record = future.result()
+                        except BaseException as error:
+                            record = {"case_id": case_id, "status": "infrastructure_error",
+                                "cleanup_confirmed": False,
+                                "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
+                        if record is not None:
+                            attempt_state = ledger.attempts[case_id]["state"]
+                            if attempt_state == "active":
+                                ledger.capture_result(case_id, record, interrupted=True)
+                            elif attempt_state not in {"completing_pending", "terminal"}:
+                                raise RuntimeError(
+                                    f"known Future {case_id} has unexpected ledger state {attempt_state}"
+                                )
+                            save()
+                            if ledger.attempts[case_id]["state"] == "completing_pending":
+                                ledger.finish(case_id)
+                                save()
+                            if (record["status"] == "infrastructure_error"
+                                    and record.get("cleanup_confirmed") is not True):
+                                summary["stop_reason"] = "interrupted_cleanup_risk"
+                        else:
+                            ledger.cancel_unstarted(case_id)
+                        active.pop(future)
+                        save()
+                cleanup_incomplete = bool(active or ledger.snapshot()["in_flight_ids"])
+                if cleanup_incomplete:
+                    summary["stop_reason"] = "interrupted_cleanup_risk"
+                    save()
+                executor.shutdown(wait=not cleanup_incomplete, cancel_futures=True)
+            else:
+                executor.shutdown(wait=True)
+            if summary["stop_reason"] is None and len(summary["results"]) != len(items):
+                summary["stop_reason"] = "partial"
+            save()
+        finally:
+            _release_resume_lease(resume_lease)
+    return summary
 
 
 def report_mode_summaries(
