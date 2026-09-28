@@ -170,7 +170,7 @@ be reused. Resumed runs retain terminal evidence once but are excluded from
 throughput comparison, so the benchmark remains based on fresh uninterrupted
 modes. See the [recovery plan](../superpowers/plans/2026-09-28-m3-launch-identity-and-resume.md).
 
-Local verification passed 239 Windows tests (3 POSIX-only skips) and 66
+Local verification passed 242 Windows tests (3 POSIX-only skips) and 66
 focused WSL lifecycle/driver tests, including actual process signals and a
 delayed-child containment case. This does not prove daemon-level Docker
 containment: the pinned harness can spawn `docker run`, and a daemon request

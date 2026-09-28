@@ -49,7 +49,7 @@ $env:PYTHONPATH = 'src'
 & 'C:\Windows\py.exe' -3.11 -m unittest discover -s tests -v
 ```
 
-Verified after pilot/watchdog integration: 239 tests pass,
+Verified after pilot/watchdog integration: 242 tests pass,
 with 3 POSIX-only skips, on Windows Python 3.11. The focused lifecycle and
 driver suites also pass under WSL (66 tests), including real POSIX signals:
 

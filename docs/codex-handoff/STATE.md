@@ -37,7 +37,7 @@
   nominal/failure outcomes; the benchmark reporter rejects pilot summaries.
   The guard arms while the VM is stopped, keeps an immutable exact target,
   bounds individual CLI calls, and reports unconfirmed stops as errors.
-  Integrated Windows Python 3.11 passed 239 tests (3 POSIX-only skips), and
+  Integrated Windows Python 3.11 passed 242 tests (3 POSIX-only skips), and
   focused WSL driver/lifecycle tests passed 66. No M3 Nebius run exists.
 
 ## Next material decision
