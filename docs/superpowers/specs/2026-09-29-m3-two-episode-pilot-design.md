@@ -1,6 +1,6 @@
 # M3 two-episode concurrency pilot design
 
-**Status:** proposed for written review; the user approved the separate pilot-session boundary on September 29, 2026. **No Nebius start or spending is authorized by this document.**
+**Status:** accepted for implementation planning on September 29, 2026. **No Nebius start or spending is authorized by this document.**
 
 ## Purpose and workload
 

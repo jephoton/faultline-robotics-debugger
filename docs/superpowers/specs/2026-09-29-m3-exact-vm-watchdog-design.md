@@ -1,6 +1,6 @@
 # M3 exact-VM external watchdog design
 
-**Status:** proposed for written review; the user approved a workstation-side, exact-VM watchdog on September 29, 2026. **This design does not authorize starting or stopping the VM.**
+**Status:** accepted for implementation planning on September 29, 2026. **This design does not authorize starting or stopping the VM.**
 
 ## Safety objective
 
@@ -8,7 +8,7 @@ The M3 Python runner, its evaluator children, and Docker all run inside one Nebi
 
 ## Components and data flow
 
-Implement a small Python 3.11 standard-library watchdog runnable on the workstation through WSL, using the existing local Nebius CLI credentials without copying tokens. Input is a validated local JSON run record under an ignored directory, containing schema version, exact `computeinstance-...` ID, exact `project-...` ID, UTC deadline, CLI path, and an approved run label. Reject missing or malformed identifiers, past deadlines, paths outside the intended local log root, and a mismatched read-back of the instance's parent project. The record and append-only timestamped JSONL log contain no credentials.
+Implement a small Python 3.11 standard-library watchdog as a detached Windows workstation process. It invokes the existing Nebius CLI inside WSL as a child for each control-plane call, using local credentials without copying tokens. This keeps the guard alive if an individual WSL CLI call exits or hangs, though it still depends on Windows being awake and WSL being available. Input is a validated local JSON run record under an ignored directory, containing schema version, exact `computeinstance-...` ID, exact `project-...` ID, UTC deadline, CLI path, and an approved run label. Reject missing or malformed identifiers, past deadlines, paths outside the intended local log root, and a mismatched read-back of the instance's parent project. The record and append-only timestamped JSONL log contain no credentials.
 
 An arm step starts one detached watchdog process *before* VM start, waits for a durable `armed` log entry, and verifies that the process remains alive. The watchdog first performs a read-only exact-instance lookup, then waits until the deadline without changing the VM. At the deadline it issues `nebius compute instance stop --id <immutable-id>`, polls the same ID until `STOPPED`, and logs every command result and state. Transient API failures get bounded retries; after the retry window, log `stop_unconfirmed` and surface urgent manual-console action. Never enumerate VMs to choose a target, stop by display name, use a broad filter, or act on a different project/instance. Do not declare success on a command exit alone.
 
