@@ -174,6 +174,34 @@ class WatchStateMachineTests(unittest.TestCase):
             self.assertEqual(calls, 4)
             self.assertEqual(self._events(record)[-1]["event"], "stop_unconfirmed")
 
+    def test_deadline_get_failure_still_stops_exact_preverified_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = self._record(Path(directory), datetime(2030, 1, 1, tzinfo=UTC))
+            calls: list[list[str]] = []
+            def invoke(argv: list[str]) -> object:
+                calls.append(argv)
+                if len(calls) == 1:
+                    return self._instance("RUNNING")
+                if len(calls) in (2, 3):
+                    raise OSError("transient exact get failure")
+                if "stop" in argv:
+                    return ""  # CLI exit 0, no JSON body
+                return self._instance("STOPPED")
+            result = watch(record, invoke=invoke, now=lambda: datetime(2030, 1, 2, tzinfo=UTC),
+                           sleep=lambda _: None, retries=2)
+            self.assertEqual(result, "stop_confirmed")
+            self.assertEqual([call for call in calls if "stop" in call][0][7], record.instance_id)
+
+    def test_deadline_wrong_instance_refuses_stop_and_reports_unconfirmed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = self._record(Path(directory), datetime(2030, 1, 1, tzinfo=UTC))
+            calls: list[list[str]] = []
+            replies = iter([self._instance(), self._instance(instance_id="computeinstance-other")])
+            result = watch(record, invoke=lambda argv: calls.append(argv) or next(replies),
+                           now=lambda: datetime(2030, 1, 2, tzinfo=UTC), sleep=lambda _: None)
+            self.assertEqual(result, "stop_unconfirmed")
+            self.assertTrue(all("stop" not in call for call in calls))
+
 
 class ArmWrapperTests(unittest.TestCase):
     @classmethod
@@ -262,6 +290,13 @@ class ArmWrapperTests(unittest.TestCase):
             with patch.object(self.runner, "watch", return_value="stop_unconfirmed"):
                 self.assertNotEqual(self.runner.main(["watch", "--record", str(record),
                                                       "--control-root", str(root / "control")]), 0)
+
+    def test_local_test_without_fake_cli_cannot_reach_real_invoker(self):
+        with patch.object(self.runner, "_real_invoke") as real:
+            with self.assertRaises(SystemExit):
+                self.runner.main(["watch", "--record", "unused.json", "--control-root", "unused",
+                                  "--local-test"])
+            real.assert_not_called()
 
     def test_arm_production_mode_can_launch_a_watch_child_without_fake_cli(self):
         with tempfile.TemporaryDirectory() as directory:

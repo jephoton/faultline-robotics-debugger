@@ -154,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.fake_cli is not None and not args.local_test:
         parser.error("--fake-cli requires --local-test")
+    if args.local_test and args.fake_cli is None:
+        parser.error("--local-test requires --fake-cli")
     invoke = _fake_invoke(args.fake_cli) if args.local_test and args.fake_cli else _real_invoke
     try:
         if args.mode == "check":

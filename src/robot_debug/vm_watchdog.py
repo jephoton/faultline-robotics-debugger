@@ -29,6 +29,10 @@ class RecordError(ValueError):
     """The untrusted local run record cannot safely control a VM."""
 
 
+class TargetMismatch(RecordError):
+    """The exact-instance read-back contradicts the immutable run record."""
+
+
 @dataclass(frozen=True)
 class GuardRecord:
     instance_id: str
@@ -142,10 +146,22 @@ def watch(
         audit.write("armed", deadline_utc=_timestamp(record.deadline_utc))
         _wait_until(record.deadline_utc, now, sleep, monotonic)
         audit.write("deadline_reached")
-        deadline_state = _get_verified(record, invoke)
-        if _state(deadline_state) == "STOPPED":
+        deadline_state = None
+        for attempt in range(retries):
+            try:
+                deadline_state = _get_verified(record, invoke)
+                break
+            except TargetMismatch:
+                audit.write("stop_unconfirmed", reason="target_readback_mismatch")
+                return "stop_unconfirmed"
+            except Exception as error:
+                audit.write("deadline_get_failed", attempt=attempt + 1, error=type(error).__name__)
+        if deadline_state is not None and _state(deadline_state) == "STOPPED":
             audit.write("already_stopped")
             return "already_stopped"
+        # The initial lookup already verified the immutable target. If later
+        # reads fail transiently, still issue the exact-ID stop rather than
+        # abandoning an active billable VM.
         if not _retry_stop(record, invoke, retries, audit):
             audit.write("stop_unconfirmed", reason="stop_command_failed")
             return "stop_unconfirmed"
@@ -184,7 +200,7 @@ def _retry_stop(record: GuardRecord, invoke: Any, retries: int, audit: "_AuditLo
         raise ValueError("retries must be a positive integer")
     for attempt in range(retries):
         try:
-            _decode_result(invoke(record.stop_command()))
+            invoke(record.stop_command())
             return True
         except Exception as error:
             audit.write("stop_failed", attempt=attempt + 1, error=type(error).__name__)
@@ -197,9 +213,9 @@ def _get_verified(record: GuardRecord, invoke: Any) -> dict[str, Any]:
     instance_id = metadata.get("id") if isinstance(metadata, dict) else None
     parent_id = metadata.get("parent_id") if isinstance(metadata, dict) else None
     if instance_id != record.instance_id:
-        raise RecordError("exact instance read-back ID does not match target")
+        raise TargetMismatch("exact instance read-back ID does not match target")
     if parent_id != record.project_id:
-        raise RecordError("exact instance read-back parent does not match project")
+        raise TargetMismatch("exact instance read-back parent does not match project")
     return result
 
 
