@@ -45,6 +45,8 @@ class AttemptLedger:
             if not isinstance(record, dict):
                 raise ValueError("attempt record must be a dictionary")
             state = record.get("state")
+            if not isinstance(state, str):
+                raise ValueError("attempt record state must be a string")
             if state in {_PREPARED, _SUBMITTING_UNKNOWN, _ACTIVE}:
                 if set(record) != {"state"}:
                     raise ValueError("nonterminal attempt record has unexpected fields")

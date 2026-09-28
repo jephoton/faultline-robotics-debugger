@@ -140,6 +140,13 @@ class AttemptLedgerTests(unittest.TestCase):
         restored = AttemptLedger.from_snapshot(
             ["nominal-01", "mask-01"], json.loads(json.dumps(self.ledger.snapshot()))
         )
+        round_tripped = json.loads(json.dumps(self.ledger.snapshot()))
+        restored_isolated = AttemptLedger.from_snapshot(["nominal-01", "mask-01"], round_tripped)
+        round_tripped["attempt_records"]["nominal-01"]["result"]["evidence"]["artifact"] = "tampered"
+        self.assertEqual(
+            "runs/nominal-01/results.json",
+            restored_isolated.snapshot()["attempt_records"]["nominal-01"]["result"]["evidence"]["artifact"],
+        )
         self.assertEqual("completing_pending", restored.snapshot()["attempt_states"]["nominal-01"])
         restored.finish("nominal-01")
         self.assertEqual([captured], restored.snapshot()["results"])
@@ -156,6 +163,11 @@ class AttemptLedgerTests(unittest.TestCase):
         snapshot["attempt_records"]["nominal-01"] = {"state": "invented_success"}
         with self.assertRaises(ValueError):
             AttemptLedger.from_snapshot(["nominal-01", "mask-01"], snapshot)
+        for state in ([], {}):
+            snapshot = self.ledger.snapshot()
+            snapshot["attempt_records"]["nominal-01"] = {"state": state}
+            with self.assertRaises(ValueError):
+                AttemptLedger.from_snapshot(["nominal-01", "mask-01"], snapshot)
         snapshot = self.ledger.snapshot()
         snapshot["attempt_records"]["nominal-01"] = {
             "state": "terminal", "result": {"case_id": "nominal-01", "status": "valid", "bad": object()},
