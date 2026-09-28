@@ -77,4 +77,10 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
                         pass
                     except PermissionError:
                         pass
-                    process.wait(timeout=1)
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired as cleanup_error:
+                        self.addCleanup(
+                            self.fail,
+                            f"owned evaluator group did not exit after SIGKILL: {cleanup_error}",
+                        )
