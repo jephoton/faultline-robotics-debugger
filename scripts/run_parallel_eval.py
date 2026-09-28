@@ -533,10 +533,23 @@ def run_mode(
                             "cleanup_confirmed": False,
                             "infrastructure_error": f"cleanup risk: worker ended with {type(error).__name__}: {error}"}
                     if record is not None:
-                        ledger.capture_result(case_id, record, interrupted=True)
+                        # A save may have been interrupted after normal-path
+                        # capture but before Future release.  That pending
+                        # record is already the ledger's single result; do not
+                        # recapture a downgraded copy and corrupt its identity.
+                        # The mode-level interrupted stop reason still makes
+                        # this summary non-comparable.
+                        attempt_state = ledger.attempts[case_id]["state"]
+                        if attempt_state == "active":
+                            ledger.capture_result(case_id, record, interrupted=True)
+                        elif attempt_state not in {"completing_pending", "terminal"}:
+                            raise RuntimeError(
+                                f"known Future {case_id} has unexpected ledger state {attempt_state}"
+                            )
                         save()
-                        ledger.finish(case_id)
-                        save()
+                        if ledger.attempts[case_id]["state"] == "completing_pending":
+                            ledger.finish(case_id)
+                            save()
                         if (record["status"] == "infrastructure_error"
                                 and record.get("cleanup_confirmed") is not True):
                             summary["stop_reason"] = "interrupted_cleanup_risk"

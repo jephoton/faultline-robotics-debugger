@@ -752,14 +752,20 @@ class ParallelEvalDriverTests(unittest.TestCase):
     def test_submit_that_enqueues_then_interrupts_retains_uncertain_case(self):
         """submit() may have started work even when it raises before returning a future."""
         original_submit = runner_module.ThreadPoolExecutor.submit
+        enqueued = []
 
         def enqueue_then_interrupt(executor, *args, **kwargs):
-            original_submit(executor, *args, **kwargs)
+            # The scheduler never receives this Future, but the test owns it
+            # so its fake worker has deterministically finished before this
+            # TemporaryDirectory is cleaned up.  The durable summary remains
+            # deliberately uncertain because production has no such handle.
+            enqueued.append(original_submit(executor, *args, **kwargs))
             raise KeyboardInterrupt()
 
         results = self.root / "submit-return-interrupt"
         with patch.object(runner_module.ThreadPoolExecutor, "submit", new=enqueue_then_interrupt):
             summary = self.run_mode(FakeEvaluator(), results=results)
+        enqueued[0].result(timeout=2)
         durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
         self.assertEqual(summary, durable)
         self.assertEqual("interrupted_cleanup_risk", summary["stop_reason"])
@@ -796,7 +802,12 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 results=self.root / "registered-future-interrupt")
         self.assertEqual("interrupted", summary["stop_reason"])
         self.assertEqual([], summary["in_flight_ids"])
-        self.assertEqual(1, len(summary["results"]))
+        # The Future is known.  It may be cancelled before its worker starts
+        # or reconciled to one terminal record, but it cannot remain lost.
+        self.assertLessEqual(len(summary["results"]), 1)
+        self.assertEqual(len(summary["results"]), len({
+            record["case_id"] for record in summary["results"]
+        }))
         self.assertEqual([True], shutdown_waits)
 
     def test_completed_future_after_interrupt_is_not_counted_as_valid(self):
@@ -833,6 +844,60 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual(0, summary["valid_count"])
         self.assertTrue(summary["in_flight_ids"]
             or any(record["status"] != "valid" for record in summary["results"]))
+
+    def test_interrupted_save_after_capture_preserves_pending_result_without_duplication(self):
+        """A captured result survives an interrupt before its terminal save."""
+        original_write = runner_module.base._atomic_write_json
+        interrupted = False
+
+        def interrupt_pending_save(path, value):
+            nonlocal interrupted
+            attempt = value["attempt_records"]["nominal-01"]
+            if not interrupted and attempt["state"] == "completing_pending":
+                interrupted = True
+                raise KeyboardInterrupt()
+            return original_write(path, value)
+
+        results = self.root / "captured-save-interrupt"
+        with patch.object(runner_module.base, "_atomic_write_json", side_effect=interrupt_pending_save):
+            summary = self.run_mode(FakeEvaluator(), results=results)
+
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        # Capture happened before the interrupt, so retain its exact evidence;
+        # the mode-level stop reason keeps the summary non-comparable.
+        self.assertEqual(1, summary["valid_count"])
+        self.assertEqual(1, len(summary["results"]))
+        self.assertEqual("valid", summary["results"][0]["status"])
+
+    def test_interrupt_after_active_registration_before_its_save_reconciles_known_future(self):
+        """A known Future is either cancelled before start or durably terminal."""
+        original_write = runner_module.base._atomic_write_json
+        interrupted = False
+
+        def interrupt_active_save(path, value):
+            nonlocal interrupted
+            attempt = value["attempt_records"]["nominal-01"]
+            if not interrupted and attempt["state"] == "active":
+                interrupted = True
+                raise KeyboardInterrupt()
+            return original_write(path, value)
+
+        fake = FakeEvaluator()
+        results = self.root / "active-save-interrupt"
+        with patch.object(runner_module.base, "_atomic_write_json", side_effect=interrupt_active_save):
+            summary = self.run_mode(fake, results=results)
+
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual(summary, durable)
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertEqual([], summary["in_flight_ids"])
+        self.assertLessEqual(len(summary["results"]), 1)
+        self.assertEqual(len(summary["results"]), len({
+            record["case_id"] for record in summary["results"]
+        }))
 
     def test_interrupt_during_session_setup_writes_partial_summary_when_directory_exists(self):
         results = self.root / "setup-interrupt"
@@ -986,20 +1051,34 @@ module.main()
 '''
         runner = subprocess.Popen([sys.executable, "-c", child], stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(SCRIPT_PATH.parents[1] / "src")})
+        evaluator_pid = None
         try:
             deadline = time.monotonic() + 5
             while not ready.exists() and time.monotonic() < deadline:
                 time.sleep(.02)
             self.assertTrue(ready.exists(), "fake evaluator did not become active")
+            evaluator_pid = int(ready.read_text(encoding="utf-8"))
             os.kill(runner.pid, signal.SIGTERM)
             stdout, stderr = runner.communicate(timeout=10)
         finally:
             if runner.poll() is None:
                 runner.kill()
                 runner.communicate(timeout=2)
+            # If an assertion above fails before the runner's handler stops
+            # its fake child, terminate that child while this fixture still
+            # owns its freshly recorded PID.
+            if evaluator_pid is not None and not stopped.exists():
+                try:
+                    os.kill(evaluator_pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
         self.assertEqual(1, runner.returncode, stderr)
         self.assertTrue(stopped.exists())
         self.assertIn("stop: interrupted", stdout)
+        durable = json.loads((results / "m3-workers-1" / "session_summary.json").read_text())
+        self.assertEqual("interrupted", durable["stop_reason"])
+        self.assertEqual([], durable["in_flight_ids"])
+        self.assertEqual(0, durable["valid_count"])
 
     def test_cli_prints_summary_and_returns_failure_for_partial_mode(self):
         argv = ["run_parallel_eval.py", "--upstream-root", str(self.upstream),
