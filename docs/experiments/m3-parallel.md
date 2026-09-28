@@ -154,7 +154,14 @@ it is investigated.
 
 ## Current live-run status
 
-No M3 live run is authorized. Task 3 also found an unresolved scheduler risk:
-a main-thread `SIGTERM` or `KeyboardInterrupt` can leave stale in-flight state
-and create an orphan-process risk. Do not run the live M3 comparison until that
-behavior has been fixed and independently reviewed.
+No M3 live run is authorized. The local runner now finalizes main-thread
+interruptions and preserves partial evidence; all 172 local tests pass.
+Independent review nevertheless found that this does not guarantee process
+containment: the pinned harness spawns `docker run` as a child, and its SIGTERM
+handler does not reap that child. The evaluator parent can exit and two Docker
+absence queries can pass before the surviving child acts. A stuck evaluator
+thread can also keep the CLI alive past its partial-summary deadline. The
+runner's `cleanup_confirmed` flag must not be treated as permission to resume
+after an interruption or uncertain timeout. See the current-state handoff for
+the live-run decision; an independent VM-stop watchdog remains the final cost
+boundary even if process-group containment is added.
