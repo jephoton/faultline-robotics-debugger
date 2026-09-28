@@ -154,14 +154,20 @@ it is investigated.
 
 ## Current live-run status
 
-No M3 live run is authorized. The local runner now finalizes main-thread
-interruptions and preserves partial evidence; all 172 local tests pass.
-Independent review nevertheless found that this does not guarantee process
-containment: the pinned harness spawns `docker run` as a child, and its SIGTERM
-handler does not reap that child. The evaluator parent can exit and two Docker
-absence queries can pass before the surviving child acts. A stuck evaluator
-thread can also keep the CLI alive past its partial-summary deadline. The
-runner's `cleanup_confirmed` flag must not be treated as permission to resume
-after an interruption or uncertain timeout. See the current-state handoff for
-the live-run decision; an independent VM-stop watchdog remains the final cost
-boundary even if process-group containment is added.
+No M3 live run is authorized. The local runner now uses a durable per-case
+attempt ledger: it persists uncertain submission before enqueueing, captures
+the full pending result before releasing Future ownership, and derives counts
+and visible results from terminal ledger records. On interruption, a late
+completion is nonvalid; a possibly submitted case is never silently treated
+as untouched. See the [accepted attempt-ownership design](../superpowers/specs/2026-09-28-m3-attempt-ownership-design.md).
+
+Local verification passed 199 Windows tests (2 POSIX-only skips) and 45
+focused WSL lifecycle/driver tests, including actual process signals and a
+delayed-child containment case. This does not prove daemon-level Docker
+containment: the pinned harness can spawn `docker run`, and a daemon request
+may remain in flight even after local process-group termination and an
+absent-container observation. A stuck thread can also outlive the CLI's
+partial-summary deadline. The runner's cleanup observation is not permission
+to resume after uncertainty. An independent exact-VM stop watchdog remains
+the final cost boundary for the later pilot, together with refreshed resource
+preflight and a separately approved run-specific cap.

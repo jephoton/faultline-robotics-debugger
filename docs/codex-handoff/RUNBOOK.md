@@ -49,8 +49,20 @@ $env:PYTHONPATH = 'src'
 & 'C:\Windows\py.exe' -3.11 -m unittest discover -s tests -v
 ```
 
-Verified after the local M3 implementation/spec review: 172 tests pass with
-Windows Python 3.11. This does not validate Docker descendant containment.
+Verified after the local M3 attempt-ledger implementation: 199 tests pass,
+with 2 POSIX-only skips, on Windows Python 3.11. The focused lifecycle and
+driver suites also pass under WSL (45 tests), including real POSIX signals:
+
+```bash
+PYTHONPATH=src python3 -m unittest \
+  tests.test_m3_posix_lifecycle tests.test_parallel_eval_driver -q
+```
+
+The ledger writes `submitting_unknown` before enqueueing a case and
+`completing_pending` with its full result before releasing Future ownership.
+This preserves conservative evidence if interruption lands at a save boundary;
+`results`, `valid_count`, and `in_flight_ids` are derived from the ledger.
+These tests do not prove Docker-daemon-level containment.
 
 Also run `git diff --check` before committing. Use Conventional Commit
 messages and stage only task-related paths.
@@ -61,8 +73,9 @@ Before any Nebius start, confirm authentication, tenant/project, balance,
 expiry, GPU quota/capacity, exact rates, VM state, and the user-approved cap.
 Arm independent cleanup, copy evidence before media, and verify the VM is
 stopped and temporary network rules are absent after every attempt.
-Do not start the M3 live session merely because local tests pass: its runner
-still needs a containment decision, an external VM-stop watchdog, and a
-separately approved run-specific cap. After any uncertain timeout or
-interruption, stop and verify the exact VM before another mode; do not rely
-on a momentary absent-container check.
+Do not start the M3 live session merely because local tests pass. The runner
+has POSIX process-group termination plus exact-container cleanup checks, but
+cannot rule out a Docker daemon request still in flight. The pilot still
+needs an external exact-VM stop watchdog and a separately approved run-specific
+cap. After any uncertain timeout or interruption, stop and verify the exact
+VM before another mode; do not rely on a momentary absent-container check.
