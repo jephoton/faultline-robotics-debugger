@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
@@ -14,7 +15,10 @@ from types import SimpleNamespace
 import unittest
 
 
-@unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+@unittest.skipUnless(
+    os.name == "posix" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"),
+    "requires POSIX process groups and pidfd cleanup",
+)
 class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
     def test_timeout_prevents_descendant_delayed_action(self):
         """The evaluator's SIGTERM must cover its child, not just its parent."""
@@ -28,8 +32,10 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
             root = Path(directory)
             marker = root / "descendant-ran"
             ready = root / "parent-ready"
+            child_pid_path = root / "descendant-pid"
             child = (
-                "import pathlib, time; "
+                "import os, pathlib, time; "
+                f"pathlib.Path({str(child_pid_path)!r}).write_text(str(os.getpid()), encoding='utf-8'); "
                 "time.sleep(0.5); "
                 f"pathlib.Path({str(marker)!r}).write_text('ran', encoding='utf-8'); "
                 "time.sleep(10)"
@@ -42,15 +48,14 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
                 f"pathlib.Path({str(ready)!r}).write_text('ready', encoding='utf-8'); "
                 "time.sleep(10)"
             )
-            processes = []
-
             def process_factory(*args, **kwargs):
                 process = subprocess.Popen(*args, **kwargs)
-                processes.append(process)
                 deadline = time.monotonic() + 2
                 while not ready.exists() and time.monotonic() < deadline:
                     time.sleep(0.01)
                 if not ready.exists():
+                    # This factory still owns an unreaped session leader, so
+                    # this exact group cannot have been reused yet.
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait(timeout=1)
                     self.fail("evaluator parent did not install its SIGTERM handler")
@@ -68,20 +73,16 @@ class EvaluatorProcessGroupLifecycleTests(unittest.TestCase):
                 time.sleep(0.7)
                 self.assertFalse(marker.exists(), "a descendant survived evaluator cleanup")
             finally:
-                for process in processes:
+                if child_pid_path.exists():
                     try:
-                        # The evaluator made itself a process-group leader before
-                        # signalling readiness, so this group is ours even after
-                        # its parent has already been reaped.
-                        os.killpg(process.pid, signal.SIGKILL)
+                        child_pid = int(child_pid_path.read_text(encoding="utf-8"))
+                        child_pidfd = os.pidfd_open(child_pid)
                     except ProcessLookupError:
-                        pass
-                    except PermissionError:
-                        pass
-                    try:
-                        process.wait(timeout=1)
-                    except subprocess.TimeoutExpired as cleanup_error:
-                        self.addCleanup(
-                            self.fail,
-                            f"owned evaluator group did not exit after SIGKILL: {cleanup_error}",
-                        )
+                        child_pidfd = None
+                    if child_pidfd is not None:
+                        try:
+                            signal.pidfd_send_signal(child_pidfd, signal.SIGKILL)
+                            if not select.select([child_pidfd], [], [], 1)[0]:
+                                self.fail("owned descendant did not exit after pidfd SIGKILL")
+                        finally:
+                            os.close(child_pidfd)
