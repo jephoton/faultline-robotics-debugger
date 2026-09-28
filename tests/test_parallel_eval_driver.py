@@ -1395,6 +1395,68 @@ module.main()
                 command_runner=FakeEvaluator(), resume=True,
             )
 
+    def test_resume_lease_prevents_concurrent_prepared_case_launches(self):
+        results = self.root / "resume-lease"
+        self.write_safe_partial_session(results)
+        started = threading.Event()
+        release = threading.Event()
+        first_errors = []
+
+        class BlockingEvaluator(FakeEvaluator):
+            def __call__(self, argv, *, cwd, check, timeout):
+                started.set()
+                release.wait(2)
+                return super().__call__(argv, cwd=cwd, check=check, timeout=timeout)
+
+        errors = []
+        def run_first():
+            try:
+                runner_module.run_mode(
+                    upstream_root=self.upstream, project_root=self.project, results_root=results,
+                    workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                    command_runner=BlockingEvaluator(), resume=True,
+                )
+            except BaseException as error:
+                first_errors.append(error)
+
+        first = threading.Thread(target=run_first)
+        first.start()
+        try:
+            self.assertTrue(started.wait(2))
+            with self.assertRaisesRegex(ValueError, "resume lease"):
+                runner_module.run_mode(
+                    upstream_root=self.upstream, project_root=self.project, results_root=results,
+                    workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                    command_runner=FakeEvaluator(), resume=True,
+                )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            release.set()
+            first.join(5)
+        self.assertEqual([], errors)
+        self.assertFalse(first.is_alive())
+        self.assertEqual([], first_errors)
+
+    def test_resume_rejects_symlinked_session_layout_or_metadata(self):
+        for target_name in ("session", "configs", "runs", "launches", "manifest.json", "session_summary.json"):
+            with self.subTest(target_name=target_name):
+                results = self.root / f"symlink-{target_name.replace('.', '-') }"
+                session, _ = self.write_safe_partial_session(results)
+                target = session if target_name == "session" else session / target_name
+                replacement = self.root / f"real-{target_name.replace('.', '-') }"
+                target.rename(replacement)
+                try:
+                    target.symlink_to(replacement, target_is_directory=replacement.is_dir())
+                except OSError as error:
+                    self.skipTest(f"symlinks unavailable: {error}")
+                with self.assertRaisesRegex(ValueError, "symlink"):
+                    runner_module.run_mode(
+                        upstream_root=self.upstream, project_root=self.project, results_root=results,
+                        workers=1, repeats_per_case=8, launch_cutoff_seconds=60, item_timeout_seconds=5,
+                        command_runner=FakeEvaluator(), resume=True,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

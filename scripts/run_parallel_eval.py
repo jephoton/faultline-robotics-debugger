@@ -247,6 +247,39 @@ def _positive_finite_seconds(name: str, value: Any) -> None:
         raise ValueError(f"{name} must be a finite positive number")
 
 
+def _require_contained_non_symlink(path: Path, *, root: Path, label: str) -> Path:
+    """Return a resolved path only when it is an in-root real filesystem entry."""
+    if path.is_symlink():
+        raise ValueError(f"cannot resume: {label} must not be a symlink")
+    try:
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ValueError(f"cannot resume: {label} escapes the results root") from error
+    return resolved
+
+
+def _acquire_resume_lease(session: Path) -> Path:
+    """Atomically claim one session; any stale claim remains fail-closed."""
+    lease = session / ".resume.lock"
+    if lease.is_symlink():
+        raise ValueError("cannot resume: resume lease must not be a symlink")
+    try:
+        descriptor = os.open(lease, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    except FileExistsError as error:
+        raise ValueError("cannot resume: resume lease already exists") from error
+    try:
+        os.write(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
+    finally:
+        os.close(descriptor)
+    return lease
+
+
+def _release_resume_lease(lease: Path | None) -> None:
+    if lease is not None:
+        lease.unlink()
+
+
 def run_mode(
     *,
     upstream_root: Path | str,
@@ -292,7 +325,8 @@ def run_mode(
     expected_manifest_bytes = json.dumps(
         items, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode("utf-8")
-    session = Path(results_root).resolve() / f"m3-workers-{workers}"
+    resolved_results_root = Path(results_root).resolve()
+    session = resolved_results_root / f"m3-workers-{workers}"
     summary: dict[str, Any] = {
         "workers": workers, "manifest_hash": manifest_hash(items), "manifest_path": "manifest.json",
         "case_ids": case_ids, "planned_ids": case_ids,
@@ -300,64 +334,81 @@ def run_mode(
         "elapsed_seconds": 0.0, "stop_reason": None,
     }
     previous_elapsed = 0.0
+    resume_lease: Path | None = None
 
     if not isinstance(resume, bool):
         raise ValueError("resume must be a boolean")
     if resume:
         if not session.is_dir():
             raise ValueError("cannot resume: no prior session exists")
-        manifest_path = session / "manifest.json"
-        summary_path = session / "session_summary.json"
-        if not manifest_path.is_file() or not summary_path.is_file():
-            raise ValueError("cannot resume: partial session is missing manifest or summary")
+        _require_contained_non_symlink(session, root=resolved_results_root, label="session")
+        resume_lease = _acquire_resume_lease(session)
         try:
+            manifest_path = session / "manifest.json"
+            summary_path = session / "session_summary.json"
+            if not manifest_path.is_file() or not summary_path.is_file():
+                raise ValueError("cannot resume: partial session is missing manifest or summary")
+            _require_contained_non_symlink(manifest_path, root=resolved_results_root, label="manifest")
+            _require_contained_non_symlink(summary_path, root=resolved_results_root, label="summary")
             manifest_bytes = manifest_path.read_bytes()
             prior_summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
+            _release_resume_lease(resume_lease)
+            resume_lease = None
             raise ValueError("cannot resume: partial summary or manifest is malformed") from error
-        if manifest_bytes != expected_manifest_bytes:
-            raise ValueError("cannot resume: manifest bytes do not match the frozen workload")
-        if not isinstance(prior_summary, dict):
-            raise ValueError("cannot resume: partial summary is malformed")
-        required_summary_fields = {
-            "workers", "manifest_hash", "manifest_path", "case_ids", "planned_ids",
-            "elapsed_seconds", "stop_reason", "attempt_states", "attempt_records",
-            "results", "valid_count", "in_flight_ids",
-        }
-        if not required_summary_fields.issubset(prior_summary):
-            raise ValueError("cannot resume: partial summary is malformed")
-        if prior_summary.get("workers") != workers:
-            raise ValueError("cannot resume: workers do not match the partial session")
-        if (prior_summary.get("manifest_hash") != manifest_hash(items)
-                or prior_summary.get("manifest_path") != "manifest.json"):
-            raise ValueError("cannot resume: manifest digest does not match the partial session")
-        if prior_summary.get("case_ids") != case_ids or prior_summary.get("planned_ids") != case_ids:
-            raise ValueError("cannot resume: case IDs do not match the frozen workload")
-        if prior_summary.get("stop_reason") not in {"partial", "interrupted", "launch_cutoff_reached"}:
-            raise ValueError("cannot resume: partial summary has an unsafe stop reason")
+        except BaseException:
+            _release_resume_lease(resume_lease)
+            resume_lease = None
+            raise
         try:
-            ledger = AttemptLedger.from_snapshot(case_ids, prior_summary)
-        except ValueError as error:
-            raise ValueError("cannot resume: partial summary ledger is malformed") from error
-        authoritative = ledger.snapshot()
-        states = authoritative["attempt_states"]
-        if any(state not in {"prepared", "terminal"} for state in states.values()):
-            raise ValueError("cannot resume: partial session has in-flight or uncertain attempts")
-        if any(result.get("status") != "valid" for result in authoritative["results"]):
-            raise ValueError("cannot resume: partial session has nonvalid terminal evidence")
-        if any(prior_summary.get(field) != value for field, value in authoritative.items()):
-            raise ValueError("cannot resume: partial summary does not match its ledger")
-        previous_elapsed = prior_summary.get("elapsed_seconds")
-        if (isinstance(previous_elapsed, bool)
-                or not isinstance(previous_elapsed, (int, float))
-                or not math.isfinite(previous_elapsed) or previous_elapsed < 0):
-            raise ValueError("cannot resume: partial summary elapsed time is malformed")
-        for directory in (session / "configs", session / "runs", session / "launches"):
-            if not directory.is_dir():
-                raise ValueError("cannot resume: partial session layout is malformed")
-        summary = prior_summary
-        summary["resumed"] = True
-        summary["stop_reason"] = None
+            if manifest_bytes != expected_manifest_bytes:
+                raise ValueError("cannot resume: manifest bytes do not match the frozen workload")
+            if not isinstance(prior_summary, dict):
+                raise ValueError("cannot resume: partial summary is malformed")
+            required_summary_fields = {
+                "workers", "manifest_hash", "manifest_path", "case_ids", "planned_ids",
+                "elapsed_seconds", "stop_reason", "attempt_states", "attempt_records",
+                "results", "valid_count", "in_flight_ids",
+            }
+            if not required_summary_fields.issubset(prior_summary):
+                raise ValueError("cannot resume: partial summary is malformed")
+            if prior_summary.get("workers") != workers:
+                raise ValueError("cannot resume: workers do not match the partial session")
+            if (prior_summary.get("manifest_hash") != manifest_hash(items)
+                    or prior_summary.get("manifest_path") != "manifest.json"):
+                raise ValueError("cannot resume: manifest digest does not match the partial session")
+            if prior_summary.get("case_ids") != case_ids or prior_summary.get("planned_ids") != case_ids:
+                raise ValueError("cannot resume: case IDs do not match the frozen workload")
+            if prior_summary.get("stop_reason") not in {"partial", "interrupted", "launch_cutoff_reached"}:
+                raise ValueError("cannot resume: partial summary has an unsafe stop reason")
+            try:
+                ledger = AttemptLedger.from_snapshot(case_ids, prior_summary)
+            except ValueError as error:
+                raise ValueError("cannot resume: partial summary ledger is malformed") from error
+            authoritative = ledger.snapshot()
+            states = authoritative["attempt_states"]
+            if any(state not in {"prepared", "terminal"} for state in states.values()):
+                raise ValueError("cannot resume: partial session has in-flight or uncertain attempts")
+            if any(result.get("status") != "valid" for result in authoritative["results"]):
+                raise ValueError("cannot resume: partial session has nonvalid terminal evidence")
+            if any(prior_summary.get(field) != value for field, value in authoritative.items()):
+                raise ValueError("cannot resume: partial summary does not match its ledger")
+            previous_elapsed = prior_summary.get("elapsed_seconds")
+            if (isinstance(previous_elapsed, bool)
+                    or not isinstance(previous_elapsed, (int, float))
+                    or not math.isfinite(previous_elapsed) or previous_elapsed < 0):
+                raise ValueError("cannot resume: partial summary elapsed time is malformed")
+            for directory in (session / "configs", session / "runs", session / "launches"):
+                if not directory.is_dir():
+                    raise ValueError("cannot resume: partial session layout is malformed")
+                _require_contained_non_symlink(directory, root=resolved_results_root, label="session layout")
+            summary = prior_summary
+            summary["resumed"] = True
+            summary["stop_reason"] = None
+        except BaseException:
+            _release_resume_lease(resume_lease)
+            resume_lease = None
+            raise
     else:
         ledger = AttemptLedger(case_ids)
 
@@ -393,7 +444,11 @@ def run_mode(
         summary["stop_reason"] = "interrupted"
         if session.is_dir():
             save()
+        _release_resume_lease(resume_lease)
         return summary
+    except BaseException:
+        _release_resume_lease(resume_lease)
+        raise
 
     def item_paths(item: dict[str, Any]) -> tuple[Path, Path]:
         case_id = item["case_id"]
@@ -617,6 +672,10 @@ def run_mode(
     except KeyboardInterrupt:
         interrupted = True
         interrupt_event.set()
+    except BaseException:
+        _release_resume_lease(resume_lease)
+        resume_lease = None
+        raise
     finally:
         if interrupted or interrupt_event.is_set():
             interrupt_event.set()
@@ -685,10 +744,13 @@ def run_mode(
             executor.shutdown(wait=not cleanup_incomplete, cancel_futures=True)
         else:
             executor.shutdown(wait=True)
-    if summary["stop_reason"] is None and len(summary["results"]) != len(items):
-        summary["stop_reason"] = "partial"
-    save()
-    return summary
+    try:
+        if summary["stop_reason"] is None and len(summary["results"]) != len(items):
+            summary["stop_reason"] = "partial"
+        save()
+        return summary
+    finally:
+        _release_resume_lease(resume_lease)
 
 
 def report_mode_summaries(
