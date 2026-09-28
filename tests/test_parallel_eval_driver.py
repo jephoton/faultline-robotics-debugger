@@ -195,8 +195,15 @@ class ParallelEvalDriverTests(unittest.TestCase):
             events.append(("launch", kwargs))
             return Process()
 
-        with patch.object(runner_module.os, "killpg", create=True,
-                side_effect=lambda pid, signum: events.append(("signal", pid, signum))):
+        group_alive = True
+        def signal_group(pid, signum):
+            nonlocal group_alive
+            events.append(("signal", pid, signum))
+            if signum == 0 and not group_alive:
+                raise ProcessLookupError()
+            if signum == signal.SIGTERM:
+                group_alive = False
+        with patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             with self.assertRaises(subprocess.TimeoutExpired) as raised:
                 runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
                     check=False, timeout=5, process_factory=process_factory, docker_runner=docker)
@@ -205,7 +212,8 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual(1, len(launches))
         self.assertTrue(launches[0]["start_new_session"])
         self.assertIn(("signal", 4321, signal.SIGTERM), events)
-        self.assertFalse(any(event[0] == "signal" and event[2] == signal.SIGKILL for event in events))
+        self.assertFalse(any(event[0] == "signal" and event[2] == getattr(signal, "SIGKILL", 9)
+            for event in events))
         self.assertFalse(any(event[0] == "docker" and "rm" in event[1] for event in events))
 
     def test_timeout_escalates_owned_process_group_before_exact_container_removal(self):
@@ -226,17 +234,24 @@ class ParallelEvalDriverTests(unittest.TestCase):
             checks = len([event for event in events if event[0] == "docker" and "ps" in event[1]])
             return SimpleNamespace(returncode=0, stdout="vla-eval-5678\n" if checks == 1 else "", stderr="")
 
-        with patch.object(runner_module.os, "killpg", create=True,
-                side_effect=lambda pid, signum: events.append(("signal", pid, signum))):
+        group_alive = True
+        def signal_group(pid, signum):
+            nonlocal group_alive
+            events.append(("signal", pid, signum))
+            if signum == 0 and not group_alive:
+                raise ProcessLookupError()
+            if signum == getattr(signal, "SIGKILL", 9):
+                group_alive = False
+        with patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             with self.assertRaises(subprocess.TimeoutExpired) as raised:
                 runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
                     check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
         self.assertTrue(raised.exception.cleanup_confirmed)
-        self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, signal.SIGKILL)],
-            [event for event in events if event[0] == "signal"])
+        self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, getattr(signal, "SIGKILL", 9))],
+            [event for event in events if event[0] == "signal" and event[2] != 0])
         removal = ("docker", ["docker", "rm", "-f", "vla-eval-5678"])
         self.assertEqual([removal], [event for event in events if event[0] == "docker" and "rm" in event[1]])
-        self.assertLess(events.index(("signal", 5678, signal.SIGKILL)), events.index(removal))
+        self.assertLess(events.index(("signal", 5678, getattr(signal, "SIGKILL", 9))), events.index(removal))
 
     def test_docker_inspection_exception_makes_cleanup_uncertain(self):
         class Process:
@@ -278,23 +293,32 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="vla-eval-5678\n" if checks == 1 else "", stderr="")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        with patch.object(runner_module.os, "killpg", create=True,
-                side_effect=lambda pid, signum: events.append(("signal", pid, signum))):
+        group_alive = True
+        def signal_group(pid, signum):
+            nonlocal group_alive
+            events.append(("signal", pid, signum))
+            if signum == 0 and not group_alive:
+                raise ProcessLookupError()
+            if signum == getattr(signal, "SIGKILL", 9):
+                group_alive = False
+        with patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             with self.assertRaises(subprocess.TimeoutExpired) as raised:
                 runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
                     check=False, timeout=5, process_factory=lambda *a, **k: Process(), docker_runner=docker)
         self.assertTrue(raised.exception.cleanup_confirmed)
-        self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, signal.SIGKILL)],
-            [event for event in events if event[0] == "signal"])
+        self.assertEqual([("signal", 5678, signal.SIGTERM), ("signal", 5678, getattr(signal, "SIGKILL", 9))],
+            [event for event in events if event[0] == "signal" and event[2] != 0])
         removal = ("docker", ["docker", "rm", "-f", "vla-eval-5678"])
         self.assertEqual([removal], [event for event in events if event[0] == "docker" and "rm" in event[1]])
-        self.assertLess(events.index(("signal", 5678, signal.SIGKILL)), events.index(removal))
+        self.assertLess(events.index(("signal", 5678, getattr(signal, "SIGKILL", 9))), events.index(removal))
 
     def test_unconfirmed_cleanup_stops_session_and_records_risk(self):
         def risky_runner(*args, **kwargs):
             error = subprocess.TimeoutExpired("vla-eval", 5)
             error.cleanup_confirmed = False
             error.cleanup_error = "Docker daemon unavailable"
+            error.evaluator_pid = 4242
+            error.expected_container = "vla-eval-4242"
             raise error
 
         record = self.run_mode(risky_runner, results=self.root / "cleanup-risk")
@@ -302,6 +326,8 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual(1, len(record["results"]))
         self.assertFalse(record["results"][0]["cleanup_confirmed"])
         self.assertIn("Docker daemon unavailable", record["results"][0]["infrastructure_error"])
+        self.assertEqual(4242, record["results"][0]["evaluator_pid"])
+        self.assertEqual("vla-eval-4242", record["results"][0]["expected_container"])
 
     def test_timeout_requests_stop_before_graceful_cleanup_finishes(self):
         stop = threading.Event()
@@ -309,6 +335,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
         release_cleanup = threading.Event()
         errors = []
         events = []
+        group_alive = True
 
         class Process:
             pid = 6789
@@ -320,10 +347,14 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 return self.returncode
 
         def signal_group(pid, signum):
+            nonlocal group_alive
             events.append((pid, signum))
+            if signum == 0 and not group_alive:
+                raise ProcessLookupError()
             if signum == signal.SIGTERM:
                 cleanup_started.set()
                 release_cleanup.wait(2)
+                group_alive = False
 
         with patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             def run():
@@ -345,7 +376,7 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 thread.join(2)
         self.assertEqual(1, len(errors))
         self.assertTrue(errors[0].cleanup_confirmed)
-        self.assertEqual([(6789, signal.SIGTERM)], events)
+        self.assertEqual([(6789, signal.SIGTERM)], [event for event in events if event[1] != 0])
 
     def test_stop_gate_prevents_late_process_creation(self):
         stop = threading.Event()
@@ -457,8 +488,10 @@ class ParallelEvalDriverTests(unittest.TestCase):
         class Process:
             pid = 2468
             returncode = None
+            waits = 0
             def wait(self, timeout):
-                if self.returncode is None and timeout == 5:
+                self.waits += 1
+                if self.returncode is None and self.waits == 1:
                     raise OSError("wait failed")
                 self.returncode = 143
                 return self.returncode
@@ -467,33 +500,34 @@ class ParallelEvalDriverTests(unittest.TestCase):
             def kill(self):
                 self.returncode = -9
 
-        with self.assertRaises(OSError) as raised:
-            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
-                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
-                docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+        with patch.object(runner_module.os, "killpg", create=True,
+                side_effect=ProcessLookupError):
+            with self.assertRaises(OSError) as raised:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                    docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
         self.assertTrue(raised.exception.cleanup_confirmed)
 
-    def test_interrupted_wait_still_terminates_parent(self):
+    def test_interrupted_wait_still_reaps_an_absent_owned_group(self):
         events = []
         class Process:
             pid = 1357
             returncode = None
+            waits = 0
             def wait(self, timeout):
-                if timeout == 5:
+                self.waits += 1
+                if self.waits == 1:
                     raise KeyboardInterrupt()
                 self.returncode = 143
                 return self.returncode
-            def terminate(self):
-                events.append("terminate")
-            def kill(self):
-                events.append("kill")
-
-        with self.assertRaises(KeyboardInterrupt) as raised:
-            runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
-                check=False, timeout=5, process_factory=lambda *a, **k: Process(),
-                docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+        with patch.object(runner_module.os, "killpg", create=True,
+                side_effect=ProcessLookupError):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                runner_module._run_evaluator_safely(["vla-eval"], cwd=self.upstream,
+                    check=False, timeout=5, process_factory=lambda *a, **k: Process(),
+                    docker_runner=lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
         self.assertTrue(raised.exception.cleanup_confirmed)
-        self.assertEqual(["terminate"], events)
+        self.assertEqual([], events)
 
     def test_main_thread_interrupt_cleans_active_processes_and_finalizes_summary(self):
         events = []
@@ -537,8 +571,16 @@ class ParallelEvalDriverTests(unittest.TestCase):
         real_evaluator = runner_module._run_evaluator_safely
         def evaluator(*args, **kwargs):
             return real_evaluator(*args, **kwargs, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        def signal_group(pid, signum):
+            process = next(process for process in processes if process.pid == pid)
+            events.append(("signal", pid, signum))
+            if signum == 0 and process.returncode is not None:
+                raise ProcessLookupError()
+            if signum == signal.SIGTERM:
+                process.returncode = 143
         with patch.object(runner_module, "wait", side_effect=interrupt_once), \
-                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator):
+                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator), \
+                patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             summary = runner_module.run_mode(upstream_root=self.upstream, project_root=self.project,
                 results_root=results, workers=2, repeats_per_case=8,
                 launch_cutoff_seconds=60, item_timeout_seconds=5)
@@ -549,8 +591,9 @@ class ParallelEvalDriverTests(unittest.TestCase):
         self.assertEqual(2, len(summary["results"]))
         self.assertEqual(2, len(processes))
         self.assertEqual({process.pid for process in processes},
-            {pid for action, pid in events if action == "terminate"})
-        self.assertFalse(any(action == "kill" for action, _ in events))
+            {event[1] for event in events if event[0] == "signal" and event[2] == signal.SIGTERM})
+        self.assertFalse(any(event[0] == "signal" and event[2] == getattr(signal, "SIGKILL", 9)
+            for event in events))
         self.assertEqual(4, len([event for event in events if event[0] == "docker" and "ps" in event[1]]))
 
     def test_interrupt_during_initial_summary_write_finalizes_without_launch(self):
@@ -593,10 +636,12 @@ class ParallelEvalDriverTests(unittest.TestCase):
     def test_interrupt_with_unconfirmed_docker_cleanup_records_risk(self):
         started = threading.Event()
         docker_commands = []
+        processes = []
         class Process:
             pid = 8123
             returncode = None
             def __init__(self):
+                processes.append(self)
                 started.set()
             def wait(self, timeout):
                 if self.returncode is None:
@@ -615,6 +660,12 @@ class ParallelEvalDriverTests(unittest.TestCase):
         real_evaluator = runner_module._run_evaluator_safely
         def evaluator(*args, **kwargs):
             return real_evaluator(*args, **kwargs, process_factory=lambda *a, **k: Process(), docker_runner=docker)
+        def signal_group(pid, signum):
+            process = next(process for process in processes if process.pid == pid)
+            if signum == 0 and process.returncode is not None:
+                raise ProcessLookupError()
+            if signum == signal.SIGTERM:
+                process.returncode = 143
         real_wait = runner_module.wait
         interrupted = False
         def interrupt_once(futures, **kwargs):
@@ -625,7 +676,8 @@ class ParallelEvalDriverTests(unittest.TestCase):
                 raise KeyboardInterrupt()
             return real_wait(futures, **kwargs)
         with patch.object(runner_module, "wait", side_effect=interrupt_once), \
-                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator):
+                patch.object(runner_module, "_run_evaluator_safely", side_effect=evaluator), \
+                patch.object(runner_module.os, "killpg", create=True, side_effect=signal_group):
             summary = runner_module.run_mode(upstream_root=self.upstream, project_root=self.project,
                 results_root=self.root / "interrupt-risk", workers=1, repeats_per_case=8,
                 launch_cutoff_seconds=60, item_timeout_seconds=5)

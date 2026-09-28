@@ -26,6 +26,7 @@ from robot_debug.parallel_eval import build_manifest, manifest_hash, summarize_m
 
 
 _FROZEN_M3_MANIFEST_HASH = manifest_hash(build_manifest(8))
+_SIGKILL = getattr(signal, "SIGKILL", 9)
 
 
 _BASE_PATH = Path(__file__).with_name("run_failure_search.py")
@@ -43,6 +44,25 @@ class _EvaluatorInterrupted(Exception):
     """An active evaluator was cancelled by the session owner."""
 
 
+def _owned_group_present(group_id: int, problems: list[str]) -> bool | None:
+    """Return whether this evaluator's exact process group still exists.
+
+    The group identifier is the evaluator PID because the launcher creates a
+    new session.  This deliberately probes one group only; it never searches
+    the host process table.
+    """
+    try:
+        os.killpg(group_id, 0)
+    except ProcessLookupError:
+        return False
+    except Exception as error:
+        problems.append(
+            f"process-group observation failed: {type(error).__name__}: {error}"
+        )
+        return None
+    return True
+
+
 def _run_evaluator_safely(
     argv: list[str], *, cwd: Path, check: bool, timeout: float,
     process_factory: Callable[..., Any] = subprocess.Popen,
@@ -51,17 +71,21 @@ def _run_evaluator_safely(
     interrupt_event: threading.Event | None = None,
     launch_lock: threading.Lock | None = None,
 ) -> Any:
-    """Own the evaluator PID so timeout can trigger the pinned CLI's SIGTERM cleanup.
+    """Own an evaluator process group and its exact PID-named container.
 
     The pinned Docker CLI names its `--rm` container ``vla-eval-{os.getpid()}``.
     It handles SIGTERM by stopping that container with a ten-second grace period.
-    An uncertain Docker query must never count as cleanup confirmation.
+    An uncertain process-group or Docker query must never count as cleanup
+    confirmation.  Docker observations do not prove the daemon has no pending
+    request.
     """
+    if process_factory is subprocess.Popen and os.name != "posix":
+        raise RuntimeError("the production evaluator launcher requires a POSIX host")
     with launch_lock if launch_lock is not None else nullcontext():
         if ((stop_event is not None and stop_event.is_set())
                 or (interrupt_event is not None and interrupt_event.is_set())):
             raise _LaunchCancelled()
-        process = process_factory(argv, cwd=cwd)
+        process = process_factory(argv, cwd=cwd, start_new_session=True)
     try:
         if interrupt_event is None:
             process.wait(timeout=timeout)
@@ -84,17 +108,72 @@ def _run_evaluator_safely(
         if stop_event is not None:
             with launch_lock if launch_lock is not None else nullcontext():
                 stop_event.set()
-        container = f"vla-eval-{process.pid}"
+        evaluator_pid = process.pid
+        container = f"vla-eval-{evaluator_pid}"
+        error.evaluator_pid = evaluator_pid
+        error.expected_container = container
         problems: list[str] = []
         reaped = False
-        try:
-            process.terminate()
-            process.wait(timeout=20)  # Upstream docker stop -t 10 has a 15-second CLI timeout.
-            reaped = True
-        except subprocess.TimeoutExpired:
-            problems.append("evaluator did not exit after SIGTERM")
-        except Exception as cleanup_error:
-            problems.append(f"SIGTERM/wait failed: {type(cleanup_error).__name__}: {cleanup_error}")
+        supports_groups = os.name == "posix" or hasattr(os, "killpg")
+        if supports_groups:
+            group_present = _owned_group_present(evaluator_pid, problems)
+            if group_present:
+                try:
+                    os.killpg(evaluator_pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    group_present = False
+                except Exception as cleanup_error:
+                    problems.append(
+                        f"process-group SIGTERM failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+            try:
+                process.wait(timeout=20)  # Upstream docker stop -t 10 has a 15-second CLI timeout.
+                reaped = True
+            except subprocess.TimeoutExpired:
+                problems.append("evaluator parent did not exit after process-group SIGTERM")
+            except Exception as cleanup_error:
+                problems.append(f"evaluator wait failed: {type(cleanup_error).__name__}: {cleanup_error}")
+
+            group_present = _owned_group_present(evaluator_pid, problems)
+            if group_present:
+                try:
+                    os.killpg(evaluator_pid, _SIGKILL)
+                except ProcessLookupError:
+                    group_present = False
+                except Exception as cleanup_error:
+                    problems.append(
+                        f"process-group SIGKILL failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+                try:
+                    process.wait(timeout=5)
+                    reaped = True
+                except subprocess.TimeoutExpired:
+                    problems.append("evaluator parent did not exit after process-group SIGKILL")
+                except Exception as cleanup_error:
+                    problems.append(f"evaluator reap failed: {type(cleanup_error).__name__}: {cleanup_error}")
+                group_present = _owned_group_present(evaluator_pid, problems)
+        else:
+            # This branch is only for injected test runners on non-POSIX hosts.
+            # The production launcher above has already refused such a host.
+            group_present = False
+            try:
+                process.terminate()
+                process.wait(timeout=20)
+                reaped = True
+            except subprocess.TimeoutExpired:
+                problems.append("evaluator parent did not exit after SIGTERM")
+            except Exception as cleanup_error:
+                problems.append(f"SIGTERM/wait failed: {type(cleanup_error).__name__}: {cleanup_error}")
+
+        if not reaped and group_present is False:
+            try:
+                process.wait(timeout=5)
+                reaped = True
+            except Exception as cleanup_error:
+                problems.append(f"evaluator reap failed: {type(cleanup_error).__name__}: {cleanup_error}")
+
+        if group_present is True:
+            problems.append("owned evaluator process group survived SIGKILL")
 
         def container_present() -> bool | None:
             try:
@@ -108,27 +187,24 @@ def _run_evaluator_safely(
                 return None
             return container in result.stdout.splitlines()
 
-        present = container_present()
-        if present is not False:
-            try:
-                removed = docker_runner(["docker", "rm", "-f", container],
-                    capture_output=True, text=True, check=False, timeout=20)
-                if removed.returncode != 0:
-                    problems.append(f"Docker removal failed for {container}: {removed.stderr}")
-            except Exception as cleanup_error:
-                problems.append(f"Docker removal failed for {container}: {type(cleanup_error).__name__}: {cleanup_error}")
+        absent = False
+        if group_present is False:
+            present = container_present()
+            if present is not False:
+                try:
+                    removed = docker_runner(["docker", "rm", "-f", container],
+                        capture_output=True, text=True, check=False, timeout=20)
+                    if removed.returncode != 0:
+                        problems.append(f"Docker removal failed for {container}: {removed.stderr}")
+                except Exception as cleanup_error:
+                    problems.append(f"Docker removal failed for {container}: {type(cleanup_error).__name__}: {cleanup_error}")
+            # This is an exact-name observation after the owned group is quiet,
+            # not proof that the Docker daemon has no outstanding request.
+            absent = container_present() is False
+        else:
+            problems.append("owned evaluator process group was not confirmed quiescent")
 
-        if not reaped:
-            try:
-                process.kill()
-                process.wait(timeout=5)
-                reaped = True
-            except Exception as cleanup_error:
-                problems.append(f"evaluator reap failed: {type(cleanup_error).__name__}: {cleanup_error}")
-
-        # Check after the parent has exited, so it cannot create a late container.
-        absent = container_present() is False
-        error.cleanup_confirmed = reaped and absent
+        error.cleanup_confirmed = reaped and group_present is False and absent
         error.cleanup_error = "; ".join(problems) if not error.cleanup_confirmed else None
         if not error.cleanup_confirmed and not error.cleanup_error:
             error.cleanup_error = f"cannot confirm {container} was removed"
@@ -218,6 +294,15 @@ def run_mode(
                   "config_path": str(config.relative_to(session)), "output_path": str(output.relative_to(session)),
                   "started_seconds": attempt_started, "ended_seconds": None, "duration_seconds": None,
                   "status": None, "outcome": None, "replayable": False}
+
+        def record_cleanup_identity(error: BaseException) -> None:
+            evaluator_pid = getattr(error, "evaluator_pid", None)
+            expected_container = getattr(error, "expected_container", None)
+            if evaluator_pid is not None:
+                record["evaluator_pid"] = evaluator_pid
+            if expected_container is not None:
+                record["expected_container"] = expected_container
+
         try:
             process = command_runner([base._resolve_evaluator_command(Path(sys.executable)), "run", "--config", str(config)],
                 cwd=upstream_root, check=False, timeout=item_timeout_seconds)
@@ -225,6 +310,7 @@ def run_mode(
             return None
         except _EvaluatorInterrupted as error:
             request_stop()
+            record_cleanup_identity(error)
             cleanup_confirmed = getattr(error, "cleanup_confirmed", False)
             cleanup_error = getattr(error, "cleanup_error", None)
             record.update(status="infrastructure_error", cleanup_confirmed=cleanup_confirmed,
@@ -232,6 +318,7 @@ def run_mode(
                 + (f"; cleanup risk: {cleanup_error}" if cleanup_error else ""))
         except subprocess.TimeoutExpired as error:
             request_stop()
+            record_cleanup_identity(error)
             cleanup_confirmed = getattr(error, "cleanup_confirmed", False)
             cleanup_error = getattr(error, "cleanup_error", None)
             if not cleanup_confirmed and not cleanup_error:
@@ -240,6 +327,7 @@ def run_mode(
                 infrastructure_error=f"timeout: {error}" + (f"; cleanup risk: {cleanup_error}" if cleanup_error else ""))
         except Exception as error:
             request_stop()
+            record_cleanup_identity(error)
             cleanup_confirmed = getattr(error, "cleanup_confirmed", None)
             cleanup_error = getattr(error, "cleanup_error", None)
             record.update(status="infrastructure_error", cleanup_confirmed=cleanup_confirmed,
