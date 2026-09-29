@@ -60,9 +60,10 @@
 Jethro redirected M3's next experiment toward portfolio-first HPC: schedule
 distinct LIBERO Object task-level find → confirm → reduce jobs across one GPU,
 starting with the existing occlusion family. The decision is recorded in
-`docs/decisions/0009-portfolio-first-hpc.md`; the written spec under
-`docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md` awaits
-review. M6 now explicitly adds another perturbation family and exploration of
+`docs/decisions/0009-portfolio-first-hpc.md`; the design spec is approved and
+`docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md` scopes local
+implementation. M5 now includes a proposed portfolio overview in the viewer.
+M6 explicitly adds another perturbation family and exploration of
 other LIBERO suites. The former single-loop US$4/90-minute live proposal is
 paused, not authorized. No portfolio implementation or live run has begun.
 The September 29 read-only preflight found a US$10.42 balance, the exact VM
