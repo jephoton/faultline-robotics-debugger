@@ -41,6 +41,32 @@ class PortfolioPolicyTests(unittest.TestCase):
             cursor = wave.next_cursor
         self.assertEqual(["task-0", "task-1", "task-2"], first_jobs)
 
+    def test_full_frozen_job_set_prevents_dynamic_readiness_starvation(self):
+        from robot_debug.portfolio_policy import choose_wave
+        cursor = 0
+        first_jobs = []
+        # The runner retains every manifest key even while one job is paused.
+        # With a cursor over just eligible jobs this can select task-0 then
+        # task-2 forever, starving continuously-ready task-1.
+        for ready in (
+            {"task-0": ("a",), "task-1": ("b",), "task-2": None},
+            {"task-0": None, "task-1": ("b",), "task-2": ("c",)},
+            {"task-0": ("a",), "task-1": ("b",), "task-2": None},
+        ):
+            wave = choose_wave(ready, cursor=cursor, slots=1, bounds=self.bounds(episode_slots=1))
+            first_jobs.append(wave.requests[0].job_id)
+            cursor = wave.next_cursor
+        self.assertIn("task-1", first_jobs)
+
+    def test_rotation_uses_sorted_full_keys_with_more_than_four_jobs(self):
+        from robot_debug.portfolio_policy import choose_wave
+        ready = {"task-4": ("e",), "task-2": ("c",), "task-0": ("a",),
+                 "task-3": ("d",), "task-1": ("b",)}
+        wave = choose_wave(ready, cursor=3, slots=4, bounds=self.bounds())
+        self.assertEqual(["task-3", "task-4", "task-0", "task-1"],
+                         [item.job_id for item in wave.requests])
+        self.assertEqual(4, wave.next_cursor)
+
     def test_admission_failure_or_ineligible_job_produces_no_work(self):
         from robot_debug.portfolio_policy import choose_wave
         for bounds in (self.bounds(episode_slots=0), self.bounds(seconds_left=0), self.bounds(dollars_left=0)):

@@ -47,10 +47,13 @@ def choose_wave(
 ) -> PortfolioWave:
     """Choose at most one earliest-ready case from each rotated eligible job.
 
-    Job IDs are sorted to make rotation independent of mapping insertion order.
-    ``next_cursor`` advances exactly one position after the wave's first job,
-    so a continuously eligible job becomes first in turn even if earlier jobs
-    are also continuously ready.
+    The caller must pass the same complete frozen manifest job-ID keys on every
+    wave; a paused or not-ready job is represented by ``None`` or ``()``. Job
+    IDs are sorted to make rotation independent of mapping insertion order.
+    ``cursor`` and ``next_cursor`` index that full stable set, not the changing
+    eligible subset.  The selector skips paused jobs while scanning, then
+    advances one full-set position, so changing peer readiness cannot starve a
+    continuously ready job.
     """
     if not isinstance(ready_by_job, Mapping):
         raise ValueError("ready_by_job must be a mapping")
@@ -60,7 +63,7 @@ def choose_wave(
         raise ValueError("slots must be an integer from 1 through 4")
     if not isinstance(bounds, PortfolioBounds):
         raise ValueError("bounds must be PortfolioBounds")
-    eligible: list[tuple[str, str]] = []
+    ready_cases: dict[str, str] = {}
     for job_id, cases in ready_by_job.items():
         if not isinstance(job_id, str) or not job_id:
             raise ValueError("job IDs must be nonempty strings")
@@ -73,15 +76,15 @@ def choose_wave(
         if len(set(cases)) != len(cases):
             raise ValueError("a job cannot offer the same ready case twice")
         if cases:
-            eligible.append((job_id, cases[0]))
-    job_count = len(eligible)
-    if not bounds.admits_work or not eligible:
-        return PortfolioWave((), cursor if not eligible else cursor % job_count,
+            ready_cases[job_id] = cases[0]
+    job_ids = sorted(ready_by_job)
+    job_count = len(job_ids)
+    if not bounds.admits_work or not ready_cases:
+        return PortfolioWave((), cursor if not job_count else cursor % job_count,
                              "shared admission limit prevents work" if not bounds.admits_work else "no eligible jobs")
-    eligible.sort(key=lambda item: item[0])
     first = cursor % job_count
-    rotated = eligible[first:] + eligible[:first]
-    count = min(slots, bounds.episode_slots, job_count)
-    requests = tuple(PortfolioChoice(job_id, case_id, "round_robin_ready")
-                     for job_id, case_id in rotated[:count])
+    rotated = job_ids[first:] + job_ids[:first]
+    count = min(slots, bounds.episode_slots, len(ready_cases))
+    requests = tuple(PortfolioChoice(job_id, ready_cases[job_id], "round_robin_ready")
+                     for job_id in rotated if job_id in ready_cases)[:count]
     return PortfolioWave(requests, (first + 1) % job_count, "work_conserving_round_robin")
