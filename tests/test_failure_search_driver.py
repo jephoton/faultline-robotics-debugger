@@ -60,6 +60,25 @@ class WriteConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.write_config(side=None, x=.75, y=.5, width=.5, height=.5)
 
+    def test_writes_exact_portfolio_task_and_seed(self):
+        text = self.write_config(task_id=2, seed=11)
+
+        self.assertIn("    max_tasks: 1", text)
+        self.assertIn("      task_id: 2", text)
+        self.assertIn("      seed: 11", text)
+        self.assertIn("      env_seed: 11", text)
+
+    def test_default_configuration_preserves_legacy_first_task(self):
+        text = self.write_config()
+
+        self.assertNotIn("task_id:", text)
+        self.assertIn("      seed: 7", text)
+
+    def test_rejects_invalid_task_and_seed_values(self):
+        for field, value in (("task_id", -1), ("task_id", True), ("seed", -1), ("seed", True)):
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                self.write_config(**{field: value})
+
 
 if __name__ == "__main__":
     unittest.main()

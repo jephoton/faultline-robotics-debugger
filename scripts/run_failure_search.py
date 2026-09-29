@@ -319,18 +319,25 @@ def _write_config(
     project_root: Path,
     stage_name: str,
     episode_indices: Sequence[int],
+    task_id: int = 0,
+    seed: int = 7,
     side: Optional[float] = None,
     x: Optional[float] = None,
     y: Optional[float] = None,
     width: Optional[float] = None,
     height: Optional[float] = None,
 ) -> None:
+    for name, value in (("task_id", task_id), ("seed", seed)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("{} must be a nonnegative integer".format(name))
     params = [
         "      suite: libero_object",
-        "      seed: 7",
-        "      env_seed: 7",
+        "      seed: {}".format(seed),
+        "      env_seed: {}".format(seed),
         "      num_steps_wait: 10",
     ]
+    if task_id != 0:
+        params.append("      task_id: {}".format(task_id))
     if side is not None:
         if width is not None or height is not None:
             raise ValueError("side cannot be combined with width or height")
