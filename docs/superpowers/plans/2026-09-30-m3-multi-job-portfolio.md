@@ -29,7 +29,7 @@ Do not modify the historical M2/M4/M3 evidence, fixed M3 manifest, old single-jo
 
 ## Task 1 — Prove task selection and freeze candidate identities (red checkpoint before live task choice)
 
-- [x] Read the pinned harness's LIBERO task-selection API and the current `_write_config` output. The existing writer fixes `suite: libero_object`, `seed: 7`, and `max_tasks: 1`; do not infer that changing `episode_indices` changes task ID. [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md) records that the pinned harness only truncates a task-list prefix and cannot select exact requested task IDs. The local LIBERO runtime needed to enumerate task instructions is unavailable, so no catalog has been invented. **Dependent work is paused for Jethro's adapter decision.**
+- [x] Read the pinned harness's LIBERO task-selection API and the current `_write_config` output. The original writer fixed `suite: libero_object`, `seed: 7`, and `max_tasks: 1`; changing `episode_indices` does not change task ID. [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md) records the pinned harness's prefix-only behavior and the approved local exact-ID adapter. The local LIBERO runtime needed to enumerate task instructions is unavailable, so no catalog has been invented.
 - [x] Write a failing `tests/test_portfolio_manifest.py` contract for exactly three *distinct* nonnegative task IDs, one frozen suite/checkpoint/family, unique safe job IDs, explicit seed, and stable hash independent of JSON key order. For example, `PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7, family="agentview_rect_occlusion")` must reject `(0, 0, 1)` and a suite other than `libero_object` in this plan.
 
 ```python
@@ -43,11 +43,11 @@ with self.assertRaises(ValueError):
 ```
 - [x] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_portfolio_manifest -v`; it initially failed because the `portfolio_manifest` API did not exist.
 - [x] Implement the immutable manifest and hash in `src/robot_debug/portfolio_manifest.py`; serialize with sorted JSON, reject bool/negative/duplicate task IDs and path-unsafe job IDs, and keep the exact selected task list in every session. Focused tests pass and commit `feat(portfolio): freeze task job identities` (`9704e5a`) contains only source/test/note paths.
-- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and two or three candidate tasks to Jethro. **Blocked until Jethro chooses whether the local adapter gains an exact task selector.** Jethro then chooses the exact three task IDs before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
+- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and two or three candidate tasks to Jethro when runtime enumeration is available. Jethro approved the exact task selector; the exact three task IDs remain a separate decision before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
 
 ## Task 2 — Add explicit task selection without regressing old runs (green after API proof)
 
-- [ ] Add a failing config-writer test in `tests/test_failure_search_driver.py` for a new explicit `task_id` argument and current unchanged default. Assert the generated YAML selects the requested task using the *verified pinned-harness key*, keeps `suite: libero_object`, `episodes_per_task: 1`, image recording, and separate output paths. Add a negative-ID rejection fixture.
+- [x] Add failing fake-upstream adapter and config-writer tests for exact `task_id`, unchanged default, original upstream ID preservation, and invalid-ID rejection. The local adapter consumes `params.task_id`; it is not an upstream constructor key.
 
 ```python
 search._write_config(config_path=config, output_dir=output, project_root=project,
@@ -60,8 +60,7 @@ assert "record_video: true" in rendered
 # Assert the pinned harness's actual task-selector key, discovered in Task 1,
 # selects task 1; max_tasks: 2 alone is NOT such a selector.
 ```
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_failure_search_driver -v`; expect only the new task-selection assertions to fail.
-- [ ] Extend `scripts/run_failure_search.py::_write_config` with `task_id: int = 0` and `seed: int = 7`, validated as nonnegative integers. Emit the verified task-selection key while preserving byte-equivalent behavior for default calls where practical. Pass task/seed from the portfolio runner; do not change existing M2/M4 commands. Run writer and existing driver tests plus `git diff --check`. Commit `feat(libero): select frozen task per diagnostic job`.
+- [x] Ran focused tests red first, then extended `DiagnosticLIBEROBenchmark.get_tasks()` and `scripts/run_failure_search.py::_write_config` with validated exact task and seed. Existing M2/M4 calls retain their defaults. Focused tests and the full Windows Python 3.11 suite pass (309 tests, 4 skips); `git diff --check` passes. Commits: `a9cc776 feat(libero): select exact diagnostic task` and `f0d7c34 feat(runner): write exact task selection in configs`. Passing task/seed from the future portfolio runner remains Task 4.
 
 ## Task 3 — Pure shared-queue policy (amber; user checkpoint on priority/fairness)
 

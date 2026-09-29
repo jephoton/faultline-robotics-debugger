@@ -78,16 +78,17 @@ and fixed M3 comparison.
 
 ### Portfolio implementation checkpoint
 
-The first local portfolio task is partially complete on isolated branch
-`codex/m3-portfolio` at `9704e5a`. It adds a frozen three-job manifest and
-task-selection contract note. The pinned upstream orchestrator only truncates
-the task list with top-level `max_tasks`; it exposes no exact task-ID selector,
-and `episode_indices` select reset states rather than tasks. The existing
-config can therefore only run task 0 safely. Before scheduler or live work,
-Jethro must choose whether to add a narrow exact task selector to the local
-`DiagnosticLIBEROBenchmark` adapter (recommended), accept unusable prefix-only
-jobs, or change evaluator integration. No task catalog beyond task 0 has been
-invented, no VM started, and no cloud cost incurred.
+The first local portfolio slice is on isolated branch `codex/m3-portfolio`.
+It adds a frozen three-job manifest, an exact task-ID filter in the local
+`DiagnosticLIBEROBenchmark`, and config-writer support for an explicit task
+and seed. The pinned upstream orchestrator otherwise truncates only a task
+prefix with `max_tasks`; `episode_indices` select reset states rather than
+tasks. Local fake-upstream adapter and config tests pass, but real LIBERO
+task IDs/instructions beyond task 0 and live selector compatibility remain
+unverified. Jethro approved the narrow adapter. The next local checkpoint
+is the shared queue's priority/fairness rule before policy implementation;
+exact three-task selection and any paid run remain separate decisions.
+No VM started and no cloud cost incurred for this portfolio slice.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
