@@ -66,7 +66,7 @@ assert "record_video: true" in rendered
 
 **Accepted rule:** Jethro approved work-conserving round-robin across eligible jobs, at most one ready episode per job per wave, rotating the first job, and no more than four active evaluator processes on the existing one GPU. This is adaptive to *ready work and phase*, not an optimal or learned failure-probability scheduler. Compare it with whole-job-at-a-time execution. The rationale is recorded in [`ADR 0009`](../../decisions/0009-portfolio-first-hpc.md).
 
-- [ ] Write failing `tests/test_portfolio_policy.py` cases with ready queues `{"task-0": ("search-01", "search-02"), "task-1": ("confirm-01",), "task-2": ("nominal-01",)}`. Assert stable rotated first choices, no duplicate request, a four-slot maximum, no starvation of a continuously ready job across three waves, and zero work when shared episode/wall/dollar admission fails. A paused/invalid job must never be selected.
+- [x] Wrote red-first `tests/test_portfolio_policy.py` cases for stable rotated first choices, no duplicate request, a four-slot maximum, no starvation under fixed or changing readiness, zero work when shared episode/wall/dollar admission fails, and paused/non-ready exclusion. Every wave must retain the full frozen manifest job-key set; malformed input fails closed. Independent spec and quality reviews passed after the changing-readiness fairness fix.
 
 ```python
 ready = {"task-0": ("search-01", "search-02"),
@@ -78,8 +78,8 @@ assert len(wave.requests) <= 4
 assert {item.job_id for item in wave.requests} == set(ready)
 assert len({(item.job_id, item.case_id) for item in wave.requests}) == len(wave.requests)
 ```
-- [ ] Run the focused policy tests; verify a missing API failure. Implement immutable `PortfolioChoice(job_id, case_id, reason)` and `choose_wave(ready_by_job, cursor, slots, bounds)` in `src/robot_debug/portfolio_policy.py`. Make cursor and bounds explicit inputs/outputs; never inspect mutable global state. Re-run tests. Commit `feat(hpc): choose fair bounded portfolio waves`.
-- [ ] Use existing `choose_workers` for 1/2/4 concurrency after `choose_wave` fixes the ready set. Record the measured timing source and selection reason; full VM rate is charged once per elapsed hour, not once per worker.
+- [x] Implemented immutable `PortfolioBounds`, `PortfolioChoice`, and `PortfolioWave`, with pure `choose_wave(ready_by_job, cursor, slots, bounds)` and explicit cursor/bounds. Focused tests passed 6/6; full Windows Python 3.11 suite passed 315 tests (4 skips). Commits `397bbaa feat(hpc): choose fair bounded portfolio waves` and `313577b fix(hpc): prevent dynamic-readiness starvation`.
+- [ ] In the Task 4 runner, call existing `choose_workers` for 1/2/4 concurrency after `choose_wave` fixes the ready set. Record measured timing source and selection reason; full VM rate is charged once per elapsed hour, not once per worker. This needs the runner's live wave/budget context and is intentionally not inside the pure selector.
 
 ## Task 4 — Durable portfolio runner and CLI (amber; one execution owner)
 

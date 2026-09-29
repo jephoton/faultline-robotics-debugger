@@ -85,9 +85,13 @@ and seed. The pinned upstream orchestrator otherwise truncates only a task
 prefix with `max_tasks`; `episode_indices` select reset states rather than
 tasks. Local fake-upstream adapter and config tests pass, but real LIBERO
 task IDs/instructions beyond task 0 and live selector compatibility remain
-unverified. Jethro approved the narrow adapter. The next local checkpoint
-is the shared queue's priority/fairness rule before policy implementation;
-exact three-task selection and any paid run remain separate decisions.
+unverified. Jethro approved the narrow adapter and the work-conserving
+round-robin scheduler rule. Its pure policy is implemented and independently
+reviewed; a fairness bug under changing task readiness was caught and fixed
+before runner integration. The runner must supply all frozen manifest job
+keys, including paused/non-ready jobs, each wave. Next is wiring this policy
+to one durable shared evaluator queue, with exact three-task selection and
+any paid run still separate decisions.
 No VM started and no cloud cost incurred for this portfolio slice.
 
 M4's bounded live run and evidence validation are complete; details are in
