@@ -58,6 +58,22 @@ class WorkerPolicyTests(unittest.TestCase):
         self.assertEqual(choice.workers, 1)
         self.assertIn("fallback", choice.reason)
 
+    def test_inconsistent_parallel_measurements_fall_back_to_one(self):
+        choice = self.choose(measured_seconds={1: 10, 2: 100, 4: 1})
+        self.assertEqual(choice.workers, 1)
+        self.assertIn("fallback", choice.reason)
+
+    def test_zero_shutdown_reserve_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.choose(shutdown_reserve_seconds=0)
+
+    def test_large_queue_uses_four_when_measured_cost_is_lower(self):
+        self.assertEqual(self.choose(ready_count=32, seconds_left=900, dollars_left=1).workers, 4)
+
+    def test_equal_predicted_cost_uses_fewer_workers(self):
+        choice = self.choose(measured_seconds={1: 10, 2: 10, 4: 10})
+        self.assertEqual(choice.workers, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

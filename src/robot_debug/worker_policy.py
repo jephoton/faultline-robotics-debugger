@@ -36,7 +36,7 @@ def choose_workers(
     dollars_left: float,
     hourly_rate: float,
     measured_seconds: Mapping[int, float],
-    shutdown_reserve_seconds: float = 0.0,
+    shutdown_reserve_seconds: float,
 ) -> WorkerChoice:
     """Choose the cheapest feasible measured 1/2/4-worker mode for one VM.
 
@@ -50,7 +50,7 @@ def choose_workers(
     remaining = _number("seconds_left", seconds_left)
     budget = _number("dollars_left", dollars_left)
     rate = _number("hourly_rate", hourly_rate, positive=True)
-    reserve = _number("shutdown_reserve_seconds", shutdown_reserve_seconds)
+    reserve = _number("shutdown_reserve_seconds", shutdown_reserve_seconds, positive=True)
     if not isinstance(measured_seconds, Mapping):
         raise ValueError("measured_seconds must be a mapping")
     if any(isinstance(key, bool) or key not in (1, 2, 4) for key in measured_seconds):
@@ -72,6 +72,18 @@ def choose_workers(
             return WorkerChoice(1, "fallback: no trustworthy baseline; budget covers full remaining window", remaining, cost)
         return WorkerChoice(0, "no trustworthy baseline and full window exceeds budget", 0.0, 0.0)
 
+    parallel_consistent = True
+    previous = valid[1]
+    for workers in (2, 4):
+        if workers not in valid:
+            continue
+        observed = valid[workers]
+        if observed > previous or observed < valid[1] / workers:
+            parallel_consistent = False
+        previous = observed
+    if not parallel_consistent:
+        valid = {1: valid[1]}
+
     choices = []
     for workers in (1, 2, 4):
         if workers > ready_count or workers not in valid:
@@ -83,7 +95,8 @@ def choose_workers(
         total = warm + reserve
         cost = total * rate / 3600
         if total <= remaining and cost <= budget:
-            choices.append(WorkerChoice(workers, "measured one-GPU throughput estimate", total, cost))
+            reason = "fallback: inconsistent parallel measurements" if not parallel_consistent else "measured one-GPU throughput estimate"
+            choices.append(WorkerChoice(workers, reason, total, cost))
     if not choices:
         return WorkerChoice(0, "no measured mode fits deadline and dollar cap", 0.0, 0.0)
     return min(choices, key=lambda choice: (choice.predicted_cost_usd, choice.workers))
