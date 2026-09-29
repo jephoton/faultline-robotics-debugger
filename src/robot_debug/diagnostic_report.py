@@ -36,7 +36,10 @@ def compare_sessions(sequential_summary: Mapping[str, Any], adaptive_summary: Ma
         raise ValueError("sessions have unequal scenario_contract values")
 
     same_terminal_result = sequential["terminal"] == adaptive["terminal"]
-    outcome_drift_case_ids = _outcome_drift_case_ids(sequential["ordered_outcomes"], adaptive["ordered_outcomes"])
+    outcome_drift_case_ids, extra_case_ids = _compare_outcomes(
+        sequential["ordered_outcomes"], adaptive["ordered_outcomes"]
+    )
+    decision_drift = sequential["decisions"] != adaptive["decisions"]
     limitations: list[str] = []
     if not same_terminal_result:
         limitations.append("terminal diagnostic results differ; no speedup claim is valid")
@@ -53,6 +56,10 @@ def compare_sessions(sequential_summary: Mapping[str, Any], adaptive_summary: Ma
 
     if outcome_drift_case_ids:
         limitations.append("ordered episode outcomes differ; no warm diagnostic speedup claim is valid")
+    if decision_drift:
+        limitations.append("diagnostic decisions differ; no warm diagnostic speedup claim is valid")
+    if any(extra_case_ids.values()):
+        limitations.append("one policy executed extra cases; physical attempt counts include the extra work")
     if sequential["dry_run"] or adaptive["dry_run"]:
         limitations.append("fake dry-run timing is not evidence of live diagnostic speedup")
     if sequential["dry_run"] != adaptive["dry_run"]:
@@ -60,7 +67,7 @@ def compare_sessions(sequential_summary: Mapping[str, Any], adaptive_summary: Ma
     limitations.append(
         "full VM allocation timestamps are unavailable; warm diagnostic cost is not a billed or full-allocation cost"
     )
-    comparable = (same_terminal_result and not outcome_drift_case_ids
+    comparable = (same_terminal_result and not outcome_drift_case_ids and not decision_drift
                   and sequential["dry_run"] == adaptive["dry_run"])
     speedup = (sequential["elapsed_seconds"] / adaptive["elapsed_seconds"]
                if comparable and not sequential["dry_run"] else None)
@@ -71,6 +78,8 @@ def compare_sessions(sequential_summary: Mapping[str, Any], adaptive_summary: Ma
         "comparable": comparable,
         "same_terminal_result": same_terminal_result,
         "outcome_drift_case_ids": outcome_drift_case_ids,
+        "extra_case_ids": extra_case_ids,
+        "decision_drift": decision_drift,
         "warm_diagnostic_speedup": speedup,
         "time_to_apparent_failure_seconds": phase_metrics["apparent_failure"],
         "time_to_reproducible_failure_seconds": phase_metrics["reproducible_failure"],
@@ -154,6 +163,7 @@ def _validate_summary(summary: Mapping[str, Any], expected_policy: str) -> dict[
         "terminal": (True, True, rectangle),
         "phases": phases,
         "ordered_outcomes": ordered_outcomes,
+        "decisions": flow.snapshot()["decisions"],
     }
 
 
@@ -306,18 +316,27 @@ def _flow_rounds_from_results(rounds: object) -> list[dict[str, list[str]]]:
     return result
 
 
-def _outcome_drift_case_ids(sequential: list[tuple[str, str]], adaptive: list[tuple[str, str]]) -> list[str]:
-    """Return stable IDs for changed or differently ordered durable outcomes."""
-    drift: list[str] = []
-    for index in range(max(len(sequential), len(adaptive))):
-        left = sequential[index] if index < len(sequential) else None
-        right = adaptive[index] if index < len(adaptive) else None
-        if left == right:
-            continue
-        for item in (left, right):
-            if item is not None and item[0] not in drift:
-                drift.append(item[0])
-    return drift
+def _compare_outcomes(
+    sequential: list[tuple[str, str]], adaptive: list[tuple[str, str]]
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Compare shared case occurrences; keep speculative extras separate."""
+    def keyed(values: list[tuple[str, str]]) -> dict[tuple[str, int], str]:
+        counts: dict[str, int] = {}
+        result: dict[tuple[str, int], str] = {}
+        for case_id, outcome in values:
+            counts[case_id] = counts.get(case_id, 0) + 1
+            result[(case_id, counts[case_id])] = outcome
+        return result
+
+    left, right = keyed(sequential), keyed(adaptive)
+    drift = list(dict.fromkeys(case_id for (case_id, occurrence), outcome in left.items()
+                               if (case_id, occurrence) in right
+                               and right[(case_id, occurrence)] != outcome))
+    extras = {
+        "sequential": list(dict.fromkeys(case_id for case_id, occurrence in left if (case_id, occurrence) not in right)),
+        "adaptive": list(dict.fromkeys(case_id for case_id, occurrence in right if (case_id, occurrence) not in left)),
+    }
+    return drift, extras
 
 
 def _pair(sequential: Mapping[str, Any], adaptive: Mapping[str, Any], field: str) -> dict[str, Any]:

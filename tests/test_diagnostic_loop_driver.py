@@ -15,6 +15,23 @@ if str(SOURCE_ROOT) not in sys.path:
 
 
 class DiagnosticLoopDriverTests(unittest.TestCase):
+    def test_sequential_search_stops_after_first_eligible_failure(self):
+        from scripts.run_diagnostic_loop import run_local_fixture
+
+        outcomes = {
+            "nominal": "success", "grid-x000-y050": "policy_failure",
+            "grid": "success", "confirm": "policy_failure",
+            "reduction-sentinel": "success", "parent": "policy_failure",
+            "delta": "policy_failure", "control": "success", "default": "success",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = run_local_fixture(policy="sequential", outcomes=outcomes,
+                                        results_root=Path(temporary))
+        self.assertTrue(summary["certified"])
+        search_rounds = [item for item in summary["rounds"]
+                         if item["case_ids"][0].startswith("grid-")]
+        self.assertEqual([["grid-x000-y050"]], [item["case_ids"] for item in search_rounds])
+
     def test_local_fake_policies_certify_the_same_rectangle(self):
         from scripts.run_diagnostic_loop import run_local_fixture
 

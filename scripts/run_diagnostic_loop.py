@@ -158,7 +158,13 @@ def run_session(*, upstream_root: Path | str, project_root: Path | str,
         if interrupt_event is not None and interrupt_event.is_set():
             flow._stop("interrupted")
             break
-        pending = flow.pending(search_limit=4 if flow.phase == "search" else None)
+        episode_slots = episode_limit - summary["physical_attempts"]
+        if episode_slots <= 0:
+            flow._stop("episode_limit_reached")
+            break
+        search_window = (min(1 if policy == "sequential" else 4, episode_slots)
+                         if flow.phase == "search" else None)
+        pending = flow.pending(search_limit=search_window)
         if not pending:
             break
         if elapsed() >= cutoff:
@@ -180,6 +186,11 @@ def run_session(*, upstream_root: Path | str, project_root: Path | str,
         if choice.workers == 0:
             flow._stop("budget_or_deadline_prevents_launch")
             break
+        if flow.phase == "search":
+            # Every item in this wave is submitted before its result can drive
+            # the next decision. Do not queue a later candidate behind an
+            # active worker after an earlier failure becomes eligible.
+            pending = pending[:choice.workers]
         # The shared scheduler consults this cutoff before *each* submit.
         # Reserve the same shutdown/evidence window used by worker policy so
         # a late wave cannot begin merely because this round started in time.

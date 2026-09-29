@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -212,6 +213,27 @@ class DiagnosticReportTests(unittest.TestCase):
         self.assertTrue(report["comparable"])
         self.assertIsNone(report["warm_diagnostic_speedup"])
         self.assertTrue(any("fake" in item or "dry-run" in item for item in report["limitations"]))
+
+    def test_speculative_extra_search_cases_are_counted_not_called_outcome_drift(self):
+        from scripts.run_diagnostic_loop import run_local_fixture
+        outcomes = {
+            "nominal": "success", "grid-x000-y050": "policy_failure",
+            "grid": "success", "confirm": "policy_failure",
+            "reduction-sentinel": "success", "parent": "policy_failure",
+            "delta": "policy_failure", "control": "success", "default": "success",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sequential = run_local_fixture(policy="sequential", outcomes=outcomes,
+                                           results_root=root / "sequential")
+            adaptive = run_local_fixture(policy="adaptive", outcomes=outcomes,
+                                         results_root=root / "adaptive")
+            report = self.compare(sequential, adaptive)
+        self.assertTrue(report["comparable"])
+        self.assertEqual([], report["outcome_drift_case_ids"])
+        self.assertGreater(report["physical_attempts"]["adaptive"],
+                           report["physical_attempts"]["sequential"])
+        self.assertTrue(report["extra_case_ids"]["adaptive"])
 
     def test_flow_snapshot_must_be_certified_and_match_top_level_rectangle(self):
         mutations = (
