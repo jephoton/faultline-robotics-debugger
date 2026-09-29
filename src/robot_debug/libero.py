@@ -15,16 +15,31 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     def __init__(
         self,
         agentview_occlusion: Optional[Mapping[str, Any]] = None,
+        task_id: Optional[int] = None,
         send_wrist_image: bool = False,
         send_state: bool = False,
         **kwargs: Any
     ) -> None:
+        if task_id is not None and (
+            isinstance(task_id, bool) or not isinstance(task_id, int) or task_id < 0
+        ):
+            raise ValueError("task_id must be a nonnegative integer")
         super().__init__(
             send_wrist_image=send_wrist_image,
             send_state=send_state,
             **kwargs
         )
+        self.task_id = task_id
         self.agentview_occlusion = RectOcclusion.from_mapping(agentview_occlusion)
+
+    def get_tasks(self) -> Any:
+        tasks = super().get_tasks()
+        if self.task_id is None:
+            return tasks
+        selected = [task for task in tasks if task["task_id"] == self.task_id]
+        if len(selected) != 1:
+            raise ValueError("task_id {} did not identify exactly one task".format(self.task_id))
+        return selected
 
     def make_obs(self, raw_obs: Any, task: Any) -> Any:
         observation = super().make_obs(raw_obs, task)

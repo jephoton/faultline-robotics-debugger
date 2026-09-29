@@ -11,6 +11,12 @@ class FakeLIBEROBenchmark:
     def __init__(self, **kwargs) -> None:
         self.upstream_kwargs = kwargs
 
+    def get_tasks(self):
+        return [
+            {"task_id": task_id, "task_obj": object(), "name": f"task {task_id}"}
+            for task_id in range(3)
+        ]
+
     def make_obs(self, raw_obs, task):
         return {
             "images": {
@@ -93,6 +99,29 @@ class DiagnosticLIBEROBenchmarkTests(unittest.TestCase):
 
         self.assertIn("send_wrist_image", parameters)
         self.assertIn("send_state", parameters)
+
+    def test_selects_exact_task_without_renumbering_it(self) -> None:
+        benchmark = self.benchmark_type(task_id=2, suite="libero_object")
+
+        self.assertEqual([task["task_id"] for task in benchmark.get_tasks()], [2])
+        self.assertNotIn("task_id", benchmark.upstream_kwargs)
+        self.assertIn("task_obj", benchmark.get_tasks()[0])
+
+    def test_legacy_configuration_keeps_all_tasks(self) -> None:
+        benchmark = self.benchmark_type()
+
+        self.assertEqual([task["task_id"] for task in benchmark.get_tasks()], [0, 1, 2])
+
+    def test_missing_task_id_fails_closed(self) -> None:
+        benchmark = self.benchmark_type(task_id=9)
+
+        with self.assertRaisesRegex(ValueError, "task_id 9"):
+            benchmark.get_tasks()
+
+    def test_rejects_invalid_task_ids(self) -> None:
+        for task_id in (-1, True, 1.5, "1"):
+            with self.subTest(task_id=task_id), self.assertRaises(ValueError):
+                self.benchmark_type(task_id=task_id)
 
     def test_masks_only_policy_agentview(self) -> None:
         agentview = np.full((4, 4, 3), 255, dtype=np.uint8)
