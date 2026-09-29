@@ -45,6 +45,7 @@ class DiagnosticFlow:
         self.control_count = control_count
         self.config_hash = config_hash
         self.phase = "nominal"
+        self.search_offset = 0
         self.selected_search_id: str | None = None
         self.current_rect: Rect | None = None
         self.delta_index = 0
@@ -73,11 +74,16 @@ class DiagnosticFlow:
             raise ValueError("no active reduction candidate")
         return f"delta-{self.delta_index + 1:02d}-{candidate.edge}"
 
-    def pending(self) -> tuple[str, ...]:
+    def pending(self, *, search_limit: int | None = None) -> tuple[str, ...]:
+        if search_limit is not None and (isinstance(search_limit, bool)
+                                         or not isinstance(search_limit, int) or search_limit <= 0):
+            raise ValueError("search_limit must be a positive integer")
         if self.phase == "nominal":
             return tuple(f"nominal-{number:02d}" for number in range(1, self.nominal_count + 1))
         if self.phase == "search":
-            return tuple(case_id for case_id, _ in self.search)
+            remaining = self.search[self.search_offset:]
+            window = remaining if search_limit is None else remaining[:search_limit]
+            return tuple(case_id for case_id, _ in window)
         if self.phase == "confirm":
             return tuple(f"confirm-{number:02d}" for number in range(1, 6))
         if self.phase == "reduction_sentinel":
@@ -123,7 +129,7 @@ class DiagnosticFlow:
 
     def apply_round(self, outcomes: Mapping[str, str]) -> None:
         """Commit one complete round; never infer an omitted or invalid result."""
-        expected = self.pending()
+        expected = self.pending(search_limit=len(outcomes)) if self.phase == "search" and outcomes else self.pending()
         if not expected or set(outcomes) != set(expected):
             raise ValueError("round results must match every pending case ID exactly")
         ordered = [outcomes[case_id] for case_id in expected]
@@ -139,7 +145,9 @@ class DiagnosticFlow:
         elif self.phase == "search":
             selected = next((case_id for case_id in expected if outcomes[case_id] == "policy_failure"), None)
             if selected is None:
-                self._stop("no_apparent_failure")
+                self.search_offset += len(expected)
+                if self.search_offset == len(self.search):
+                    self._stop("no_apparent_failure")
             else:
                 self.selected_search_id = selected
                 self.current_rect = dict(self.search)[selected]
@@ -204,7 +212,8 @@ class DiagnosticFlow:
                 "candidate_attempt_budget": self.candidate_attempt_budget,
                 "control_count": self.control_count, "config_hash": self.config_hash,
             },
-            "phase": self.phase, "selected_search_id": self.selected_search_id,
+            "phase": self.phase, "search_offset": self.search_offset,
+            "selected_search_id": self.selected_search_id,
             "current_rect": asdict(self.current_rect) if self.current_rect else None,
             "delta_index": self.delta_index, "candidate_index": self.candidate_index,
             "gate_outcomes": self.gate_outcomes, "candidate_attempts": self.candidate_attempts,

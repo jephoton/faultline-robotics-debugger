@@ -34,6 +34,40 @@ class DiagnosticFlowTests(unittest.TestCase):
         self.assertEqual(flow.selected_search_id, "search-b")
         self.assertEqual(flow.pending(), tuple(f"confirm-{i:02d}" for i in range(1, 6)))
 
+    def test_search_advances_after_bounded_prefix_without_later_launches(self):
+        flow = self.make_flow(search=(("search-a", Rect(0, 0, .5, .5)),
+                                      ("search-b", Rect(.5, 0, .5, .5)),
+                                      ("search-c", Rect(0, .5, .5, .5))))
+        flow.apply_round({"nominal-01": "success", "nominal-02": "success"})
+        self.assertEqual(flow.pending(search_limit=2), ("search-a", "search-b"))
+        flow.apply_round({"search-b": "success", "search-a": "policy_failure"})
+        self.assertEqual(flow.phase, "confirm")
+        self.assertEqual(flow.selected_search_id, "search-a")
+        self.assertTrue(all("search-c" not in round_record["case_ids"] for round_record in flow.rounds))
+
+    def test_search_next_prefix_after_first_batch_has_no_failure(self):
+        flow = self.make_flow(search=(("search-a", Rect(0, 0, .5, .5)),
+                                      ("search-b", Rect(.5, 0, .5, .5)),
+                                      ("search-c", Rect(0, .5, .5, .5))))
+        flow.apply_round({"nominal-01": "success", "nominal-02": "success"})
+        flow.apply_round({"search-b": "success", "search-a": "success"})
+        self.assertEqual(flow.pending(search_limit=2), ("search-c",))
+        restored = DiagnosticFlow.restore(flow.snapshot(), search=flow.search,
+                                          deltas=flow.deltas, nominal_count=flow.nominal_count,
+                                          candidate_attempt_budget=flow.candidate_attempt_budget,
+                                          control_count=flow.control_count,
+                                          config_hash=flow.config_hash)
+        self.assertEqual(restored.pending(search_limit=2), ("search-c",))
+        flow.apply_round({"search-c": "policy_failure"})
+        self.assertEqual(flow.selected_search_id, "search-c")
+
+    def test_search_refuses_result_that_skips_unresolved_earlier_candidate(self):
+        flow = self.make_flow()
+        flow.apply_round({"nominal-01": "success", "nominal-02": "success"})
+        with self.assertRaises(ValueError):
+            flow.apply_round({"search-b": "policy_failure"})
+        self.assertEqual(flow.pending(search_limit=1), ("search-a",))
+
     def test_confirmation_requires_exactly_five_valid_replays(self):
         flow = self.make_flow()
         self.advance_to_confirmation(flow)
