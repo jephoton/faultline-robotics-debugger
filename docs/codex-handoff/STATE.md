@@ -38,7 +38,9 @@
   The guard arms while the VM is stopped, keeps an immutable exact target,
   bounds individual CLI calls, and reports unconfirmed stops as errors.
   Integrated Windows Python 3.11 passed 242 tests (3 POSIX-only skips), and
-  focused WSL driver/lifecycle tests passed 66. No M3 Nebius run exists.
+  focused WSL driver/lifecycle tests passed 66. The September 29 two-episode
+  Nebius pilot passed: one nominal success and one reduced-mask failure, both
+  with valid traces and videos. See `docs/experiments/m3-parallel.md`.
 
 ## Next material decision
 
@@ -48,17 +50,15 @@ M4's bounded live run and evidence validation are complete; details are in
 repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
 fail-closed resume lease. Whole-branch review and merged-result tests passed.
-The 2-worker live pilot and subsequent 1/2/4 comparison remain
-separate paid work. Jethro approved and the project implemented the local
-pilot/watchdog plans in `docs/superpowers/plans/`. A real read-only watchdog
-`check` succeeded against the exact stopped VM; the guard has not been armed
-against Nebius. Local fake tests do not prove the detached guard survives
-workstation sleep, lost network, or expired auth. Read-only preflight found the existing
-one-L40S VM stopped, with a 200 GiB retained boot disk. The CLI calculator
-reported $1.7468/hour for that VM shape and $0.0194444/hour for the disk,
-pre-tax, on September 29; refresh prices before a run. Credit balance/expiry
-and restart capacity remain unverified. A live, numeric run-specific cap still
-needs Jethro's separate approval. The root
+The 2-worker live pilot is complete; the subsequent 1/2/4 comparison remains
+separate, unapproved paid work. The exact-VM watchdog was armed before the
+pilot, and the VM was confirmed stopped after evidence copy. Local fake tests
+and this successful pilot do not prove the guard survives workstation sleep,
+lost network, or expired auth. Preflight showed an $11.97 card-funded balance,
+available L40S capacity, and a one-L40S VM with 200 GiB boot disk. The CLI
+calculator reported $1.7468/hour for the VM and $0.0194444/hour for disk,
+pre-tax, on September 29; refresh prices and balance before another run.
+Jethro approved $4/90 minutes for the pilot only. The root
 `FEEDBACK.md` tracks submission feedback by actual tool.
 
 The M4 reducer kernel's September 21 external-provider handoff is historical
@@ -74,8 +74,9 @@ only when investigating M4 history; do not treat it as an active instruction.
 - Experiment evidence is ignored and local; do not infer that it is published
   or durable off-machine.
 - The retained 200 GiB boot disk continues to accrue storage cost while the VM
-  is stopped. A future storage/teardown decision should preserve any needed
-  model cache and copied evidence explicitly.
+  is stopped. Decide storage/teardown within the pilot's approved 24-hour
+  retention window; preserve any needed model cache and copied evidence
+  explicitly. The temporary SSH ingress rule was removed after the pilot.
 - The position failure is empirical and spatially specific, not a causal or
   universal robustness claim.
 - The M3 ledger persists `prepared`, `submitting_unknown`, `active`,

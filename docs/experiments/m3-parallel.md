@@ -1,6 +1,6 @@
 # M3 fixed replay workload contract
 
-**Status:** workload identity frozen; local pilot/watchdog ready for gated live validation; no cloud run or spending authorized
+**Status:** workload identity frozen; two-episode live pilot passed September 29; full 1/2/4-worker comparison not authorized
 
 **Harness:** `allenai/vla-evaluation-harness` commit `35f1200eb15608aa898f727a3722f7eef889c6cd`
 
@@ -154,7 +154,24 @@ it is investigated.
 
 ## Current live-run status
 
-No M3 live run is authorized. The local runner now uses a durable per-case
+The separately labeled two-episode Nebius pilot ran on September 29 within
+Jethro's US$4/90-minute cap. Both evaluators ran concurrently on one L40S VM
+against the pinned harness and shared GR00T server. `nominal-01` succeeded
+(138 steps, 41.8 seconds) and `mask-01` failed (280 steps, 53.4 seconds).
+Both were terminal-valid, replayable, and have non-empty JSONL traces and
+MP4s. The warm two-worker evaluation elapsed 53.4 seconds. Local ignored
+evidence is in `artifacts/m3-pilot-live-20260929/` and is visible in the
+viewer. This is a concurrency/outcome-isolation smoke test, **not** a
+1/2/4-worker performance or cost comparison. The summary's `cost_usd` is
+null; billable end-to-end cost awaits provider reconciliation.
+
+The VM was stopped promptly after evidence copy, and the temporary SSH
+ingress rule was removed. Its retained 200 GiB boot disk still incurs storage
+charges; decide retention or teardown within the approved 24-hour window.
+The independent exact-VM guard remains armed until its UTC deadline. No
+further paid run is approved.
+
+No full M3 1/2/4-worker comparison is authorized. The local runner uses a durable per-case
 attempt ledger: it persists uncertain submission before enqueueing, captures
 the full pending result before releasing Future ownership, and derives counts
 and visible results from terminal ledger records. On interruption, a late
@@ -185,10 +202,7 @@ The separately labeled `pilot` command now runs only `build_manifest(1)` with
 two workers in `m3-pilot-workers-2/`. It requires nominal success and reduced
 mask failure, plus non-empty trace and MP4 evidence per case; incomplete or
 drifted results are non-comparable. The reporter refuses pilot summaries.
-The detached Windows exact-VM watchdog has local fake tests and passed a real
-read-only `check` while the target was stopped. It has not been armed against
-the real VM, and no M3 pilot episodes have run. Before that transition,
-verify remaining credit and expiry, restart capacity, current full-resource
-rate and tax, set an exact UTC deadline with guest backup, and obtain Jethro's
-numeric cap approval. Pilot success does not authorize the 48-episode
-comparison.
+The detached Windows exact-VM watchdog passed a real read-only `check` and
+was armed before the VM start, with guest shutdown as backup. The pilot
+completed and the VM was independently confirmed stopped before the guard's
+deadline. Pilot success does not authorize the 48-episode comparison.

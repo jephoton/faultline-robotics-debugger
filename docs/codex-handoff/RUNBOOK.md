@@ -98,7 +98,9 @@ pilot --upstream-root <pinned-harness> --project-root <repo> --results-root
 <seconds>`. It fixes two workers and one nominal plus one M4 reduced-mask
 case, writes `m3-pilot-workers-2/`, and cannot resume. A valid pilot requires
 both expected outcomes and non-empty traces and MP4s. It is not accepted by
-the benchmark reporter. No live pilot has been run.
+the benchmark reporter. The September 29 live pilot passed and its copied
+evidence is under ignored `artifacts/m3-pilot-live-20260929/`; do not rerun
+without a new cap and refreshed resource preflight.
 
 The workstation watchdog is `PYTHONPATH=src python3 scripts/run_vm_watchdog.py
 check|arm|watch --record <ignored-record.json> --control-root
@@ -115,5 +117,6 @@ fresh balance/expiry, quota/capacity, full-rate, deadline, guest-backup, and
 Jethro-approved numeric cap gate is satisfied. Windows must stay awake and
 network/WSL authentication must remain available; the guest timer is backup.
 The retained disk bills even after the VM stops. The September 29 real
-read-only `check` returned zero and the VM remained `STOPPED`; no real arm or
-stop was tested.
+read-only `check` returned zero. The guard was then armed for the approved
+pilot, and the VM was independently stopped after results were copied. Its
+retained disk remains billable; decide retention within the approved window.
