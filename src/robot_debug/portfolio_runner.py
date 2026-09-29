@@ -71,6 +71,8 @@ def _status(result: Any) -> str:
 
 def _launched_attempts(case_ids: list[str], durable: Mapping[str, Any]) -> int:
     """Validate the authoritative ledger before counting its launch intents."""
+    if not isinstance(durable, Mapping):
+        raise ValueError("ledger snapshot must be a mapping")
     ledger = AttemptLedger.from_snapshot(case_ids, dict(durable))
     return sum(record["state"] != "prepared" for record in ledger.attempts.values())
 

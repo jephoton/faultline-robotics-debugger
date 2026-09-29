@@ -203,6 +203,30 @@ class PortfolioRunnerTests(unittest.TestCase):
         self.assertIsNone(summary["physical_attempts"])
         self.assertFalse(summary["certified"])
 
+    def test_parseable_scalar_ledger_marks_attempt_accounting_unknown(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        import robot_debug.portfolio_runner as runner
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        original = runner.run_round
+        for scalar in (None, 1):
+            def corrupt_ledger(*args, **kwargs):
+                result = original(*args, **kwargs)
+                Path(kwargs["ledger_path"]).write_text(json.dumps(scalar), encoding="utf-8")
+                return result
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                with patch.object(runner, "run_round", side_effect=corrupt_ledger):
+                    with self.assertRaises(ValueError):
+                        run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                      project_root=Path(__file__).parents[1], evaluator=FakeEvaluator(),
+                                      limits=PortfolioLimits(episodes=10, seconds=600, estimated_usd=10, hourly_rate=1))
+                summary = json.loads(next(root.glob("portfolio-*/portfolio_summary.json")).read_text(encoding="utf-8"))
+            self.assertTrue(summary["accounting_incomplete"])
+            self.assertIsNone(summary["physical_attempts"])
+            self.assertFalse(summary["certified"])
+
     def test_confirmation_is_buffered_per_job_until_each_five_case_gate_is_complete(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
         from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
