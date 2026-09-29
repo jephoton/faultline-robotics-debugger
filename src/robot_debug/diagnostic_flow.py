@@ -52,6 +52,7 @@ class DiagnosticFlow:
         self.gate_outcomes: list[str] = []
         self.candidate_attempts = 0
         self.decisions: list[dict[str, object]] = []
+        self.rounds: list[dict[str, object]] = []
         self.stop_reason: str | None = None
 
     @property
@@ -97,6 +98,16 @@ class DiagnosticFlow:
         self.phase = "stopped"
         self.stop_reason = reason
 
+    def _has_accepted_reduction(self) -> bool:
+        return any(item.get("phase") == "reduce_candidate" and item.get("decision") == "pass"
+                   for item in self.decisions)
+
+    def _finish_reduction(self, reason: str) -> None:
+        if self._has_accepted_reduction():
+            self.phase = "controls"
+        else:
+            self._stop(reason)
+
     def _next_candidate(self) -> None:
         self.gate_outcomes = []
         while self.delta_index < len(self.deltas):
@@ -108,7 +119,7 @@ class DiagnosticFlow:
                 return
             self.delta_index += 1
             self.candidate_index = 0
-        self.phase = "controls"
+        self._finish_reduction("no_accepted_reduction")
 
     def apply_round(self, outcomes: Mapping[str, str]) -> None:
         """Commit one complete round; never infer an omitted or invalid result."""
@@ -116,6 +127,7 @@ class DiagnosticFlow:
         if not expected or set(outcomes) != set(expected):
             raise ValueError("round results must match every pending case ID exactly")
         ordered = [outcomes[case_id] for case_id in expected]
+        self.rounds.append({"case_ids": list(expected), "outcomes": list(ordered)})
         if any(outcome not in {"success", "policy_failure"} for outcome in ordered):
             self._stop("invalid_or_infrastructure_outcome")
             return
@@ -153,7 +165,7 @@ class DiagnosticFlow:
                 if len(self.gate_outcomes) == 5:
                     self._stop("gate_exhausted_without_decision")
                 elif gate_phase == "reduce_candidate" and self.candidate_attempts >= self.candidate_attempt_budget:
-                    self.phase = "controls"
+                    self._finish_reduction("candidate_budget_exhausted_without_reduction")
                 return
             if gate_phase == "reduction_parent":
                 if decision is GateDecision.REJECT:
@@ -174,7 +186,7 @@ class DiagnosticFlow:
             else:
                 self.candidate_index += 1
             if self.candidate_attempts >= self.candidate_attempt_budget:
-                self.phase = "controls"
+                self._finish_reduction("candidate_budget_exhausted_without_reduction")
             else:
                 self._next_candidate()
         elif self.phase == "controls":
@@ -196,7 +208,7 @@ class DiagnosticFlow:
             "current_rect": asdict(self.current_rect) if self.current_rect else None,
             "delta_index": self.delta_index, "candidate_index": self.candidate_index,
             "gate_outcomes": self.gate_outcomes, "candidate_attempts": self.candidate_attempts,
-            "decisions": self.decisions, "stop_reason": self.stop_reason,
+            "decisions": self.decisions, "rounds": self.rounds, "stop_reason": self.stop_reason,
         }, allow_nan=False))
 
     @classmethod
@@ -205,30 +217,20 @@ class DiagnosticFlow:
         flow = cls(**config)
         if snapshot.get("config") != flow.snapshot()["config"]:
             raise ValueError("stored diagnostic configuration differs")
-        phase = snapshot.get("phase")
-        if phase not in {"nominal", "search", "confirm", "reduction_sentinel",
-                         "reduction_parent", "reduce_candidate", "controls", "certified", "stopped"}:
-            raise ValueError("unknown stored diagnostic phase")
-        flow.phase = phase
-        flow.selected_search_id = snapshot.get("selected_search_id")
-        raw_rect = snapshot.get("current_rect")
-        flow.current_rect = Rect(**raw_rect) if isinstance(raw_rect, dict) else None
-        for name in ("delta_index", "candidate_index", "candidate_attempts"):
-            value = snapshot.get(name)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-                raise ValueError(f"invalid stored {name}")
-            setattr(flow, name, value)
-        outcomes = snapshot.get("gate_outcomes")
-        if not isinstance(outcomes, list) or len(outcomes) > 5 or any(
-            item not in {"success", "policy_failure"} for item in outcomes
-        ):
-            raise ValueError("invalid stored gate outcomes")
-        flow.gate_outcomes = list(outcomes)
-        decisions = snapshot.get("decisions")
-        if not isinstance(decisions, list):
-            raise ValueError("invalid stored decisions")
-        flow.decisions = list(decisions)
-        flow.stop_reason = snapshot.get("stop_reason")
-        if flow.phase not in {"stopped", "certified"} and not flow.pending():
-            raise ValueError("restored active state has no pending work")
+        rounds = snapshot.get("rounds")
+        if not isinstance(rounds, list):
+            raise ValueError("stored diagnostic rounds are missing")
+        for round_record in rounds:
+            if not isinstance(round_record, dict) or set(round_record) != {"case_ids", "outcomes"}:
+                raise ValueError("invalid stored round record")
+            case_ids = round_record["case_ids"]
+            outcomes = round_record["outcomes"]
+            if not isinstance(case_ids, list) or not isinstance(outcomes, list) or len(case_ids) != len(outcomes):
+                raise ValueError("invalid stored round results")
+            try:
+                flow.apply_round(dict(zip(case_ids, outcomes)))
+            except (TypeError, ValueError) as error:
+                raise ValueError("stored round does not replay") from error
+        if flow.snapshot() != snapshot:
+            raise ValueError("stored diagnostic state does not match replayed decisions")
         return flow

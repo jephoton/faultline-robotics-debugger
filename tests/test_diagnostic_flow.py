@@ -112,6 +112,38 @@ class DiagnosticFlowTests(unittest.TestCase):
         flow.apply_round({case_id: "success" for case_id in flow.pending()})
         self.assertTrue(flow.certified)
 
+    def test_budget_exhausted_without_accepted_smaller_mask_cannot_certify(self):
+        flow = self.make_flow(candidate_attempt_budget=1)
+        self.advance_to_confirmation(flow)
+        flow.apply_round({f"confirm-{i:02d}": "policy_failure" for i in range(1, 6)})
+        flow.apply_round({"reduction-sentinel": "success"})
+        flow.apply_round({case_id: "policy_failure" for case_id in flow.pending()})
+        flow.apply_round({case_id: "policy_failure" for case_id in flow.pending()})
+        self.assertEqual(flow.phase, "stopped")
+        self.assertFalse(flow.certified)
+
+    def test_all_rejected_candidates_cannot_certify(self):
+        flow = self.make_flow(candidate_attempt_budget=20)
+        self.advance_to_confirmation(flow)
+        flow.apply_round({f"confirm-{i:02d}": "policy_failure" for i in range(1, 6)})
+        flow.apply_round({"reduction-sentinel": "success"})
+        flow.apply_round({case_id: "policy_failure" for case_id in flow.pending()})
+        for _ in range(4):
+            flow.apply_round({case_id: "success" for case_id in flow.pending()})
+        self.assertEqual(flow.phase, "stopped")
+        self.assertFalse(flow.certified)
+
+    def test_restore_rejects_phase_jump_without_recorded_gates(self):
+        flow = self.make_flow()
+        forged = flow.snapshot()
+        forged["phase"] = "controls"
+        with self.assertRaises(ValueError):
+            DiagnosticFlow.restore(forged, search=flow.search, deltas=flow.deltas,
+                                   nominal_count=flow.nominal_count,
+                                   candidate_attempt_budget=flow.candidate_attempt_budget,
+                                   control_count=flow.control_count,
+                                   config_hash=flow.config_hash)
+
 
 if __name__ == "__main__":
     unittest.main()
