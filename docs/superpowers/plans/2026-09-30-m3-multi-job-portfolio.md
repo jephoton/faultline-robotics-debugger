@@ -29,8 +29,8 @@ Do not modify the historical M2/M4/M3 evidence, fixed M3 manifest, old single-jo
 
 ## Task 1 — Prove task selection and freeze candidate identities (red checkpoint before live task choice)
 
-- [ ] Read the pinned harness's LIBERO task-selection API and the current `_write_config` output. The existing writer fixes `suite: libero_object`, `seed: 7`, and `max_tasks: 1`; do not infer that changing `episode_indices` changes task ID. Record the exact supported config key and the task-index-to-instruction mapping in a short note under `docs/experiments/` without copying private artifacts. If task selection is unsupported by the pinned harness, stop dependent work and present the narrow adapter choices to Jethro.
-- [ ] Write a failing `tests/test_portfolio_manifest.py` contract for exactly three *distinct* nonnegative task IDs, one frozen suite/checkpoint/family, unique safe job IDs, explicit seed, and stable hash independent of JSON key order. For example, `PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7, family="agentview_rect_occlusion")` must reject `(0, 0, 1)` and a suite other than `libero_object` in this plan.
+- [x] Read the pinned harness's LIBERO task-selection API and the current `_write_config` output. The existing writer fixes `suite: libero_object`, `seed: 7`, and `max_tasks: 1`; do not infer that changing `episode_indices` changes task ID. [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md) records that the pinned harness only truncates a task-list prefix and cannot select exact requested task IDs. The local LIBERO runtime needed to enumerate task instructions is unavailable, so no catalog has been invented. **Dependent work is paused for Jethro's adapter decision.**
+- [x] Write a failing `tests/test_portfolio_manifest.py` contract for exactly three *distinct* nonnegative task IDs, one frozen suite/checkpoint/family, unique safe job IDs, explicit seed, and stable hash independent of JSON key order. For example, `PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7, family="agentview_rect_occlusion")` must reject `(0, 0, 1)` and a suite other than `libero_object` in this plan.
 
 ```python
 manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2),
@@ -41,9 +41,9 @@ with self.assertRaises(ValueError):
     PortfolioManifest(suite="libero_object", task_ids=(0, 0, 1),
                       seed=7, family="agentview_rect_occlusion")
 ```
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_portfolio_manifest -v`; expect failure from missing `portfolio_manifest` API, not a malformed test.
-- [ ] Implement the immutable manifest and hash in `src/robot_debug/portfolio_manifest.py`; serialize with sorted JSON, reject bool/negative/duplicate task IDs and path-unsafe job IDs, and keep the exact selected task list in every session. Re-run the focused tests. Commit `feat(portfolio): freeze task job identities` with only source/test/note paths.
-- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and two or three candidate tasks to Jethro. Jethro chooses the exact three task IDs before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
+- [x] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_portfolio_manifest -v`; it initially failed because the `portfolio_manifest` API did not exist.
+- [x] Implement the immutable manifest and hash in `src/robot_debug/portfolio_manifest.py`; serialize with sorted JSON, reject bool/negative/duplicate task IDs and path-unsafe job IDs, and keep the exact selected task list in every session. Focused tests pass and commit `feat(portfolio): freeze task job identities` (`9704e5a`) contains only source/test/note paths.
+- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and two or three candidate tasks to Jethro. **Blocked until Jethro chooses whether the local adapter gains an exact task selector.** Jethro then chooses the exact three task IDs before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
 
 ## Task 2 — Add explicit task selection without regressing old runs (green after API proof)
 
