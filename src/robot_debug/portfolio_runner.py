@@ -97,12 +97,18 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
              candidate_attempt_budget=12, control_count=5,
              config_hash=f"{manifest.config_hash}:{job.job_id}") for job in manifest.jobs}
     buffered: dict[str, dict[str, str]] = {job.job_id: {} for job in manifest.jobs}
+    phase_times: dict[str, dict[str, float | None]] = {
+        job.job_id: {"apparent_failure": None, "reproducible_failure": None,
+                     "reduced_failure": None, "terminal": None}
+        for job in manifest.jobs
+    }
     summary: dict[str, Any] = {"schema_version": 1, "session_id": session.name, "mode": mode,
         "manifest": manifest.to_mapping(), "manifest_hash": manifest.config_hash,
         "limits": asdict(limits), "cost_basis": "warm elapsed seconds times one full VM rate; not billed allocation cost",
         "waves": [], "jobs": {}, "physical_attempts": 0, "valid_episodes": 0,
         "invalid_attempts": 0, "uncertain_attempts": 0, "elapsed_seconds": 0.0,
         "warm_diagnostic_estimate_usd": 0.0, "max_observed_evaluator_calls": 0,
+        "accounting_incomplete": False,
         "certified": False, "stop_reason": None}
     evaluator_lock = threading.Lock()
     active_evaluator_calls = 0
@@ -117,10 +123,12 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         summary["elapsed_seconds"] = elapsed()
         summary["warm_diagnostic_estimate_usd"] = elapsed() * limits.hourly_rate / 3600
         summary["max_observed_evaluator_calls"] = max_evaluator_calls
-        summary["certified"] = all(flow.certified for flow in flows.values())
+        summary["certified"] = not summary["accounting_incomplete"] and all(flow.certified for flow in flows.values())
         for job_id, flow in flows.items():
             job_summary = {"job_id": job_id, "flow": flow.snapshot(), "certified": flow.certified,
-                           "buffered_case_ids": sorted(buffered[job_id])}
+                           "buffered_case_ids": sorted(buffered[job_id]),
+                           "phase_timestamps_seconds": phase_times[job_id],
+                           "terminal_status": "certified" if flow.certified else flow.stop_reason}
             summary["jobs"][job_id] = job_summary
             job_dir = session / "jobs" / job_id
             job_dir.mkdir(parents=True, exist_ok=True)
@@ -128,6 +136,24 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         _atomic_json(session / "portfolio_summary.json", summary)
 
     save()
+
+    def reconcile_exception(error: BaseException, ledger_path: Path | None = None) -> None:
+        """Persist a fail-closed partial record before propagating unexpected errors."""
+        if ledger_path is not None and ledger_path.is_file():
+            try:
+                durable = json.loads(ledger_path.read_text(encoding="utf-8"))
+                launched = sum(record.get("state") != "prepared"
+                               for record in durable.get("attempt_records", {}).values())
+                summary["physical_attempts"] += launched
+            except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+                summary["physical_attempts"] = None
+                summary["accounting_incomplete"] = True
+        elif ledger_path is not None:
+            summary["accounting_incomplete"] = True
+            summary["physical_attempts"] = None
+        summary["certified"] = False
+        summary["stop_reason"] = f"runner_exception: {type(error).__name__}: {error}"
+        save(summary["stop_reason"])
     cursor = 0
     wave_number = 0
     while True:
@@ -182,7 +208,11 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
                 "seed": jobs[choice.job_id].seed}
             if rect is not None:
                 options.update(x=rect.x, y=rect.y, width=rect.width, height=rect.height)
-            search._write_config(**options)
+            try:
+                search._write_config(**options)
+            except BaseException as error:
+                reconcile_exception(error)
+                raise
             requests.append(RoundRequest(global_id, config, output)); owners[global_id] = (choice.job_id, choice.case_id)
         ledger = wave_root / "ledger.json"
         def observed_evaluator(*args: Any, **kwargs: Any) -> Any:
@@ -195,10 +225,14 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             finally:
                 with evaluator_lock:
                     active_evaluator_calls -= 1
-        round_summary = run_round(tuple(requests), workers=worker_choice.workers, launch_cutoff=launch_window,
-                                  evaluator=observed_evaluator, ledger_path=ledger, round_root=wave_root,
-                                  interrupt_event=interrupt_event)
-        durable = json.loads(ledger.read_text(encoding="utf-8"))
+        try:
+            round_summary = run_round(tuple(requests), workers=worker_choice.workers, launch_cutoff=launch_window,
+                                      evaluator=observed_evaluator, ledger_path=ledger, round_root=wave_root,
+                                      interrupt_event=interrupt_event)
+            durable = json.loads(ledger.read_text(encoding="utf-8"))
+        except BaseException as error:
+            reconcile_exception(error, ledger)
+            raise
         summary["physical_attempts"] += sum(record.get("state") != "prepared"
                                              for record in durable.get("attempt_records", {}).values())
         summary["valid_episodes"] += sum(result.status == "valid" for result in round_summary.results)
@@ -213,14 +247,37 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         bad = [result for result in round_summary.results if _status(result) not in {"success", "policy_failure"}]
         if bad:
             summary["stop_reason"] = _status(bad[0]); save(); break
-        for result in round_summary.results:
-            job_id, case_id = owners[result.case_id]
-            buffered[job_id][case_id] = _status(result)
+        try:
+            for result in round_summary.results:
+                job_id, case_id = owners[result.case_id]
+                buffered[job_id][case_id] = _status(result)
+        except BaseException as error:
+            reconcile_exception(error)
+            raise
         for job_id, flow in flows.items():
             expected = flow.pending(search_limit=1 if flow.phase == "search" else None)
             if expected and set(expected).issubset(buffered[job_id]):
                 outcomes = {case: buffered[job_id].pop(case) for case in expected}
-                flow.apply_round(outcomes)
+                previous_phase = flow.phase
+                prior_decisions = len(flow.decisions)
+                try:
+                    flow.apply_round(outcomes)
+                except BaseException as error:
+                    # This ledger was already counted immediately after the
+                    # durable read above; do not double-count it on routing.
+                    reconcile_exception(error)
+                    raise
+                marked = elapsed()
+                timestamps = phase_times[job_id]
+                if previous_phase == "search" and flow.phase == "confirm":
+                    timestamps["apparent_failure"] = marked
+                if previous_phase == "confirm" and flow.phase == "reduction_sentinel":
+                    timestamps["reproducible_failure"] = marked
+                if (timestamps["reduced_failure"] is None
+                        and any(item.get("decision") == "pass" for item in flow.decisions[prior_decisions:])):
+                    timestamps["reduced_failure"] = marked
+                if flow.phase in {"stopped", "certified"} and timestamps["terminal"] is None:
+                    timestamps["terminal"] = marked
         save()
     save(summary["stop_reason"])
     return summary

@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SOURCE_ROOT = Path(__file__).parents[1] / "src"
@@ -127,6 +128,57 @@ class PortfolioRunnerTests(unittest.TestCase):
         self.assertEqual("stopped", summary["jobs"]["task-00"]["flow"]["phase"])
         self.assertEqual("nominal_gate_failed", summary["jobs"]["task-00"]["flow"]["stop_reason"])
         self.assertEqual("search", summary["jobs"]["task-01"]["flow"]["phase"])
+
+    def test_persists_per_job_gate_timestamps_and_nulls_for_absent_gates(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        def evaluator(request, *, launch_observer, **_kwargs):
+            launch_observer(7900 + len(request.case_id), f"vla-eval-{7900 + len(request.case_id)}")
+            request.output_dir.mkdir(parents=True); evidence = request.output_dir / "aggregate.json"
+            evidence.write_text("{}", encoding="utf-8")
+            success = request.case_id.startswith("task-01") or any(token in request.case_id for token in ("nominal", "sentinel", "control"))
+            return {"status": "valid", "outcome": "success" if success else "policy_failure",
+                    "evidence_paths": [str(evidence)]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                    project_root=Path(__file__).parents[1], evaluator=evaluator,
+                                    limits=PortfolioLimits(episodes=100, seconds=600, estimated_usd=10, hourly_rate=1))
+            saved = json.loads((root / summary["session_id"] / "portfolio_summary.json").read_text(encoding="utf-8"))
+        phase = saved["jobs"]["task-00"]["phase_timestamps_seconds"]
+        self.assertIsNotNone(phase["apparent_failure"])
+        self.assertIsNotNone(phase["reproducible_failure"])
+        self.assertIsNotNone(phase["reduced_failure"])
+        self.assertLessEqual(phase["apparent_failure"], phase["reproducible_failure"])
+        self.assertLessEqual(phase["reproducible_failure"], phase["reduced_failure"])
+        absent = saved["jobs"]["task-01"]["phase_timestamps_seconds"]
+        self.assertIsNone(absent["apparent_failure"])
+        self.assertIsNotNone(absent["terminal"])
+
+    def test_exception_after_durable_launch_intent_reconciles_or_marks_accounting_unknown(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        import robot_debug.portfolio_runner as runner
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        original = runner.run_round
+        def after_round(*args, **kwargs):
+            original(*args, **kwargs)
+            raise RuntimeError("injected after durable launch")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(runner, "run_round", side_effect=after_round):
+                with self.assertRaisesRegex(RuntimeError, "injected"):
+                    run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                  project_root=Path(__file__).parents[1], evaluator=FakeEvaluator(),
+                                  limits=PortfolioLimits(episodes=10, seconds=600, estimated_usd=10, hourly_rate=1))
+            saved = next(root.glob("portfolio-*/portfolio_summary.json"))
+            summary = json.loads(saved.read_text(encoding="utf-8"))
+        self.assertFalse(summary["certified"])
+        self.assertIn("runner_exception", summary["stop_reason"])
+        self.assertTrue(summary["accounting_incomplete"] or summary["physical_attempts"] >= 1)
 
     def test_confirmation_is_buffered_per_job_until_each_five_case_gate_is_complete(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
