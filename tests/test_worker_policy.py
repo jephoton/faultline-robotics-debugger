@@ -74,6 +74,11 @@ class WorkerPolicyTests(unittest.TestCase):
         choice = self.choose(measured_seconds={1: 10, 2: 10, 4: 10})
         self.assertEqual(choice.workers, 1)
 
+    def test_enormous_inputs_fail_as_validation_errors(self):
+        for field in ("seconds_left", "ready_count"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.choose(**{field: 10 ** 1000})
+
 
 if __name__ == "__main__":
     unittest.main()

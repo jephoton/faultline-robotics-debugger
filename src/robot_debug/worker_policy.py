@@ -23,7 +23,10 @@ class WorkerChoice:
 def _number(name: str, value: object, *, positive: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a finite number")
-    result = float(value)
+    try:
+        result = float(value)
+    except OverflowError as error:
+        raise ValueError(f"{name} must be a finite number") from error
     if not math.isfinite(result) or result < 0 or (positive and result == 0):
         raise ValueError(f"{name} must be finite and {'positive' if positive else 'nonnegative'}")
     return result
@@ -45,7 +48,8 @@ def choose_workers(
     trustworthy measurement exists, one worker may run only if the remaining
     full time window is affordable; its reported time is that whole window.
     """
-    if isinstance(ready_count, bool) or not isinstance(ready_count, int) or ready_count < 0:
+    if (isinstance(ready_count, bool) or not isinstance(ready_count, int)
+            or ready_count < 0 or ready_count > 2 ** 53):
         raise ValueError("ready_count must be a nonnegative integer")
     remaining = _number("seconds_left", seconds_left)
     budget = _number("dollars_left", dollars_left)
@@ -94,7 +98,7 @@ def choose_workers(
         )
         total = warm + reserve
         cost = total * rate / 3600
-        if total <= remaining and cost <= budget:
+        if math.isfinite(total) and math.isfinite(cost) and total <= remaining and cost <= budget:
             reason = "fallback: inconsistent parallel measurements" if not parallel_consistent else "measured one-GPU throughput estimate"
             choices.append(WorkerChoice(workers, reason, total, cost))
     if not choices:
