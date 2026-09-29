@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from robot_debug.diagnostic_flow import DiagnosticFlow
 from robot_debug.diagnostic_round import RoundRequest, run_round
+from robot_debug.attempt_ledger import AttemptLedger
 from robot_debug.portfolio_manifest import PortfolioManifest
 from robot_debug.portfolio_policy import PortfolioBounds, choose_wave
 from robot_debug.reduce import Rect, candidates
@@ -66,6 +67,12 @@ def _rect_for(flow: DiagnosticFlow, case_id: str) -> Rect | None:
 
 def _status(result: Any) -> str:
     return result.outcome if result.status == "valid" and result.outcome else result.status
+
+
+def _launched_attempts(case_ids: list[str], durable: Mapping[str, Any]) -> int:
+    """Validate the authoritative ledger before counting its launch intents."""
+    ledger = AttemptLedger.from_snapshot(case_ids, dict(durable))
+    return sum(record["state"] != "prepared" for record in ledger.attempts.values())
 
 
 def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path | str,
@@ -123,7 +130,9 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         summary["elapsed_seconds"] = elapsed()
         summary["warm_diagnostic_estimate_usd"] = elapsed() * limits.hourly_rate / 3600
         summary["max_observed_evaluator_calls"] = max_evaluator_calls
-        summary["certified"] = not summary["accounting_incomplete"] and all(flow.certified for flow in flows.values())
+        summary["certified"] = (not summary["accounting_incomplete"]
+                                 and not str(summary["stop_reason"] or "").startswith("runner_exception")
+                                 and all(flow.certified for flow in flows.values()))
         for job_id, flow in flows.items():
             job_summary = {"job_id": job_id, "flow": flow.snapshot(), "certified": flow.certified,
                            "buffered_case_ids": sorted(buffered[job_id]),
@@ -137,15 +146,17 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
 
     save()
 
-    def reconcile_exception(error: BaseException, ledger_path: Path | None = None) -> None:
+    def reconcile_exception(error: BaseException, ledger_path: Path | None = None,
+                            case_ids: list[str] | None = None) -> None:
         """Persist a fail-closed partial record before propagating unexpected errors."""
         if ledger_path is not None and ledger_path.is_file():
             try:
                 durable = json.loads(ledger_path.read_text(encoding="utf-8"))
-                launched = sum(record.get("state") != "prepared"
-                               for record in durable.get("attempt_records", {}).values())
+                if case_ids is None:
+                    raise ValueError("expected case IDs are required for ledger accounting")
+                launched = _launched_attempts(case_ids, durable)
                 summary["physical_attempts"] += launched
-            except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+            except (OSError, json.JSONDecodeError, TypeError, AttributeError, ValueError):
                 summary["physical_attempts"] = None
                 summary["accounting_incomplete"] = True
         elif ledger_path is not None:
@@ -231,10 +242,14 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
                                       interrupt_event=interrupt_event)
             durable = json.loads(ledger.read_text(encoding="utf-8"))
         except BaseException as error:
-            reconcile_exception(error, ledger)
+            reconcile_exception(error, ledger, [request.case_id for request in requests])
             raise
-        summary["physical_attempts"] += sum(record.get("state") != "prepared"
-                                             for record in durable.get("attempt_records", {}).values())
+        try:
+            summary["physical_attempts"] += _launched_attempts(
+                [request.case_id for request in requests], durable)
+        except ValueError as error:
+            reconcile_exception(error, ledger, [request.case_id for request in requests])
+            raise
         summary["valid_episodes"] += sum(result.status == "valid" for result in round_summary.results)
         summary["invalid_attempts"] += sum(result.status in {"invalid_evidence", "infrastructure_error"} for result in round_summary.results)
         summary["uncertain_attempts"] += sum(result.status == "uncertain" for result in round_summary.results)
