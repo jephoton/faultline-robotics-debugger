@@ -13,7 +13,10 @@ added a controlled agent-view occlusion, and implemented replayable experiment
 records plus a local evidence viewer. The September 27 bounded run reduced a
 reproducible 25%-area occlusion to a 14.0625%-area case while matched nominal
 controls succeeded. This is a tested, budget-local reduction, not a proven
-minimum. Parallel cost/performance evaluation is the next milestone.
+minimum. The September 29 M3 comparison completed 48/48 valid fixed-work
+episodes without outcome drift; four evaluator workers delivered 3.715× warm
+throughput versus one on the same Nebius VM. That is a narrow replay-throughput
+result, not a claim of faster adaptive discovery or finalized billed cost.
 
 Collaboration: cloud compute is an available main resource; architectural and design choices are discussed with Jethro before adoption, with explanations to support learning. Work is committed frequently using Conventional Commits. See [project instructions](AGENTS.md).
 
@@ -24,6 +27,7 @@ Collaboration: cloud compute is an available main resource; architectural and de
 - [Attempt-record decision](docs/decisions/0002-attempt-record-boundary.md): the portable record shared by future runners, reducers, and reports.
 - [Cloud-pilot preflight](docs/setup/cloud-pilot.md): credential-safe resource, cost, and cleanup checklist.
 - [M4 reduction evidence](docs/experiments/m4-reducer.md): exact candidate outcomes, budget, replay manifest, and claim limits.
+- [M3 parallel evidence](docs/experiments/m3-parallel.md): fixed-work 1/2/4-worker results, local evidence, cost boundary, and claim limits.
 - [Hackathon tool feedback](FEEDBACK.md): observed Nebius and NVIDIA strengths and friction, with Token Factory clearly marked untested.
 
 Model training and formal verification are outside the initial scope.

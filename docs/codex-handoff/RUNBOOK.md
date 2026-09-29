@@ -102,6 +102,14 @@ the benchmark reporter. The September 29 live pilot passed and its copied
 evidence is under ignored `artifacts/m3-pilot-live-20260929/`; do not rerun
 without a new cap and refreshed resource preflight.
 
+The separately approved full M3 comparison also completed September 29.
+Its ignored source evidence is under `artifacts/m3-comparison-20260929/`;
+`evaluation/m3_comparison.md` is the no-cost fail-closed report and
+`warm-cost-report/m3_comparison.md` allocates compute-only warm-mode cost.
+See `docs/experiments/m3-parallel.md` before interpreting either report.
+The viewer health endpoint returned `ok` and its catalog indexed the new
+episodes. The VM was stopped and its temporary SSH ingress removed.
+
 The workstation watchdog is `PYTHONPATH=src python3 scripts/run_vm_watchdog.py
 check|arm|watch --record <ignored-record.json> --control-root
 <ignored-control-root>`. The JSON record contains only schema version, one
@@ -120,3 +128,10 @@ The retained disk bills even after the VM stops. The September 29 real
 read-only `check` returned zero. The guard was then armed for the approved
 pilot, and the VM was independently stopped after results were copied. Its
 retained disk remains billable; decide retention within the approved window.
+Before the full comparison, a plain detached guard disappeared without a
+terminal log event. A Windows Task Scheduler-owned process running the same
+exact-VM `watch` command remained `Running` throughout that session; the
+task was stopped and unregistered only after `STOPPED` was independently
+verified. Treat process liveness as a pre-start gate on any future session,
+and re-authenticate the CLI before starting: one M3 start request reached
+Nebius just as local OAuth expired and had to be stopped through the console.

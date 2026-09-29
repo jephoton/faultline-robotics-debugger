@@ -10,7 +10,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's fixed-workload runner, durable interruption/recovery, and comparison reporter are implemented and locally reviewed; the live pilot and measured 1/2/4-worker comparison have not run.
+**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. Billing reconciliation and the post-M3 product flow remain next.
 
 **Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
@@ -260,8 +260,10 @@ We have completed **M1: reproducible runner** and the engineering gate for
   suite. The September 27 live run certified a 14.0625%-area rectangle, then
   exhausted its 12-attempt candidate budget; see
   [M4 evidence](docs/experiments/m4-reducer.md).
-- M3 has not started. Its equal-work 1/2/4-worker comparison should accelerate
-  this real diagnostic workload, subject to a new topology and spending gate.
+- M3 completed its equal-work 1/2/4-worker comparison on September 29. All
+  48 episodes were valid; four workers gave 3.715× warm throughput versus one
+  on the same VM. Provider billing reconciliation remains pending; see
+  [M3 evidence](docs/experiments/m3-parallel.md).
 
 ### Immediate decision after the bounded session
 
@@ -389,12 +391,11 @@ M2 and the bounded M4 live reduction are complete for one named policy, task,
 initial state, and visual-occlusion family. M3's local runner and safety work
 are integrated in `main`; the fixed 16-item workload, evidence contract, and
 recovery boundary are recorded in [M3 experiment notes](docs/experiments/m3-parallel.md).
-The next material step is the bounded live 2-worker pilot, followed only after
-valid evidence by the equal-work 1/2/4-worker comparison. The accepted
-single-VM/shared-server topology does not authorize spending: first refresh
-Nebius account, credit, quota, capacity, exact price and VM state; arm an
-independent exact-VM stop watchdog; calculate a run-specific cap and obtain
-Jethro's separate approval. Tool feedback is
+The bounded live 2-worker pilot and the equal-work 1/2/4-worker comparison
+are complete; see [M3 experiment notes](docs/experiments/m3-parallel.md).
+The next material choices are disk retention/teardown, the replayable-case
+import design, and the bounded Nemotron product pilot. No further paid work
+is implied by M3 completion. Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
 repository audit are explicit submission gates after M3, as Jethro requested.
 

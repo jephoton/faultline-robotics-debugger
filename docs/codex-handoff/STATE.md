@@ -40,7 +40,11 @@
   Integrated Windows Python 3.11 passed 242 tests (3 POSIX-only skips), and
   focused WSL driver/lifecycle tests passed 66. The September 29 two-episode
   Nebius pilot passed: one nominal success and one reduced-mask failure, both
-  with valid traces and videos. See `docs/experiments/m3-parallel.md`.
+  with valid traces and videos. The separate full M3 comparison then completed
+  48/48 valid episodes with no outcome drift. Warm 1/2/4-worker times were
+  610.247/310.472/164.256 seconds (1.000/1.966/3.715× speedup). All 48
+  MP4s and traces are in ignored local artifacts and visible in the viewer.
+  See `docs/experiments/m3-parallel.md`.
 
 ## Next material decision
 
@@ -50,15 +54,18 @@ M4's bounded live run and evidence validation are complete; details are in
 repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
 fail-closed resume lease. Whole-branch review and merged-result tests passed.
-The 2-worker live pilot is complete; the subsequent 1/2/4 comparison remains
-separate, unapproved paid work. The exact-VM watchdog was armed before the
-pilot, and the VM was confirmed stopped after evidence copy. Local fake tests
-and this successful pilot do not prove the guard survives workstation sleep,
-lost network, or expired auth. Preflight showed an $11.97 card-funded balance,
-available L40S capacity, and a one-L40S VM with 200 GiB boot disk. The CLI
-calculator reported $1.7468/hour for the VM and $0.0194444/hour for disk,
-pre-tax, on September 29; refresh prices and balance before another run.
-Jethro approved $4/90 minutes for the pilot only. The root
+The 2-worker pilot and separately approved US$5/two-hour 1/2/4 comparison are
+complete. The VM was independently confirmed stopped after evidence copy,
+and the temporary SSH ingress rule was removed. The first plain detached
+watchdog disappeared without a terminal log; the full run instead used an
+OS-managed scheduled task for the same exact-VM guard, plus guest shutdown.
+The scheduled task was removed after stop verification. This does not prove
+the guard survives workstation sleep, lost network, or expired auth. CLI
+authentication did expire during one short start, which was stopped before
+the clean full run. The calculator reported $1.7468/hour for the VM and
+$0.0194444/hour for disk, pre-tax, on September 29. Operation bounds give
+an estimated $1.1038 compute including assumed 9% tax across both VM-on
+intervals, before separate disk accrual; posted billing is pending. The root
 `FEEDBACK.md` tracks submission feedback by actual tool.
 
 The M4 reducer kernel's September 21 external-provider handoff is historical
@@ -76,7 +83,8 @@ only when investigating M4 history; do not treat it as an active instruction.
 - The retained 200 GiB boot disk continues to accrue storage cost while the VM
   is stopped. Decide storage/teardown within the pilot's approved 24-hour
   retention window; preserve any needed model cache and copied evidence
-  explicitly. The temporary SSH ingress rule was removed after the pilot.
+  explicitly. Both pilot and comparison temporary SSH ingress rules were
+  removed.
 - The position failure is empirical and spatially specific, not a causal or
   universal robustness claim.
 - The M3 ledger persists `prepared`, `submitting_unknown`, `active`,

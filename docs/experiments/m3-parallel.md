@@ -1,6 +1,6 @@
 # M3 fixed replay workload contract
 
-**Status:** workload identity frozen; two-episode live pilot passed September 29; full 1/2/4-worker comparison not authorized
+**Status:** September 29 live 1/2/4-worker comparison complete; billing reconciliation pending
 
 **Harness:** `allenai/vla-evaluation-harness` commit `35f1200eb15608aa898f727a3722f7eef889c6cd`
 
@@ -154,6 +154,57 @@ it is investigated.
 
 ## Current live-run status
 
+### Equal-work comparison (September 29)
+
+The approved US$5/two-hour comparison completed on the existing one-L40S VM,
+with one shared GR00T server. Each mode used the identical frozen 16-item
+manifest (`2c815047f734a691b8b55db0dc15521afd175962d7483a7a9f8f06463cd0338a`):
+
+| Evaluator workers | Valid | Nominal success | Mask policy failure | Warm elapsed | Speedup vs 1 | Efficiency |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 16/16 | 8/8 | 8/8 | 610.247 s | 1.000× | 1.000 |
+| 2 | 16/16 | 8/8 | 8/8 | 310.472 s | 1.966× | 0.983 |
+| 4 | 16/16 | 8/8 | 8/8 | 164.256 s | 3.715× | 0.929 |
+
+The fail-closed reporter accepted all three fresh, complete summaries and
+found no outcome drift. The local ignored tree
+`artifacts/m3-comparison-20260929/` contains all 48 non-empty MP4s and
+48 non-empty JSONL traces, plus the manifests, per-case configs/results,
+and `evaluation/m3_comparison.json`/`.md`. The running viewer indexes these
+episodes. The archive `artifacts/m3-comparison-20260929.tar.gz` is another
+local copy; none of this evidence is in Git or off-machine backup.
+
+The CLI calculator's full VM rate was US$1.7468/hour before tax. Allocating
+only each mode's warm elapsed seconds gives **compute-only estimates** of
+US$0.2961, US$0.1506, and US$0.0797 for 1/2/4 workers respectively
+(US$0.01851, US$0.00942, and US$0.00498 per valid episode). These are shown
+in `warm-cost-report/`; they exclude shared setup and teardown, disk, and
+tax, and are **not** provider-billed per-mode costs. The mode time saved on
+one VM should reduce marginal compute cost when the overhead is held fixed.
+
+There were two VM-on intervals: a short 229-second start aborted when CLI
+authentication expired, and the main 1,858-second session. Using the
+operation creation-to-finish bounds (2,087 seconds total) gives a
+conservative US$1.0127 compute estimate before tax, or US$1.1038 with an
+assumed 9% tax; approximately 1,002 seconds of those bounds were outside
+the three warm mode clocks. This is **not an invoice**. Posted billing may
+lag, and the retained 200 GiB boot disk accrues separately while stopped.
+The VM was verified `STOPPED` after evidence copy and the temporary
+workstation-only SSH ingress rule was removed. An OS-managed Windows task
+kept the exact-VM guard running during the comparison; it was removed only
+after independent stop verification. Guest shutdown was backup. The first
+plain detached guard disappeared without a terminal log event, so it was
+not trusted for the run. No further paid mode is required for M3.
+
+This supports a narrow systems claim: on this pinned task/policy, overlapping
+simulator/evaluator processes improved fixed-work replay throughput on one
+shared-server VM without changing these observed outcomes. It does not prove
+concurrent model inference, generalization, adaptive search acceleration,
+or a universal cloud-cost optimum. The next product work is a separately
+designed import/Nemotron flow, not an automatic extension of M3.
+
+### Two-episode pilot
+
 The separately labeled two-episode Nebius pilot ran on September 29 within
 Jethro's US$4/90-minute cap. Both evaluators ran concurrently on one L40S VM
 against the pinned harness and shared GR00T server. `nominal-01` succeeded
@@ -168,10 +219,10 @@ null; billable end-to-end cost awaits provider reconciliation.
 The VM was stopped promptly after evidence copy, and the temporary SSH
 ingress rule was removed. Its retained 200 GiB boot disk still incurs storage
 charges; decide retention or teardown within the approved 24-hour window.
-The independent exact-VM guard remains armed until its UTC deadline. No
-further paid run is approved.
+At that point the pilot did not authorize the later comparison; Jethro
+subsequently approved its separate US$5/two-hour cap.
 
-No full M3 1/2/4-worker comparison is authorized. The local runner uses a durable per-case
+The local runner uses a durable per-case
 attempt ledger: it persists uncertain submission before enqueueing, captures
 the full pending result before releasing Future ownership, and derives counts
 and visible results from terminal ledger records. On interruption, a late
@@ -194,9 +245,9 @@ containment: the pinned harness can spawn `docker run`, and a daemon request
 may remain in flight even after local process-group termination and an
 absent-container observation. A stuck thread can also outlive the CLI's
 partial-summary deadline. The runner's cleanup observation is not permission
-to resume after uncertainty. An independent exact-VM stop watchdog remains
-the final cost boundary for the later pilot, together with refreshed resource
-preflight and a separately approved run-specific cap.
+to resume after uncertainty. The independent exact-VM stop guard and guest
+shutdown remained the cost boundary for the later comparison, together with
+refreshed resource preflight and its separately approved cap.
 
 The separately labeled `pilot` command now runs only `build_manifest(1)` with
 two workers in `m3-pilot-workers-2/`. It requires nominal success and reduced
@@ -205,4 +256,5 @@ drifted results are non-comparable. The reporter refuses pilot summaries.
 The detached Windows exact-VM watchdog passed a real read-only `check` and
 was armed before the VM start, with guest shutdown as backup. The pilot
 completed and the VM was independently confirmed stopped before the guard's
-deadline. Pilot success does not authorize the 48-episode comparison.
+deadline. Pilot success alone did not authorize the later 48-episode
+comparison.
