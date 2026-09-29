@@ -18,7 +18,8 @@
 | --- | --- |
 | `src/robot_debug/worker_policy.py` | Pure 1/2/4-worker choice and persisted reason; no provisioning. |
 | `src/robot_debug/diagnostic_flow.py` | Pure ordered find/confirm/reduce state transitions using existing rules. |
-| `src/robot_debug/diagnostic_round.py` | Bounded round contract, unique request IDs, ordered result reconciliation and fail-closed state. |
+| `src/robot_debug/diagnostic_round.py` | Bounded round contract and adapter into a shared M3 safety core. |
+| `scripts/run_parallel_eval.py` | Extract its internal ledger/launch/containment loop for reuse without changing the frozen benchmark/pilot wrappers. |
 | `scripts/run_diagnostic_loop.py` | CLI/session orchestration and adaptation to existing evaluator launch/config/evidence functions. |
 | `src/robot_debug/diagnostic_report.py` | Validate two completed sessions and produce honest end-to-end comparison. |
 | `tests/test_worker_policy.py`, `tests/test_diagnostic_flow.py`, `tests/test_diagnostic_round.py`, `tests/test_diagnostic_loop_driver.py`, `tests/test_diagnostic_report.py` | Test-first behavior and fault cases. |
@@ -82,7 +83,7 @@ class RoundResult:
 
 - [ ] Add failing `tests/test_diagnostic_round.py` cases for a round of four uniquely named requests with two workers: never >2 active; store intent before launch; save result before releasing ownership; order terminal results by requested ID, not completion time; timeout/late completion/unknown launch identity makes the round non-certifying and non-resumable; no duplicate output paths or second launch on uncertain resume. Inject a fake evaluator that finishes in reverse order.
 - [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_diagnostic_round -v` and verify missing adapter/API failure.
-- [ ] Implement `src/robot_debug/diagnostic_round.py` using the existing `AttemptLedger` and M3 evaluator containment. Exact public contract: `RoundRequest(case_id, config_path, output_dir)`, `RoundResult(case_id, status, outcome, evidence_paths)`, `run_round(requests, workers, launch_cutoff, evaluator, ledger_path) -> RoundSummary`. Preserve M3's `prepared/submitting_unknown/active/completing_pending/terminal` durability and exact process/container identity. Never infer that a missing output means an attempt did not run.
+- [ ] Extract a narrow internal safety core from `scripts/run_parallel_eval.py` so the existing fixed `run_mode`/`run_pilot_mode` wrappers still enforce their exact manifest, purpose, hash, and reporter contract. Implement `src/robot_debug/diagnostic_round.py` as a separate adapter supplying validated immutable round items and config/evidence callbacks to that same core. Public value types are `RoundRequest(case_id, config_path, output_dir)` and `RoundResult(case_id, status, outcome, evidence_paths)`; the round call takes requests, worker bound, launch cutoff, evaluator, and ledger path. Preserve M3's `prepared/submitting_unknown/active/completing_pending/terminal` durability and exact process/container identity. Never infer that a missing output means an attempt did not run. Do not clone the subprocess scheduler.
 - [ ] Run round tests plus `tests.test_parallel_eval_driver`, including its containment and resume cases; commit `feat(hpc): run durable adaptive rounds` with explicit paths. If extracting M3 internals changes its behavior, stop for coordinator review before a commit.
 
 ## Task 4 — Local full-loop CLI with fake evaluator first (amber)
