@@ -89,6 +89,27 @@ class PortfolioRunnerTests(unittest.TestCase):
         self.assertFalse(result["certified"])
         self.assertEqual("uncertain", result["stop_reason"])
 
+    def test_shared_interrupt_stops_portfolio_with_a_durable_partial_summary(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        interrupted = threading.Event()
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        def interrupting(request, *, launch_observer, **_kwargs):
+            launch_observer(7888, "vla-eval-7888")
+            request.output_dir.mkdir(parents=True); evidence = request.output_dir / "aggregate.json"
+            evidence.write_text("{}", encoding="utf-8"); interrupted.set()
+            return {"status": "valid", "outcome": "success", "evidence_paths": [str(evidence)]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                    project_root=Path(__file__).parents[1], evaluator=interrupting,
+                                    limits=PortfolioLimits(episodes=10, seconds=600, estimated_usd=10, hourly_rate=1),
+                                    interrupt_event=interrupted)
+            self.assertTrue((root / summary["session_id"] / "portfolio_summary.json").is_file())
+        self.assertEqual("interrupted", summary["stop_reason"])
+        self.assertFalse(summary["certified"])
+
 
 if __name__ == "__main__":
     unittest.main()

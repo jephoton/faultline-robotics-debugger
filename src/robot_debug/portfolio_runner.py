@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import threading
 import time
 from typing import Any, Callable, Mapping
 
@@ -69,7 +70,8 @@ def _status(result: Any) -> str:
 
 def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path | str,
                   project_root: Path | str, evaluator: Callable[..., Any], limits: PortfolioLimits,
-                  monotonic_clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
+                  monotonic_clock: Callable[[], float] = time.monotonic,
+                  interrupt_event: threading.Event | None = None) -> dict[str, Any]:
     """Run global durable waves; a bad round stops all jobs fail-closed.
 
     This core intentionally has no production evaluator or resume path.  The
@@ -82,6 +84,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         raise ValueError("mode must be sequential-jobs or adaptive-portfolio")
     if not isinstance(limits, PortfolioLimits) or not callable(evaluator):
         raise ValueError("limits and evaluator are required")
+    if interrupt_event is not None and not isinstance(interrupt_event, threading.Event):
+        raise ValueError("interrupt_event must be a threading.Event")
     root = Path(results_root).resolve()
     project = Path(project_root).resolve()
     session = root / f"portfolio-{mode}-{manifest.config_hash[:12]}"
@@ -122,6 +126,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
     cursor = 0
     wave_number = 0
     while True:
+        if interrupt_event is not None and interrupt_event.is_set():
+            summary["stop_reason"] = "interrupted"; break
         active = [job_id for job_id, flow in flows.items() if flow.phase not in {"stopped", "certified"}]
         if not active:
             if summary["stop_reason"] is None:
@@ -174,7 +180,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             requests.append(RoundRequest(global_id, config, output)); owners[global_id] = (choice.job_id, choice.case_id)
         ledger = wave_root / "ledger.json"
         round_summary = run_round(tuple(requests), workers=worker_choice.workers, launch_cutoff=launch_window,
-                                  evaluator=evaluator, ledger_path=ledger, round_root=wave_root)
+                                  evaluator=evaluator, ledger_path=ledger, round_root=wave_root,
+                                  interrupt_event=interrupt_event)
         durable = json.loads(ledger.read_text(encoding="utf-8"))
         summary["physical_attempts"] += sum(record.get("state") != "prepared"
                                              for record in durable.get("attempt_records", {}).values())
