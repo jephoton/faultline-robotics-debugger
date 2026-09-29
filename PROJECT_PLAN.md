@@ -10,7 +10,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. Billing reconciliation and the post-M3 product flow remain next.
+**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. The adaptive find → confirm → reduce loop is now implemented and locally tested on one GPU topology, but its sequential/adaptive end-to-end cloud comparison and billing reconciliation are not yet done.
 
 **Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
@@ -241,7 +241,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
-### Current roadmap position — September 27
+### Current roadmap position — September 29
 
 We have completed **M1: reproducible runner** and the engineering gate for
 **M2: first failure** on one exact case:
@@ -264,6 +264,13 @@ We have completed **M1: reproducible runner** and the engineering gate for
   48 episodes were valid; four workers gave 3.715× warm throughput versus one
   on the same VM. Provider billing reconciliation remains pending; see
   [M3 evidence](docs/experiments/m3-parallel.md).
+- The accepted [one-GPU adaptive-loop plan](docs/superpowers/plans/2026-09-29-adaptive-loop-one-gpu.md)
+  is locally implemented: ordered grid search → five-replay confirmation →
+  rectangle reduction → fresh controls, using the M3 durable scheduler and
+  a bounded 1/2/4 worker selector. Synthetic sequential/adaptive sessions
+  reach the same certified rectangle, and the reporter refuses a fake timing
+  claim. This is not a measured end-to-end cloud speedup, and its new summaries
+  are not yet represented in the viewer.
 
 ### Immediate decision after the bounded session
 
@@ -393,9 +400,13 @@ are integrated in `main`; the fixed 16-item workload, evidence contract, and
 recovery boundary are recorded in [M3 experiment notes](docs/experiments/m3-parallel.md).
 The bounded live 2-worker pilot and the equal-work 1/2/4-worker comparison
 are complete; see [M3 experiment notes](docs/experiments/m3-parallel.md).
-The next material choices are disk retention/teardown, the replayable-case
-import design, and the bounded Nemotron product pilot. No further paid work
-is implied by M3 completion. Tool feedback is
+The next material choice for M3 is whether to fund a bounded live comparison
+of the complete sequential/adaptive diagnostic loop. This needs fresh balance,
+quota, VM/disk state, price, model-readiness, and independent-stop checks plus
+Jethro's run-specific numeric cap. The fixed-work 3.715× throughput result
+must not be presented as an end-to-end loop speedup. The replayable-case import
+design, Nemotron product pilot, and disk retention/teardown also remain.
+No further paid work is implied by local implementation. Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
 repository audit are explicit submission gates after M3, as Jethro requested.
 

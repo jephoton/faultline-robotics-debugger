@@ -98,10 +98,10 @@ assert sequential["controls_passed"] is adaptive["controls_passed"] is True
 assert adaptive["physical_attempts"] >= adaptive["valid_episodes"]
 ```
 
-- [ ] Write failing `tests/test_diagnostic_loop_driver.py` using a fake evaluator whose deterministic outcomes create one ordered search failure, five confirming replays, a passed reduced rectangle, and successful nominal controls. Run once with `workers=1`, once with policy selection. Assert same certified rectangle/rules, immutable scenario IDs/config hashes, exact recording paths, physical attempt counts, and no over-cap launch. Add timeout and infrastructure fixtures that leave a durable partial report and cannot claim success.
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_diagnostic_loop_driver -v`; verify red for missing CLI/controller.
-- [ ] Implement `scripts/run_diagnostic_loop.py` around Tasks 1–3. CLI needs `--upstream-root`, `--project-root`, `--results-root`, `--policy sequential|adaptive`, `--launch-cutoff-seconds`, `--episode-limit`, `--hourly-rate-usd`, `--max-estimated-usd`, and `--dry-run`; reject billable execution without explicit bounds. Keep one session directory per policy/config hash, atomic JSON summaries, the existing GR00T/LIBERO task and occlusion family, and original seed/initial-state semantics. Dry-run uses a fake evaluator and makes no Nebius call. Reuse existing config generation and evidence parsing; do not reimplement outcome classification.
-- [ ] Run focused tests and `C:\Windows\py.exe -3.11 -m unittest discover -s tests -q`; update verified local command in `docs/codex-handoff/RUNBOOK.md`; commit `feat(diagnostics): orchestrate bounded parallel loop` with explicit paths.
+- [x] Write failing fake-evaluator driver tests for the complete ordered loop, timeout/interruption, and sequential search stopping after its first eligible failure. The local sequential and adaptive fixtures reach the same certified rectangle and controls; a real POSIX SIGTERM test checks that the evaluator PID exits and the session stays partial.
+- [x] Run focused driver tests with `PYTHONPATH=src` and verify red for the missing CLI/controller and subsequent regression cases.
+- [x] Implement `scripts/run_diagnostic_loop.py` around Tasks 1–3 with required bounds, one immutable session per policy/config hash, atomic summaries, the exact prior position-grid order, one sentinel, five confirmation replays, five fresh controls, and contained evaluator cleanup. Dry-run is explicitly fake and makes no Nebius call.
+- [x] Run focused tests and the full Windows suite, update the runbook, and commit `feat(diagnostics): orchestrate bounded parallel loop` plus a reviewed safety fix. The observed full-suite result is 298 tests with four POSIX-only skips; the focused WSL suite passes 92, including real SIGTERM.
 
 ## Task 5 — End-to-end comparison and claim guard (green)
 
@@ -115,16 +115,16 @@ assert report["billed_cost_usd"] is None
 assert report["physical_attempts"]["adaptive"] >= report["valid_episodes"]["adaptive"]
 ```
 
-- [ ] Write failing `tests/test_diagnostic_report.py` cases for matched sequential/adaptive runs, mismatched model/task/seed/perturbation/reducer rules, incomplete or uncertain sessions, and differing physical attempt counts. Exact expected fields: `time_to_apparent_failure_seconds`, `time_to_reproducible_failure_seconds`, `time_to_reduced_failure_seconds`, `end_to_end_seconds`, `valid_episodes`, `physical_attempts`, `estimated_compute_usd`, `final_area_percent`, `same_terminal_result`, `comparable`, and explicit `limitations`.
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_diagnostic_report -v`; verify red for missing report API.
-- [ ] Implement `src/robot_debug/diagnostic_report.py` to read complete immutable summaries, reject unequal frozen scenario contracts or missing evidence, compute VM cost from full-resource rate × elapsed allocation time (never × worker count), and refuse a speedup claim when results/rules differ. Keep billed cost `null` until a provider record is reconciled.
-- [ ] Run focused and full suite, `git diff --check`; commit `feat(hpc): compare end-to-end diagnosis modes` with explicit paths.
+- [x] Write failing reporter tests for matched runs, contract mismatches, partial/uncertain sessions, outcome drift, extra speculative attempts, and fake-timing claim refusal.
+- [x] Run the focused report tests and verify red for the missing API and later claim-boundary regressions.
+- [x] Implement `src/robot_debug/diagnostic_report.py` to replay the pure flow against ordered durable round results, reject unequal frozen contracts or missing evidence references, separate shared-outcome drift from extra attempted cases, and refuse speedup claims for dry runs. Only **warm diagnostic** cost is estimated from the full-VM rate and observed warm elapsed time; full allocation and billed costs remain `null` until lifecycle/billing records exist.
+- [x] Run focused and full suite, `git diff --check`; commit `feat(hpc): compare end-to-end diagnosis modes` plus the claim-boundary fix.
 
 ## Task 6 — Integration review and local handoff (green)
 
-- [ ] Independent reviewer checks spec coverage, order preservation, M2 vs M4 gates, ledger/containment equivalence, timeout behavior, non-certifying partial results, and report claim boundaries. Integration owner resolves findings and re-runs the complete suite (Windows Python 3.11; focused WSL POSIX tests for process groups).
-- [ ] Execute both local fake-evaluator policies, inspect their JSON summaries and artifact paths, and record observed terminal equality plus timing *without* presenting fake timing as a cloud result.
-- [ ] Update `docs/codex-handoff/STATE.md`, `PROJECT_PLAN.md`, and `FEEDBACK.md` only where evidence supports changes. Conventional commit `docs(hpc): record local adaptive-loop readiness`.
+- [x] Independent reviewer checked spec coverage and found signal, drift, cost-label, and direct-invocation gaps; integration owner fixed them and re-ran Windows (298 tests, four POSIX skips) and WSL focused (92 tests) suites. A final separate re-review was unavailable; the integration owner also added and verified the real POSIX SIGTERM test.
+- [x] Execute both local fake-evaluator policies and inspect their JSON summaries: both complete the same nine decision rounds and rectangle in the no-drift fixture (32 physical attempts each). The report marks them logically comparable but refuses a fake speedup number. A first-grid-failure fixture confirms the sequential mode avoids unneeded later grid launches while adaptive extra work is counted explicitly.
+- [x] Update `docs/codex-handoff/STATE.md`, `docs/codex-handoff/RUNBOOK.md`, and `PROJECT_PLAN.md` with the local evidence. `FEEDBACK.md` is unchanged because this implementation made no new Nebius/NVIDIA provider interaction. Conventional commit `docs(hpc): record local adaptive-loop readiness`.
 - [ ] Present a separate live experiment proposal with current Nebius balance/price/capacity, one exact VM, disk retention, watchdog, estimated cost, and sequential/adaptive workload contract. **Do not start the VM without Jethro's run-specific approval.**
 
 ## Dependency, agent, and review map

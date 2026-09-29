@@ -45,8 +45,27 @@
   610.247/310.472/164.256 seconds (1.000/1.966/3.715× speedup). All 48
   MP4s and traces are in ignored local artifacts and visible in the viewer.
   See `docs/experiments/m3-parallel.md`.
+- The accepted one-GPU adaptive diagnostic loop is implemented locally on the
+  `codex/adaptive-loop` branch, not yet a live end-to-end cloud comparison.
+  It combines the prior eight-position grid, five-replay confirmation, M4
+  reduction, and nominal controls with the M3 durable scheduler and 1/2/4
+  worker selector. The reporter replays saved ordered results, separates
+  speculative extra attempts from outcome drift, and refuses speedup claims
+  from fake runs. Windows Python 3.11 passed 298 tests (four POSIX skips);
+  focused WSL passed 92, including a real SIGTERM during an active evaluator.
+  Two inspected synthetic sessions reached the same certified rectangle.
 
 ## Next material decision
+
+For the adaptive loop, the next red gate is a separately approved live
+sequential/adaptive comparison on the one existing GPU VM. Before proposing a
+numeric cap, recheck account balance/expiry, quota/capacity, VM and disk state,
+current full-VM price, model cache/readiness, and the exact-VM stop guard. The
+local code reports only warm diagnostic estimates; VM allocation/startup and
+posted billing are not yet captured. Do not call the fixed-work M3 3.715×
+throughput result an end-to-end adaptive-loop speedup. The current viewer has
+not been wired to these new session summaries; it still displays the prior
+M2/M4 cases and fixed M3 comparison.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work

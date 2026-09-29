@@ -135,3 +135,47 @@ task was stopped and unregistered only after `STOPPED` was independently
 verified. Treat process liveness as a pre-start gate on any future session,
 and re-authenticate the CLI before starting: one M3 start request reached
 Nebius just as local OAuth expired and had to be stopped through the console.
+
+## Adaptive diagnostic loop (local validation only)
+
+The new `scripts/run_diagnostic_loop.py` connects the existing position-grid
+search, five-replay confirmation, and rectangle reduction to the one-GPU
+1/2/4-evaluator scheduler. `sequential` uses one worker; `adaptive` chooses
+bounded concurrency from the recorded M3 warm timing table. Both require a
+fresh results directory, explicit episode/wall/dollar bounds, and the same
+frozen scenario contract. A dry run uses synthetic outcomes and writes fake
+evidence; it does **not** evaluate GR00T or measure cloud speedup.
+
+```powershell
+$env:PYTHONPATH = 'src'
+& 'C:\Windows\py.exe' -3.11 scripts/run_diagnostic_loop.py `
+  --upstream-root . --project-root . --results-root '<fresh-ignored-results-root>' `
+  --policy sequential --launch-cutoff-seconds 600 --episode-limit 100 `
+  --hourly-rate-usd 1 --max-estimated-usd 10 --dry-run
+```
+
+Use the same command with `--policy adaptive` and the same results root to
+create the second synthetic session. `robot_debug.diagnostic_report.compare_sessions`
+accepts their decoded `session_summary.json` objects. It can establish logical
+agreement, but returns no warm speedup for dry runs. The saved report distinguishes
+extra speculative attempts from outcome drift. Real results require the pinned
+Linux evaluator/model environment, a refreshed cloud preflight, an independent
+exact-VM stop guard, and a separately approved cap. Local code readiness is not
+permission to start a VM.
+
+Verified on the adaptive branch: Windows Python 3.11 full discovery passes 298
+tests with four POSIX-only skips. The focused WSL POSIX suite passes 92 tests:
+
+```bash
+PYTHONPATH=src python3 -m unittest \
+  tests.test_parallel_eval_driver tests.test_diagnostic_round \
+  tests.test_diagnostic_loop_driver tests.test_diagnostic_report -q
+```
+
+The POSIX suite includes a real CLI SIGTERM sent while an evaluator child is
+active; it verifies a partial session and an absent evaluator PID afterward.
+Docker-daemon request quiescence still cannot be proven by a local process
+test. `elapsed_seconds` and `warm_diagnostic_estimate_usd` cover only the
+diagnostic window, not VM allocation/startup/shutdown. Full allocation and
+posted billed costs remain unknown until lifecycle and billing evidence is
+captured and reconciled.
