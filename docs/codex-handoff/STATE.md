@@ -57,17 +57,19 @@
 
 ## Next material decision
 
-For the adaptive loop, the next red gate is a separately approved live
-sequential/adaptive comparison on the one existing GPU VM. Before proposing a
-numeric cap, recheck account balance/expiry, quota/capacity, VM and disk state,
-current full-VM price, model cache/readiness, and the exact-VM stop guard. The
-read-only September 29 preflight found a US$10.42 balance, the exact VM stopped,
-and the same US$1.7468/hour pre-tax VM rate. The capacity dashboard showed zero
-regular launches for its exact L40S shape (low chance), so restart is uncertain.
-The proposed US$4/90-minute comparison is in
-`docs/experiments/m3-adaptive-live-proposal.md`; no paid start has been approved.
-The
-local code reports only warm diagnostic estimates; VM allocation/startup and
+Jethro redirected M3's next experiment toward portfolio-first HPC: schedule
+distinct LIBERO Object task-level find → confirm → reduce jobs across one GPU,
+starting with the existing occlusion family. The decision is recorded in
+`docs/decisions/0009-portfolio-first-hpc.md`; the written spec under
+`docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md` awaits
+review. M6 now explicitly adds another perturbation family and exploration of
+other LIBERO suites. The former single-loop US$4/90-minute live proposal is
+paused, not authorized. No portfolio implementation or live run has begun.
+The September 29 read-only preflight found a US$10.42 balance, the exact VM
+stopped, the same US$1.7468/hour pre-tax VM rate, and zero regular launch
+slots for its exact L40S shape (low chance). Refresh all of this and verify
+the watchdog before any new numeric-cap request or VM start. The local code
+reports only warm diagnostic estimates; VM allocation/startup and
 posted billing are not yet captured. Do not call the fixed-work M3 3.715×
 throughput result an end-to-end adaptive-loop speedup. The current viewer has
 not been wired to these new session summaries; it still displays the prior

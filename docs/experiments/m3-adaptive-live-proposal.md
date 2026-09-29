@@ -1,6 +1,6 @@
 # M3 adaptive-loop live comparison — proposed, not authorized
 
-**Status:** Awaiting Jethro's run-specific spend approval and a fresh capacity check. No VM start is authorized by this document.
+**Status:** Paused/superseded as the *next* M3 experiment by the portfolio-first design accepted September 29. Retained as a historical single-loop proposal; no VM start is authorized by this document.
 
 ## Question
 
