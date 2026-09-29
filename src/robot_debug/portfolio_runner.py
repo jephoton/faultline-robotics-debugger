@@ -102,7 +102,11 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         "limits": asdict(limits), "cost_basis": "warm elapsed seconds times one full VM rate; not billed allocation cost",
         "waves": [], "jobs": {}, "physical_attempts": 0, "valid_episodes": 0,
         "invalid_attempts": 0, "uncertain_attempts": 0, "elapsed_seconds": 0.0,
-        "warm_diagnostic_estimate_usd": 0.0, "certified": False, "stop_reason": None}
+        "warm_diagnostic_estimate_usd": 0.0, "max_observed_evaluator_calls": 0,
+        "certified": False, "stop_reason": None}
+    evaluator_lock = threading.Lock()
+    active_evaluator_calls = 0
+    max_evaluator_calls = 0
 
     def elapsed() -> float:
         return max(0.0, monotonic_clock() - started)
@@ -112,6 +116,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             summary["stop_reason"] = reason
         summary["elapsed_seconds"] = elapsed()
         summary["warm_diagnostic_estimate_usd"] = elapsed() * limits.hourly_rate / 3600
+        summary["max_observed_evaluator_calls"] = max_evaluator_calls
         summary["certified"] = all(flow.certified for flow in flows.values())
         for job_id, flow in flows.items():
             job_summary = {"job_id": job_id, "flow": flow.snapshot(), "certified": flow.certified,
@@ -140,9 +145,10 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             summary["stop_reason"] = "shared_budget_exhausted"; break
         # Full frozen manifest keys are retained even for stopped jobs; this is
         # required by the policy's dynamic-readiness fairness guarantee.
+        sequential_owner = active[0] if mode == "sequential-jobs" else None
         ready: dict[str, tuple[str, ...] | None] = {}
         for job_id, flow in flows.items():
-            if flow.phase in {"stopped", "certified"}:
+            if flow.phase in {"stopped", "certified"} or job_id != sequential_owner and sequential_owner is not None:
                 ready[job_id] = None; continue
             pending = flow.pending(search_limit=1 if flow.phase == "search" else None)
             ready[job_id] = tuple(case for case in pending if case not in buffered[job_id])
@@ -179,8 +185,18 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             search._write_config(**options)
             requests.append(RoundRequest(global_id, config, output)); owners[global_id] = (choice.job_id, choice.case_id)
         ledger = wave_root / "ledger.json"
+        def observed_evaluator(*args: Any, **kwargs: Any) -> Any:
+            nonlocal active_evaluator_calls, max_evaluator_calls
+            with evaluator_lock:
+                active_evaluator_calls += 1
+                max_evaluator_calls = max(max_evaluator_calls, active_evaluator_calls)
+            try:
+                return evaluator(*args, **kwargs)
+            finally:
+                with evaluator_lock:
+                    active_evaluator_calls -= 1
         round_summary = run_round(tuple(requests), workers=worker_choice.workers, launch_cutoff=launch_window,
-                                  evaluator=evaluator, ledger_path=ledger, round_root=wave_root,
+                                  evaluator=observed_evaluator, ledger_path=ledger, round_root=wave_root,
                                   interrupt_event=interrupt_event)
         durable = json.loads(ledger.read_text(encoding="utf-8"))
         summary["physical_attempts"] += sum(record.get("state") != "prepared"
@@ -190,6 +206,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         summary["uncertain_attempts"] += sum(result.status == "uncertain" for result in round_summary.results)
         summary["waves"].append({"wave_id": wave_number, "cursor": cursor, "requests": [asdict(item) for item in wave.requests],
             "worker_choice": asdict(worker_choice), "ledger_path": str(ledger.relative_to(session)),
+            "timing_source": "M3 fixed-manifest warm per-episode measurements; not task-specific",
             "manifest_hash": round_summary.manifest_hash, "results": [asdict(result) for result in round_summary.results]})
         if not round_summary.certifying or len(round_summary.results) != len(requests):
             summary["stop_reason"] = round_summary.stop_reason or "invalid_or_uncertain_round"; save(); break

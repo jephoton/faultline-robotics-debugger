@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -53,6 +54,79 @@ class PortfolioRunnerTests(unittest.TestCase):
         self.assertIn("task_id: 1", "\n".join(configs)); self.assertIn("task_id: 2", "\n".join(configs))
         self.assertLessEqual(evaluator.maximum_active, 4)
         self.assertFalse(summary["certified"])
+
+    def test_sequential_mode_finishes_first_manifest_job_before_second_job_starts(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        evaluator = FakeEvaluator()
+        with tempfile.TemporaryDirectory() as temporary:
+            run_portfolio(manifest=manifest, mode="sequential-jobs", results_root=Path(temporary),
+                          project_root=Path(__file__).parents[1], evaluator=evaluator,
+                          limits=PortfolioLimits(episodes=12, seconds=600, estimated_usd=10, hourly_rate=1))
+        job_ids = [request.case_id.split("--")[0] for request in evaluator.requests]
+        first_task_1 = job_ids.index("task-01")
+        self.assertEqual(["task-00"] * first_task_1, job_ids[:first_task_1])
+        self.assertNotIn("task-00", job_ids[first_task_1:])
+
+    def test_out_of_order_results_are_routed_to_owning_job_flows(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        def evaluator(request, *, launch_observer, **_kwargs):
+            pid = 7700 + len(request.case_id); launch_observer(pid, f"vla-eval-{pid}")
+            time.sleep({"task-00": .02, "task-01": .01, "task-02": 0}[request.case_id[:7]])
+            request.output_dir.mkdir(parents=True); evidence = request.output_dir / "aggregate.json"
+            evidence.write_text("{}", encoding="utf-8")
+            outcome = "success" if "nominal" in request.case_id or request.case_id.startswith("task-01") else "policy_failure"
+            return {"status": "valid", "outcome": outcome, "evidence_paths": [str(evidence)]}
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                    project_root=Path(__file__).parents[1], evaluator=evaluator,
+                                    limits=PortfolioLimits(episodes=6, seconds=600, estimated_usd=10, hourly_rate=1))
+        self.assertIsNotNone(summary["jobs"]["task-00"]["flow"]["selected_search_id"])
+        self.assertIsNone(summary["jobs"]["task-01"]["flow"]["selected_search_id"])
+        self.assertIsNotNone(summary["jobs"]["task-02"]["flow"]["selected_search_id"])
+        self.assertLessEqual(summary["max_observed_evaluator_calls"], 4)
+
+    def test_invalid_evidence_and_shared_budget_leave_partial_summary(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        def invalid(request, *, launch_observer, **_kwargs):
+            launch_observer(7788, "vla-eval-7788")
+            return {"status": "invalid_evidence", "outcome": None, "evidence_paths": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            failed = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                   project_root=Path(__file__).parents[1], evaluator=invalid,
+                                   limits=PortfolioLimits(episodes=10, seconds=600, estimated_usd=10, hourly_rate=1))
+        self.assertFalse(failed["certified"]); self.assertEqual("invalid_evidence", failed["stop_reason"])
+        with tempfile.TemporaryDirectory() as temporary:
+            exhausted = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                      project_root=Path(__file__).parents[1], evaluator=FakeEvaluator(),
+                                      limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1))
+        self.assertFalse(exhausted["certified"]); self.assertEqual("shared_budget_exhausted", exhausted["stop_reason"])
+
+    def test_nominal_failure_stops_only_its_own_job(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        def evaluator(request, *, launch_observer, **_kwargs):
+            launch_observer(7811, "vla-eval-7811"); request.output_dir.mkdir(parents=True)
+            evidence = request.output_dir / "aggregate.json"; evidence.write_text("{}", encoding="utf-8")
+            outcome = "policy_failure" if request.case_id.startswith("task-00") else "success"
+            return {"status": "valid", "outcome": outcome, "evidence_paths": [str(evidence)]}
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                    project_root=Path(__file__).parents[1], evaluator=evaluator,
+                                    limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1))
+        self.assertEqual("stopped", summary["jobs"]["task-00"]["flow"]["phase"])
+        self.assertEqual("nominal_gate_failed", summary["jobs"]["task-00"]["flow"]["stop_reason"])
+        self.assertEqual("search", summary["jobs"]["task-01"]["flow"]["phase"])
 
     def test_confirmation_is_buffered_per_job_until_each_five_case_gate_is_complete(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
