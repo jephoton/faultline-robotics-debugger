@@ -70,7 +70,11 @@ The September 29 read-only preflight found a US$10.42 balance, the exact VM
 stopped, the same US$1.7468/hour pre-tax VM rate, and zero regular launch
 slots for its exact L40S shape (low chance). Refresh all of this and verify
 the watchdog before any new numeric-cap request or VM start. The local code
-reports only warm diagnostic estimates; VM allocation/startup and
+reports only warm diagnostic estimates; VM allocation/startup and posted
+billing are not yet captured. Do not call the fixed-work M3 3.715× throughput
+result an end-to-end adaptive-loop speedup. The current viewer has not been
+wired to these new session summaries; it still displays the prior M2/M4 cases
+and fixed M3 comparison.
 
 ### Portfolio implementation checkpoint
 
@@ -84,10 +88,6 @@ Jethro must choose whether to add a narrow exact task selector to the local
 `DiagnosticLIBEROBenchmark` adapter (recommended), accept unusable prefix-only
 jobs, or change evaluator integration. No task catalog beyond task 0 has been
 invented, no VM started, and no cloud cost incurred.
-posted billing are not yet captured. Do not call the fixed-work M3 3.715×
-throughput result an end-to-end adaptive-loop speedup. The current viewer has
-not been wired to these new session summaries; it still displays the prior
-M2/M4 cases and fixed M3 comparison.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
