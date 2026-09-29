@@ -35,6 +35,9 @@ identifiers, tokens, private addresses, or payment details here.
 
 ## Maintenance boundary
 
-The M3 local runner and review have not yet produced Nebius or NVIDIA runtime
-feedback: no M3 cloud session has run. Add performance, scaling, and cost
-observations here only after the bounded live comparison and billing review.
+The September 29 M3 two-episode cloud pilot completed with expected outcomes,
+traces, and videos on one L40S VM. It validates the narrow concurrency smoke
+test, not throughput scaling or final cost. Add performance, scaling, and cost
+observations only after the bounded 1/2/4-worker comparison and billing review.
+Engineering issues and operator errors are tracked in [`docs/dev-log.md`](docs/dev-log.md);
+do not misattribute them to Nebius or NVIDIA.
