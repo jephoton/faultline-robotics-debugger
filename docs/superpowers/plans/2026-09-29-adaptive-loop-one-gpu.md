@@ -125,7 +125,7 @@ assert report["physical_attempts"]["adaptive"] >= report["valid_episodes"]["adap
 - [x] Independent reviewer checked spec coverage and found signal, drift, cost-label, and direct-invocation gaps; integration owner fixed them and re-ran Windows (298 tests, four POSIX skips) and WSL focused (92 tests) suites. A final separate re-review was unavailable; the integration owner also added and verified the real POSIX SIGTERM test.
 - [x] Execute both local fake-evaluator policies and inspect their JSON summaries: both complete the same nine decision rounds and rectangle in the no-drift fixture (32 physical attempts each). The report marks them logically comparable but refuses a fake speedup number. A first-grid-failure fixture confirms the sequential mode avoids unneeded later grid launches while adaptive extra work is counted explicitly.
 - [x] Update `docs/codex-handoff/STATE.md`, `docs/codex-handoff/RUNBOOK.md`, and `PROJECT_PLAN.md` with the local evidence. `FEEDBACK.md` is unchanged because this implementation made no new Nebius/NVIDIA provider interaction. Conventional commit `docs(hpc): record local adaptive-loop readiness`.
-- [ ] Present a separate live experiment proposal with current Nebius balance/price/capacity, one exact VM, disk retention, watchdog, estimated cost, and sequential/adaptive workload contract. **Do not start the VM without Jethro's run-specific approval.**
+- [x] Present a separate [live experiment proposal](../../experiments/m3-adaptive-live-proposal.md) with current Nebius balance/price/capacity, one exact VM, disk retention, watchdog, estimated cost, and sequential/adaptive workload contract. **Do not start the VM without Jethro's run-specific approval.**
 
 ## Dependency, agent, and review map
 

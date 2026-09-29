@@ -14,6 +14,14 @@ identifiers, tokens, private addresses, or payment details here.
 
 ## Our setup errors, not provider bugs
 
+- A September 29 read-only preflight initially checked a project identifier
+  from an older console tab and found no VM. The saved exact-project run record
+  identified the intended project; the stopped VM and disk were then verified.
+  This was a project-selection mistake, not a Nebius disappearance. The live
+  capacity dashboard showed zero regular launch slots for the exact L40S
+  shape, so a restart is uncertain; it is not evidence of a quota denial or
+  provider outage. See [`docs/experiments/m3-adaptive-live-proposal.md`](docs/experiments/m3-adaptive-live-proposal.md).
+
 - A stale workstation-IP `/32` SSH rule and a wrong private-key path caused
   earlier access failures; a narrow current rule and the dedicated WSL key
   resolved them.
