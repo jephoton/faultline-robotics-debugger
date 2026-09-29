@@ -43,7 +43,7 @@ with self.assertRaises(ValueError):
 ```
 - [x] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_portfolio_manifest -v`; it initially failed because the `portfolio_manifest` API did not exist.
 - [x] Implement the immutable manifest and hash in `src/robot_debug/portfolio_manifest.py`; serialize with sorted JSON, reject bool/negative/duplicate task IDs and path-unsafe job IDs, and keep the exact selected task list in every session. Focused tests pass and commit `feat(portfolio): freeze task job identities` (`9704e5a`) contains only source/test/note paths.
-- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and two or three candidate tasks to Jethro when runtime enumeration is available. Jethro approved the exact task selector; the exact three task IDs remain a separate decision before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
+- [ ] Present the supported task catalog, current nominal evidence (only task 0 is proven), and candidate IDs to Jethro at the task-selection checkpoint. Pinned-source inspection provisionally maps IDs 1/2/3 to cream cheese/salad dressing/BBQ sauce basket tasks; see [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md). The actual image and GR00T outcomes are not yet checked. Jethro approved the exact task selector; the exact three task IDs remain a separate decision before paid baseline screening or any task-specific product claim. A local synthetic fixture may use `(0, 1, 2)` strictly as fake IDs until then.
 
 ## Task 2 — Add explicit task selection without regressing old runs (green after API proof)
 

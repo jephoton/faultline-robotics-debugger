@@ -21,11 +21,18 @@ nonzero task IDs; task 0 retains the historical `max_tasks: 1` config.
 task itself. Missing or invalid task IDs fail closed in the adapter.
 
 The existing baseline identifies task 0 as `pick up the alphabet soup and
-place it in the basket`. This environment does not contain the pinned LIBERO
-runtime, so the remaining task-index-to-instruction catalog has not been
-verified locally and is intentionally not invented here.
+place it in the basket`. Source inspection of the [harness-pinned LIBERO
+revision](https://raw.githubusercontent.com/Lifelong-Robot-Learning/LIBERO/8f1084e3132a39270c3a13ebe37270a43ece2a01/libero/libero/benchmark/libero_suite_task_map.py)
+gives provisional IDs 1 = cream cheese, 2 = salad dressing, and 3 = BBQ sauce,
+each placed in the basket. The [pinned harness Dockerfile](https://raw.githubusercontent.com/allenai/vla-evaluation-harness/35f1200eb15608aa898f727a3722f7eef889c6cd/docker/Dockerfile.libero)
+selects that LIBERO revision, and its benchmark enumerates IDs from zero.
+This is pinned-source evidence, not runtime enumeration or GR00T baseline
+success. IDs 1 and 2 are sensible screening candidates because they keep the
+same single-object-to-basket task shape, but Jethro has not frozen the actual
+three-job manifest.
 
 This resolves the local config-compatibility block for constructing distinct
 portfolio jobs. Unit tests use a fake upstream task list; the exact selector
-has not yet been exercised on the installed LIBERO runtime. Do not select
-three real task IDs, change suites, or start a VM from this local proof alone.
+has not yet been exercised on the installed LIBERO runtime. Verify the actual
+image's task catalog and nominal outcomes before freezing three real task IDs.
+Do not change suites or start a VM from this local proof alone.
