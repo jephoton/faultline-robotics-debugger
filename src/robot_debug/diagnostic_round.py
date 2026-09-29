@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -49,10 +50,22 @@ class RoundSummary:
     manifest_hash: str
 
 
+@dataclass(frozen=True)
+class RoundLifecycle:
+    """The single scheduler-owned launch/containment boundary for a round."""
+
+    stop_requested: threading.Event
+    interrupt_event: threading.Event
+    launch_lock: threading.Lock
+    request_stop: Callable[[], None]
+
+
 def run_round(
     requests: tuple[RoundRequest, ...] | list[RoundRequest], *, workers: int,
     launch_cutoff: float, evaluator: Callable[..., Any], ledger_path: Path | str,
     round_root: Path | str, resume: bool = False,
+    lifecycle_observer: Callable[[RoundLifecycle], None] | None = None,
+    interrupt_event: threading.Event | None = None,
 ) -> RoundSummary:
     """Run one immutable local round using M3's shared fail-closed scheduler."""
     root = Path(round_root).resolve(strict=True)
@@ -88,8 +101,19 @@ def run_round(
     }
     started = time.monotonic()
     stop_requested = threading.Event()
-    interrupt_event = threading.Event()
+    if interrupt_event is None:
+        interrupt_event = threading.Event()
+    elif not isinstance(interrupt_event, threading.Event):
+        raise ValueError("interrupt_event must be a threading.Event")
     launch_lock = threading.Lock()
+
+    def request_stop() -> None:
+        with launch_lock:
+            stop_requested.set()
+
+    lifecycle = RoundLifecycle(stop_requested, interrupt_event, launch_lock, request_stop)
+    if lifecycle_observer is not None:
+        lifecycle_observer(lifecycle)
 
     def elapsed() -> float:
         return time.monotonic() - started
@@ -132,12 +156,25 @@ def run_round(
             })
 
         try:
-            raw = evaluator(request, launch_observer=observe)
+            parameters = inspect.signature(evaluator).parameters.values()
+            accepts_lifecycle = ("lifecycle" in inspect.signature(evaluator).parameters
+                                 or any(parameter.kind is inspect.Parameter.VAR_KEYWORD
+                                        for parameter in parameters))
+            raw = evaluator(request, launch_observer=observe,
+                            **({"lifecycle": lifecycle} if accepts_lifecycle else {}))
         except subprocess.TimeoutExpired as error:
-            return _record(request, "uncertain", None, (), identity, f"timeout: {error}")
+            record = _record(request, "uncertain", None, (), identity, f"timeout: {error}")
+            record["cleanup_confirmed"] = getattr(error, "cleanup_confirmed", False)
+            if getattr(error, "cleanup_error", None):
+                record["cleanup_error"] = error.cleanup_error
+            return record
         except BaseException as error:
-            return _record(request, "infrastructure_error", None, (), identity,
-                           f"evaluator: {type(error).__name__}: {error}")
+            record = _record(request, "infrastructure_error", None, (), identity,
+                             f"evaluator: {type(error).__name__}: {error}")
+            record["cleanup_confirmed"] = getattr(error, "cleanup_confirmed", False)
+            if getattr(error, "cleanup_error", None):
+                record["cleanup_error"] = error.cleanup_error
+            return record
         if identity.get("uncertain") or "evaluator_pid" not in identity:
             return _record(request, "uncertain", None, (), identity,
                            "launch identity was not confirmed")
@@ -152,8 +189,11 @@ def run_round(
             return _record(request, "invalid_evidence", None, (), identity,
                            "valid evidence requires a certifying policy outcome")
         try:
-            evidence = tuple(str(_contained(Path(value), output, "evidence path", must_exist=True))
-                             for value in raw.get("evidence_paths", ()))
+            checked = tuple(_contained(Path(value), output, "evidence path", must_exist=True)
+                            for value in raw.get("evidence_paths", ()))
+            if any(not value.is_file() or value.stat().st_size <= 0 for value in checked):
+                raise ValueError("evidence paths must be non-empty regular files")
+            evidence = tuple(str(value) for value in checked)
         except (TypeError, ValueError) as error:
             return _record(request, "invalid_evidence", None, (), identity, str(error))
         if raw["status"] == "valid" and not evidence:
@@ -164,7 +204,7 @@ def run_round(
     run_schedule(items=items, workers=workers, ledger=ledger, summary=summary,
                  elapsed=elapsed, launch_cutoff_seconds=launch_cutoff,
                  stop_requested=stop_requested, interrupt_event=interrupt_event,
-                 launch_lock=launch_lock, request_stop=stop_requested.set, save=save,
+                 launch_lock=launch_lock, request_stop=request_stop, save=save,
                  item_paths=item_paths, validate_prepared_artifacts=validate_prepared,
                  prepare_config=prepare_config, execute=execute)
     results = tuple(_round_result(case_id, ledger.attempts[case_id]["result"])
@@ -194,8 +234,9 @@ def _items(
         if config in configs:
             raise ValueError("config_path paths must be unique")
         configs.add(config)
-        if output in outputs:
-            raise ValueError("output_dir paths must be unique")
+        if any(output == prior or output.is_relative_to(prior) or prior.is_relative_to(output)
+               for prior in outputs):
+            raise ValueError("output_dir paths must be unique and non-overlapping")
         outputs.add(output)
         if output.exists() and not allow_existing_outputs:
             raise ValueError("output_dir already exists before launch")
@@ -235,7 +276,9 @@ def _resume(path: Path, root: Path, items: list[dict[str, Any]], digest: str) ->
         if not isinstance(evidence, list) or not evidence:
             raise ValueError("cannot resume: valid result lacks case-specific evidence")
         for evidence_path in evidence:
-            _contained(Path(evidence_path), output, "evidence path", must_exist=True)
+            checked = _contained(Path(evidence_path), output, "evidence path", must_exist=True)
+            if not checked.is_file() or checked.stat().st_size <= 0:
+                raise ValueError("cannot resume: evidence is not a non-empty regular file")
         pid = result.get("evaluator_pid")
         container = result.get("expected_container")
         if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0 or container != f"vla-eval-{pid}":

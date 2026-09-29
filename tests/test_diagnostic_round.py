@@ -130,6 +130,26 @@ class DiagnosticRoundTests(unittest.TestCase):
             run_round(duplicate, workers=1, launch_cutoff=60, evaluator=ReverseEvaluator(),
                       ledger_path=self.root / "second.json", round_root=self.root)
 
+    def test_shares_lifecycle_and_rejects_overlapping_outputs(self):
+        from robot_debug.diagnostic_round import RoundRequest, run_round
+        requests = self.requests()[:2]
+        nested = (requests[0], RoundRequest("case-2", requests[1].config_path,
+                                             requests[0].output_dir / "nested"))
+        with self.assertRaisesRegex(ValueError, "non-overlapping"):
+            run_round(nested, workers=1, launch_cutoff=60, evaluator=ReverseEvaluator(),
+                      ledger_path=self.root / "nested.json", round_root=self.root)
+        observed = []
+        def evaluator(request, *, launch_observer, lifecycle):
+            observed.append(lifecycle)
+            launch_observer(8123, "vla-eval-8123")
+            request.output_dir.mkdir(); evidence = request.output_dir / "aggregate.json"
+            evidence.write_text("{}", encoding="utf-8")
+            return {"status": "valid", "outcome": "success", "evidence_paths": [str(evidence)]}
+        run_round(requests[:1], workers=1, launch_cutoff=60, evaluator=evaluator,
+                  ledger_path=self.root / "lifecycle.json", round_root=self.root)
+        self.assertEqual(1, len(observed))
+        self.assertFalse(observed[0].stop_requested.is_set())
+
     def test_binds_config_output_dir_and_rejects_duplicate_config_paths(self):
         from robot_debug.diagnostic_round import RoundRequest, run_round
         request = self.requests()[:1]
