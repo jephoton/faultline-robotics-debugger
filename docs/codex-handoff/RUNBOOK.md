@@ -163,7 +163,7 @@ Linux evaluator/model environment, a refreshed cloud preflight, an independent
 exact-VM stop guard, and a separately approved cap. Local code readiness is not
 permission to start a VM.
 
-Verified on the adaptive branch: Windows Python 3.11 full discovery passes 298
+Verified before local integration into `main`: Windows Python 3.11 full discovery passes 298
 tests with four POSIX-only skips. The focused WSL POSIX suite passes 92 tests:
 
 ```bash

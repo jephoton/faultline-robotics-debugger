@@ -45,8 +45,8 @@
   610.247/310.472/164.256 seconds (1.000/1.966/3.715× speedup). All 48
   MP4s and traces are in ignored local artifacts and visible in the viewer.
   See `docs/experiments/m3-parallel.md`.
-- The accepted one-GPU adaptive diagnostic loop is implemented locally on the
-  `codex/adaptive-loop` branch, not yet a live end-to-end cloud comparison.
+- The accepted one-GPU adaptive diagnostic loop is integrated locally in
+  `main`, not yet a live end-to-end cloud comparison.
   It combines the prior eight-position grid, five-replay confirmation, M4
   reduction, and nominal controls with the M3 durable scheduler and 1/2/4
   worker selector. The reporter replays saved ordered results, separates
