@@ -1,6 +1,7 @@
 # ADR 0009: Portfolio-first HPC for diagnostics
 
-**Status:** Accepted direction on 2026-09-29; scheduler details and live experiment pending.
+**Status:** Accepted direction on 2026-09-29; local scheduler rule accepted on
+2026-09-30; live experiment pending.
 
 ## Context
 
@@ -12,6 +13,16 @@ Make independent task-level diagnostic jobs the primary unit of portfolio schedu
 
 The existing single-job adaptive loop remains available as a per-job component. Its proposed paid sequential/adaptive comparison is paused; no cloud expenditure is authorized by this ADR.
 
+## Local scheduler rule
+
+Jethro accepted work-conserving round-robin for the first implementation:
+rotate which eligible task goes first each wave, take at most one ready episode
+per task per wave, and cap the shared queue at four evaluators on the existing
+one-GPU topology. The scheduler may leave slots unused when fewer task jobs
+are ready; it does not invent extra work or advance a job past its evidence
+gate. This favors fairness and an auditable baseline over a prediction of
+which job is most likely to fail. It is not a claim of optimal allocation.
+
 ## Alternatives and rationale
 
 - Accelerate only one diagnosis: simpler integration but decision dependencies limit parallel work and make HPC less central to the product.
@@ -20,4 +31,8 @@ The existing single-job adaptive loop remains available as a per-job component. 
 
 ## Revisit when
 
-Within-suite task baselines are invalid, shared scheduling changes outcomes, the scheduler starves jobs, or budget-matched evidence does not improve useful reports or time to report. Multi-GPU scale-out is a separate decision.
+Within-suite task baselines are invalid, shared scheduling changes outcomes,
+the scheduler starves jobs, or budget-matched evidence does not improve useful
+reports or time to report. A phase-priority or yield-prediction scheduler
+would need new evidence and a separate decision. Multi-GPU scale-out is a
+separate decision.

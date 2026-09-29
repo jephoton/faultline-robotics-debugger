@@ -64,7 +64,7 @@ assert "record_video: true" in rendered
 
 ## Task 3 — Pure shared-queue policy (amber; user checkpoint on priority/fairness)
 
-**Decision before dependent implementation:** recommend work-conserving round-robin across eligible jobs, at most one search candidate per job per wave, and no more than four active evaluator processes on the existing one GPU. This is adaptive to *ready work and phase*, not an optimal or learned failure-probability scheduler. Compare it with whole-job-at-a-time execution. Jethro confirms or changes this scheduling rule before implementing Task 3; record the accepted rule in `docs/decisions/`.
+**Accepted rule:** Jethro approved work-conserving round-robin across eligible jobs, at most one ready episode per job per wave, rotating the first job, and no more than four active evaluator processes on the existing one GPU. This is adaptive to *ready work and phase*, not an optimal or learned failure-probability scheduler. Compare it with whole-job-at-a-time execution. The rationale is recorded in [`ADR 0009`](../../decisions/0009-portfolio-first-hpc.md).
 
 - [ ] Write failing `tests/test_portfolio_policy.py` cases with ready queues `{"task-0": ("search-01", "search-02"), "task-1": ("confirm-01",), "task-2": ("nominal-01",)}`. Assert stable rotated first choices, no duplicate request, a four-slot maximum, no starvation of a continuously ready job across three waves, and zero work when shared episode/wall/dollar admission fails. A paused/invalid job must never be selected.
 
