@@ -1,7 +1,8 @@
 """Pure, ordered find → confirm → reduce decisions for one frozen scenario.
 
-The controller submits a complete `pending()` round and feeds its valid
-outcomes to `apply_round`. This module does not launch or cancel evaluations;
+The controller submits a bounded `pending(search_limit=n)` prefix during search
+and complete `pending()` rounds for other gates, then feeds valid outcomes to
+`apply_round`. This module does not launch or cancel evaluations;
 the durable round adapter owns those side effects and uncertainty handling.
 """
 
