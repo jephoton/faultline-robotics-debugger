@@ -116,6 +116,13 @@ immutable and its managed boot disk must not be lost during migration. H100
 has stronger advised availability but a higher hourly rate and untested
 runtime compatibility. See
 [`m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
+Jethro chose a snapshot-based **separate H100 VM** on September 30.
+[ADR 0010](../decisions/0010-h100-snapshot-migration.md) and the
+[H100 screen plan](../superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md)
+preserve the original L40S VM/disk. No snapshot or H100 VM has been created,
+and no new spending cap has been approved. Verify live snapshot/clone pricing,
+account balance, H100 rate/capacity, and a numeric cap before any billable
+mutation; the old US$3 cap does not carry over.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.
