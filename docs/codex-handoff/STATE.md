@@ -123,6 +123,13 @@ preserve the original L40S VM/disk. No snapshot or H100 VM has been created,
 and no new spending cap has been approved. Verify live snapshot/clone pricing,
 account balance, H100 rate/capacity, and a numeric cap before any billable
 mutation; the old US$3 cap does not carry over.
+The September 30 H100 read-only preflight found the original VM `STOPPED`, its
+200-GiB disk `READY`, and H100 on-demand advice `HIGH`/`MEDIUM` across four
+fabrics. The console balance was US$9.89, and detailed Nebius pricing lists
+US$0.071/GiB/730h for snapshots. A conservative US$7.50 total cap for one
+60-minute H100 start and at most 24 hours of all three 200-GiB storage objects
+is proposed, **not approved**. No credit expiry was displayed. See the
+experiment note for the calculation; refresh all live figures before spending.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.

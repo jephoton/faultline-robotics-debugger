@@ -34,6 +34,18 @@ feedback.
 
 ## Our setup errors, not provider bugs
 
+The September 30 H100 migration preflight found a useful distinction in
+Nebius pricing information: the public summary page did not itemize disk
+snapshots, while the detailed Compute pricing documentation did state the
+separate full-copy snapshot tariff and billing units. The CLI calculator
+gave immediate H100 and Network SSD estimates, but its estimate fields did
+not expose a standalone snapshot resource. The signed-in pricing-list page
+returned "Access forbidden" for this account, though the console still
+showed the balance. The detailed documentation resolved the pricing question;
+the access restriction is a specific onboarding/friction observation, not a
+claim that snapshot pricing was unavailable or that creation failed. See
+[`docs/experiments/m3-three-task-screen.md`](docs/experiments/m3-three-task-screen.md).
+
 - A September 29 read-only preflight initially checked a project identifier
   from an older console tab and found no VM. The saved exact-project run record
   identified the intended project; the stopped VM and disk were then verified.

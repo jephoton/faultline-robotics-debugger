@@ -19,7 +19,9 @@
 - [ ] Confirm the source disk can produce a snapshot and the selected H100 preset can boot from a snapshot-backed managed disk with compatible image architecture. Inspect CLI options without mutating resources. Record non-sensitive observations and timestamps.
 - [ ] Recheck that the locally reviewed source includes the exact three-case dry-run regression and that the run will request only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`.
 
-**Gate:** Present a proposed numeric *incremental* cap, maximum VM-on minutes, snapshot/new-disk retention, and current balance to Jethro. Wait for explicit approval. The prior L40S cap is closed.
+**Gate:** Present a proposed numeric cap for all charges in the bounded time window (including the original disk's ongoing charge), maximum VM-on minutes, snapshot/new-disk retention, and current balance to Jethro. Wait for explicit approval. The prior L40S cap is closed.
+
+**Read-only preflight result, September 30:** The exact original VM/disk, H100 preset/capacity, console balance (US$9.89), CLI H100 and cloned-disk estimates, and detailed published snapshot tariff were checked. The three-case CLI contract passed 7/7 focused WSL tests. The conservative proposal in the [experiment note](../../experiments/m3-three-task-screen.md) is US$7.50 *total including the existing disk's next 24 hours*, 60 minutes H100 VM-on, and cleanup of only the new snapshot/clone by 24 hours; it is not approved. No credit-expiry date was displayed. Refresh live prices, capacity, and balance before any approved mutation.
 
 ## Task 2 — Snapshot and separate H100 guest (red gate, then amber)
 
