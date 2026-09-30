@@ -39,6 +39,23 @@ class PortfolioCliTests(unittest.TestCase):
         self.assertEqual("dry_run", saved["execution_kind"])
         self.assertFalse(saved["certified"])
 
+    def test_adaptive_dry_run_screens_each_frozen_task_with_one_nominal_episode(self):
+        from scripts.run_diagnostic_portfolio import run_cli
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(manifest_mapping()), encoding="utf-8")
+            summary = run_cli(manifest_path=manifest, mode="adaptive-portfolio", results_root=root / "results",
+                              upstream_root=root, project_root=Path(__file__).parents[1], episodes=3,
+                              seconds=600, estimated_usd=10, hourly_rate=1, dry_run=True)
+
+        expected = ["task-00--nominal-01", "task-01--nominal-01", "task-02--nominal-01"]
+        self.assertEqual(expected, [result["case_id"]
+                                    for wave in summary["waves"] for result in wave["results"]])
+        self.assertEqual({"task-00", "task-01", "task-02"}, set(summary["jobs"]))
+        self.assertFalse(any("search" in request["case_id"]
+                             for wave in summary["waves"] for request in wave["requests"]))
+        self.assertEqual(3, summary["physical_attempts"])
+
     def test_sequential_dry_run_and_existing_session_refusal(self):
         from scripts.run_diagnostic_portfolio import run_cli
         with tempfile.TemporaryDirectory() as temporary:
