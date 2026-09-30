@@ -10,7 +10,7 @@
 
 **Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
 
-**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. The adaptive find → confirm → reduce loop is implemented and locally tested, but Jethro has redirected M3's next experiment toward scheduling several task-level diagnostic jobs on one GPU. No portfolio comparison or billing reconciliation is complete.
+**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. The adaptive find → confirm → reduce loop and three-job portfolio are locally implemented and tested. No live three-task portfolio result, end-to-end speedup, or billing reconciliation is complete.
 
 **Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
@@ -241,7 +241,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M6: stronger experiments | Add a second perturbation family, more related tasks, and explore other LIBERO suites after within-suite validation | Held-out and cross-suite compatibility/evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
-### Current roadmap position — September 29
+### Current roadmap position — September 30
 
 We have completed **M1: reproducible runner** and the engineering gate for
 **M2: first failure** on one exact case:
@@ -271,8 +271,8 @@ We have completed **M1: reproducible runner** and the engineering gate for
   reach the same certified rectangle, and the reporter refuses a fake timing
   claim. This is not a measured end-to-end cloud speedup, and its new summaries
   are not yet represented in the viewer.
-- Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) is approved; the [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) is ready for review. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal is paused; no portfolio run is approved yet.
-- M5's proposed UI work is a portfolio overview of all task jobs, their outcomes and resource use, with drill-down to the existing per-case videos, reducer lineage, and replay recipe. It is separate from the M3 scheduling-core plan and is not implemented yet.
+- Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. Next choose and nominally screen the exact live task IDs; a Nebius run needs a separately approved cap. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
+- M5's proposed UI work is a portfolio overview of all task jobs, their outcomes and resource use, with drill-down to the existing per-case videos, reducer lineage, and replay recipe. It can consume the portfolio summary/report contract after live task validation; it is not implemented yet.
 
 ### Immediate decision after the bounded session
 
@@ -402,7 +402,15 @@ are integrated in `main`; the fixed 16-item workload, evidence contract, and
 recovery boundary are recorded in [M3 experiment notes](docs/experiments/m3-parallel.md).
 The bounded live 2-worker pilot and the equal-work 1/2/4-worker comparison
 are complete; see [M3 experiment notes](docs/experiments/m3-parallel.md).
-The next M3 step is to review the [multi-job implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md), prove task selection in the pinned harness, and settle the scheduling rule at its learning checkpoint. Then locally validate the shared scheduler and per-job evidence before proposing a separately capped, budget-matched live portfolio comparison. The former single-loop US$4/90-minute proposal is paused, not approved for execution. Any live run still needs fresh balance, quota/capacity, VM/disk state, price, model-readiness, and independent-stop checks plus Jethro's run-specific numeric cap. The fixed-work 3.715× throughput result must not be presented as an end-to-end diagnosis speedup. The replayable-case import
+The next M3 step is to choose exact three task IDs with Jethro, screen nominal
+task validity, then propose a separately capped, budget-matched live portfolio
+comparison. The task-selection adapter, shared runner, CLI, and report are
+locally implemented and tested; synthetic sessions never produce a speedup
+claim. The former single-loop US$4/90-minute proposal is paused, not approved
+for execution. Any live run still needs fresh balance, quota/capacity, VM/disk
+state, price, model-readiness, and independent-stop checks plus Jethro's
+run-specific numeric cap. The fixed-work 3.715× throughput result must not be
+presented as an end-to-end diagnosis speedup. The replayable-case import
 design, Nemotron product pilot, and disk retention/teardown also remain.
 No further paid work is implied by local implementation. Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public

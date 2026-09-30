@@ -79,11 +79,11 @@ assert {item.job_id for item in wave.requests} == set(ready)
 assert len({(item.job_id, item.case_id) for item in wave.requests}) == len(wave.requests)
 ```
 - [x] Implemented immutable `PortfolioBounds`, `PortfolioChoice`, and `PortfolioWave`, with pure `choose_wave(ready_by_job, cursor, slots, bounds)` and explicit cursor/bounds. Focused tests passed 6/6; full Windows Python 3.11 suite passed 315 tests (4 skips). Commits `397bbaa feat(hpc): choose fair bounded portfolio waves` and `313577b fix(hpc): prevent dynamic-readiness starvation`.
-- [ ] In the Task 4 runner, call existing `choose_workers` for 1/2/4 concurrency after `choose_wave` fixes the ready set. Record measured timing source and selection reason; full VM rate is charged once per elapsed hour, not once per worker. This needs the runner's live wave/budget context and is intentionally not inside the pure selector.
+- [x] The Task 4 runner calls existing `choose_workers` after `choose_wave` fixes the ready set, records the choice, and applies one shared VM hourly-rate bound. With only three jobs and one ready episode per job, the first portfolio can select at most two workers; a four-worker wave is not manufactured.
 
 ## Task 4 — Durable portfolio runner and CLI (amber; one execution owner)
 
-- [ ] Write failing `tests/test_portfolio_runner.py` with an injected fake evaluator and three fake tasks. Assert job-prefixed case IDs/output directories, one global `run_round` call per wave, a shared maximum of four active evaluators, stable result routing despite out-of-order completion, each job's independent flow/ledger, and no output collision. Use distinct fixture outcomes so a task-0 failure cannot advance task-1 confirmation.
+- [x] Wrote red-first `tests/test_portfolio_runner.py` with injected fake evaluator and three fake tasks. It covers job-prefixed case IDs/output directories, one global `run_round` per wave, a shared evaluator bound, stable routing, each job's independent flow/ledger, and no output collision.
 
 ```python
 summary = run_portfolio(manifest=fake_manifest, mode="adaptive-portfolio",
@@ -94,13 +94,13 @@ assert len(summary["jobs"]) == 3
 assert summary["max_observed_evaluators"] <= 4
 assert summary["jobs"]["task-1"]["flow"]["selected_search_id"] is None
 ```
-- [ ] Add interruption, evaluator-timeout, invalid-evidence, task-baseline-failure, and exhausted-budget cases. Assert no certification from missing results, a partial portfolio summary, no unsafe automatic resume, and durable physical attempts from ledger launch intent rather than only completed results. The existing POSIX SIGTERM child-containment test must still pass.
-- [ ] Run red tests, then implement `src/robot_debug/portfolio_runner.py` around per-job `DiagnosticFlow` instances. For each wave: gather `pending()` from eligible jobs; ask the pure policy for ready requests; build `RoundRequest` with globally unique `job--case` IDs; write configs with frozen task/seed; run one shared `run_round`; persist its ledger and results; route only terminal-valid outcomes to the owning controller; atomically write each job and portfolio summary. Match the current `DiagnosticFlow.apply_round` contract: confirmation needs exactly five valid outcomes and reduction gates may need a second wave. If a job's logical gate spans waves, buffer only its own ordered results until the full gate input exists.
-- [ ] Add `scripts/run_diagnostic_portfolio.py` with required manifest path, fresh ignored results root, `--mode sequential-jobs|adaptive-portfolio`, episode/wall/estimated-dollar bounds, and `--dry-run`. Reject existing session directories. Production evaluator wiring must reuse `_run_evaluator_safely` and M3's exact launch sidecars; do not create a second subprocess implementation. Run focused tests and all existing diagnostic/parallel driver tests. Commit `feat(portfolio): orchestrate isolated jobs on one GPU`.
+- [x] Added interruption, evaluator-timeout, invalid-evidence, task-baseline-failure, and exhausted-budget cases. Partial summaries do not certify, and ledger-derived physical attempts distinguish launches from valid results. The focused POSIX lifecycle/driver tests pass (66).
+- [x] Implemented `src/robot_debug/portfolio_runner.py` around per-job `DiagnosticFlow` instances, globally unique requests, one shared `run_round` per wave, atomic summaries, validated launch accounting, and per-job ordered gate buffering.
+- [x] Added `scripts/run_diagnostic_portfolio.py` with the required manifest, fresh results root, both modes, bounds, and synthetic dry run. It reuses `_run_evaluator_safely` and the existing sidecars, rejects existing sessions, and validates exact task/episode plus nonempty aggregate, trace, and MP4 evidence. Focused tests pass.
 
 ## Task 5 — Comparison report and claim guard (green)
 
-- [ ] Write failing `tests/test_portfolio_report.py` for matched modes, task-order drift, config/family/seed/model mismatch, missing per-job evidence, infrastructure-invalid jobs, and synthetic timing. Require `comparable=false` for a contract mismatch and `speedup=null` for fake runs or outcome drift. Count successful reports, no-failure jobs, and budget-exhausted jobs separately.
+- [x] Wrote red-first `tests/test_portfolio_report.py` for matched modes, manifest drift, malformed accounting, missing evidence, invalid jobs, synthetic timing, and paired tampering of flow/status/timestamps. Contract mismatches and unsupported timing suppress speedup.
 
 ```python
 report = compare_portfolios(sequential_summary, adaptive_summary)
@@ -109,12 +109,12 @@ assert report["speedup"] is None  # Both summaries are synthetic.
 assert report["billed_cost_usd"] is None
 assert sum(report["job_status_counts"].values()) == 3
 ```
-- [ ] Implement `src/robot_debug/portfolio_report.py::compare_portfolios(sequential, adaptive)` to validate frozen manifest hashes and durable job summaries, then report time to first reproducible/reduced report, count of valid reduced reports, task coverage, physical/valid attempts, per-job statuses, speculative work, and warm elapsed estimates. Full VM allocation and posted billed cost remain `null` without lifecycle/billing records; no per-job dollars should be presented as an invoice. Run focused tests and commit `feat(portfolio): compare budget-matched diagnostic queues`.
+- [x] Implemented `compare_portfolios` with manifest and job-flow replay validation, outcome/decision drift, wave-ledger launch reconciliation, status/phase-timing checks, and a complete-live-session gate for warm speedup. Full VM allocation and posted billed cost remain `null`. An independent claim-safety review approved the final guard.
 
 ## Task 6 — Local acceptance, handoff, and later cloud gate (green/red separated)
 
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest discover -s tests -v`, the focused WSL POSIX lifecycle/driver tests, `git diff --check`, and two fresh fake CLI sessions with the same manifest and budgets. Inspect JSON by hand: all three jobs retain distinct evidence; sequential and portfolio modes obey the same total physical-attempt/wall/dollar ceilings; differing decisions or task outcomes suppress a speedup claim. Synthetic speedup is never a product claim.
-- [ ] Update `docs/codex-handoff/STATE.md`, `RUNBOOK.md`, and the M3/M5/M6 rows of `PROJECT_PLAN.md` with verified commands and limitations. Do not add provider praise to `FEEDBACK.md` without a new provider interaction. Commit `docs(portfolio): record local multi-job readiness` and integrate only after independent evidence/safety review.
+- [x] With `PYTHONPATH=src`, Windows Python 3.11 full discovery passed 344 tests (four POSIX-only skips); focused WSL POSIX lifecycle/driver passed 66; `git diff --check` passed. A paired fresh fake-CLI test used the same manifest/bounds for both modes, confirmed three separate jobs and physical-attempt ceiling, and found no synthetic speedup claim.
+- [x] Updated `docs/codex-handoff/STATE.md`, `RUNBOOK.md`, and the M3/M5/M6 roadmap text with verified commands and limitations. No provider feedback was invented. Independent report claim-safety review approved; integration follows final branch checks.
 - [ ] Separately propose task-baseline screening and a live sequential-versus-portfolio experiment to Jethro, with exact task IDs, nominal validity gate, current balance/price/quota/capacity, one exact VM, watchdog, disk retention, numeric cap/deadline, and honest comparison metrics. **No VM start or extra GPU is authorized by this plan.** If exact-shape regular capacity still shows zero, defer without changing to preemptible or a different shape silently.
 
 ## Dependency, agent, and review map

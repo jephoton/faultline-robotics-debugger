@@ -65,7 +65,8 @@ starting with the existing occlusion family. The decision is recorded in
 implementation. M5 now includes a proposed portfolio overview in the viewer.
 M6 explicitly adds another perturbation family and exploration of
 other LIBERO suites. The former single-loop US$4/90-minute live proposal is
-paused, not authorized. No portfolio implementation or live run has begun.
+paused, not authorized. The portfolio core is locally implemented; no live
+portfolio run has begun.
 The September 29 read-only preflight found a US$10.42 balance, the exact VM
 stopped, the same US$1.7468/hour pre-tax VM rate, and zero regular launch
 slots for its exact L40S shape (low chance). Refresh all of this and verify
@@ -78,7 +79,7 @@ and fixed M3 comparison.
 
 ### Portfolio implementation checkpoint
 
-The first local portfolio slice is on isolated branch `codex/m3-portfolio`.
+The local portfolio implementation is on isolated branch `codex/m3-portfolio`.
 It adds a frozen three-job manifest, an exact task-ID filter in the local
 `DiagnosticLIBEROBenchmark`, and config-writer support for an explicit task
 and seed. The pinned upstream orchestrator otherwise truncates only a task
@@ -88,10 +89,18 @@ task IDs/instructions beyond task 0 and live selector compatibility remain
 unverified. Jethro approved the narrow adapter and the work-conserving
 round-robin scheduler rule. Its pure policy is implemented and independently
 reviewed; a fairness bug under changing task readiness was caught and fixed
-before runner integration. The runner must supply all frozen manifest job
-keys, including paused/non-ready jobs, each wave. Next is wiring this policy
-to one durable shared evaluator queue, with exact three-task selection and
-any paid run still separate decisions.
+before runner integration. The runner supplies all frozen manifest job keys,
+including paused/non-ready jobs, each wave. The new CLI runs separate
+sequential-job and adaptive-portfolio sessions through one durable shared
+evaluator queue. Each job has its own diagnostic flow and evidence; a shared
+ledger records physical launch attempts. The report replays saved flows,
+reconciles wave attempts, and withholds warm speedup unless both sessions are
+complete, live, budget-matched, and outcome-consistent. Two fresh synthetic
+CLI sessions passed a paired smoke test without a speedup claim. Windows
+Python 3.11 passed 344 tests (four POSIX-only skips); focused WSL lifecycle
+and driver tests passed 66. An independent reviewer approved the report
+claim guard. The live three-task identities and their nominal validity are
+still the next red decision, followed by a separately capped Nebius run.
 No VM started and no cloud cost incurred for this portfolio slice.
 
 M4's bounded live run and evidence validation are complete; details are in

@@ -179,3 +179,51 @@ test. `elapsed_seconds` and `warm_diagnostic_estimate_usd` cover only the
 diagnostic window, not VM allocation/startup/shutdown. Full allocation and
 posted billed costs remain unknown until lifecycle and billing evidence is
 captured and reconciled.
+
+## Multi-job portfolio (local synthetic validation)
+
+The manifest must contain exactly three distinct `libero_object` task IDs,
+one seed, one perturbation family, and the pinned model identity. Task IDs
+`[0, 1, 2]` are **synthetic test identities only** until the selected live
+tasks have passed nominal screening and Jethro has approved them. Save the
+following as a manifest in an ignored scratch directory:
+
+```json
+{
+  "suite": "libero_object",
+  "task_ids": [0, 1, 2],
+  "seed": 7,
+  "family": "agentview_rect_occlusion",
+  "checkpoint_id": "nvidia/gr00t17-lerobot-libero_object-640",
+  "checkpoint_revision": "1499db357f6ca3762b56c2e8c00b530eb9a09444"
+}
+```
+
+From the repository root, run once per mode with different fresh ignored
+results roots. `--dry-run` uses fake successful outcomes; it exercises
+routing/accounting but cannot measure GR00T or justify a speedup claim.
+
+```powershell
+$env:PYTHONPATH = 'src'
+& 'C:\Windows\py.exe' -3.11 scripts/run_diagnostic_portfolio.py `
+  --manifest '<ignored-manifest.json>' --mode sequential-jobs `
+  --results-root '<fresh-ignored-sequential-root>' --upstream-root . `
+  --project-root . --episodes 3 --seconds 600 --estimated-usd 10 `
+  --hourly-rate 1 --dry-run
+```
+
+Repeat with `--mode adaptive-portfolio` and a different fresh results root.
+Decode each `portfolio_summary.json` and pass the two mappings to
+`robot_debug.portfolio_report.compare_portfolios`. The report requires
+complete, matched live sessions with reconciled wave ledgers before it shows
+a warm diagnostic speedup. Neither this estimate nor the hourly-rate bound
+is a posted cloud bill. Before removing `--dry-run`, verify the pinned Linux
+evaluator and exact task selection on the intended cloud environment, obtain
+a fresh numeric spend cap, and satisfy the cloud safety gates above. The
+portfolio CLI has **not** yet been run on Nebius. The M5 viewer does not yet
+consume portfolio summaries.
+
+Final local acceptance on September 30: Windows Python 3.11 full discovery
+passed 344 tests (four POSIX-only skips); focused WSL lifecycle/driver
+passed 66; paired fresh synthetic CLI sessions passed and produced no
+speedup claim. The report's claim guard passed an independent review.
