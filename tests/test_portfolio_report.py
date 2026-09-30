@@ -104,9 +104,47 @@ class PortfolioReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "physical_attempts"):
             self.compare(adaptive=adaptive)
 
+    def test_paired_attested_launch_or_accounting_tampering_cannot_claim_speedup(self):
+        sequential = complete_live_summary("sequential-jobs", elapsed=120)
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        for value in (sequential, adaptive):
+            value["physical_attempts"] = 7
+        with self.assertRaisesRegex(ValueError, "launched_attempts"):
+            self.compare(sequential, adaptive)
+        sequential = complete_live_summary("sequential-jobs", elapsed=120)
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        for value in (sequential, adaptive):
+            value.pop("accounting_incomplete")
+        report = self.compare(sequential, adaptive)
+        self.assertIsNone(report["warm_diagnostic_speedup"])
+
+    def test_paired_flow_contract_status_and_timestamp_tampering_is_rejected(self):
+        sequential = complete_live_summary("sequential-jobs", elapsed=120)
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        for value in (sequential, adaptive):
+            value["jobs"]["task-00"]["flow"]["config"]["config_hash"] = "wrong"
+        with self.assertRaisesRegex(ValueError, "config_hash"):
+            self.compare(sequential, adaptive)
+        sequential = complete_live_summary("sequential-jobs", elapsed=120)
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        for value in (sequential, adaptive):
+            value["jobs"]["task-00"]["certified"] = True
+            value["jobs"]["task-00"]["terminal_status"] = "certified"
+        with self.assertRaisesRegex(ValueError, "certified flag"):
+            self.compare(sequential, adaptive)
+        sequential = complete_live_summary("sequential-jobs", elapsed=120)
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        for value in (sequential, adaptive):
+            value["jobs"]["task-00"]["phase_timestamps_seconds"]["apparent_failure"] = 1.0
+        with self.assertRaisesRegex(ValueError, "apparent_failure"):
+            self.compare(sequential, adaptive)
+
     def test_contract_limits_and_live_markers_must_match_exactly(self):
-        for mutate in (lambda value: value["manifest"].update(task_ids=[1, 0, 2]),
-                       lambda value: value["limits"].update(episodes=31),
+        adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+        adaptive["manifest"].update(task_ids=[1, 0, 2])
+        with self.assertRaisesRegex(ValueError, "config_hash"):
+            self.compare(adaptive=adaptive)
+        for mutate in (lambda value: value["limits"].update(episodes=31),
                        lambda value: value.update(execution_kind="production"),
                        lambda value: value.update(synthetic=True)):
             with self.subTest(mutate=mutate):
@@ -120,9 +158,8 @@ class PortfolioReportTests(unittest.TestCase):
             self.compare(adaptive=adaptive)
         adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
         adaptive["jobs"]["task-00"]["terminal_status"] = "nominal_gate_failed"
-        report = self.compare(adaptive=adaptive)
-        self.assertIsNone(report["warm_diagnostic_speedup"])
-        self.assertEqual(["task-00"], report["job_status_drift_job_ids"])
+        with self.assertRaisesRegex(ValueError, "terminal_status"):
+            self.compare(adaptive=adaptive)
 
     def test_incomplete_or_unvalidated_accounting_suppresses_speedup(self):
         adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
@@ -141,6 +178,7 @@ class PortfolioReportTests(unittest.TestCase):
         flow.apply_round({"nominal-01": "success"})
         adaptive["jobs"]["task-02"]["flow"] = flow.snapshot()
         adaptive["jobs"]["task-02"]["terminal_status"] = None
+        adaptive["jobs"]["task-02"]["phase_timestamps_seconds"]["terminal"] = None
         report = self.compare(adaptive=adaptive)
         self.assertIsNone(report["warm_diagnostic_speedup"])
         self.assertIn("budget_exhausted", report["job_statuses"]["adaptive"].values())

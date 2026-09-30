@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from robot_debug.diagnostic_flow import DiagnosticFlow
 from robot_debug.portfolio_manifest import PortfolioManifest
 from robot_debug.reduce import Rect
+from robot_debug.session import is_reproducible
 
 
 _PHASES = ("apparent_failure", "reproducible_failure", "reduced_failure")
@@ -88,20 +89,30 @@ def _session(raw: Mapping[str, Any], mode: str) -> dict[str, Any]:
         raise ValueError("valid_episodes must equal valid wave result count")
     if physical < sum(len(records) for records in outcomes.values()):
         raise ValueError("physical_attempts cannot be less than durable wave result count")
+    if accounting_validated and physical != launched:
+        raise ValueError("physical_attempts must equal attested launched_attempts")
     statuses: dict[str, str] = {}; decisions: dict[str, Any] = {}; phases: dict[str, dict[str, float | None]] = {}
     for job_id in job_ids:
         job = jobs[job_id]
         if not isinstance(job, Mapping) or job.get("job_id") != job_id or not isinstance(job.get("flow"), Mapping):
             raise ValueError("each job requires a durable flow summary")
         flow = _restore(job["flow"])
+        if flow.config_hash != f"{manifest.config_hash}:{job_id}":
+            raise ValueError("flow config_hash does not bind the frozen manifest and job")
+        expected_certified = flow.certified
+        expected_terminal = "certified" if expected_certified else flow.stop_reason
+        if job.get("certified") is not expected_certified:
+            raise ValueError("job certified flag differs from replayed flow")
+        if job.get("terminal_status") != expected_terminal:
+            raise ValueError("job terminal_status differs from replayed flow")
         records = outcomes[job_id]
         terminal = flow.phase in {"stopped", "certified"}
         if terminal and _flow_records(flow, job_id) != records:
             raise ValueError("terminal flow rounds do not match job-prefixed wave records")
-        statuses[job_id] = _status(job, flow, raw.get("stop_reason"), records)
+        statuses[job_id] = _status(flow, raw.get("stop_reason"), records)
         decisions[job_id] = flow.decisions
-        phases[job_id] = _phase_times(job.get("phase_timestamps_seconds"), elapsed)
-    unsafe = (raw.get("accounting_incomplete") is True or invalid > 0 or uncertain > 0
+        phases[job_id] = _phase_times(job.get("phase_timestamps_seconds"), elapsed, flow)
+    unsafe = (raw.get("accounting_incomplete") is not False or invalid > 0 or uncertain > 0
               or raw.get("stop_reason") == "shared_budget_exhausted"
               or any(status in {"incomplete", "invalid_or_uncertain", "budget_exhausted"} for status in statuses.values()))
     return {"manifest": manifest.to_mapping(), "manifest_ok": raw.get("manifest_hash") == manifest.config_hash,
@@ -130,25 +141,40 @@ def _restore(snapshot: Mapping[str, Any]) -> DiagnosticFlow:
 
 
 def _waves(waves: object, job_ids: set[str]) -> tuple[dict[str, list[tuple[str, str, str]]], int, int, bool]:
-    if not isinstance(waves, list): raise ValueError("waves must be a list")
-    results = {job: [] for job in job_ids}; seen: set[str] = set(); valid = launched = 0; validated = bool(waves)
+    if not isinstance(waves, list):
+        raise ValueError("waves must be a list")
+    results = {job: [] for job in job_ids}
+    seen: set[str] = set()
+    valid = launched = 0
+    validated = bool(waves)
     for wave in waves:
-        if not isinstance(wave, Mapping) or not isinstance(wave.get("results"), list): raise ValueError("wave lacks results")
+        if not isinstance(wave, Mapping) or not isinstance(wave.get("results"), list):
+            raise ValueError("wave lacks results")
         count = wave.get("launched_attempts")
-        if not isinstance(count, int) or isinstance(count, bool) or count < 0 or wave.get("attempt_accounting_validated") is not True or not _path(wave.get("ledger_path")):
+        if (not isinstance(count, int) or isinstance(count, bool) or count < len(wave["results"])
+                or wave.get("attempt_accounting_validated") is not True
+                or not _path(wave.get("ledger_path"))):
             validated = False
-        else: launched += count
+        else:
+            launched += count
         for record in wave["results"]:
-            if not isinstance(record, Mapping): raise ValueError("result must be a mapping")
+            if not isinstance(record, Mapping):
+                raise ValueError("result must be a mapping")
             case = record.get("case_id")
-            if not isinstance(case, str) or "--" not in case or case in seen: raise ValueError("result IDs must be unique and job-prefixed")
+            if not isinstance(case, str) or "--" not in case or case in seen:
+                raise ValueError("result IDs must be unique and job-prefixed")
             job, _local = case.split("--", 1)
-            if job not in results: raise ValueError("result belongs to unknown job")
-            status = record.get("status"); outcome = record.get("outcome")
+            if job not in results:
+                raise ValueError("result belongs to unknown job")
+            status = record.get("status")
+            outcome = record.get("outcome")
             if status == "valid":
-                if outcome not in _OUTCOMES or not _paths(record.get("evidence_paths")): raise ValueError("valid result requires outcome and evidence")
+                if outcome not in _OUTCOMES or not _paths(record.get("evidence_paths")):
+                    raise ValueError("valid result requires outcome and evidence")
                 valid += 1
-            results[job].append((case, str(status), outcome if isinstance(outcome, str) else "")); seen.add(case)
+            stored_outcome = outcome if isinstance(outcome, str) else ""
+            results[job].append((case, str(status), stored_outcome))
+            seen.add(case)
     return results, valid, launched, validated
 
 
@@ -161,30 +187,50 @@ def _flow_record_count(jobs: Mapping[str, Any], job_ids: list[str]) -> int:
     return sum(sum(len(round_record["case_ids"]) for round_record in jobs[job]["flow"].get("rounds", [])) for job in job_ids)
 
 
-def _status(job: Mapping[str, Any], flow: DiagnosticFlow, stop: object, records: list[tuple[str, str, str]]) -> str:
-    if job.get("certified") is True and flow.certified: return "certified"
-    reason = job.get("terminal_status") or flow.stop_reason
-    if reason == "no_apparent_failure": return "no_failure"
-    if reason == "nominal_gate_failed": return "nominal_failed"
-    if stop == "shared_budget_exhausted" and flow.phase not in {"stopped", "certified"}: return "budget_exhausted"
-    if any(status != "valid" for _, status, _ in records): return "invalid_or_uncertain"
+def _status(flow: DiagnosticFlow, stop: object, records: list[tuple[str, str, str]]) -> str:
+    if flow.certified:
+        return "certified"
+    reason = flow.stop_reason
+    if reason == "no_apparent_failure":
+        return "no_failure"
+    if reason == "nominal_gate_failed":
+        return "nominal_failed"
+    if stop == "shared_budget_exhausted" and flow.phase not in {"stopped", "certified"}:
+        return "budget_exhausted"
+    if any(status != "valid" for _, status, _ in records):
+        return "invalid_or_uncertain"
     return "incomplete"
 
 
 def _limits(raw: object) -> tuple[int | float, ...]:
-    if not isinstance(raw, Mapping) or set(raw) != set(_LIMITS): raise ValueError("limits must contain frozen bounds")
+    if not isinstance(raw, Mapping) or set(raw) != set(_LIMITS):
+        raise ValueError("limits must contain frozen bounds")
     return (_integer(raw["episodes"], "limits.episodes"), *(_positive(raw[name], f"limits.{name}") for name in _LIMITS[1:]))
 
 
-def _phase_times(raw: object, elapsed: float) -> dict[str, float | None]:
+def _phase_times(raw: object, elapsed: float, flow: DiagnosticFlow) -> dict[str, float | None]:
     if not isinstance(raw, Mapping): raise ValueError("job lacks phase_timestamps_seconds")
+    confirmation = next((round_record["outcomes"] for round_record in flow.rounds
+                         if any(case.startswith("confirm-") for case in round_record["case_ids"])), None)
+    expected = {
+        "apparent_failure": any(item.get("phase") == "search" for item in flow.decisions),
+        "reproducible_failure": confirmation is not None and is_reproducible(confirmation),
+        "reduced_failure": any(item.get("phase") == "reduce_candidate" and item.get("decision") == "pass"
+                               for item in flow.decisions),
+        "terminal": flow.phase in {"stopped", "certified"},
+    }
+    if set(raw) != set((*_PHASES, "terminal")):
+        raise ValueError("phase_timestamps_seconds must contain every gate")
     result = {}; prior = 0.0
-    for phase in _PHASES:
+    for phase in (*_PHASES, "terminal"):
         value = raw.get(phase)
-        if value is None: result[phase] = None
+        if value is None:
+            if expected[phase]: raise ValueError(f"{phase} timestamp is required by replayed flow")
+            result[phase] = None
         else:
             number = _number(value, f"phase_timestamps_seconds.{phase}")
             if number < prior or number > elapsed: raise ValueError("phase timestamps must be monotonic and within elapsed")
+            if not expected[phase]: raise ValueError(f"{phase} timestamp has no replayed gate")
             result[phase] = number; prior = number
     return result
 
@@ -208,12 +254,16 @@ def _count(values: Mapping[str, str], target: str) -> int: return sum(value == t
 def _path(value: object) -> bool: return isinstance(value, str) and bool(value)
 def _paths(value: object) -> bool: return isinstance(value, (list, tuple)) and bool(value) and all(_path(item) for item in value)
 def _integer(value: object, name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0: raise ValueError(f"{name} must be non-negative integer")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{name} must be non-negative integer")
     return value
 def _positive(value: object, name: str) -> float:
     number = _number(value, name)
-    if number <= 0: raise ValueError(f"{name} must be positive")
+    if number <= 0:
+        raise ValueError(f"{name} must be positive")
     return number
 def _number(value: object, name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0: raise ValueError(f"{name} must be finite non-negative")
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value < 0):
+        raise ValueError(f"{name} must be finite non-negative")
     return float(value)
