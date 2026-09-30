@@ -33,6 +33,21 @@ class FakeEvaluator:
 
 
 class PortfolioRunnerTests(unittest.TestCase):
+    def test_runner_persists_atomic_dry_run_contract(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                    project_root=Path(__file__).parents[1], evaluator=FakeEvaluator(),
+                                    limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1),
+                                    dry_run=True)
+            saved = json.loads((root / summary["session_id"] / "portfolio_summary.json").read_text(encoding="utf-8"))
+        self.assertTrue(saved["dry_run"])
+        self.assertTrue(saved["synthetic"])
+
     def test_global_wave_uses_unique_job_requests_and_frozen_task_configs(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
         from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio

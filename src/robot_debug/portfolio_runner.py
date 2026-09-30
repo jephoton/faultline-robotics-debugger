@@ -80,7 +80,7 @@ def _launched_attempts(case_ids: list[str], durable: Mapping[str, Any]) -> int:
 def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path | str,
                   project_root: Path | str, evaluator: Callable[..., Any], limits: PortfolioLimits,
                   monotonic_clock: Callable[[], float] = time.monotonic,
-                  interrupt_event: threading.Event | None = None) -> dict[str, Any]:
+                  interrupt_event: threading.Event | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Run global durable waves; a bad round stops all jobs fail-closed.
 
     This core intentionally has no production evaluator or resume path.  The
@@ -95,6 +95,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         raise ValueError("limits and evaluator are required")
     if interrupt_event is not None and not isinstance(interrupt_event, threading.Event):
         raise ValueError("interrupt_event must be a threading.Event")
+    if not isinstance(dry_run, bool):
+        raise ValueError("dry_run must be a boolean")
     root = Path(results_root).resolve()
     project = Path(project_root).resolve()
     session = root / f"portfolio-{mode}-{manifest.config_hash[:12]}"
@@ -113,6 +115,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
     }
     summary: dict[str, Any] = {"schema_version": 1, "session_id": session.name, "mode": mode,
         "manifest": manifest.to_mapping(), "manifest_hash": manifest.config_hash,
+        "dry_run": dry_run, "synthetic": dry_run,
+        "execution_kind": "dry_run" if dry_run else "production",
         "limits": asdict(limits), "cost_basis": "warm elapsed seconds times one full VM rate; not billed allocation cost",
         "waves": [], "jobs": {}, "physical_attempts": 0, "valid_episodes": 0,
         "invalid_attempts": 0, "uncertain_attempts": 0, "elapsed_seconds": 0.0,
