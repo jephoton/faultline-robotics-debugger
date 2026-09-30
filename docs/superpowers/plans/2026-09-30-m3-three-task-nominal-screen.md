@@ -10,6 +10,8 @@
 
 **Authority boundary:** Jethro approved task IDs `(0, 1, 2)` as *screening candidates*. This document does not authorize a VM start, a dollar cap, a public push, a different VM shape, or a claim that IDs 1 and 2 are nominally reliable. The former single-loop live comparison remains paused.
 
+**Execution update, September 30:** Jethro separately approved US$3/60 minutes. The local test was integrated at `9344c62` and passed; one guarded exact-shape start then timed out with Nebius `NotEnoughResources` before any episode. The VM is confirmed stopped, temporary ingress removed, and guard unregistered. See [the attempt record](../../experiments/m3-three-task-screen.md). No automatic retry or different shape is authorized by this attempt.
+
 ---
 
 ## Frozen experiment contract and cost gate
@@ -18,16 +20,16 @@
 - `adaptive-portfolio` mode with `episodes=3` and a fresh ignored results root. Assert from a local dry run that the sole requests are `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`; no search, confirmation, or reduction case is admitted. The existing measured worker chooser may use at most two evaluator processes on the one GPU; no extra GPU is allocated.
 - A valid screen requires the exact task ID and episode index 0 in each nonempty aggregate, a nonempty trace and MP4, no infrastructure/uncertain attempt, and three terminal-valid outcomes. Record each success/failure separately. One success per task proves only a single initial state worked, **not** a stable nominal success rate; any nominal failure pauses the portfolio comparison for interpretation.
 - Current read-only CLI preflight on September 30: existing exact L40S Intel `1gpu-16vcpu-64gb` VM is `STOPPED` in eu-north1. Calculator: US$1.7468/VM-on hour pre-tax and US$0.0194444/hour for its retained 200 GiB Network SSD. Capacity advice: one on-demand slot for the exact shape, `LOW` availability; restart is not guaranteed. Balance/expiry and any billing lag still require a console check.
-- **Proposed, not approved:** US$3 maximum incremental spend, at most 60 minutes VM-on, and at most 24 further hours of retained disk before a separate retention decision. At current quoted rates, 60 minutes VM-on plus 24 hours of disk is US$2.2135 before tax, about US$2.4127 with an assumed 9% tax; the cap leaves about US$0.59 for price/tax variance. Stop earlier after three episodes. If balance is below the cap plus a prudent reserve, or rate/capacity changes, do not start; return to Jethro.
+- **Approved for the September 30 attempt, now ended:** US$3 maximum incremental spend, at most 60 minutes VM-on, and at most 24 further hours of retained disk before a separate retention decision. At quoted rates, 60 minutes VM-on plus 24 hours of disk was US$2.2135 before tax, about US$2.4127 with an assumed 9% tax. The start failed before any episode; these figures remain estimates, not a billed total. A later attempt needs a fresh cap/readiness decision.
 - A 60-minute exact-VM workstation watchdog must be armed *while the VM is stopped* and confirmed alive; guest shutdown is backup. The launch cutoff is at most 45 minutes after VM start, leaving 15 minutes for a possible 300-second evaluator timeout, evidence copy, and stop verification. The CLI's estimated-dollar bound is advisory; the independently armed VM stop deadline is the spending boundary. No retry of an uncertain start/stop.
 
 ## Task 1 — Freeze accepted candidates and prove three nominal requests (green)
 
 **Files:** `tests/test_diagnostic_portfolio_cli.py`, `docs/experiments/m3-task-selection-contract.md`, `docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md`.
 
-- [ ] Extend `test_paired_fresh_dry_runs_never_claim_live_speedup` or add a focused test that runs `run_cli(... mode="adaptive-portfolio", episodes=3, dry_run=True)` with manifest `(0,1,2)`, flattens `summary["waves"][*]["results"]`, and asserts exactly the three `task-XX--nominal-01` case IDs, three distinct owning jobs, no search case, and `physical_attempts == 3`. Run the test first against current code; if it fails, diagnose before changing runner logic.
-- [ ] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_diagnostic_portfolio_cli -v` with `PYTHONPATH=src`; then full Windows discovery and focused WSL lifecycle/driver tests. Commit only related test/docs paths with `test(portfolio): prove three-task nominal screen`.
-- [ ] Record Jethro's candidate choice as **accepted for screening**, not a passed runtime baseline. The task IDs are a red decision already settled; do not silently substitute task 3 if another task fails.
+- [x] Add a focused dry-run test for the three exact task-nominal requests, ownership, no search, and `physical_attempts == 3`.
+- [x] Run focused/full Windows tests and focused WSL lifecycle/driver tests; commit the related test at `9344c62`.
+- [x] Record Jethro's candidate choice as **accepted for screening**, not a passed runtime baseline.
 
 ## Task 2 — Read-only resource and model preflight (green/amber)
 

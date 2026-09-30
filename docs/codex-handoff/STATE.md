@@ -102,11 +102,17 @@ and driver tests passed 66. An independent reviewer approved the report
 claim guard. Jethro accepted task IDs `(0, 1, 2)` as nominal-screening
 candidates; their runtime catalog and nominal validity are still unverified.
 The [bounded screening plan](../superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md)
-proposes a separately capped Nebius run, not yet authorized.
+received a US$3/60-minute approval. Its September 30 first start was blocked
+before guest access by `NotEnoughResources` despite one `LOW`-availability slot
+in capacity advice. No task episode ran, so IDs 1 and 2 remain unscreened.
+The VM is confirmed `STOPPED`; temporary SSH ingress and the OS-owned guard
+were removed after verification. See
+[`m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.
-No VM started and no cloud cost incurred for this portfolio slice.
+No portfolio episode has run; provider billing for the failed start has not
+yet posted, and the retained disk remains billable.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work

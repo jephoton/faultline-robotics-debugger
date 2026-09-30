@@ -2,7 +2,8 @@
 
 **Status:** Local adapter implemented and regression-tested on 2026-09-30.
 Pinned-harness compatibility was checked in source, but no live LIBERO task
-screening or cloud run was performed.
+screening episode was performed. A September 30 cloud start attempt failed
+before guest access; see [the attempt record](m3-three-task-screen.md).
 
 The pinned `LIBEROBenchmark` can enumerate LIBERO Object tasks internally: it
 loops over task IDs from zero through the suite's `n_tasks - 1`, and its reset

@@ -22,8 +22,15 @@ uncertainty without spending. The authenticated CLI still had no default
 `parent-id`, so the correct regional project had to be selected explicitly;
 checking an unrelated regional project first again returned an empty VM list.
 That was our project-selection error, not a provider outage. The live console
-balance and posted billing have not yet been verified for this screen. Reuse
-judgment remains provisional until the actual run and Jethro's feedback.
+balance was read in the signed-in console before the September 30 screen
+attempt; posted billing for that attempt has not yet been reconciled. The
+one-slot `LOW` capacity advice did not guarantee an actual allocation: the
+exact-shape start timed out with `NotEnoughResources` and returned to
+`STOPPED` without an episode. This is a concrete capacity/scheduling friction
+point, not an evaluator or model failure. See
+[`docs/experiments/m3-three-task-screen.md`](docs/experiments/m3-three-task-screen.md).
+Reuse judgment remains provisional until a real three-task run and Jethro's
+feedback.
 
 ## Our setup errors, not provider bugs
 
