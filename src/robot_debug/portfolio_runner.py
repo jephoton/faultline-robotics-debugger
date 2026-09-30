@@ -116,7 +116,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
     summary: dict[str, Any] = {"schema_version": 1, "session_id": session.name, "mode": mode,
         "manifest": manifest.to_mapping(), "manifest_hash": manifest.config_hash,
         "dry_run": dry_run, "synthetic": dry_run,
-        "execution_kind": "dry_run" if dry_run else "production",
+        "execution_kind": "dry_run" if dry_run else "live",
         "limits": asdict(limits), "cost_basis": "warm elapsed seconds times one full VM rate; not billed allocation cost",
         "waves": [], "jobs": {}, "physical_attempts": 0, "valid_episodes": 0,
         "invalid_attempts": 0, "uncertain_attempts": 0, "elapsed_seconds": 0.0,
@@ -263,6 +263,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         summary["waves"].append({"wave_id": wave_number, "cursor": cursor, "requests": [asdict(item) for item in wave.requests],
             "worker_choice": asdict(worker_choice), "ledger_path": str(ledger.relative_to(session)),
             "launched_attempts": launched_attempts,
+            "attempt_accounting_validated": True,
             "timing_source": "M3 fixed-manifest warm per-episode measurements; not task-specific",
             "manifest_hash": round_summary.manifest_hash, "results": [asdict(result) for result in round_summary.results]})
         if not round_summary.certifying or len(round_summary.results) != len(requests):

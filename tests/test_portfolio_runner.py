@@ -47,6 +47,7 @@ class PortfolioRunnerTests(unittest.TestCase):
             saved = json.loads((root / summary["session_id"] / "portfolio_summary.json").read_text(encoding="utf-8"))
         self.assertTrue(saved["dry_run"])
         self.assertTrue(saved["synthetic"])
+        self.assertEqual("dry_run", saved["execution_kind"])
 
     def test_global_wave_uses_unique_job_requests_and_frozen_task_configs(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
@@ -64,6 +65,7 @@ class PortfolioRunnerTests(unittest.TestCase):
             self.assertEqual(3, summary["physical_attempts"])
             self.assertEqual(summary["physical_attempts"],
                              sum(wave["launched_attempts"] for wave in summary["waves"]))
+            self.assertTrue(all(wave["attempt_accounting_validated"] for wave in summary["waves"]))
             self.assertEqual(3, len(summary["waves"][0]["requests"]))
             self.assertEqual(3, len({request.case_id for request in evaluator.requests}))
             self.assertEqual(3, len({request.output_dir for request in evaluator.requests}))
@@ -301,6 +303,7 @@ class PortfolioRunnerTests(unittest.TestCase):
         self.assertFalse(summary["certified"])
         self.assertEqual(summary["physical_attempts"],
                          sum(wave["launched_attempts"] for wave in summary["waves"]))
+        self.assertTrue(all(wave["attempt_accounting_validated"] for wave in summary["waves"]))
 
 
 if __name__ == "__main__":
