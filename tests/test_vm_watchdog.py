@@ -302,12 +302,15 @@ class ArmWrapperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             record = self._payload(root)
-            with self.assertRaisesRegex(self.runner.ArmError, "child exited"):
-                self.runner.arm(
-                    record, root / "control",
-                    process_factory=lambda *args, **kwargs: SimpleNamespace(pid=6, poll=lambda: 1),
-                    handshake_seconds=0,
-                )
+            # A zero-second deadline can expire between two real clock reads
+            # before the fake child's first poll, especially on CI runners.
+            with patch.object(self.runner.time, "monotonic", return_value=0):
+                with self.assertRaisesRegex(self.runner.ArmError, "child exited"):
+                    self.runner.arm(
+                        record, root / "control",
+                        process_factory=lambda *args, **kwargs: SimpleNamespace(pid=6, poll=lambda: 1),
+                        handshake_seconds=0,
+                    )
 
     def test_local_fake_arm_detaches_then_confirms_stop_without_nebius(self):
         with tempfile.TemporaryDirectory() as directory:
