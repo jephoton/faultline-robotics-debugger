@@ -118,6 +118,17 @@ class PortfolioReportTests(unittest.TestCase):
         report = self.compare(sequential, adaptive)
         self.assertIsNone(report["warm_diagnostic_speedup"])
 
+    def test_paired_interruption_or_runner_exception_cannot_claim_speedup(self):
+        for reason in ("interrupted", "runner_exception: RuntimeError: fake"):
+            with self.subTest(reason=reason):
+                sequential = complete_live_summary("sequential-jobs", elapsed=120)
+                adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)
+                for value in (sequential, adaptive):
+                    value["stop_reason"] = reason
+                report = self.compare(sequential, adaptive)
+                self.assertIsNone(report["warm_diagnostic_speedup"])
+                self.assertTrue(any("completion reason" in item for item in report["limitations"]))
+
     def test_paired_flow_contract_status_and_timestamp_tampering_is_rejected(self):
         sequential = complete_live_summary("sequential-jobs", elapsed=120)
         adaptive = complete_live_summary("adaptive-portfolio", elapsed=60)

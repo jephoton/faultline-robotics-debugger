@@ -41,6 +41,8 @@ def compare_portfolios(sequential: Mapping[str, Any], adaptive: Mapping[str, Any
         limitations.append("exact live markers are absent or contradictory; timing is not product evidence")
     if not left["accounting_validated"] or not right["accounting_validated"]:
         limitations.append("per-wave validated launched accounting is unavailable")
+    if not left["complete"] or not right["complete"]:
+        limitations.append("portfolio completion reason is not all_jobs_terminal")
     if left["unsafe"] or right["unsafe"]:
         limitations.append("session is incomplete, budget-exhausted, invalid, or uncertain")
     allowed = (same_manifest and same_limits and not outcome_drift and not decision_drift and not status_drift
@@ -112,8 +114,9 @@ def _session(raw: Mapping[str, Any], mode: str) -> dict[str, Any]:
         statuses[job_id] = _status(flow, raw.get("stop_reason"), records)
         decisions[job_id] = flow.decisions
         phases[job_id] = _phase_times(job.get("phase_timestamps_seconds"), elapsed, flow)
+    complete = raw.get("stop_reason") == "all_jobs_terminal"
     unsafe = (raw.get("accounting_incomplete") is not False or invalid > 0 or uncertain > 0
-              or raw.get("stop_reason") == "shared_budget_exhausted"
+              or not complete
               or any(status in {"incomplete", "invalid_or_uncertain", "budget_exhausted"} for status in statuses.values()))
     return {"manifest": manifest.to_mapping(), "manifest_ok": raw.get("manifest_hash") == manifest.config_hash,
             "limits": limits, "job_ids": job_ids, "statuses": statuses, "decisions": decisions,
@@ -124,7 +127,7 @@ def _session(raw: Mapping[str, Any], mode: str) -> dict[str, Any]:
             "speculative_valid": max(0, valid - _flow_record_count(jobs, job_ids)),
             "unvalidated": max(0, physical - launched), "accounting_validated": accounting_validated,
             "live": raw.get("dry_run") is False and raw.get("synthetic") is False and raw.get("execution_kind") == "live",
-            "unsafe": unsafe, "phases": phases}
+            "complete": complete, "unsafe": unsafe, "phases": phases}
 
 
 def _restore(snapshot: Mapping[str, Any]) -> DiagnosticFlow:
