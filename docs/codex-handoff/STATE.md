@@ -109,7 +109,12 @@ No task episode ran, so IDs 1 and 2 remain unscreened. The VM is confirmed
 `STOPPED`; temporary SSH ingress and both OS-owned guards were removed after
 verification. Jethro waived the fresh balance check for the retry, so the
 prior US$9.96 reading is not a current balance. The next red choice is to wait
-for the same shape or plan a different resource/cache path with a new cap. See
+for the same shape or plan a snapshot-based VM on a different platform with a
+new cap. Read-only diagnosis found two scheduler-level capacity timeouts on an
+unchanged VM, not a guest/model/runner error; the existing platform is
+immutable and its managed boot disk must not be lost during migration. H100
+has stronger advised availability but a higher hourly rate and untested
+runtime compatibility. See
 [`m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
