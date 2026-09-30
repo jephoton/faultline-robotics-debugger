@@ -52,6 +52,28 @@ class PortfolioCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "existing portfolio session"):
                 run_cli(**kwargs)
 
+    def test_paired_fresh_dry_runs_never_claim_live_speedup(self):
+        from robot_debug.portfolio_report import compare_portfolios
+        from scripts.run_diagnostic_portfolio import run_cli
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(manifest_mapping()), encoding="utf-8")
+            shared = dict(manifest_path=manifest, upstream_root=root,
+                          project_root=Path(__file__).parents[1], episodes=3,
+                          seconds=600, estimated_usd=10, hourly_rate=1, dry_run=True)
+            sequential = run_cli(mode="sequential-jobs", results_root=root / "sequential", **shared)
+            adaptive = run_cli(mode="adaptive-portfolio", results_root=root / "adaptive", **shared)
+            report = compare_portfolios(sequential, adaptive)
+
+            self.assertEqual(sequential["manifest"], adaptive["manifest"])
+            self.assertEqual(3, len(sequential["jobs"]))
+            self.assertEqual(3, len(adaptive["jobs"]))
+            self.assertLessEqual(sequential["physical_attempts"], 3)
+            self.assertLessEqual(adaptive["physical_attempts"], 3)
+            self.assertIsNone(report["warm_diagnostic_speedup"])
+
     def test_production_adapter_uses_contained_launcher_and_rejects_wrong_task(self):
         from robot_debug.diagnostic_round import RoundRequest, RoundLifecycle
         from scripts import run_diagnostic_portfolio as cli
