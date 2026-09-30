@@ -1,4 +1,4 @@
-"""Fail-closed, provider-neutral comparison of portfolio diagnostic sessions."""
+"""Fail-closed comparison of frozen multi-job diagnostic portfolios."""
 
 from __future__ import annotations
 
@@ -6,227 +6,214 @@ import math
 from collections import Counter
 from typing import Any, Mapping
 
+from robot_debug.diagnostic_flow import DiagnosticFlow
 from robot_debug.portfolio_manifest import PortfolioManifest
+from robot_debug.reduce import Rect
 
 
 _PHASES = ("apparent_failure", "reproducible_failure", "reduced_failure")
-_VALID_OUTCOMES = {"success", "policy_failure"}
+_OUTCOMES = {"success", "policy_failure"}
+_LIMITS = ("episodes", "seconds", "estimated_usd", "hourly_rate")
 
 
 def compare_portfolios(sequential: Mapping[str, Any], adaptive: Mapping[str, Any]) -> dict[str, Any]:
-    """Report a portfolio comparison without making unsupported speedup claims.
-
-    Malformed durable evidence raises ``ValueError``. Contract mismatch and
-    outcome/decision drift remain reportable, but always suppress speedup.
-    """
-    left = _validate_session(sequential, "sequential-jobs")
-    right = _validate_session(adaptive, "adaptive-portfolio")
-    same_manifest = left["manifest"] == right["manifest"] and left["manifest_integrity"] and right["manifest_integrity"]
-    outcome_drift = _drift_ids(left["outcomes"], right["outcomes"])
-    decision_drift = [job_id for job_id in left["job_ids"]
-                      if left["decisions"][job_id] != right["decisions"].get(job_id)]
-    limitations: list[str] = []
+    """Compare two durable sessions, withholding speedup unless evidence agrees."""
+    left = _session(sequential, "sequential-jobs")
+    right = _session(adaptive, "adaptive-portfolio")
+    same_manifest = left["manifest"] == right["manifest"] and left["manifest_ok"] and right["manifest_ok"]
+    same_limits = left["limits"] == right["limits"]
+    outcome_drift = _drift(left["outcomes"], right["outcomes"])
+    decision_drift = [job for job in left["job_ids"] if left["decisions"][job] != right["decisions"][job]]
+    status_drift = [job for job in left["job_ids"] if left["statuses"][job] != right["statuses"][job]]
+    limitations: list[str] = ["full VM allocation timing and reconciled billed cost are unavailable"]
     if not same_manifest:
-        limitations.append("frozen manifest hash or content differs; sessions are not comparable")
+        limitations.append("frozen manifest hash or content differs")
+    if not same_limits:
+        limitations.append("shared episode, wall-time, dollar, or hourly-rate limits differ")
     if outcome_drift:
-        limitations.append("durable episode outcomes differ; warm speedup is suppressed")
+        limitations.append("durable episode outcomes differ")
     if decision_drift:
-        limitations.append("per-job flow decisions differ; warm speedup is suppressed")
-    if left["unsafe_accounting"] or right["unsafe_accounting"]:
-        limitations.append("accounting is incomplete or has invalid/uncertain attempts; warm speedup is suppressed")
-    if not left["dry_run_known_live"] or not right["dry_run_known_live"]:
-        limitations.append("dry_run is true or missing/unknown; synthetic timing cannot support a speedup claim")
-    limitations.append("full VM allocation timing and reconciled billing are unavailable")
-
-    comparable = same_manifest
-    speedup_allowed = comparable and not outcome_drift and not decision_drift and not (
-        left["unsafe_accounting"] or right["unsafe_accounting"]
-    ) and left["dry_run_known_live"] and right["dry_run_known_live"]
-    combined_statuses = {
-        job_id: left["statuses"][job_id] if left["statuses"][job_id] == right["statuses"].get(job_id) else "status_drift"
-        for job_id in left["job_ids"]
-    }
+        limitations.append("replayed per-job flow decisions differ")
+    if status_drift:
+        limitations.append("per-job terminal statuses differ")
+    if not left["live"] or not right["live"]:
+        limitations.append("exact live markers are absent or contradictory; timing is not product evidence")
+    if not left["accounting_validated"] or not right["accounting_validated"]:
+        limitations.append("per-wave validated launched accounting is unavailable")
+    if left["unsafe"] or right["unsafe"]:
+        limitations.append("session is incomplete, budget-exhausted, invalid, or uncertain")
+    allowed = (same_manifest and same_limits and not outcome_drift and not decision_drift and not status_drift
+               and left["live"] and right["live"] and left["accounting_validated"] and right["accounting_validated"]
+               and not left["unsafe"] and not right["unsafe"])
+    combined = {job: left["statuses"][job] if job not in status_drift else "status_drift" for job in left["job_ids"]}
     return {
-        "schema_version": 1,
-        "same_manifest": same_manifest,
-        "comparable": comparable,
-        "warm_diagnostic_speedup": left["elapsed"] / right["elapsed"] if speedup_allowed else None,
-        "outcome_drift_case_ids": outcome_drift,
-        "decision_drift_job_ids": decision_drift,
+        "schema_version": 2, "same_manifest": same_manifest, "same_limits": same_limits,
+        "comparable": same_manifest and same_limits,
+        "warm_diagnostic_speedup": left["elapsed"] / right["elapsed"] if allowed else None,
+        "outcome_drift_case_ids": outcome_drift, "decision_drift_job_ids": decision_drift,
+        "job_status_drift_job_ids": status_drift,
         "job_statuses": {"sequential": left["statuses"], "adaptive": right["statuses"]},
-        "job_status_counts": dict(Counter(combined_statuses.values())),
+        "job_status_counts": dict(Counter(combined.values())),
         "successful_reports": {"sequential": _count(left["statuses"], "certified"),
                                "adaptive": _count(right["statuses"], "certified")},
-        "task_coverage": {"sequential": len(left["job_ids"]), "adaptive": len(right["job_ids"])},
-        "physical_attempts": _pair(left, right, "physical"),
-        "valid_episodes": _pair(left, right, "valid"),
-        "speculative_work": {"sequential": left["physical"] - left["valid"],
-                             "adaptive": right["physical"] - right["valid"]},
+        "task_coverage": {"sequential": len(left["evidence_jobs"]), "adaptive": len(right["evidence_jobs"])},
+        "physical_attempts": _pair(left, right, "physical"), "valid_episodes": _pair(left, right, "valid"),
+        "speculative_valid_work": _pair(left, right, "speculative_valid"),
+        "unvalidated_attempts": _pair(left, right, "unvalidated"),
         "warm_diagnostic_elapsed_seconds": _pair(left, right, "elapsed"),
         "warm_diagnostic_estimate_usd": _pair(left, right, "warm_cost"),
         "time_to_first_reproducible_report_seconds": _first_phase(left, right, "reproducible_failure"),
         "time_to_first_reduced_report_seconds": _first_phase(left, right, "reduced_failure"),
-        "full_vm_allocation_estimated_compute_usd": None,
-        "billed_cost_usd": None,
-        "limitations": limitations,
+        "full_vm_allocation_estimated_compute_usd": None, "billed_cost_usd": None, "limitations": limitations,
     }
 
 
-def _validate_session(raw: Mapping[str, Any], expected_mode: str) -> dict[str, Any]:
-    if not isinstance(raw, Mapping) or raw.get("mode") != expected_mode:
-        raise ValueError(f"expected {expected_mode} portfolio summary")
-    manifest_raw = raw.get("manifest")
+def _session(raw: Mapping[str, Any], mode: str) -> dict[str, Any]:
+    if not isinstance(raw, Mapping) or raw.get("mode") != mode:
+        raise ValueError(f"expected {mode} portfolio summary")
     try:
-        manifest = PortfolioManifest.from_mapping(manifest_raw)
+        manifest = PortfolioManifest.from_mapping(raw.get("manifest"))
     except (TypeError, ValueError) as error:
-        raise ValueError("summary has an invalid frozen manifest") from error
-    manifest_integrity = raw.get("manifest_hash") == manifest.config_hash
-    job_ids = [job.job_id for job in manifest.jobs]
-    jobs = raw.get("jobs")
+        raise ValueError("invalid frozen manifest") from error
+    jobs = raw.get("jobs"); job_ids = [item.job_id for item in manifest.jobs]
     if not isinstance(jobs, Mapping) or set(jobs) != set(job_ids):
         raise ValueError("summary must contain exactly the frozen manifest jobs")
-    elapsed = _positive(raw.get("elapsed_seconds"), "elapsed_seconds")
-    physical = _count_value(raw.get("physical_attempts"), "physical_attempts")
-    valid = _count_value(raw.get("valid_episodes"), "valid_episodes")
-    if physical < valid:
-        raise ValueError("physical_attempts cannot be less than valid_episodes")
-    warm_cost = _nonnegative(raw.get("warm_diagnostic_estimate_usd"), "warm_diagnostic_estimate_usd")
-    invalid = _count_value(raw.get("invalid_attempts"), "invalid_attempts")
-    uncertain = _count_value(raw.get("uncertain_attempts"), "uncertain_attempts")
-    outcomes = _durable_outcomes(raw.get("waves"), set(job_ids))
-    statuses: dict[str, str] = {}
-    decisions: dict[str, Any] = {}
+    limits = _limits(raw.get("limits")); elapsed = _positive(raw.get("elapsed_seconds"), "elapsed_seconds")
+    physical = _integer(raw.get("physical_attempts"), "physical_attempts")
+    valid = _integer(raw.get("valid_episodes"), "valid_episodes")
+    invalid = _integer(raw.get("invalid_attempts"), "invalid_attempts")
+    uncertain = _integer(raw.get("uncertain_attempts"), "uncertain_attempts")
+    outcomes, valid_records, launched, accounting_validated = _waves(raw.get("waves"), set(job_ids))
+    if valid != valid_records:
+        raise ValueError("valid_episodes must equal valid wave result count")
+    if physical < sum(len(records) for records in outcomes.values()):
+        raise ValueError("physical_attempts cannot be less than durable wave result count")
+    statuses: dict[str, str] = {}; decisions: dict[str, Any] = {}; phases: dict[str, dict[str, float | None]] = {}
     for job_id in job_ids:
         job = jobs[job_id]
         if not isinstance(job, Mapping) or job.get("job_id") != job_id or not isinstance(job.get("flow"), Mapping):
             raise ValueError("each job requires a durable flow summary")
-        phase = job["flow"].get("phase")
-        statuses[job_id] = _job_status(job, phase, raw.get("stop_reason"), outcomes[job_id])
-        decisions[job_id] = job["flow"].get("decisions")
-        _phase_times(job.get("phase_timestamps_seconds"), elapsed)
-        if statuses[job_id] in {"certified", "no_failure", "nominal_failed"} and not outcomes[job_id]:
-            raise ValueError("terminal job has no durable evidence")
-    unsafe = raw.get("accounting_incomplete") is True or invalid > 0 or uncertain > 0 or any(
-        record[1] != "valid" for record in outcomes.values() for record in record
-    )
-    return {"manifest": manifest.to_mapping(), "manifest_integrity": manifest_integrity,
-            "job_ids": job_ids, "statuses": statuses, "decisions": decisions,
-            "outcomes": {job_id: [(case_id, outcome) for case_id, _status, outcome in records]
-                         for job_id, records in outcomes.items()},
-            "elapsed": elapsed, "physical": physical, "valid": valid, "warm_cost": warm_cost,
-            "unsafe_accounting": unsafe,
-            "phases": {job_id: _phase_times(jobs[job_id].get("phase_timestamps_seconds"), elapsed) for job_id in job_ids},
-            "dry_run_known_live": raw.get("dry_run") is False}
+        flow = _restore(job["flow"])
+        records = outcomes[job_id]
+        terminal = flow.phase in {"stopped", "certified"}
+        if terminal and _flow_records(flow, job_id) != records:
+            raise ValueError("terminal flow rounds do not match job-prefixed wave records")
+        statuses[job_id] = _status(job, flow, raw.get("stop_reason"), records)
+        decisions[job_id] = flow.decisions
+        phases[job_id] = _phase_times(job.get("phase_timestamps_seconds"), elapsed)
+    unsafe = (raw.get("accounting_incomplete") is True or invalid > 0 or uncertain > 0
+              or raw.get("stop_reason") == "shared_budget_exhausted"
+              or any(status in {"incomplete", "invalid_or_uncertain", "budget_exhausted"} for status in statuses.values()))
+    return {"manifest": manifest.to_mapping(), "manifest_ok": raw.get("manifest_hash") == manifest.config_hash,
+            "limits": limits, "job_ids": job_ids, "statuses": statuses, "decisions": decisions,
+            "outcomes": {job: [(case, outcome) for case, _status, outcome in records] for job, records in outcomes.items()},
+            "evidence_jobs": {job for job, records in outcomes.items() if any(status == "valid" for _, status, _ in records)},
+            "elapsed": elapsed, "physical": physical, "valid": valid,
+            "warm_cost": _number(raw.get("warm_diagnostic_estimate_usd"), "warm_diagnostic_estimate_usd"),
+            "speculative_valid": max(0, valid - _flow_record_count(jobs, job_ids)),
+            "unvalidated": max(0, physical - launched), "accounting_validated": accounting_validated,
+            "live": raw.get("dry_run") is False and raw.get("synthetic") is False and raw.get("execution_kind") == "live",
+            "unsafe": unsafe, "phases": phases}
 
 
-def _durable_outcomes(waves: object, job_ids: set[str]) -> dict[str, list[tuple[str, str, str]]]:
-    if not isinstance(waves, list):
-        raise ValueError("waves must be a list")
-    result = {job_id: [] for job_id in job_ids}
-    seen: set[str] = set()
+def _restore(snapshot: Mapping[str, Any]) -> DiagnosticFlow:
+    config = snapshot.get("config") if isinstance(snapshot, Mapping) else None
+    if not isinstance(config, Mapping) or not isinstance(config.get("search"), list):
+        raise ValueError("flow snapshot lacks replayable config")
+    try:
+        search = tuple((item[0], Rect(**item[1])) for item in config["search"])
+        return DiagnosticFlow.restore(snapshot, search=search, deltas=tuple(config["deltas"]),
+                                      nominal_count=config["nominal_count"], candidate_attempt_budget=config["candidate_attempt_budget"],
+                                      control_count=config["control_count"], config_hash=config["config_hash"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("flow snapshot cannot be replayed") from error
+
+
+def _waves(waves: object, job_ids: set[str]) -> tuple[dict[str, list[tuple[str, str, str]]], int, int, bool]:
+    if not isinstance(waves, list): raise ValueError("waves must be a list")
+    results = {job: [] for job in job_ids}; seen: set[str] = set(); valid = launched = 0; validated = bool(waves)
     for wave in waves:
-        if not isinstance(wave, Mapping) or not isinstance(wave.get("results"), list):
-            raise ValueError("wave lacks durable results")
+        if not isinstance(wave, Mapping) or not isinstance(wave.get("results"), list): raise ValueError("wave lacks results")
+        count = wave.get("launched_attempts")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0 or wave.get("attempt_accounting_validated") is not True or not _path(wave.get("ledger_path")):
+            validated = False
+        else: launched += count
         for record in wave["results"]:
-            if not isinstance(record, Mapping):
-                raise ValueError("result must be a mapping")
-            case_id = record.get("case_id")
-            if not isinstance(case_id, str) or "--" not in case_id or case_id in seen:
-                raise ValueError("result case IDs must be globally unique job-prefixed IDs")
-            job_id, _ = case_id.split("--", 1)
-            if job_id not in result:
-                raise ValueError("result is not owned by a manifest job")
-            seen.add(case_id)
-            status = record.get("status")
-            outcome = record.get("outcome")
+            if not isinstance(record, Mapping): raise ValueError("result must be a mapping")
+            case = record.get("case_id")
+            if not isinstance(case, str) or "--" not in case or case in seen: raise ValueError("result IDs must be unique and job-prefixed")
+            job, _local = case.split("--", 1)
+            if job not in results: raise ValueError("result belongs to unknown job")
+            status = record.get("status"); outcome = record.get("outcome")
             if status == "valid":
-                if outcome not in _VALID_OUTCOMES or not _paths(record.get("evidence_paths")):
-                    raise ValueError("valid result requires supported outcome and evidence")
-            result[job_id].append((case_id, str(status), outcome if isinstance(outcome, str) else ""))
-    return result
+                if outcome not in _OUTCOMES or not _paths(record.get("evidence_paths")): raise ValueError("valid result requires outcome and evidence")
+                valid += 1
+            results[job].append((case, str(status), outcome if isinstance(outcome, str) else "")); seen.add(case)
+    return results, valid, launched, validated
 
 
-def _job_status(job: Mapping[str, Any], phase: object, portfolio_stop: object,
-                records: list[tuple[str, str, str]]) -> str:
-    if job.get("certified") is True and phase == "certified":
-        return "certified"
-    stop = job.get("terminal_status") or job["flow"].get("stop_reason")
-    if stop == "no_apparent_failure":
-        return "no_failure"
-    if stop == "nominal_gate_failed":
-        return "nominal_failed"
-    if portfolio_stop == "shared_budget_exhausted" and phase not in {"stopped", "certified"}:
-        return "budget_exhausted"
-    if any(status != "valid" for _, status, _ in records):
-        return "invalid_or_uncertain"
+def _flow_records(flow: DiagnosticFlow, job: str) -> list[tuple[str, str, str]]:
+    return [(f"{job}--{case}", "valid", outcome)
+            for round_record in flow.rounds for case, outcome in zip(round_record["case_ids"], round_record["outcomes"])]
+
+
+def _flow_record_count(jobs: Mapping[str, Any], job_ids: list[str]) -> int:
+    return sum(sum(len(round_record["case_ids"]) for round_record in jobs[job]["flow"].get("rounds", [])) for job in job_ids)
+
+
+def _status(job: Mapping[str, Any], flow: DiagnosticFlow, stop: object, records: list[tuple[str, str, str]]) -> str:
+    if job.get("certified") is True and flow.certified: return "certified"
+    reason = job.get("terminal_status") or flow.stop_reason
+    if reason == "no_apparent_failure": return "no_failure"
+    if reason == "nominal_gate_failed": return "nominal_failed"
+    if stop == "shared_budget_exhausted" and flow.phase not in {"stopped", "certified"}: return "budget_exhausted"
+    if any(status != "valid" for _, status, _ in records): return "invalid_or_uncertain"
     return "incomplete"
 
 
+def _limits(raw: object) -> tuple[int | float, ...]:
+    if not isinstance(raw, Mapping) or set(raw) != set(_LIMITS): raise ValueError("limits must contain frozen bounds")
+    return (_integer(raw["episodes"], "limits.episodes"), *(_positive(raw[name], f"limits.{name}") for name in _LIMITS[1:]))
+
+
 def _phase_times(raw: object, elapsed: float) -> dict[str, float | None]:
-    if not isinstance(raw, Mapping):
-        raise ValueError("job lacks phase_timestamps_seconds")
-    result: dict[str, float | None] = {}
-    previous = 0.0
-    for name in _PHASES:
-        value = raw.get(name)
-        if value is None:
-            result[name] = None
+    if not isinstance(raw, Mapping): raise ValueError("job lacks phase_timestamps_seconds")
+    result = {}; prior = 0.0
+    for phase in _PHASES:
+        value = raw.get(phase)
+        if value is None: result[phase] = None
         else:
-            number = _nonnegative(value, f"phase_timestamps_seconds.{name}")
-            if number > elapsed or number < previous:
-                raise ValueError("phase timestamps must be monotonic and within elapsed time")
-            result[name] = number
-            previous = number
+            number = _number(value, f"phase_timestamps_seconds.{phase}")
+            if number < prior or number > elapsed: raise ValueError("phase timestamps must be monotonic and within elapsed")
+            result[phase] = number; prior = number
     return result
 
 
-def _drift_ids(left: Mapping[str, list[tuple[str, str]]], right: Mapping[str, list[tuple[str, str]]]) -> list[str]:
-    drift: list[str] = []
-    for job_id in left:
-        l = left[job_id]; r = right.get(job_id, [])
-        for index in range(max(len(l), len(r))):
-            a = l[index] if index < len(l) else None; b = r[index] if index < len(r) else None
-            if a != b:
-                for item in (a, b):
-                    if item and item[0] not in drift:
-                        drift.append(item[0])
+def _drift(left: Mapping[str, list[tuple[str, str]]], right: Mapping[str, list[tuple[str, str]]]) -> list[str]:
+    drift = []
+    for job, left_records in left.items():
+        right_records = right[job]
+        for index in range(max(len(left_records), len(right_records))):
+            for record in (left_records[index] if index < len(left_records) else None, right_records[index] if index < len(right_records) else None):
+                if record and record[0] not in drift and (index >= len(left_records) or index >= len(right_records) or left_records[index] != right_records[index]): drift.append(record[0])
     return drift
 
 
 def _first_phase(left: Mapping[str, Any], right: Mapping[str, Any], phase: str) -> dict[str, float | None]:
-    result: dict[str, float | None] = {}
-    for label, item in (("sequential", left), ("adaptive", right)):
-        values = [times[phase] for times in item["phases"].values() if times[phase] is not None]
-        result[label] = min(values) if values else None
-    return result
+    return {label: min(values) if (values := [times[phase] for times in item["phases"].values() if times[phase] is not None]) else None for label, item in (("sequential", left), ("adaptive", right))}
 
 
-def _pair(left: Mapping[str, Any], right: Mapping[str, Any], field: str) -> dict[str, Any]:
-    return {"sequential": left[field], "adaptive": right[field]}
-
-
-def _count(statuses: Mapping[str, str], target: str) -> int:
-    return sum(status == target for status in statuses.values())
-
-
-def _paths(value: object) -> bool:
-    return isinstance(value, (list, tuple)) and bool(value) and all(isinstance(path, str) and path for path in value)
-
-
-def _count_value(value: object, name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{name} must be a non-negative integer")
+def _pair(left: Mapping[str, Any], right: Mapping[str, Any], name: str) -> dict[str, Any]: return {"sequential": left[name], "adaptive": right[name]}
+def _count(values: Mapping[str, str], target: str) -> int: return sum(value == target for value in values.values())
+def _path(value: object) -> bool: return isinstance(value, str) and bool(value)
+def _paths(value: object) -> bool: return isinstance(value, (list, tuple)) and bool(value) and all(_path(item) for item in value)
+def _integer(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0: raise ValueError(f"{name} must be non-negative integer")
     return value
-
-
 def _positive(value: object, name: str) -> float:
-    number = _nonnegative(value, name)
-    if number == 0:
-        raise ValueError(f"{name} must be positive")
+    number = _number(value, name)
+    if number <= 0: raise ValueError(f"{name} must be positive")
     return number
-
-
-def _nonnegative(value: object, name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-        raise ValueError(f"{name} must be finite and non-negative")
+def _number(value: object, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0: raise ValueError(f"{name} must be finite non-negative")
     return float(value)
