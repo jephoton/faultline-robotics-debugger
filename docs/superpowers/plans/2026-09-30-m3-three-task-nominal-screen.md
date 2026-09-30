@@ -12,6 +12,8 @@
 
 **Execution update, September 30:** Jethro separately approved US$3/60 minutes. The local test was integrated at `9344c62` and passed; one guarded exact-shape start then timed out with Nebius `NotEnoughResources` before any episode. The VM is confirmed stopped, temporary ingress removed, and guard unregistered. See [the attempt record](../../experiments/m3-three-task-screen.md). No automatic retry or different shape is authorized by this attempt.
 
+**Retry update, September 30:** Jethro approved one same-cap retry and waived a fresh balance check. It timed out with the same `NotEnoughResources` result before guest access. The exact VM is again confirmed stopped, no temporary ingress exists, and the second guard was unregistered. No task-validity conclusion follows; another start or resource change requires a new decision.
+
 ---
 
 ## Frozen experiment contract and cost gate

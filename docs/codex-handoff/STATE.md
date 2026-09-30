@@ -102,11 +102,14 @@ and driver tests passed 66. An independent reviewer approved the report
 claim guard. Jethro accepted task IDs `(0, 1, 2)` as nominal-screening
 candidates; their runtime catalog and nominal validity are still unverified.
 The [bounded screening plan](../superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md)
-received a US$3/60-minute approval. Its September 30 first start was blocked
-before guest access by `NotEnoughResources` despite one `LOW`-availability slot
-in capacity advice. No task episode ran, so IDs 1 and 2 remain unscreened.
-The VM is confirmed `STOPPED`; temporary SSH ingress and the OS-owned guard
-were removed after verification. See
+received a US$3/60-minute approval. Its September 30 first start and a later
+separately approved same-cap retry were both blocked before guest access by
+`NotEnoughResources`, despite one `LOW`-availability slot in capacity advice.
+No task episode ran, so IDs 1 and 2 remain unscreened. The VM is confirmed
+`STOPPED`; temporary SSH ingress and both OS-owned guards were removed after
+verification. Jethro waived the fresh balance check for the retry, so the
+prior US$9.96 reading is not a current balance. The next red choice is to wait
+for the same shape or plan a different resource/cache path with a new cap. See
 [`m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
