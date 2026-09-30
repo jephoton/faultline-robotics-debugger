@@ -218,8 +218,10 @@ Decode each `portfolio_summary.json` and pass the two mappings to
 complete, matched live sessions with reconciled wave ledgers before it shows
 a warm diagnostic speedup. Neither this estimate nor the hourly-rate bound
 is a posted cloud bill. Before removing `--dry-run`, verify the pinned Linux
-evaluator and exact task selection on the intended cloud environment, obtain
-a fresh numeric spend cap, and satisfy the cloud safety gates above. The
+evaluator, exact task selection, and actual served model ID/revision on the
+intended cloud environment. The manifest rejects other checkpoint labels,
+but cannot prove what a separate localhost model server loaded. Obtain a
+fresh numeric spend cap and satisfy the cloud safety gates above. The
 portfolio CLI has **not** yet been run on Nebius. The M5 viewer does not yet
 consume portfolio summaries.
 

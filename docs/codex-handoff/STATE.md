@@ -101,6 +101,9 @@ Python 3.11 passed 344 tests (four POSIX-only skips); focused WSL lifecycle
 and driver tests passed 66. An independent reviewer approved the report
 claim guard. The live three-task identities and their nominal validity are
 still the next red decision, followed by a separately capped Nebius run.
+The manifest rejects unsupported family/model labels, but live preflight
+must independently verify the model server actually loaded the pinned
+checkpoint and revision.
 No VM started and no cloud cost incurred for this portfolio slice.
 
 M4's bounded live run and evidence validation are complete; details are in

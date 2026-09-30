@@ -21,12 +21,6 @@ def _nonnegative_integer(name: str, value: object) -> int:
     return value
 
 
-def _nonempty_text(name: str, value: object) -> str:
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{name} must be a nonempty string")
-    return value
-
-
 @dataclass(frozen=True)
 class PortfolioJob:
     """One task-level diagnostic identity; evidence is never shared by jobs."""
@@ -50,9 +44,12 @@ class PortfolioManifest:
     def __post_init__(self) -> None:
         if self.suite != "libero_object":
             raise ValueError("suite must be libero_object for the first portfolio")
-        _nonempty_text("family", self.family)
-        _nonempty_text("checkpoint_id", self.checkpoint_id)
-        _nonempty_text("checkpoint_revision", self.checkpoint_revision)
+        if self.family != "agentview_rect_occlusion":
+            raise ValueError("family must be agentview_rect_occlusion for the first portfolio")
+        if self.checkpoint_id != DEFAULT_CHECKPOINT_ID:
+            raise ValueError("checkpoint_id must match the pinned first-portfolio model")
+        if self.checkpoint_revision != DEFAULT_CHECKPOINT_REVISION:
+            raise ValueError("checkpoint_revision must match the pinned first-portfolio revision")
         _nonnegative_integer("seed", self.seed)
         if (isinstance(self.task_ids, str) or not isinstance(self.task_ids, Sequence)
                 or len(self.task_ids) != 3):

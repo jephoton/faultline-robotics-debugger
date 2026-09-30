@@ -55,6 +55,9 @@ class PortfolioManifestTests(unittest.TestCase):
             ("seed", -1),
             ("seed", True),
             ("family", ""),
+            ("family", "lighting"),
+            ("checkpoint_id", "another/model"),
+            ("checkpoint_revision", "another-revision"),
         ):
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 self.make_manifest(**{field: value})
