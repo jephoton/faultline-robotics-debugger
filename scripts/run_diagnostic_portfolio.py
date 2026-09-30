@@ -13,7 +13,7 @@ from pathlib import Path
 import signal
 import sys
 import threading
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -26,12 +26,6 @@ from robot_debug.portfolio_manifest import PortfolioManifest
 from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
 from scripts import run_failure_search as search
 from scripts import run_parallel_eval as parallel
-
-
-def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, sort_keys=True, allow_nan=False), encoding="utf-8")
-    temporary.replace(path)
 
 
 def load_manifest(path: Path | str) -> PortfolioManifest:
