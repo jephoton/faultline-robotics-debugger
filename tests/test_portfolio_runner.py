@@ -62,6 +62,8 @@ class PortfolioRunnerTests(unittest.TestCase):
             saved = root / summary["session_id"] / "portfolio_summary.json"
             self.assertTrue(saved.is_file())
             self.assertEqual(3, summary["physical_attempts"])
+            self.assertEqual(summary["physical_attempts"],
+                             sum(wave["launched_attempts"] for wave in summary["waves"]))
             self.assertEqual(3, len(summary["waves"][0]["requests"]))
             self.assertEqual(3, len({request.case_id for request in evaluator.requests}))
             self.assertEqual(3, len({request.output_dir for request in evaluator.requests}))
@@ -297,6 +299,8 @@ class PortfolioRunnerTests(unittest.TestCase):
             self.assertTrue((root / summary["session_id"] / "portfolio_summary.json").is_file())
         self.assertEqual("interrupted", summary["stop_reason"])
         self.assertFalse(summary["certified"])
+        self.assertEqual(summary["physical_attempts"],
+                         sum(wave["launched_attempts"] for wave in summary["waves"]))
 
 
 if __name__ == "__main__":

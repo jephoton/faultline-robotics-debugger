@@ -251,8 +251,9 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
             reconcile_exception(error, ledger, [request.case_id for request in requests])
             raise
         try:
-            summary["physical_attempts"] += _launched_attempts(
+            launched_attempts = _launched_attempts(
                 [request.case_id for request in requests], durable)
+            summary["physical_attempts"] += launched_attempts
         except ValueError as error:
             reconcile_exception(error, ledger, [request.case_id for request in requests])
             raise
@@ -261,6 +262,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         summary["uncertain_attempts"] += sum(result.status == "uncertain" for result in round_summary.results)
         summary["waves"].append({"wave_id": wave_number, "cursor": cursor, "requests": [asdict(item) for item in wave.requests],
             "worker_choice": asdict(worker_choice), "ledger_path": str(ledger.relative_to(session)),
+            "launched_attempts": launched_attempts,
             "timing_source": "M3 fixed-manifest warm per-episode measurements; not task-specific",
             "manifest_hash": round_summary.manifest_hash, "results": [asdict(result) for result in round_summary.results]})
         if not round_summary.certifying or len(round_summary.results) != len(requests):
