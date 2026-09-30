@@ -12,6 +12,19 @@ identifiers, tokens, private addresses, or payment details here.
 | AllenAI VLA evaluation harness and LIBERO image | Hosted the evaluator, simulator, recordings, and model-server adapter. | Structured aggregates, traces, SQLite recordings, and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user. Generic schema warnings appeared even on successful episodes. M3 local review also found that the pinned CLI can leave its Docker client child alive after the evaluator exits; this is an upstream process-lifecycle integration risk, not evidence of a Nebius or NVIDIA fault. | Yes for the pinned benchmark, with explicit version, compatibility, and process-cleanup checks. |
 | Nebius Token Factory / Nemotron | Not used yet. Planned small evidence-grounded triage pilot after M3, subject to model/API and price verification. | No first-hand result to report. | Do not claim model quality, onboarding success, or API problems before a real pilot. AI Cloud CLI authentication does not itself configure a Token Factory key. | Undecided until a bounded pilot compares it with a deterministic report. |
 
+## September 30 read-only AI Cloud preflight
+
+The CLI's calculator returned separate hourly estimates for the same L40S VM
+shape and retained Network SSD disk, and the capacity resource-advice service
+returned an explicit on-demand count and `LOW` availability label for that
+exact shape. This made a bounded screen easier to price and exposed restart
+uncertainty without spending. The authenticated CLI still had no default
+`parent-id`, so the correct regional project had to be selected explicitly;
+checking an unrelated regional project first again returned an empty VM list.
+That was our project-selection error, not a provider outage. The live console
+balance and posted billing have not yet been verified for this screen. Reuse
+judgment remains provisional until the actual run and Jethro's feedback.
+
 ## Our setup errors, not provider bugs
 
 - A September 29 read-only preflight initially checked a project identifier

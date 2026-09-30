@@ -99,8 +99,10 @@ complete, live, budget-matched, and outcome-consistent. Two fresh synthetic
 CLI sessions passed a paired smoke test without a speedup claim. Windows
 Python 3.11 passed 344 tests (four POSIX-only skips); focused WSL lifecycle
 and driver tests passed 66. An independent reviewer approved the report
-claim guard. The live three-task identities and their nominal validity are
-still the next red decision, followed by a separately capped Nebius run.
+claim guard. Jethro accepted task IDs `(0, 1, 2)` as nominal-screening
+candidates; their runtime catalog and nominal validity are still unverified.
+The [bounded screening plan](../superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md)
+proposes a separately capped Nebius run, not yet authorized.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.

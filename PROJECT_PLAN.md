@@ -271,7 +271,7 @@ We have completed **M1: reproducible runner** and the engineering gate for
   reach the same certified rectangle, and the reporter refuses a fake timing
   claim. This is not a measured end-to-end cloud speedup, and its new summaries
   are not yet represented in the viewer.
-- Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. Next choose and nominally screen the exact live task IDs; a Nebius run needs a separately approved cap. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
+- Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. Jethro selected task IDs `(0, 1, 2)` as **screening candidates** on September 30; the [bounded nominal-screen plan](docs/superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md) is proposed, not spend approval. Their runtime task mapping and nominal outcomes remain unverified. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
 - M5's proposed UI work is a portfolio overview of all task jobs, their outcomes and resource use, with drill-down to the existing per-case videos, reducer lineage, and replay recipe. It can consume the portfolio summary/report contract after live task validation; it is not implemented yet.
 
 ### Immediate decision after the bounded session
@@ -402,8 +402,8 @@ are integrated in `main`; the fixed 16-item workload, evidence contract, and
 recovery boundary are recorded in [M3 experiment notes](docs/experiments/m3-parallel.md).
 The bounded live 2-worker pilot and the equal-work 1/2/4-worker comparison
 are complete; see [M3 experiment notes](docs/experiments/m3-parallel.md).
-The next M3 step is to choose exact three task IDs with Jethro, screen nominal
-task validity, then propose a separately capped, budget-matched live portfolio
+The next M3 step is to screen Jethro's approved candidate IDs `(0, 1, 2)` for
+nominal task validity, then propose a separately capped, budget-matched live portfolio
 comparison. The task-selection adapter, shared runner, CLI, and report are
 locally implemented and tested; synthetic sessions never produce a speedup
 claim. The former single-loop US$4/90-minute proposal is paused, not approved
