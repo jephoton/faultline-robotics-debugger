@@ -45,10 +45,34 @@ at execution; the proposed US$6 cap is not yet approved.
 
 ## Task 3 — Three nominal episodes only (amber)
 
+### Local run-boundary repair before VM start (green/amber)
+
+The real CLI dry run exposed two defects in the proposed command: argparse
+passes `manifest` while `run_cli` requires `manifest_path`, and sequential mode
+spends its three attempts on task 0 nominal/search rather than three tasks.
+Use adaptive round-robin admission with an explicit **one-worker cap**, not
+sequential mode. This preserves task/family/model, attempt ceiling, and the
+accepted one-evaluator topology; no search algorithm or benchmark changes.
+
+Implementation owner: smaller-model agent in the existing clean M3 worktree.
+Files: `scripts/run_diagnostic_portfolio.py`,
+`src/robot_debug/portfolio_runner.py`, `tests/test_diagnostic_portfolio_cli.py`,
+and focused runner tests if needed. Root owns integration and docs; reviewer
+owns no files. Add failing subprocess-CLI and exact-three-nominal regressions
+first; implement `--max-workers` mapping and admission/worker cap (default
+unchanged, validate supported positive worker counts), persist the chosen cap
+in the summary. Require caps 1 and 2 to produce only nominal IDs 0/1/2 with
+three attempts and observed concurrency bounded by cap. Preserve default
+behavior and sequential semantics. Run focused tests and a real command-line
+dry run, independent spec/quality review, then commit
+`fix(portfolio): bound nominal screen workers and map CLI manifest`.
+Merge only reviewed changes into main and regenerate the private bundle before
+any compute start. No speculative paid run while local repair is unfinished.
+
 **Files:** ignored new guest/local source bundle, frozen manifest, fresh results root.
 
 - [ ] Privately transfer the reviewed local source into a fresh session checkout. Verify pinned upstream/checkpoint actually served and runtime task IDs/instructions before evaluating.
-- [ ] Use `scripts/run_diagnostic_portfolio.py` with `--mode sequential-jobs --episodes 3`, the frozen manifest, actual upstream/project paths, `--hourly-rate` equal to the fresh price, and seconds/dollars bounded by the remaining deadline with at least five minutes reserved for copy and stop.
+- [ ] Use `scripts/run_diagnostic_portfolio.py` with `--mode adaptive-portfolio --max-workers 1 --episodes 3`, the frozen manifest, actual upstream/project paths, `--hourly-rate` equal to the fresh price, and seconds/dollars bounded by the remaining deadline with at least five minutes reserved for copy and stop.
 - [ ] Expect only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`; no search, confirmation, or reduction. The attempt-limited session may exit 1 with a partial summary; validate exact three attempts, terminal validity, and zero uncertainty rather than interpreting that exit alone as failure.
 - [ ] Copy compact JSON/ledger/traces first, then MP4s. Require per-case task identity, initial-state index 0, nonempty media/trace, and valid terminal outcomes; never compensate with extra attempts.
 
