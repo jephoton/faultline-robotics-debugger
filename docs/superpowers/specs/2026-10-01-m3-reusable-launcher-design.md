@@ -1,8 +1,8 @@
 # M3 reusable interruption-safe launcher
 
-**Status:** Proposed topology and safety contract; user approved the goal of a
-reusable launcher, not a new paid start. Review this document before writing
-the implementation plan. No robot configuration changes are proposed.
+**Status:** Accepted October 1 by Jethro: reusable workstation scheduled
+controller plus existing guest pair. This approval covers local implementation,
+not a new paid start. No robot configuration changes are proposed.
 
 ## Problem and scope
 
