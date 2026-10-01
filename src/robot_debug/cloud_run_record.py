@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import stat
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ _KEYS = {
     "preflight": {"checked_at_utc", "balance_usd", "pending_usd", "estimated_total_usd", "hourly_rate_usd", "expiry_checked", "quota_checked", "capacity_checked", "billing_checked"},
 }
 _SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z", re.ASCII)
+_APPROVAL_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z", re.ASCII)
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\Z")
@@ -88,7 +90,13 @@ def _parse_utc(value: Any, label: str) -> datetime:
 
 
 def _number(value: Any, label: str, *, positive: bool) -> float:
-    if type(value) not in (int, float) or not math.isfinite(value):
+    if type(value) not in (int, float):
+        _fail(f"{label} must be a finite number")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
         _fail(f"{label} must be a finite number")
     if (positive and value <= 0) or (not positive and value < 0):
         _fail(f"{label} is outside its allowed range")
@@ -212,8 +220,8 @@ def load_record(
         _fail("temporary resource identity collides with a protected resource")
 
     approval = obj["approval"]
-    if not isinstance(approval["reference"], str) or not approval["reference"].strip() or len(approval["reference"]) > 160:
-        _fail("approval.reference must be a nonempty bounded reference")
+    if not isinstance(approval["reference"], str) or not _APPROVAL_REF.fullmatch(approval["reference"]):
+        _fail("approval.reference must be a safe ASCII identifier of at most 128 characters")
     _number(approval["max_total_usd"], "approval.max_total_usd", positive=True)
     if _int(approval["max_starts"], "approval.max_starts") != 1:
         _fail("approval.max_starts must equal one")
@@ -226,10 +234,10 @@ def load_record(
     start, request, confirm, cleanup = (deadline_times[key] for key in ("start_not_after_utc", "stop_request_utc", "stop_confirm_by_utc", "storage_cleanup_utc"))
     if not start < request < confirm <= cleanup:
         _fail("deadlines must be ordered start < stop request < stop confirmation <= storage cleanup")
-    if (request - start).total_seconds() > approval["max_runtime_seconds"]:
-        _fail("stop request deadline exceeds the approved maximum runtime from the latest start")
-    if (confirm - request).total_seconds() < 60:
-        _fail("stop confirmation deadline must reserve at least 60 seconds after stop request")
+    if (confirm - start).total_seconds() > approval["max_runtime_seconds"]:
+        _fail("stop confirmation deadline exceeds the approved maximum runtime from the latest start")
+    if (confirm - request).total_seconds() < 180:
+        _fail("stop confirmation deadline must reserve at least 180 seconds after stop request")
     if require_future and start <= now_utc:
         _fail("start deadline has expired")
 
@@ -267,6 +275,17 @@ def load_record(
             raise RecordError(f"paths.{key} must be an existing regular file") from exc
         if not resolved.is_file() or _reparse(local):
             _fail(f"paths.{key} must be an explicit regular file")
+
+    if require_future:
+        key_path = local_paths["ssh_identity_file"].resolve(strict=True)
+        for key in ("source_bundle", "manifest"):
+            candidate = local_paths[key].resolve(strict=True)
+            try:
+                aliases_key = candidate == key_path or os.path.samefile(candidate, key_path)
+            except OSError as exc:
+                raise RecordError(f"cannot safely compare paths.{key} with the SSH identity file") from exc
+            if aliases_key:
+                _fail(f"paths.{key} cannot alias the SSH identity file")
 
     guest = paths["guest_session"]
     if not isinstance(guest, str) or not guest.startswith("/home/robot/"):
@@ -362,8 +381,9 @@ def _safe_snapshot(value: Any, label: str = "snapshot") -> Any:
 class RunStore:
     """Exclusive local run identity, event journal, status and controller lease."""
 
-    def __init__(self, run_dir: str | os.PathLike[str]):
+    def __init__(self, run_dir: str | os.PathLike[str], *, record_path: str | os.PathLike[str]):
         self.run_dir = Path(run_dir)
+        self.record_path = Path(record_path)
         self.identity_path = self.run_dir / "identity.json"
         self.events_path = self.run_dir / "events.jsonl"
         self.status_path = self.run_dir / "status.json"
@@ -371,38 +391,138 @@ class RunStore:
         self._lease_fd: int | None = None
         self._lease_owner: str | None = None
         self._mutex = threading.RLock()
+        self._validate_run_dir()
+        self._validate_record_path()
+        self._expected_digest: str | None = None
+        fresh = self._fresh_record_digest()
+        if self._assert_regular_target(self.identity_path, allow_missing=True) is not None:
+            self._expected_digest = fresh
+            self._checked_identity()
 
     @property
     def record_digest(self) -> str:
-        try:
-            identity = json.loads(self.identity_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise RecordError("run identity is missing or corrupt") from exc
-        if not isinstance(identity, dict) or set(identity) != {"record_digest"} or not isinstance(identity["record_digest"], str) or not _HEX64.fullmatch(identity["record_digest"]):
-            _fail("run identity is malformed")
-        return identity["record_digest"]
+        return self._checked_identity()
 
     def _created(self) -> str:
-        return self.record_digest
+        return self._checked_identity()
+
+    def _validate_run_dir(self) -> None:
+        if not self.run_dir.is_absolute() or not self.run_dir.is_dir():
+            _fail("run directory must be an existing absolute directory")
+        _reject_reparse_chain(self.run_dir)
+
+    def _validate_record_path(self) -> None:
+        if not self.record_path.is_absolute():
+            _fail("record_path must be absolute")
+        _reject_reparse_chain(self.record_path)
+        info = self._assert_regular_target(self.record_path, allow_missing=False)
+        if info is None:
+            _fail("record_path must be an existing regular file")
+
+    def _assert_regular_target(self, path: Path, *, allow_missing: bool) -> os.stat_result | None:
+        self._validate_run_dir()
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            if allow_missing:
+                return None
+            _fail(f"required local file is missing: {path.name}")
+        except OSError as exc:
+            raise RecordError(f"cannot inspect local file: {path.name}") from exc
+        if _reparse(path) or not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
+            _fail(f"local file is not an isolated regular file: {path.name}")
+        return info
+
+    def _open_checked(self, path: Path, flags: int, *, mode: int = 0o600, allow_missing: bool = False) -> int:
+        before = self._assert_regular_target(path, allow_missing=allow_missing)
+        if allow_missing and before is None and flags & os.O_CREAT:
+            flags |= os.O_EXCL
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(path, flags, mode)
+        except OSError as exc:
+            raise RecordError(f"could not safely open local file: {path.name}") from exc
+        try:
+            opened = os.fstat(fd)
+            after = path.lstat()
+            if not stat.S_ISREG(opened.st_mode) or after.st_nlink > 1 or not os.path.samestat(opened, after):
+                _fail(f"local file changed during open: {path.name}")
+            if before is not None and not os.path.samestat(before, opened):
+                _fail(f"local file changed during open: {path.name}")
+            return fd
+        except Exception:
+            os.close(fd)
+            raise
+
+    @staticmethod
+    def _read_fd(fd: int) -> bytes:
+        with os.fdopen(fd, "rb") as stream:
+            return stream.read()
+
+    @staticmethod
+    def _canonical_digest(raw: bytes, label: str) -> str:
+        try:
+            data = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_duplicate_rejector,
+                parse_constant=lambda value: _fail(f"invalid JSON number: {value}"),
+            )
+            canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("utf-8")
+        except (RecordError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise RecordError(f"{label} is not valid canonicalizable JSON") from exc
+        return hashlib.sha256(canonical).hexdigest()
+
+    def _fresh_record_digest(self) -> str:
+        self._validate_run_dir()
+        self._validate_record_path()
+        fd = self._open_checked(self.record_path, os.O_RDONLY)
+        return self._canonical_digest(self._read_fd(fd), "record file")
+
+    def _checked_identity(self) -> str:
+        self._validate_run_dir()
+        fresh = self._fresh_record_digest()
+        if self._expected_digest is None:
+            _fail("run store has no trusted record identity")
+        if fresh != self._expected_digest:
+            _fail("immutable record file changed after RunStore was opened")
+        fd = self._open_checked(self.identity_path, os.O_RDONLY)
+        try:
+            identity = json.loads(self._read_fd(fd).decode("utf-8"), object_pairs_hook=_duplicate_rejector)
+        except (RecordError, UnicodeError, json.JSONDecodeError) as exc:
+            raise RecordError("run identity is missing or corrupt") from exc
+        if not isinstance(identity, dict) or set(identity) != {"record_digest"} or identity["record_digest"] != self._expected_digest:
+            _fail("run identity does not match the immutable original record")
+        return self._expected_digest
+
+    def _reject_existing_state(self) -> None:
+        self._validate_run_dir()
+        for path in (self.identity_path, self.events_path, self.status_path, self.lease_path):
+            if self._assert_regular_target(path, allow_missing=True) is not None:
+                _fail(f"run store already contains owned state: {path.name}")
+        try:
+            leftovers = [path for path in self.run_dir.iterdir() if path.name.startswith(".status-")]
+        except OSError as exc:
+            raise RecordError("cannot inspect run directory for interrupted status snapshots") from exc
+        if leftovers:
+            _fail("run store contains an interrupted status snapshot; refusing adoption")
 
     def create(self, record_digest: str) -> None:
-        if not isinstance(record_digest, str) or not _HEX64.fullmatch(record_digest):
-            _fail("record_digest must be 64 lowercase hex characters")
-        if not self.run_dir.is_dir():
-            _fail("run directory must already exist")
+        self._validate_run_dir()
+        fresh = self._fresh_record_digest()
+        if not isinstance(record_digest, str) or not _HEX64.fullmatch(record_digest) or record_digest != fresh or (self._expected_digest is not None and fresh != self._expected_digest):
+            _fail("create digest must match the freshly read immutable record")
+        self._reject_existing_state()
         payload = json.dumps({"record_digest": record_digest}, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         try:
-            fd = os.open(self.identity_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError as exc:
-            raise RecordError("run identity already exists; refusing overwrite") from exc
-        try:
+            fd = self._open_checked(self.identity_path, os.O_WRONLY | os.O_CREAT, allow_missing=True)
             with os.fdopen(fd, "wb") as stream:
                 stream.write(payload)
                 stream.flush()
                 os.fsync(stream.fileno())
             self._fsync_directory()
-        except Exception:
-            raise
+            self._expected_digest = record_digest
+        except OSError as exc:
+            raise RecordError("could not durably create run identity") from exc
 
     def append(self, event: str, **safe_fields: Any) -> None:
         self._created()
@@ -417,12 +537,17 @@ class RunStore:
         encoded = json.dumps(row, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
         with self._mutex:
             try:
-                with self.events_path.open("ab") as stream:
+                existing = self._assert_regular_target(self.events_path, allow_missing=True)
+                flags = os.O_WRONLY | os.O_APPEND
+                if existing is None:
+                    flags |= os.O_CREAT
+                fd = self._open_checked(self.events_path, flags, allow_missing=existing is None)
+                with os.fdopen(fd, "ab") as stream:
                     stream.write(encoded)
                     stream.flush()
                     os.fsync(stream.fileno())
                 self._fsync_directory()
-            except OSError as exc:
+            except (OSError, RecordError) as exc:
                 raise RecordError("could not durably append run event") from exc
 
     @staticmethod
@@ -437,12 +562,10 @@ class RunStore:
 
     def read_events(self) -> list[dict[str, Any]]:
         self._created()
-        try:
-            raw = self.events_path.read_bytes()
-        except FileNotFoundError:
+        if self._assert_regular_target(self.events_path, allow_missing=True) is None:
             return []
-        except OSError as exc:
-            raise RecordError("could not read run events") from exc
+        fd = self._open_checked(self.events_path, os.O_RDONLY)
+        raw = self._read_fd(fd)
         lines = raw.splitlines(keepends=True)
         events = []
         for index, line in enumerate(lines):
@@ -474,12 +597,18 @@ class RunStore:
             _fail("status snapshot record digest does not match immutable run identity")
         safe.setdefault("record_digest", digest)
         encoded = json.dumps(safe, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
+        self._assert_regular_target(self.status_path, allow_missing=True)
+        self._validate_run_dir()
         fd, temp_name = tempfile.mkstemp(prefix=".status-", suffix=".tmp", dir=self.run_dir)
         try:
+            temp_path = Path(temp_name)
+            if _reparse(temp_path) or not stat.S_ISREG(temp_path.lstat().st_mode):
+                _fail("temporary status file is not a regular file")
             with os.fdopen(fd, "wb") as stream:
                 stream.write(encoded)
                 stream.flush()
                 os.fsync(stream.fileno())
+            self._assert_regular_target(self.status_path, allow_missing=True)
             os.replace(temp_name, self.status_path)
             self._fsync_directory()
         except Exception:
@@ -491,14 +620,16 @@ class RunStore:
 
     def read_status(self) -> dict[str, Any]:
         digest = self._created()
-        try:
-            status = json.loads(self.status_path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
+        if self._assert_regular_target(self.status_path, allow_missing=True) is None:
             _fail("run status snapshot does not exist")
+        fd = self._open_checked(self.status_path, os.O_RDONLY)
+        try:
+            status = json.loads(self._read_fd(fd).decode("utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise RecordError("run status snapshot is corrupt") from exc
         if not isinstance(status, dict) or status.get("record_digest") != digest:
             _fail("run status snapshot does not match immutable run identity")
+        _safe_snapshot(status)
         return status
 
     def acquire_lease(self, owner_id: str) -> None:
@@ -506,19 +637,21 @@ class RunStore:
         if not isinstance(owner_id, str) or not _SAFE.fullmatch(owner_id) or owner_id.isdecimal():
             _fail("owner_id must be a safe non-PID identifier")
         descriptor = json.dumps({"owner_id": owner_id}, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+        if self._assert_regular_target(self.lease_path, allow_missing=True) is not None:
+            _fail("run lease already exists; refusing automatic recovery or steal")
         try:
-            fd = os.open(self.lease_path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError as exc:
-            raise RecordError("run lease already exists; refusing automatic recovery or steal") from exc
-        try:
-            os.write(fd, descriptor)
+            fd = self._open_checked(self.lease_path, os.O_RDWR | os.O_CREAT, allow_missing=True)
+            view = memoryview(descriptor)
+            while view:
+                view = view[os.write(fd, view):]
             os.fsync(fd)
             self._lock_fd(fd)
             self._lease_fd = fd
             self._lease_owner = owner_id
             self._fsync_directory()
         except Exception:
-            os.close(fd)
+            if "fd" in locals():
+                os.close(fd)
             raise
 
     def release_lease(self, owner_id: str) -> None:
@@ -526,6 +659,14 @@ class RunStore:
         if self._lease_fd is None or self._lease_owner != owner_id:
             _fail("only the current lease owner may release a held lease")
         try:
+            info = self._assert_regular_target(self.lease_path, allow_missing=False)
+            if not os.path.samestat(info, os.fstat(self._lease_fd)):
+                _fail("run lease file changed while held")
+            os.lseek(self._lease_fd, 0, os.SEEK_SET)
+            raw_descriptor = os.read(self._lease_fd, 4096)
+            descriptor = json.loads(raw_descriptor.decode("utf-8"), object_pairs_hook=_duplicate_rejector)
+            if descriptor != {"owner_id": owner_id}:
+                _fail("run lease owner descriptor changed")
             self._unlock_fd(self._lease_fd)
             os.close(self._lease_fd)
             self._lease_fd = None

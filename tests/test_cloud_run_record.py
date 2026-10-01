@@ -136,6 +136,12 @@ class LoadRecordTests(RecordFixture):
         self.data["ssh"]["private_key"] = "secret"
         self.assert_invalid()
 
+    def test_approval_reference_is_a_narrow_safe_identifier(self):
+        self.data["approval"]["reference"] = "token=local-test-only"
+        self.assert_invalid()
+        self.data["approval"]["reference"] = "approval reference with spaces"
+        self.assert_invalid()
+
     def test_rejects_wrong_schema_version(self):
         self.data["schema_version"] = True
         self.assert_invalid()
@@ -147,6 +153,9 @@ class LoadRecordTests(RecordFixture):
         self.assert_invalid()
         self.data["approval"]["max_total_usd"] = 8.0
         self.data["preflight"]["pending_usd"] = float("inf")
+        self.assert_invalid()
+        self.data["preflight"]["pending_usd"] = 0.0
+        self.data["approval"]["max_total_usd"] = 10**1000
         self.assert_invalid()
 
     def test_rejects_malformed_service_ids_and_digests(self):
@@ -188,9 +197,38 @@ class LoadRecordTests(RecordFixture):
         self.data["deadlines"]["stop_request_utc"] = "2030-01-01T00:09:00Z"
         self.assert_invalid()
         self.data = self.valid_data()
-        self.data["deadlines"]["stop_request_utc"] = "2030-01-01T01:41:00Z"
+        self.data["deadlines"]["stop_request_utc"] = "2030-01-01T01:39:00Z"
         self.data["deadlines"]["stop_confirm_by_utc"] = "2030-01-01T01:45:00Z"
         self.assert_invalid()
+
+    def test_rejects_stop_confirmation_reserve_shorter_than_three_minutes(self):
+        self.data["deadlines"]["stop_confirm_by_utc"] = "2030-01-01T01:29:59Z"
+        self.assert_invalid()
+
+    def test_rejects_bundle_or_manifest_aliasing_the_ssh_identity(self):
+        self.data["paths"]["source_bundle"] = str(self.identity)
+        self.data["pins"]["bundle_sha256"] = hashlib.sha256(self.identity.read_bytes()).hexdigest()
+        self.write_record()
+        from robot_debug import cloud_run_record
+        with patch.object(cloud_run_record, "_hash_file", wraps=cloud_run_record._hash_file) as hash_file:
+            with self.assertRaises(RecordError):
+                self.load()
+            hash_file.assert_not_called()
+
+    def test_rejects_manifest_hardlink_to_ssh_identity_before_hashing(self):
+        alias = self.root / "key-alias-manifest"
+        try:
+            os.link(self.identity, alias)
+        except OSError as exc:
+            self.skipTest(f"hard links unavailable: {exc}")
+        self.data["paths"]["manifest"] = str(alias)
+        self.data["pins"]["manifest_sha256"] = hashlib.sha256(self.identity.read_bytes()).hexdigest()
+        self.write_record()
+        from robot_debug import cloud_run_record
+        with patch.object(cloud_run_record, "_hash_file", wraps=cloud_run_record._hash_file) as hash_file:
+            with self.assertRaises(RecordError):
+                self.load()
+            hash_file.assert_not_called()
 
     def test_preflight_must_be_recent_and_cover_estimate(self):
         self.data["preflight"]["checked_at_utc"] = "2029-12-31T23:49:59Z"
@@ -203,7 +241,7 @@ class LoadRecordTests(RecordFixture):
         self.assert_invalid()
 
     def test_require_future_false_allows_expired_inspection_only(self):
-        self.data["deadlines"]["start_not_after_utc"] = "2029-12-31T23:59:59Z"
+        self.data["deadlines"]["start_not_after_utc"] = "2030-01-01T00:00:00Z"
         self.data["deadlines"]["stop_request_utc"] = "2030-01-01T01:27:00Z"
         self.write_record()
         self.bundle.write_bytes(b"changed or unavailable")
@@ -231,13 +269,41 @@ class LoadRecordTests(RecordFixture):
 class RunStoreTests(RecordFixture):
     def setUp(self):
         super().setUp()
-        self.store = RunStore(self.run_dir)
-        self.store.create("a" * 64)
+        self.record = self.load()
+        self.store = RunStore(self.run_dir, record_path=self.record_path)
+        self.store.create(self.record.digest)
 
     def test_create_is_exclusive_and_identity_digest_is_stable(self):
         with self.assertRaises(RecordError):
             self.store.create("b" * 64)
-        self.assertEqual(self.store.record_digest, "a" * 64)
+        self.assertEqual(self.store.record_digest, self.record.digest)
+
+    def test_create_revalidates_record_digest_after_constructor(self):
+        other_dir = self.root / "create-check"
+        other_dir.mkdir()
+        store = RunStore(other_dir, record_path=self.record_path)
+        self.data["run_label"] = "changed-after-open"
+        self.write_record()
+        with self.assertRaises(RecordError):
+            store.create(self.record.digest)
+        self.assertFalse(store.identity_path.exists())
+
+    def test_reopened_store_rejects_identity_digest_replacement(self):
+        self.store.snapshot({"phase": "ready"})
+        self.store.identity_path.write_text(json.dumps({"record_digest": "f" * 64}), encoding="utf-8")
+        with self.assertRaises(RecordError):
+            RunStore(self.run_dir, record_path=self.record_path)
+
+    def test_create_refuses_stale_owned_state_and_temp_snapshot(self):
+        for stale_name in ("events.jsonl", "status.json", "lease.json", ".status-leftover.tmp"):
+            with self.subTest(stale_name=stale_name):
+                other = self.root / ("other-" + stale_name.replace("/", "_"))
+                other.mkdir()
+                (other / stale_name).write_text("stale", encoding="utf-8")
+                store = RunStore(other, record_path=self.record_path)
+                with self.assertRaises(RecordError):
+                    store.create(self.record.digest)
+                self.assertFalse(store.identity_path.exists())
 
     def test_lease_is_exclusive_and_release_requires_owner(self):
         self.store.acquire_lease("controller-a")
@@ -269,11 +335,90 @@ class RunStoreTests(RecordFixture):
             self.store.read_events()
 
     def test_snapshot_replacement_failure_preserves_previous_status(self):
-        self.store.snapshot({"phase": "ready", "record_digest": "a" * 64})
+        self.store.snapshot({"phase": "ready", "record_digest": self.record.digest})
         with patch("robot_debug.cloud_run_record.os.replace", side_effect=OSError("simulated interruption")):
             with self.assertRaises(OSError):
-                self.store.snapshot({"phase": "partial", "record_digest": "a" * 64})
+                self.store.snapshot({"phase": "partial", "record_digest": self.record.digest})
         self.assertEqual(self.store.read_status()["phase"], "ready")
+
+    def test_record_file_change_blocks_every_mutator(self):
+        self.store.snapshot({"phase": "ready", "record_digest": self.record.digest})
+        self.store.append("before", phase="ready")
+        original_record = self.record_path.read_bytes()
+        self.store.acquire_lease("controller-a")
+        another_dir = self.root / "another-run"
+        another_dir.mkdir()
+        another_store = RunStore(another_dir, record_path=self.record_path)
+        another_store.create(self.record.digest)
+        paths = (self.store.identity_path, self.store.events_path, self.store.status_path, self.store.lease_path)
+        previous = {path: path.read_bytes() for path in paths[:-1]}
+        os.lseek(self.store._lease_fd, 0, os.SEEK_SET)
+        previous[self.store.lease_path] = os.read(self.store._lease_fd, 4096)
+        try:
+            self.data["run_label"] = "changed-record"
+            self.write_record()
+            for mutate in (
+                lambda: self.store.append("controller_ready", phase="waiting_release"),
+                lambda: self.store.snapshot({"phase": "changed"}),
+                lambda: another_store.acquire_lease("controller-b"),
+                lambda: self.store.release_lease("controller-a"),
+            ):
+                with self.assertRaises(RecordError):
+                    mutate()
+            current = {path: path.read_bytes() for path in paths[:-1]}
+            os.lseek(self.store._lease_fd, 0, os.SEEK_SET)
+            current[self.store.lease_path] = os.read(self.store._lease_fd, 4096)
+            self.assertEqual(previous, current)
+            self.assertFalse(another_store.lease_path.exists())
+        finally:
+            self.record_path.write_bytes(original_record)
+            if self.store._lease_fd is not None:
+                self.store.release_lease("controller-a")
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_owned_store_symlinks_never_write_through_to_external_files(self):
+        outside = self.root / "outside-owned-target"
+        outside.write_bytes(b"must remain unchanged")
+        for name, operation in (
+            ("events.jsonl", lambda store: store.append("controller_ready", phase="ready")),
+            ("status.json", lambda store: store.snapshot({"phase": "changed"})),
+            ("lease.json", lambda store: store.acquire_lease("controller-a")),
+        ):
+            with self.subTest(name=name):
+                target = self.run_dir / name
+                try:
+                    target.symlink_to(outside)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"symlink creation unavailable: {exc}")
+                with self.assertRaises(RecordError):
+                    operation(self.store)
+                self.assertEqual(outside.read_bytes(), b"must remain unchanged")
+                target.unlink()
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_identity_symlink_is_rejected_before_mutation(self):
+        outside = self.root / "outside-identity"
+        outside.write_bytes(b"identity target")
+        self.store.identity_path.unlink()
+        try:
+            self.store.identity_path.symlink_to(outside)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation unavailable: {exc}")
+        with self.assertRaises(RecordError):
+            self.store.append("controller_ready", phase="ready")
+        self.assertEqual(outside.read_bytes(), b"identity target")
+
+    def test_owned_store_hardlink_is_rejected_before_append(self):
+        outside = self.root / "outside-hardlink-target"
+        outside.write_bytes(b"must remain unchanged")
+        target = self.store.events_path
+        try:
+            os.link(outside, target)
+        except OSError as exc:
+            self.skipTest(f"hard links unavailable: {exc}")
+        with self.assertRaises(RecordError):
+            self.store.append("controller_ready", phase="ready")
+        self.assertEqual(outside.read_bytes(), b"must remain unchanged")
 
 
 if __name__ == "__main__":
