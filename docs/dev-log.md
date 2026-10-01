@@ -38,3 +38,12 @@ Independent review also found that the adaptive command has no two-worker cap
 and may select four workers using historical L40S estimates. The nominal screen
 selected the existing one-worker `sequential-jobs` mode instead. Do not reuse
 L40S allocation measurements as H100 performance evidence.
+
+After Jethro switched from hotel Wi-Fi to a phone hotspot on October 1,
+credential-free WSL probes received SSH protocol banners from `github.com:22`
+and the control endpoint `ssh.github.com:443`. The hotspot therefore permits
+outbound SSH to these endpoints. This is not an A/B comparison with the hotel
+network and does not prove Nebius reachability or establish the earlier cause;
+the temporary H100 VM was already deleted. No compute was started. The public
+egress address changed, so any future temporary ingress rule must be refreshed
+from the active network immediately before guest access.

@@ -140,6 +140,10 @@ snapshot, ingress rule, and scheduled guard are removed; only the original
 stopped VM and ready disk remain.
 The original L40S VM remains stopped and untouched. No automatic paid retry
 is authorized; investigate access before proposing another bounded attempt.
+After switching to a phone hotspot, credential-free probes received SSH
+banners from GitHub on ports 22 and 443. This confirms outbound SSH to those
+endpoints only, not Nebius connectivity or hotel filtering. The active egress
+address changed; refresh the narrow ingress rule for any future approved run.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.
