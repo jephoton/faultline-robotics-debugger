@@ -206,14 +206,17 @@ The user approved the goal of one reusable launcher, not changing the robot
 configuration on each interruption. The [accepted launcher design](../superpowers/specs/2026-10-01-m3-reusable-launcher-design.md)
 uses a scheduled workstation controller through setup plus the existing
 guest pair, reusing the watchdog. The [implementation plan](../superpowers/plans/2026-10-01-m3-reusable-launcher.md)
-is committed; local record implementation is delegated in the reused clean M3
-worktree. Independent review exposed the storage-deadline gap if the controller
+is committed. The immutable run-record/store foundation is reviewed and
+integrated; the fresh Windows suite passes 380 tests (four platform skips).
+Guest scripts passed targeted spec review and are awaiting independent quality
+review. One balanced builder owns the remaining fixed-purpose host assembly
+in the reused M3 worktree. Independent review exposed the storage-deadline gap if the controller
 dies; Jethro approved the separate cleanup task and requested the shortest
 fixed-purpose path back to M3. The plan now permits independent guest-script
 porting alongside targeted record review, followed by one controller/cleanup
 assembly and scheduled fake acceptance. No generic workflow engine or new robot
 configuration is needed. No cloud start is
-authorized. It survives chat interruption, not
+authorized. Its intended boundary is surviving chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
 execution blocker; preserve experiment settings.
 

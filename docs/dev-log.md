@@ -126,3 +126,24 @@ workflow continuity across assistant interruption. Another paid run requires
 a separately planned/reviewed persistent execution owner, fresh balance/cap,
 and no change to the currently working model/simulator configuration.
 See [the interruption record](experiments/m3-portfolio-comparison.md).
+
+## October 1 launcher: bounded local recovery fixes
+
+The shortest-path launcher work preserves the successful robot configuration.
+Independent record review caught ownership gaps: the store needed to bind to
+the original immutable record and its exact run directory, and hold an OS
+lease rather than infer ownership from a stale file. These are implemented and
+reviewed. A separate crash-boundary test caught a truncated JSONL tail: reading
+the last complete events is safe, but appending after incomplete bytes would
+corrupt the next event. The store now refuses that append without modifying the
+journal; it does not silently repair history. The integrated Windows suite
+passes 380 tests with four platform skips.
+
+Guest-script review found two integration mismatches, fixed on the guest
+branch and passing targeted spec review: checking the bundle hash alone did
+not prove that the executed checkout matched the frozen commit; and wave
+results needed reconciliation against the authoritative attempt ledger before
+allowing the adaptive mode. Windows test fixtures also needed explicit LF
+bytes when invoking Bash through WSL; the committed scripts were already LF.
+Quality review and host-controller integration remain pending. These are local
+project defects, not Nebius or NVIDIA model failures. No cloud run was started.
