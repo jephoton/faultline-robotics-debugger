@@ -145,5 +145,12 @@ not prove that the executed checkout matched the frozen commit; and wave
 results needed reconciliation against the authoritative attempt ledger before
 allowing the adaptive mode. Windows test fixtures also needed explicit LF
 bytes when invoking Bash through WSL; the committed scripts were already LF.
-Quality review and host-controller integration remain pending. These are local
-project defects, not Nebius or NVIDIA model failures. No cloud run was started.
+Quality review also caught a runner-exception summary that could authorize the
+next mode after prior valid waves. The validator now rejects internal runner
+exceptions while preserving legitimate budget-limited partial results. Spec
+and quality reviews approved the guest scripts, and they are integrated; the
+fresh full suite passes 385 tests with four platform skips. Host-controller
+integration and actual scheduled fake acceptance remain pending. These are
+local project defects, not Nebius or NVIDIA model failures. No cloud run was
+started. Publication retries failed with an HTTPS low-speed timeout; these
+changes are committed locally, not confirmed pushed.

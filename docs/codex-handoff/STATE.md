@@ -207,9 +207,9 @@ configuration on each interruption. The [accepted launcher design](../superpower
 uses a scheduled workstation controller through setup plus the existing
 guest pair, reusing the watchdog. The [implementation plan](../superpowers/plans/2026-10-01-m3-reusable-launcher.md)
 is committed. The immutable run-record/store foundation is reviewed and
-integrated; the fresh Windows suite passes 380 tests (four platform skips).
-Guest scripts passed targeted spec review and are awaiting independent quality
-review. One balanced builder owns the remaining fixed-purpose host assembly
+integrated. Guest scripts also passed independent spec and quality reviews and
+are integrated; the fresh Windows suite passes 385 tests (four platform skips).
+One balanced builder owns the remaining fixed-purpose host assembly
 in the reused M3 worktree. Independent review exposed the storage-deadline gap if the controller
 dies; Jethro approved the separate cleanup task and requested the shortest
 fixed-purpose path back to M3. The plan now permits independent guest-script
