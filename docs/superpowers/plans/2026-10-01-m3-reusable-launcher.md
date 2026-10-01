@@ -51,7 +51,7 @@ Root updates `PROJECT_PLAN.md`, `docs/codex-handoff/STATE.md`, `docs/dev-log.md`
 **Owner:** smaller builder. **Files:** `cloud_run_record.py`, `test_cloud_run_record.py` only.
 
 - [ ] Write failing unittest cases for a valid synthetic record, rejected unknown/secret fields, wrong schema, bool/nonfinite numeric values, malformed IDs/hashes, overlapping protected targets, contained paths, future UTC deadlines, immutable digest, lease collision and interrupted atomic writes.
-- [ ] Implement `RecordError(ValueError)`, frozen `CloudRunRecord`, `load_record(path, *, control_root, now_utc, require_future=True)`, and `RunStore(run_dir)` with methods `create(record_digest)`, `append(event, **safe_fields)`, `snapshot(payload)`, `read_status()`, `acquire_lease(owner_id)`, `release_lease(owner_id)`.
+- [ ] Implement `RecordError(ValueError)`, frozen `CloudRunRecord`, `load_record(path, *, control_root, now_utc, require_future=True)`, and `RunStore(run_dir, *, record_path)` with methods `create(record_digest)`, `append(event, **safe_fields)`, `snapshot(payload)`, `read_status()`, `acquire_lease(owner_id)`, `release_lease(owner_id)`.
 - [ ] Record JSON has exactly these top-level keys: `schema_version`, `run_label`, `project_id`, `temporary`, `protected`, `approval`, `deadlines`, `paths`, `pins`, `ssh`, `preflight`. Each nested object rejects unknown keys. No arbitrary command/script field or secret-bearing value is accepted.
 
 ```json
@@ -76,10 +76,23 @@ IDs have their stated service prefix and safe ASCII suffix; temporary and protec
 
 Digest canonical JSON bytes with sorted keys and compact separators; revalidate source bundle and manifest SHA256 before release. Store original immutable record separately from status, compare digest on every mutating entry point. Events are JSONL, append then flush/fsync; tolerate only a truncated final event during read, reject corruption earlier. Snapshot uses temp-file + flush/fsync + `os.replace`. Lease uses exclusive file create; duplicate acquisition refuses. No automatic stale-lease removal. Store safe event data only (phase, UTC, operation identifiers, exit classification), not unfiltered command stderr.
 
+Independent spec review clarifications: store construction takes the explicit
+original record path, and every mutation compares its freshly canonicalized
+digest with both the immutable store identity and pinned expected digest.
+Creation refuses preexisting owned state files/orphan status temporaries.
+Reject symlink/reparse store file targets as well as unsafe directory ancestry;
+use no-follow opens where available. Approval reference is a narrow safe human
+identifier, not free prose or credential-bearing text. Reject bundle/manifest
+aliases of the identity key (including hardlinks) before hashing. Static
+deadline coherence checks confirmed-stop minus latest permitted start against
+runtime, with at least three minutes between stop request and confirmation;
+controller still enforces the stronger actual-start bound. Tests must cover
+all these review findings. No extra cloud behavior is introduced.
+
 ```python
 # Acceptance interface exercised by tests (fixture is generated locally):
 record = load_record(record_path, control_root=tmp_root, now_utc=now)
-store = RunStore(record.paths["run_dir"])
+store = RunStore(record.paths["run_dir"], record_path=record_path)
 store.create(record.digest)
 store.acquire_lease("controller-example")
 store.append("controller_ready", owner_id="controller-example")
