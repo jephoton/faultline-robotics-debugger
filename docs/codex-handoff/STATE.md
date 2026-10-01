@@ -144,6 +144,11 @@ After switching to a phone hotspot, credential-free probes received SSH
 banners from GitHub on ports 22 and 443. This confirms outbound SSH to those
 endpoints only, not Nebius connectivity or hotel filtering. The active egress
 address changed; refresh the narrow ingress rule for any future approved run.
+The [hotspot retry plan](../superpowers/plans/2026-10-01-m3-hotspot-h100-retry.md)
+proposes a new US$6 total/45-minute/one-start cap, with a five-minute post-boot
+SSH gate and the same three nominal cases only. It is pending explicit cap
+approval. CLI/console access works, balance displays US$9.53, and focused CLI
+tests pass 7/7; no new resources were created during preparation.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.

@@ -14,6 +14,12 @@ The earlier one-start approval is exhausted. This plan proposes **US$6 additiona
 
 ## Task 1 — Readiness and local contract (green)
 
+Preparation verified: intended original VM remains STOPPED; CLI and console
+sessions work; console displays US$9.53 balance with no expiry shown. The
+focused Windows Python 3.11 CLI suite passes 7/7. Billing is still not reconciled
+to the prior attempt. Price/capacity and source-disk readiness must be refreshed
+at execution; the proposed US$6 cap is not yet approved.
+
 **Files:** existing `tests/test_diagnostic_portfolio_cli.py`; ignored fresh control directory under `artifacts/m3-control/`; no code changes.
 
 - [ ] Read back the original instance `STOPPED`, disk `READY`, unchanged managed ownership, and absence of previous temporary resources.
