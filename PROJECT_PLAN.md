@@ -421,7 +421,14 @@ been removed after independent stop verification; the original stopped L40S
 VM/disk are preserved. The one-start authority is exhausted. New portfolio
 summary presentation remains M5, and the task-filtered media filename reader
 needs a scoped compatibility fix before showing task IDs 1/2 correctly.
-No further paid work is implied by local implementation. Tool feedback is
+No further paid work is implied by local implementation.
+The next scoped [live portfolio comparison plan](docs/superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
+preserves the successful H100/model/simulator configuration and pairs whole-job
+sequential execution with a two-evaluator adaptive portfolio. Jethro requested
+autonomy through recovery of all videos/traces; a new US$8/90-minute numeric
+cap is approved for one start and temporary-resource cleanup. The plan includes matched bounds,
+independent evidence review, early stop and exact temporary-resource cleanup.
+Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
 repository audit are explicit submission gates after M3, as Jethro requested.
 

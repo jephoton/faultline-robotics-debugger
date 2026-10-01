@@ -179,6 +179,19 @@ task-level diagnosis. No additional paid start is authorized. Do not infer
 H100 worker performance from historical L40S timings. Posted billing remains
 unreconciled and the original disk continues accruing storage charges.
 
+Jethro clarified that autonomous execution should continue through the full
+sequential/adaptive comparison, not end at media packaging for the nominal
+screen. The [new execution plan](../superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
+preserves the working H100 stack and proposes US$8 total/90 minutes/one start,
+with identical per-mode bounds and adaptive cap 2. Jethro approved US$8/90
+minutes/one start and temporary-resource cleanup. No new resources have been
+created yet. Independent review caught the active-evaluator timeout tail:
+use 1800 seconds/US$2.25 per mode, reserving five minutes per active tail
+and copy/stop time. Latest console balance is US$8.52,
+active/no expiry displayed, not full billing reconciliation. Main through
+`b4b43c4` is pushed and remote SHA verified. Preserve all valid videos/traces,
+including failure episodes; use the existing report's fail-closed speedup gate.
+
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
 1/2/4-worker design on one GPU VM with a shared GR00T server, using fixed
