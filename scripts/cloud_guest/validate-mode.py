@@ -62,28 +62,67 @@ def validate(session, mode):
     require(isinstance(waves, list) and waves, "missing waves")
     expected_tasks = {"task-00": 0, "task-01": 1, "task-02": 2}
     seen_evidence = set()
+    seen_cases = set()
     valid_count = 0
     for wave in waves:
+        require(wave.get("attempt_accounting_validated") is True, "wave accounting unvalidated")
+        requests = wave.get("requests")
+        require(isinstance(requests, list) and requests, "missing wave requests")
+        requested = {}
+        for request in requests:
+            require(isinstance(request, dict), "invalid request")
+            local_case_id = request.get("case_id")
+            job = request.get("job_id")
+            require(isinstance(local_case_id, str) and local_case_id and job in expected_tasks,
+                    "invalid requested case")
+            case_id = f"{job}--{local_case_id}"
+            require(case_id.startswith(job + "--")
+                    and case_id not in requested and case_id not in seen_cases, "invalid or duplicate requested case")
+            requested[case_id] = job
+            seen_cases.add(case_id)
         ledger_path = wave.get("ledger_path")
         require(isinstance(ledger_path, str) and ledger_path and not Path(ledger_path).is_absolute(),
                 "invalid ledger path")
         ledger = json.loads(contained(portfolio / ledger_path, portfolio).read_text())
         records = ledger.get("attempt_records")
-        require(isinstance(records, dict) and all(isinstance(record, dict) and
-                record.get("state") in {"prepared", "terminal"} for record in records.values()),
-                "nonterminal attempt")
+        require(isinstance(records, dict) and set(records) == set(requested), "ledger request mismatch")
+        require(all(isinstance(record, dict) and record.get("state") in {"prepared", "terminal"}
+                    for record in records.values()), "nonterminal attempt")
         require(ledger.get("in_flight_ids") == [], "inflight attempt")
+        require(ledger.get("attempt_states") == {case: record["state"] for case, record in records.items()},
+                "ledger state mismatch")
+        terminal = {}
+        for case_id, record in records.items():
+            if record["state"] == "prepared":
+                require(set(record) == {"state"}, "prepared case has result")
+                continue
+            require(set(record) == {"state", "result"} and isinstance(record["result"], dict),
+                    "terminal case lacks result")
+            terminal[case_id] = record["result"]
+            require(record["result"].get("case_id") == case_id, "ledger result identity mismatch")
+            require(record["result"].get("status") == "valid", "nonvalid terminal result")
+        require(ledger.get("results") == list(terminal.values())
+                and ledger.get("valid_count") == len(terminal)
+                and wave.get("launched_attempts") == len(terminal), "ledger count/result mismatch")
         results = wave.get("results")
         require(isinstance(results, list), "invalid wave results")
+        require(len(results) == len(terminal), "wave/ledger terminal count mismatch")
+        seen_wave_results = set()
         for result in results:
+            require(isinstance(result, dict), "invalid wave result")
             require(result.get("status") == "valid", "invalid wave result")
             case_id = result.get("case_id")
             job = case_id.split("--", 1)[0] if isinstance(case_id, str) else None
-            require(job in expected_tasks and case_id in records and records[case_id]["state"] == "terminal",
+            require(job in expected_tasks and case_id in terminal and case_id not in seen_wave_results,
                     "case identity/ledger mismatch")
+            seen_wave_results.add(case_id)
+            authoritative = terminal[case_id]
+            require(all(result.get(field) == authoritative.get(field)
+                        for field in ("case_id", "status", "outcome", "evidence_paths")),
+                    "wave result differs from terminal ledger")
             evidence = result.get("evidence_paths")
             require(isinstance(evidence, list) and evidence, "missing evidence")
-            output = result.get("output_path")
+            output = authoritative.get("output_path")
             require(isinstance(output, str) and Path(output).is_absolute(), "invalid output path")
             output_root = contained(Path(output), portfolio, file=False)
             require(output_root.is_dir(), "invalid output directory")

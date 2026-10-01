@@ -16,10 +16,16 @@ PROJECT="$SESSION/source"
 UPSTREAM=/home/robot/vla-evaluation-harness
 PY=/home/robot/.venvs/vla-eval/bin/python
 export PATH=/home/robot/.venvs/vla-eval/bin:$PATH PYTHONPATH="$PROJECT/src"
-[[ -d $PROJECT && -f $SESSION/source.bundle && -f $SESSION/expected-source-sha.txt && -f $SESSION/manifest.json && -f $SESSION/deadline.txt ]] || { echo 'missing inputs' >&2; exit 2; }
+[[ -d $PROJECT && -f $SESSION/source.bundle && -f $SESSION/expected-source-sha.txt && -f $SESSION/expected-source-commit.txt && -f $SESSION/manifest.json && -f $SESSION/deadline.txt ]] || { echo 'missing inputs' >&2; exit 2; }
 EXPECTED_SHA=$(tr -d '\r\n' < "$SESSION/expected-source-sha.txt")
 [[ $EXPECTED_SHA =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid source SHA' >&2; exit 2; }
 [[ $(sha256sum "$SESSION/source.bundle" | cut -d' ' -f1) == "$EXPECTED_SHA" ]] || { echo 'source bundle SHA mismatch' >&2; exit 2; }
+EXPECTED_COMMIT=$(tr -d '\r\n' < "$SESSION/expected-source-commit.txt")
+[[ $EXPECTED_COMMIT =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid source commit' >&2; exit 2; }
+SOURCE_HEAD=$(git -C "$PROJECT" rev-parse HEAD)
+[[ $SOURCE_HEAD == "$EXPECTED_COMMIT" ]] || { echo 'source checkout commit mismatch' >&2; exit 2; }
+SOURCE_DIRTY=$(git -C "$PROJECT" status --porcelain --untracked-files=no)
+[[ -z $SOURCE_DIRTY ]] || { echo 'source tracked checkout dirty' >&2; exit 2; }
 [[ $(git -C "$UPSTREAM" rev-parse HEAD) == 35f1200eb15608aa898f727a3722f7eef889c6cd ]] || { echo 'upstream revision mismatch' >&2; exit 2; }
 grep -F 'ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0' "$PROJECT/scripts/run_failure_search.py" >/dev/null
 curl -fsS --max-time 5 http://127.0.0.1:8000/config > "$SESSION/model-server-config.json"
