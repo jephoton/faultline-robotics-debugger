@@ -91,7 +91,8 @@ If the immutable record needs a serial-enrollment policy marker instead of a
 pre-known fingerprint, add only the explicit `from_authenticated_serial` enum
 and a test; preserve existing fixed-fingerprint validation. This bounded adapter
 detail avoids an assistant/manual pause after paid start, not new credentials
-or a new trust service. Private trust output stays ignored and is never a key.
+or a new trust service. Run-specific trust output stays ignored and never
+contains a private key.
 
 New files:
 
