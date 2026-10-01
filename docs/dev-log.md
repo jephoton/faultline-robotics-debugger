@@ -21,3 +21,20 @@ tests is not necessarily a failure seen in the live pilot.
 The key boundary is **one Nebius VM with several evaluator processes and one
 shared GR00T model server**—not several independently started VMs. See the
 [M3 experiment record](experiments/m3-parallel.md), [containment design](superpowers/specs/2026-09-28-m3-evaluator-containment-design.md), and [attempt-ownership design](superpowers/specs/2026-09-28-m3-attempt-ownership-design.md).
+
+## October 1 H100 compatibility-screen access failure
+
+The separate snapshot-backed H100 clone reached `RUNNING`; serial logs
+confirmed its new network identity, SSH socket listener, cloud-init completion,
+and guest shutdown backup. SSH and an independent Windows TCP/22 probe still
+timed out after the current workstation `/32` rule was read back ready in the
+attached security group. The source IP was also verified without an HTTP proxy.
+The remaining access-path cause is unresolved; no stale-network or provider
+fault claim is justified. The clone also logged a Fabric Manager startup
+failure, not yet diagnosed or shown to block inference. The attempt was stopped
+early without an episode. See [the screen record](experiments/m3-three-task-screen.md).
+
+Independent review also found that the adaptive command has no two-worker cap
+and may select four workers using historical L40S estimates. The nominal screen
+selected the existing one-worker `sequential-jobs` mode instead. Do not reuse
+L40S allocation measurements as H100 performance evidence.

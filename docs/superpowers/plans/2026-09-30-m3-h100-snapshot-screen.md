@@ -8,7 +8,7 @@
 
 **Tech Stack:** Nebius CLI and console, existing Windows Task Scheduler-owned exact-VM watchdog, Network SSD snapshot/clone, Ubuntu/Docker/Python 3.11 guest environment, pinned GR00T/LIBERO harness, `scripts/run_diagnostic_portfolio.py`, JSON/trace/MP4 evidence.
 
-**Authority boundary:** Jethro accepted H100 snapshot migration as the next design. This plan does **not** authorize creating a billable snapshot or VM, starting compute, extending the former US$3 cap, deleting the original VM/disk, changing task/family/model, public pushing, or claiming an HPC speedup. The numeric cap and retention period are a new red decision after current price/account checks.
+**Current authority boundary:** The October 1 approval below authorized one bounded attempt, now completed without an episode. It does not authorize another start or clone. The original VM/disk, task/family/model, publication status, and HPC claim boundary remain unchanged. Further paid work needs a new bounded decision after access diagnosis.
 
 **October 1 approval:** Jethro accepted the US$7.50 bounded attempt cap, one H100 start with at most 60 minutes VM-on, and deletion of only the temporary H100 clone/managed disk and snapshot after evidence copy within 24 hours. The original L40S VM/disk remain retained. This approval supersedes the pending-cap wording below; refresh live readiness before spending. CLI access was renewed for this attempt.
 
@@ -21,9 +21,9 @@
 - [ ] Confirm the source disk can produce a snapshot and the selected H100 preset can boot from a snapshot-backed managed disk with compatible image architecture. Inspect CLI options without mutating resources. Record non-sensitive observations and timestamps.
 - [ ] Recheck that the locally reviewed source includes the exact three-case dry-run regression and that the run will request only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`.
 
-**Gate:** Present a proposed numeric cap for all charges in the bounded time window (including the original disk's ongoing charge), maximum VM-on minutes, snapshot/new-disk retention, and current balance to Jethro. Wait for explicit approval. The prior L40S cap is closed.
+**Historical gate, satisfied October 1:** Present a numeric cap including storage, VM-on minutes, retention, and current balance. Jethro approved the bounded attempt; that one-start authority is now exhausted. The prior L40S cap is closed.
 
-**Read-only preflight result, September 30:** The exact original VM/disk, H100 preset/capacity, console balance (US$9.89), CLI H100 and cloned-disk estimates, and detailed published snapshot tariff were checked. The three-case CLI contract passed 7/7 focused WSL tests. The conservative proposal in the [experiment note](../../experiments/m3-three-task-screen.md) is US$7.50 *total including the existing disk's next 24 hours*, 60 minutes H100 VM-on, and cleanup of only the new snapshot/clone by 24 hours; it is not approved. No credit-expiry date was displayed. Refresh live prices, capacity, and balance before any approved mutation.
+**Historical read-only preflight, September 30:** The exact original VM/disk, H100 preset/capacity, console balance (US$9.89), CLI compute/disk estimates, and published snapshot tariff were checked. The three-case CLI contract passed 7/7 focused WSL tests. The US$7.50/60-minute/24-hour proposal was pending then and approved October 1 after refreshed checks. No credit-expiry date was displayed. This historical paragraph is not authority for another attempt.
 
 ## Task 2 — Snapshot and separate H100 guest (red gate, then amber)
 
@@ -39,7 +39,7 @@
 **Files:** fresh ignored local results root and guard log; no tracked code mutation required.
 
 - [ ] Resolve the actual upstream/project paths and dry-run the three exact nominal requests on the selected source. Configure at most two evaluator processes on the one H100 GPU; do not launch search, confirmation, or reduction cases.
-- [ ] Run the existing `adaptive-portfolio` command with `episodes=3` and a fresh session label. Set the command's seconds and estimated-dollar options from the **fresh H100 rate and approved deadline**, with enough margin for a stuck evaluator, copy, and stop. The independent watchdog, not the advisory CLI estimate, is the final spend boundary.
+- [ ] Run the existing `sequential-jobs` command with `episodes=3` and a fresh session label. October 1 independent review found that adaptive mode can select four workers from historical L40S estimates and has no two-worker cap flag. One evaluator preserves this compatibility-screen scope and satisfies the at-most-two bound. Set seconds and estimated-dollar options from the **fresh H100 rate and approved deadline**, reserving copy/stop margin. The independent watchdog, not the advisory CLI estimate, is the final spend boundary.
 - [ ] Require three terminal-valid aggregates with exact task IDs and episode index 0, nonempty trace and MP4, and no uncertain attempt. Copy compact JSON/ledgers/traces first, then videos. If any result is invalid, preserve evidence and stop; do not expand the workload to compensate.
 - [ ] Stop and poll the exact H100 VM to `STOPPED`, remove temporary ingress, confirm the original L40S VM is still `STOPPED`, and retire the guard only after stop verification. If a stop is unconfirmed, escalate to manual console action immediately. Retain or delete snapshot/clone resources only under the approved retention decision; account for storage until then.
 
@@ -56,5 +56,15 @@
 Task 1 is read-only and may run before cap approval. Task 2 depends on the Task 1 price/account/capacity checks and Jethro's new numeric cap; Task 3 depends on verified guest/model/task preflight; Task 4 depends on copied evidence and verified stop. One coordinator owns all Nebius state, spending, watchdog registration, and final interpretation. A smaller model may independently review the local command/test contract or evidence parser, but may not mutate the same cloud resource. A reviewer should check frozen request IDs, validity criteria, and copied evidence against ledgers rather than repeat the paid run. Checkpoints are: before snapshot creation (red cap), after compatibility preflight (go/no-go within cap), and after evidence synthesis (human interpretation).
 
 ## Completion boundary
+
+**October 1 execution checkpoint:** fresh preflight and local 7/7 CLI tests
+passed; snapshot creation, stopped clone creation, watchdog arming, and one
+H100 start succeeded. Guest serial evidence confirmed boot/network/SSH socket
+and backup shutdown, but workstation TCP/22 remained unreachable. Early stop
+was requested at 08:39:51 UTC and completed at 08:41:25 UTC. No Task 3 episode
+or runtime model/task verification occurred. Preserve this partial outcome,
+Temporary clone/managed disk, snapshot, ingress, and guard cleanup is verified.
+Investigate access before
+any new paid retry. Details are in the experiment record.
 
 This plan completes only a three-task, one-initial-state-per-task H100 compatibility screen. It does not demonstrate nominal reliability, failure diagnosis quality, portfolio cost efficiency, cross-suite generalization, or end-to-end HPC speedup. Those remain later experiments under separately accepted designs and caps.

@@ -108,9 +108,8 @@ separately approved same-cap retry were both blocked before guest access by
 No task episode ran, so IDs 1 and 2 remain unscreened. The VM is confirmed
 `STOPPED`; temporary SSH ingress and both OS-owned guards were removed after
 verification. Jethro waived the fresh balance check for the retry, so the
-prior US$9.96 reading is not a current balance. The next red choice is to wait
-for the same shape or plan a snapshot-based VM on a different platform with a
-new cap. Read-only diagnosis found two scheduler-level capacity timeouts on an
+prior US$9.96 reading is not a current balance. The then-open resource choice
+was superseded by the separate H100 decision below. Read-only diagnosis found two scheduler-level capacity timeouts on an
 unchanged VM, not a guest/model/runner error; the existing platform is
 immutable and its managed boot disk must not be lost during migration. H100
 has stronger advised availability but a higher hourly rate and untested
@@ -119,21 +118,32 @@ runtime compatibility. See
 Jethro chose a snapshot-based **separate H100 VM** on September 30.
 [ADR 0010](../decisions/0010-h100-snapshot-migration.md) and the
 [H100 screen plan](../superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md)
-preserve the original L40S VM/disk. No snapshot or H100 VM has been created,
-and no new spending cap has been approved. Verify live snapshot/clone pricing,
-account balance, H100 rate/capacity, and a numeric cap before any billable
-mutation; the old US$3 cap does not carry over.
+preserve the original L40S VM/disk. The subsequent approved attempt and its
+cleanup are recorded below; its one-start authority is now exhausted.
 The September 30 H100 read-only preflight found the original VM `STOPPED`, its
 200-GiB disk `READY`, and H100 on-demand advice `HIGH`/`MEDIUM` across four
 fabrics. The console balance was US$9.89, and detailed Nebius pricing lists
 US$0.071/GiB/730h for snapshots. A conservative US$7.50 total cap for one
 60-minute H100 start and at most 24 hours of all three 200-GiB storage objects
-is proposed, **not approved**. No credit expiry was displayed. See the
-experiment note for the calculation; refresh all live figures before spending.
+was proposed on September 30. Jethro approved it on October 1, including
+cleanup of only the new clone/managed disk and snapshot. Fresh balance was
+US$9.55 and H100 compute was US$4.50/hour pre-tax; no expiry was displayed.
+The snapshot-backed H100 clone reached `RUNNING`, but SSH and a Windows
+TCP/22 probe timed out despite the correct ready narrow ingress rule.
+Serial logs confirmed new guest network identity, SSH socket listening,
+cloud-init completion, and a shutdown backup; the remaining access cause
+is unresolved. Fabric Manager also failed at boot, with inference impact
+untested. No guest source transfer or robot episode occurred. The clone was
+stopped early and independently verified `STOPPED`; local serial/lifecycle
+evidence is retained. Cleanup is verified: temporary clone/managed disk,
+snapshot, ingress rule, and scheduled guard are removed; only the original
+stopped VM and ready disk remain.
+The original L40S VM remains stopped and untouched. No automatic paid retry
+is authorized; investigate access before proposing another bounded attempt.
 The manifest rejects unsupported family/model labels, but live preflight
 must independently verify the model server actually loaded the pinned
 checkpoint and revision.
-No portfolio episode has run; provider billing for the failed start has not
+No portfolio episode has run; provider billing for these attempts has not
 yet posted, and the retained disk remains billable.
 
 M4's bounded live run and evidence validation are complete; details are in

@@ -1,6 +1,6 @@
 # M3 three-task nominal screen: allocation attempts
 
-**Status (September 30, 2026): two separately approved exact-shape starts blocked by capacity before any episode.** This is an infrastructure outcome, not evidence about task IDs 0, 1, or 2 or the portfolio scheduler.
+**Status (October 1, 2026): two L40S placement failures followed by an H100 clone that booted but remained unreachable over SSH. No episode ran.** These are infrastructure outcomes, not evidence about task IDs 0, 1, or 2 or the portfolio scheduler.
 
 ## Frozen scope and local proof
 
@@ -49,3 +49,54 @@ The same calculator returned US$0.0194444/hour for each 200-GiB Network SSD disk
 Conservative proposed bound: 60 minutes H100 VM-on at the **new** US$4.50 rate, plus 24 hours each for snapshot, cloned disk, and retained original disk, totals about US$5.90 pre-tax or US$6.43 with an assumed 9% tax. The incremental portion excluding the already-retained original disk is about US$5.92 with that tax assumption. Recommend a **US$7.50 maximum total project spend attributable to this bounded attempt**, one H100 start, 60-minute exact-VM stop deadline, and removal of the temporary snapshot/clone within 24 hours after evidence is copied and stop confirmed. This has about US$1.07 headroom over the conservative estimate and would leave at least US$2.39 of the displayed balance if the cap is fully consumed. It is a proposal, not an approval or guarantee; no posted billing is yet available. The original L40S VM/disk are excluded from cleanup and remain untouched.
 
 The local WSL `unittest` run of `tests.test_diagnostic_portfolio_cli` passed 7/7 tests, including the three exact nominal requests and no search. This is only local contract evidence; runtime task mapping and H100 compatibility still need live verification.
+
+## October 1 approved H100 attempt
+
+Jethro approved US$7.50 total, one H100 start, at most 60 minutes VM-on,
+and deletion of only the temporary clone/managed disk and snapshot after
+evidence copy within 24 hours. Fresh preflight found US$9.55 balance, no
+displayed expiry, the original VM stopped with its managed disk ready, and
+H100 availability `HIGH`/`MEDIUM`. The live compute estimate was US$4.50/hour
+pre-tax. The focused Windows Python 3.11 CLI tests passed 7/7.
+
+Independent command review found that adaptive mode could select four
+workers from historical L40S measurements and had no two-worker cap flag.
+The screen therefore selected `sequential-jobs` (one evaluator), preserving
+the three nominal requests and avoiding a hardware-inappropriate allocation.
+This is a compatibility screen, not a throughput comparison. No command was
+actually launched on the guest.
+
+The exact stopped source disk produced a ready AMD64 snapshot; a separate
+snapshot-backed H100 VM was created explicitly stopped. Its OS-owned exact-VM
+watchdog logged `verified` and `armed` at 08:31:49 UTC with a 09:30 deadline.
+One start reached `RUNNING`. Serial logs show the guest booted, configured its
+new private address and MAC, listened on `ssh.socket`, and completed cloud-init
+at 08:34:22 UTC. Its backup shutdown was scheduled for 09:29:22 UTC.
+
+SSH nevertheless repeatedly timed out. Read-back confirmed the attached
+security group had a ready stateful TCP/22 allow rule restricted to the
+workstation's current public `/32`, verified from Windows and direct WSL
+egress. An independent Windows TCP probe also timed out. This rules out a
+WSL-only problem and provides evidence against stale clone network identity;
+it does **not** establish the remaining cause or prove provider fault. Serial
+logs also reported a failed NVIDIA Fabric Manager service, whose relevance
+to GPU readiness could not be tested without guest access.
+
+The coordinator requested an early stop at 08:39:51 UTC rather than consume
+the full deadline on an inaccessible guest. Boot logs and lifecycle records
+were copied to the ignored local control directory before cleanup. No source
+transfer, served-checkpoint verification, task-catalog check, model server,
+evaluator, episode, trace, or MP4 resulted. Posted billing is still unverified;
+the cap is not the actual charge. A future paid retry requires a new bounded
+decision informed by access-path diagnosis, not an automatic replacement VM.
+
+Stop completed at 08:41:25 UTC. After copying the final shutdown logs and
+stopped-instance read-back, the temporary VM (including its managed clone
+disk), snapshot, and temporary SSH rule were deleted under the approved scope.
+Fresh lists verified only the original stopped L40S VM and original ready
+managed disk remain, no snapshot remains, and the group has only its standing
+egress rule. The scheduled watchdog task was removed after stop confirmation.
+The deleted clone/snapshot are not recoverable through this project; the
+untouched original disk remains the source cache. The roughly ten-minute
+start-to-stop operation window implies about US$0.82 compute including assumed
+9% tax as a conservative estimate, not a posted charge; storage is separate.

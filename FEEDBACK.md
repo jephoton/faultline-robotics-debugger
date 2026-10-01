@@ -66,6 +66,25 @@ claim that snapshot pricing was unavailable or that creation failed. See
 
 ## Before submission
 
+### October 1 snapshot-backed H100 attempt
+
+AI Cloud successfully created a snapshot of the stopped boot disk and booted
+a separate H100 clone, preserving the original setup. CLI serial logs were
+particularly useful: they exposed successful guest networking, the SSH socket,
+cloud-init completion, and the backup shutdown deadline without SSH access.
+However, workstation SSH remained unreachable despite a ready narrow ingress
+rule and verified source address. The cause is unresolved, so this is access
+friction, not an established Nebius defect. A Fabric Manager startup failure
+also appeared in the cloned guest; its cause and inference impact are untested.
+No NVIDIA model or episode ran in this attempt. We stopped early; billing must
+still be reconciled. Snapshot cloning and serial observability merit reuse,
+but remote-access reliability needs investigation before the next run. See
+[the experiment record](docs/experiments/m3-three-task-screen.md).
+
+An operator request initially used lowercase enum labels in a JSON file;
+the CLI's protobuf JSON parser required uppercase labels. This failed locally
+before resource creation and is separate from the remote access issue.
+
 - Record Jethro's own zero-to-hello-world experience for each tool actually
   used: precise command or screen, elapsed time, blocker, and what helped.
 - Reconcile estimated VM costs against posted billing; keep taxes and disk
