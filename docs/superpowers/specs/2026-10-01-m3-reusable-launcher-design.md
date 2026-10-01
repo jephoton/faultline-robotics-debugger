@@ -32,6 +32,14 @@ loss of network, expired authentication or provider faults. Keep the guest
 shutdown backup; report unconfirmed cleanup as unresolved. A standalone
 controller can execute approved operations but cannot grant itself authority.
 
+Jethro also approved an independent scheduled temporary-resource cleanup task
+and requested the shortest fixed-purpose route to the comparison. Reuse the
+working guest scripts and existing watchdog. The cleanup task uses separate
+progress from the controller, exact approved temporary IDs, confirmed-stop and
+protected-original checks; it does not start compute or experiments. No generic
+workflow engine or automatic restart is required. See the implementation plan's
+shortest-path override for execution order and the local acceptance stopping rule.
+
 ## Ownership and immutable inputs
 
 Root remains sole external-resource owner. The scheduled controller is its

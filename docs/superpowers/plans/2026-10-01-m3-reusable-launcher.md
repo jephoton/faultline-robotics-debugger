@@ -12,11 +12,57 @@
 
 ## Owners, concurrency and review
 
+### Shortest-path execution override (accepted October 1)
+
+Jethro approved the independent temporary-resource cleanup task and asked for
+the shortest route back to M3 evidence. This overrides the sequential execution
+order below, not the safety, experimental or spending boundaries:
+
+1. Finish targeted record review; no speculative validator expansion.
+2. In parallel, port the already prepared guest pair to reusable tracked scripts
+   in a separate clean worktree. It needs no new host controller interface.
+3. One balanced builder assembles the fixed-purpose workstation controller,
+   command adapter, scheduled launcher and independent cleanup task as a single
+   coherent unit. Keep modules focused, but do not build a generic workflow
+   engine, plugin architecture, automatic restart/resume or multi-cloud SDK.
+4. Run the local scheduled fake acceptance and independent spec/quality review,
+   integrate and return to the unchanged paid comparison under a fresh cap.
+
+Critical path: record review + independent guest scripts → fixed controller/
+cleanup assembly → parent-exit/deadline acceptance → integration → fresh
+preflight/cap → sequential/adaptive evidence. Record builder owns only its two
+files in the existing M3 worktree; guest builder owns only guest scripts/tests
+in a separate existing clean worktree. Root alone cherry-picks reviewed units.
+Reviewers remain read-only; root is sole external execution owner. The general
+recover CLI may be limited to explicit stop/copy/cleanup, never diagnostic resume.
+
+Independent cleanup is an OS-owned exact-run task armed before compute start.
+It uses immutable explicit temporary identities and a separate audit log, not
+the primary controller lease. It can request emergency exact-ID stop, but may
+delete only after confirmed STOPPED (or independently proven prior deletion)
+and current resource/project/dependency checks. Serialize actual deletion with
+a shared OS-held cleanup lock; crash releases the lock but never grants new
+start/experiment authority. On ambiguous deletes reconcile by exact-ID reads.
+Never remove the original VM/disk. At the storage deadline preserve verified
+local evidence, report any untransferred media, and honor explicit deletion
+approval. Primary controller and fallback call the same cleanup routine;
+the fallback remains armed until cleanup is independently verified. Task
+registration does not guarantee survival of workstation/network/auth failure;
+do not claim that it does. Provisioning before exact-ID task registration still
+has a root-owned recovery window; no automated paid provisioning is added.
+
+**Stop adding launcher scope once:** the local scheduled fake survives its
+parent exiting; controller death still leaves stop and cleanup tasks; repeated
+invocation cannot start twice; lost guest acknowledgment cannot duplicate the
+pair; originals survive; available media is copied with identity/integrity;
+and invalid/uncertain work cannot become a speedup claim. Extra convenience,
+UI, distributed provisioning and exhaustive hostile-local-user threat modeling
+are deferred. Fresh cloud preflight and numeric approval remain mandatory.
+
 **Independent review gate:** Task 1 proceeds independently. Before controller
 integration, settle storage cleanup after controller death: the stop-only
-watchdog cannot guarantee the snapshot/disk deadline. Root asked Jethro to
-choose a separately prearmed exact-temporary-resource cleanup task versus
-explicit manual recovery risk. Neither is silently assumed approved. A
+watchdog cannot guarantee the snapshot/disk deadline. Jethro accepted a
+separately prearmed exact-temporary-resource cleanup task. A
 confirmed watchdog stop is evidence, not a guarantee that every future stop
 succeeds; exhausted retries report unconfirmed stop. Human emergency exact-ID
 stop remains allowed; controller observes it and closes admission.
