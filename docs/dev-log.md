@@ -76,3 +76,31 @@ from the active network immediately before guest access.
   nominal default, and do not broaden it into show-all navigation silently.
 
 See [the completed screen and cleanup](experiments/m3-three-task-screen.md).
+
+### What the fixes mean in plain language
+
+The successful run kept the same policy, checkpoint, simulator, tasks, and
+reset state. The changes repaired how we reached or invoked that setup:
+
+1. **CLI argument mismatch:** the command-line parser called the manifest
+   argument `manifest`, but the receiving function expected `manifest_path`.
+   Explicitly mapping the name fixes the handoff; a subprocess regression
+   tests the real command, not just a direct function call.
+2. **Wrong three-attempt schedule:** sequential mode spends its attempts
+   progressing one task's diagnosis. Three attempts therefore did not mean
+   three tasks. Explicitly capped adaptive admission now runs each ready
+   task's nominal case before advancing into search. A one-worker cap keeps
+   this screen sequential in execution, while round-robin admission chooses
+   the three intended tasks. Default uncapped behavior was left unchanged.
+3. **Wrong Python environment:** the evaluator, model server, and simulator
+   have different dependencies. Selecting the existing model interpreter and
+   simulator Conda environment fixed the probes without reinstalling packages
+   or changing the checkpoint.
+4. **Remote access:** the retry used the hotspot's freshly checked source
+   address in its narrow SSH rule, and credentialed access worked. This is a
+   successful recovery, not proof of the hotel network's exact fault.
+
+The Fabric Manager warning was **not fixed**: CUDA and real episodes passed
+despite it on this single GPU. The viewer's global-versus-local task filename
+mismatch is also **not fixed yet**; it cannot be described as missing recording.
+No additional billable run is implied by delivering the saved media.

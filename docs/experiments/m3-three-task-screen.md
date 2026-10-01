@@ -74,6 +74,15 @@ Portfolio presentation remains M5; current viewer task-global media lookup
 does not yet match the harness's task-local media filenames for IDs 1 and 2.
 Their recordings are present, not missing.
 
+### Local media handoff
+
+The ignored local `artifacts/m3-three-task-screen-media-20261001.zip` contains
+all three MP4s, all three JSONL traces in distinct case directories, and the
+portfolio summary. Original evidence remains unchanged in the artifact root
+above. The bundle excludes model/server/control logs and does not publish
+anything. The three recordings cover nominal compatibility only, not the
+pending full multi-job find → confirm → reduce comparison.
+
 ## Frozen scope and local proof
 
 Jethro selected LIBERO Object task IDs `(0, 1, 2)` as nominal-screening candidates and approved a maximum **US$3 incremental spend / 60 minutes VM-on** on the existing L40S VM. The run would use only the first nominal episode of each task (`episodes=3` shared attempt ceiling), no occlusion search, and no benchmark speedup claim. Commit `9344c62` added an exact three-case dry-run regression. The Windows suite passed 345 tests (4 skips); the focused WSL lifecycle/driver suites passed 66.
