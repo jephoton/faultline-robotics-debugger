@@ -80,7 +80,8 @@ def _launched_attempts(case_ids: list[str], durable: Mapping[str, Any]) -> int:
 def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path | str,
                   project_root: Path | str, evaluator: Callable[..., Any], limits: PortfolioLimits,
                   monotonic_clock: Callable[[], float] = time.monotonic,
-                  interrupt_event: threading.Event | None = None, dry_run: bool = False) -> dict[str, Any]:
+                  interrupt_event: threading.Event | None = None, dry_run: bool = False,
+                  max_workers: int | None = None) -> dict[str, Any]:
     """Run global durable waves; a bad round stops all jobs fail-closed.
 
     This core intentionally has no production evaluator or resume path.  The
@@ -97,6 +98,11 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         raise ValueError("interrupt_event must be a threading.Event")
     if not isinstance(dry_run, bool):
         raise ValueError("dry_run must be a boolean")
+    if max_workers is not None and (isinstance(max_workers, bool)
+                                    or not isinstance(max_workers, int)
+                                    or max_workers not in MEASURED_SECONDS):
+        raise ValueError("max_workers must be one of 1, 2, or 4")
+    worker_cap = 1 if mode == "sequential-jobs" else max_workers
     root = Path(results_root).resolve()
     project = Path(project_root).resolve()
     session = root / f"portfolio-{mode}-{manifest.config_hash[:12]}"
@@ -117,6 +123,7 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         "manifest": manifest.to_mapping(), "manifest_hash": manifest.config_hash,
         "dry_run": dry_run, "synthetic": dry_run,
         "execution_kind": "dry_run" if dry_run else "live",
+        "max_workers": worker_cap,
         "limits": asdict(limits), "cost_basis": "warm elapsed seconds times one full VM rate; not billed allocation cost",
         "waves": [], "jobs": {}, "physical_attempts": 0, "valid_episodes": 0,
         "invalid_attempts": 0, "uncertain_attempts": 0, "elapsed_seconds": 0.0,
@@ -195,14 +202,21 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
                 ready[job_id] = None; continue
             pending = flow.pending(search_limit=1 if flow.phase == "search" else None)
             ready[job_id] = tuple(case for case in pending if case not in buffered[job_id])
-        wave = choose_wave(ready, cursor=cursor, slots=1 if mode == "sequential-jobs" else 4,
+        # A bounded adaptive screen must first obtain one nominal outcome for
+        # every frozen job; otherwise an early task can consume the next slot
+        # with search work before a later task has been screened.
+        if any(flows[job_id].phase == "nominal" and cases for job_id, cases in ready.items()):
+            ready = {job_id: cases if flows[job_id].phase == "nominal" else None
+                     for job_id, cases in ready.items()}
+        wave = choose_wave(ready, cursor=cursor, slots=1 if mode == "sequential-jobs" else (max_workers or 4),
                            bounds=PortfolioBounds(remaining_episodes, remaining_seconds, remaining_dollars))
         cursor = wave.next_cursor
         if not wave.requests:
             summary["stop_reason"] = "no_ready_admitted_work"; break
         worker_choice = choose_workers(ready_count=len(wave.requests), seconds_left=remaining_seconds,
             dollars_left=remaining_dollars, hourly_rate=limits.hourly_rate,
-            measured_seconds=({1: MEASURED_SECONDS[1]} if mode == "sequential-jobs" else MEASURED_SECONDS),
+            measured_seconds={workers: seconds for workers, seconds in MEASURED_SECONDS.items()
+                              if worker_cap is None or workers <= worker_cap},
             shutdown_reserve_seconds=SHUTDOWN_RESERVE_SECONDS)
         if worker_choice.workers == 0:
             summary["stop_reason"] = "shared_budget_exhausted"; break

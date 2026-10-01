@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,6 +20,33 @@ def manifest_mapping():
 
 
 class PortfolioCliTests(unittest.TestCase):
+    def test_main_accepts_manifest_argument_and_adaptive_worker_cap(self):
+        """The installed command boundary must exercise the same contract as Nebius."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(manifest_mapping()), encoding="utf-8")
+            environment = os.environ.copy()
+            source_root = str(SOURCE_ROOT.resolve())
+            environment["PYTHONPATH"] = source_root + os.pathsep + environment.get("PYTHONPATH", "")
+            completed = subprocess.run([
+                sys.executable, str((Path(__file__).parents[1] / "scripts" / "run_diagnostic_portfolio.py").resolve()),
+                "--manifest", str(manifest), "--mode", "adaptive-portfolio",
+                "--results-root", str(root / "results"), "--upstream-root", str(root),
+                "--project-root", str(Path(__file__).parents[1].resolve()), "--episodes", "3",
+                "--seconds", "600", "--estimated-usd", "10", "--hourly-rate", "1",
+                "--max-workers", "1", "--dry-run",
+            ], cwd=str(Path(__file__).parents[1].resolve()), env=environment,
+               text=True, capture_output=True, check=False, timeout=30)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            output = json.loads(completed.stdout)
+            self.assertEqual("partial", output["status"])
+            saved = json.loads(Path(output["summary"]).read_text(encoding="utf-8"))
+            self.assertEqual(1, saved["max_workers"])
+            self.assertEqual(["task-00--nominal-01", "task-01--nominal-01", "task-02--nominal-01"],
+                             [result["case_id"]
+                              for wave in saved["waves"] for result in wave["results"]])
+
     def test_load_manifest_requires_exact_frozen_mapping(self):
         from scripts.run_diagnostic_portfolio import load_manifest
         with tempfile.TemporaryDirectory() as temporary:

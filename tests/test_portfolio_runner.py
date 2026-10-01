@@ -33,6 +33,58 @@ class FakeEvaluator:
 
 
 class PortfolioRunnerTests(unittest.TestCase):
+    def test_adaptive_worker_cap_one_round_robins_the_three_nominal_jobs(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        evaluator = FakeEvaluator()
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                    project_root=Path(__file__).parents[1], evaluator=evaluator,
+                                    limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1),
+                                    max_workers=1)
+        self.assertEqual(1, summary["max_workers"])
+        self.assertEqual(["task-00--nominal-01", "task-01--nominal-01", "task-02--nominal-01"],
+                         [request.case_id for request in evaluator.requests])
+        self.assertEqual(3, summary["physical_attempts"])
+        self.assertFalse(any("search" in request.case_id for request in evaluator.requests))
+        self.assertLessEqual(summary["max_observed_evaluator_calls"], 1)
+
+    def test_adaptive_worker_cap_two_limits_first_wave_and_preserves_all_nominals(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        evaluator = FakeEvaluator()
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=Path(temporary),
+                                    project_root=Path(__file__).parents[1], evaluator=evaluator,
+                                    limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1),
+                                    max_workers=2)
+        self.assertEqual(2, summary["max_workers"])
+        self.assertEqual([["task-00--nominal-01", "task-01--nominal-01"], ["task-02--nominal-01"]],
+                         [[request["job_id"] + "--" + request["case_id"] for request in wave["requests"]]
+                          for wave in summary["waves"]])
+        self.assertEqual(3, summary["physical_attempts"])
+        self.assertFalse(any("search" in request.case_id for request in evaluator.requests))
+        self.assertLessEqual(summary["max_observed_evaluator_calls"], 2)
+
+    def test_invalid_worker_caps_fail_before_creating_a_session(self):
+        from robot_debug.portfolio_manifest import PortfolioManifest
+        from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio
+        manifest = PortfolioManifest(suite="libero_object", task_ids=(0, 1, 2), seed=7,
+                                     family="agentview_rect_occlusion")
+        for cap in (0, 3, 5, True, 1.0):
+            with self.subTest(cap=cap), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                with self.assertRaisesRegex(ValueError, "max_workers"):
+                    run_portfolio(manifest=manifest, mode="adaptive-portfolio", results_root=root,
+                                  project_root=Path(__file__).parents[1], evaluator=FakeEvaluator(),
+                                  limits=PortfolioLimits(episodes=3, seconds=600, estimated_usd=10, hourly_rate=1),
+                                  max_workers=cap)
+                self.assertEqual([], list(root.iterdir()))
+
     def test_runner_persists_atomic_dry_run_contract(self):
         from robot_debug.portfolio_manifest import PortfolioManifest
         from robot_debug.portfolio_runner import PortfolioLimits, run_portfolio

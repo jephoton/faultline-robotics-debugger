@@ -102,14 +102,16 @@ def dry_run_evaluator() -> Callable[..., dict[str, Any]]:
 def run_cli(*, manifest_path: Path | str, mode: str, results_root: Path | str,
             upstream_root: Path | str, project_root: Path | str, episodes: int,
             seconds: float, estimated_usd: float, hourly_rate: float, dry_run: bool,
-            interrupt_event: threading.Event | None = None) -> dict[str, Any]:
+            interrupt_event: threading.Event | None = None,
+            max_workers: int | None = None) -> dict[str, Any]:
     manifest = load_manifest(manifest_path)
     evaluator = (dry_run_evaluator() if dry_run else
                  production_evaluator(upstream_root, {job.job_id: job.task_id for job in manifest.jobs}))
     summary = run_portfolio(manifest=manifest, mode=mode, results_root=results_root,
-                            project_root=project_root, evaluator=evaluator,
-                            limits=PortfolioLimits(episodes, seconds, estimated_usd, hourly_rate),
-                            interrupt_event=interrupt_event, dry_run=dry_run)
+                             project_root=project_root, evaluator=evaluator,
+                             limits=PortfolioLimits(episodes, seconds, estimated_usd, hourly_rate),
+                             interrupt_event=interrupt_event, dry_run=dry_run,
+                             max_workers=max_workers)
     return summary
 
 
@@ -121,12 +123,18 @@ def main() -> None:
     parser.add_argument("--project-root", required=True, type=Path); parser.add_argument("--episodes", required=True, type=int)
     parser.add_argument("--seconds", required=True, type=float); parser.add_argument("--estimated-usd", required=True, type=float)
     parser.add_argument("--hourly-rate", required=True, type=float); parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--max-workers", type=int, default=None)
     args = parser.parse_args(); interrupt_event = threading.Event(); previous: dict[int, Any] = {}
     if os.name == "posix" and threading.current_thread() is threading.main_thread():
         def request_interrupt(_signum: int, _frame: Any) -> None: interrupt_event.set()
         for signum in (signal.SIGINT, signal.SIGTERM): previous[signum] = signal.signal(signum, request_interrupt)
     try:
-        summary = run_cli(**vars(args), interrupt_event=interrupt_event)
+        summary = run_cli(manifest_path=args.manifest, mode=args.mode,
+                          results_root=args.results_root, upstream_root=args.upstream_root,
+                          project_root=args.project_root, episodes=args.episodes,
+                          seconds=args.seconds, estimated_usd=args.estimated_usd,
+                          hourly_rate=args.hourly_rate, dry_run=args.dry_run,
+                          max_workers=args.max_workers, interrupt_event=interrupt_event)
     finally:
         for signum, handler in previous.items(): signal.signal(signum, handler)
     print(json.dumps({"summary": str(args.results_root / summary["session_id"] / "portfolio_summary.json"),
