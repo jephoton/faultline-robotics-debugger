@@ -425,9 +425,18 @@ No further paid work is implied by local implementation.
 The next scoped [live portfolio comparison plan](docs/superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
 preserves the successful H100/model/simulator configuration and pairs whole-job
 sequential execution with a two-evaluator adaptive portfolio. Jethro requested
-autonomy through recovery of all videos/traces; a new US$8/90-minute numeric
-cap is approved for one start and temporary-resource cleanup. The plan includes matched bounds,
-independent evidence review, early stop and exact temporary-resource cleanup.
+autonomy through recovery of all videos/traces. The approved US$8/90-minute
+one-start allocation was interrupted during startup before either comparison
+command launched: zero new episodes, videos or traces. The watchdog confirmed
+STOPPED within 90 minutes; temporary resources were deleted and independently
+verified on resumption. The three-hour storage deadline was missed. See the
+[interruption record](docs/experiments/m3-portfolio-comparison.md). The one-start
+authority is exhausted; another paid attempt requires balance/billing checks,
+a new numeric cap, and review of an interruption-safe execution controller.
+
+**Next local task: cool project name brainstorming.** Keep the final name a
+user decision; no cloud compute is needed. The [milestone commit audit](docs/milestone-commit-audit.md)
+records M1/M2/M3/M4 counts of 13/38/132/17 at frozen checkpoint `7d08e01`.
 Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
 repository audit are explicit submission gates after M3, as Jethro requested.

@@ -184,13 +184,29 @@ sequential/adaptive comparison, not end at media packaging for the nominal
 screen. The [new execution plan](../superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
 preserves the working H100 stack and proposes US$8 total/90 minutes/one start,
 with identical per-mode bounds and adaptive cap 2. Jethro approved US$8/90
-minutes/one start and temporary-resource cleanup. No new resources have been
-created yet. Independent review caught the active-evaluator timeout tail:
+minutes/one start and temporary-resource cleanup. This allocation was interrupted
+during startup before guest execution: zero comparison episodes or new media.
+The watchdog confirmed STOPPED within 90 minutes; temporary clone/managed disk,
+snapshot, ingress rule and scheduled guard were subsequently removed, with
+fresh lists verifying only the original stopped VM/ready disk remain. The
+three-hour storage deadline was missed during interruption. Independent review caught the active-evaluator timeout tail:
 use 1800 seconds/US$2.25 per mode, reserving five minutes per active tail
-and copy/stop time. Latest console balance is US$8.52,
-active/no expiry displayed, not full billing reconciliation. Main through
-`b4b43c4` is pushed and remote SHA verified. Preserve all valid videos/traces,
-including failure episodes; use the existing report's fail-closed speedup gate.
+and copy/stop time. Preflight console balance was US$8.52,
+active/no expiry displayed, not a current balance or billing reconciliation.
+The interrupted allocation's compute envelope is about US$7.13 including
+assumed tax, before storage, not posted billing. Plan checkpoint `7d08e01` is
+pushed. See [the interruption record](../experiments/m3-portfolio-comparison.md).
+The one-start authority is exhausted. Before another paid start, review an
+interruption-safe execution controller locally, check balance/billing, and
+obtain a new numeric cap. The guard is a cost brake, not a workflow driver.
+Preserve all valid videos/traces, including failure episodes; use the existing
+report's fail-closed speedup gate.
+
+**Next local task: cool project name brainstorming**, requested by Jethro.
+Final naming remains his decision and requires no paid compute. The
+[commit audit](../milestone-commit-audit.md) records M1/M2/M3/M4 as
+13/38/132/17 at frozen checkpoint `7d08e01`; these are scope-attributed
+non-merge commits, not hours worked.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work

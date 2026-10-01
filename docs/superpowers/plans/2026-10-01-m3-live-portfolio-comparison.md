@@ -8,6 +8,12 @@
 
 **Tech Stack:** Existing Python 3.11 portfolio CLI/reporter, pinned GR00T N1.7 LIBERO checkpoint, pinned simulator container, Nebius CLI, Windows Task Scheduler exact-VM watchdog, guest shutdown backup, JSON/JSONL and MP4 evidence.
 
+**Latest execution status:** Interrupted after the sole VM start and before
+guest setup or either diagnosis mode. Guard independently confirmed STOPPED;
+temporary-resource cleanup is verified on resumption, but the three-hour
+storage deadline was missed. No comparison videos/traces were produced.
+One-start authority is exhausted. See [the interruption record](../../experiments/m3-portfolio-comparison.md).
+
 ## Authority and cost boundary
 
 - Jethro requested autonomous execution through the full comparison and media recovery, minimal configuration changes, bug documentation, and Git push. The working code/documents through `b4b43c4` were pushed and remote main was read back at that exact commit.

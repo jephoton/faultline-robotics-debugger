@@ -104,3 +104,25 @@ The Fabric Manager warning was **not fixed**: CUDA and real episodes passed
 despite it on this single GPU. The viewer's global-versus-local task filename
 mismatch is also **not fixed yet**; it cannot be described as missing recording.
 No additional billable run is implied by delivering the saved media.
+
+## October 1 comparison interrupted before guest execution
+
+The assistant turn was interrupted after the new H100 start request but
+before source transfer or launch of the prepared paired runner. The scheduled
+watchdog remained independent of the turn: after two CLI timeout failures,
+it recorded STOPPED confirmation inside the 90-minute boundary. No diagnosis
+ran, so no comparison media exists. The temporary-storage cleanup deadline
+was missed until the turn resumed and exact-resource deletion was verified.
+
+**Why:** the safety controller persisted, but the workflow controller did
+not exist yet. A watchdog is a brake, not a driver: it can stop spending but
+cannot finish unissued model/evaluator commands. This is not a concurrency,
+policy, or simulator defect. Guest shutdown logs do not establish the cause
+of the two workstation CLI timeouts.
+
+**Resolved:** independently rechecked STOPPED, recovered serial/lifecycle
+evidence, and deleted only the approved temporary resources. **Not resolved:**
+workflow continuity across assistant interruption. Another paid run requires
+a separately planned/reviewed persistent execution owner, fresh balance/cap,
+and no change to the currently working model/simulator configuration.
+See [the interruption record](experiments/m3-portfolio-comparison.md).

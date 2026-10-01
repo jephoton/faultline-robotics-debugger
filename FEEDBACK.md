@@ -94,6 +94,20 @@ before resource creation and is separate from the remote access issue.
 
 ## Maintenance boundary
 
+### October 1 portfolio startup interruption
+
+AI Cloud successfully started the separately approved snapshot-backed H100
+clone. No model or evaluator was launched before the assistant turn was
+interrupted. The independent exact-VM watchdog later confirmed STOPPED within
+the allocation limit, after two observed CLI-call timeouts; their cause is
+unestablished. Serial logs and resource read-back supported recovery and
+verified cleanup. The failure to advance the workflow, idle allocated time,
+and delayed temporary-storage deletion are orchestration/control-layer
+failures on our side, not demonstrated Nebius or NVIDIA defects.
+No robot/HPC result or model feedback follows from this allocation. Estimated
+compute is roughly US$7.13 including assumed tax, before separate storage;
+posted billing remains unreconciled. See [the experiment record](docs/experiments/m3-portfolio-comparison.md).
+
 ### October 1 hotspot H100 retry: model execution completed
 
 Snapshot cloning preserved the cached model/simulator environment and the
