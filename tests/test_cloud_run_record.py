@@ -1,0 +1,280 @@
+import copy
+import hashlib
+import json
+import os
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+from robot_debug.cloud_run_record import (
+    CloudRunRecord,
+    RecordError,
+    RunStore,
+    load_record,
+)
+
+
+NOW = datetime(2030, 1, 1, 0, 0, tzinfo=timezone.utc)
+
+
+class RecordFixture(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.run_dir = self.root / "runs" / "local-example"
+        self.run_dir.mkdir(parents=True)
+        self.bundle = self.root / "source.bundle"
+        self.bundle.write_bytes(b"synthetic source bundle\n")
+        self.manifest = self.root / "manifest.json"
+        self.manifest.write_text('{"fixture":true}\n', encoding="utf-8")
+        self.known_hosts = self.root / "known_hosts"
+        self.known_hosts.write_text("synthetic host key\n", encoding="utf-8")
+        self.identity = self.root / "identity"
+        self.identity.write_text("synthetic key placeholder\n", encoding="utf-8")
+        self.data = self.valid_data()
+        self.record_path = self.root / "record.json"
+        self.write_record()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def valid_data(self):
+        return {
+            "schema_version": 1,
+            "run_label": "local-example",
+            "project_id": "project-example",
+            "temporary": {
+                "instance_id": "computeinstance-clone",
+                "disk_id": "computedisk-clone",
+                "snapshot_id": "computedisksnapshot-clone",
+                "ssh_rule_id": "vpcsecurityrule-clone",
+            },
+            "protected": {
+                "instance_id": "computeinstance-original",
+                "disk_id": "computedisk-original",
+            },
+            "approval": {
+                "reference": "local-test-only",
+                "max_total_usd": 8.0,
+                "max_starts": 1,
+                "max_runtime_seconds": 5400,
+                "temporary_cleanup": True,
+            },
+            "deadlines": {
+                "start_not_after_utc": "2030-01-01T00:10:00Z",
+                "stop_request_utc": "2030-01-01T01:27:00Z",
+                "stop_confirm_by_utc": "2030-01-01T01:30:00Z",
+                "storage_cleanup_utc": "2030-01-01T03:00:00Z",
+            },
+            "paths": {
+                "run_dir": str(self.run_dir),
+                "source_bundle": str(self.bundle),
+                "manifest": str(self.manifest),
+                "known_hosts": str(self.known_hosts),
+                "ssh_identity_file": str(self.identity),
+                "guest_session": "/home/robot/local-example",
+                "wsl_cli": "/home/local/.nebius/bin/nebius",
+            },
+            "pins": {
+                "source_sha": "1" * 40,
+                "bundle_sha256": hashlib.sha256(self.bundle.read_bytes()).hexdigest(),
+                "manifest_sha256": hashlib.sha256(self.manifest.read_bytes()).hexdigest(),
+                "upstream_sha": "35f1200eb15608aa898f727a3722f7eef889c6cd",
+                "checkpoint_id": "nvidia/gr00t17-lerobot-libero_object-640",
+                "checkpoint_revision": "1499db357f6ca3762b56c2e8c00b530eb9a09444",
+                "simulator_digest": "sha256:" + "d" * 64,
+            },
+            "ssh": {
+                "user": "robot",
+                "host_key_sha256": "SHA256:" + "A" * 43,
+                "port": 22,
+            },
+            "preflight": {
+                "checked_at_utc": "2030-01-01T00:00:00Z",
+                "balance_usd": 10.0,
+                "pending_usd": 0.0,
+                "estimated_total_usd": 7.55,
+                "hourly_rate_usd": 4.5,
+                "expiry_checked": True,
+                "quota_checked": True,
+                "capacity_checked": True,
+                "billing_checked": True,
+            },
+        }
+
+    def write_record(self):
+        self.record_path.write_text(json.dumps(self.data), encoding="utf-8")
+
+    def load(self, **kwargs):
+        return load_record(
+            self.record_path,
+            control_root=self.root,
+            now_utc=NOW,
+            **kwargs,
+        )
+
+    def assert_invalid(self):
+        self.write_record()
+        with self.assertRaises(RecordError):
+            self.load()
+
+
+class LoadRecordTests(RecordFixture):
+    def test_loads_valid_synthetic_record_and_canonical_digest(self):
+        record = self.load()
+        self.assertIsInstance(record, CloudRunRecord)
+        canonical = json.dumps(self.data, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(record.digest, hashlib.sha256(canonical).hexdigest())
+        self.assertEqual(record.paths["run_dir"], str(self.run_dir))
+
+    def test_rejects_unknown_top_level_and_nested_secret_fields(self):
+        self.data["command"] = "nebius instance start"
+        self.assert_invalid()
+        del self.data["command"]
+        self.data["ssh"]["private_key"] = "secret"
+        self.assert_invalid()
+
+    def test_rejects_wrong_schema_version(self):
+        self.data["schema_version"] = True
+        self.assert_invalid()
+
+    def test_rejects_bool_and_nonfinite_numbers(self):
+        self.data["approval"]["max_total_usd"] = True
+        self.assert_invalid()
+        self.data["approval"]["max_total_usd"] = float("nan")
+        self.assert_invalid()
+        self.data["approval"]["max_total_usd"] = 8.0
+        self.data["preflight"]["pending_usd"] = float("inf")
+        self.assert_invalid()
+
+    def test_rejects_malformed_service_ids_and_digests(self):
+        for field, value in (("instance_id", "computeinstance-../x"), ("disk_id", "wrong-id")):
+            self.data["temporary"][field] = value
+            self.assert_invalid()
+            self.data = self.valid_data()
+        self.data["pins"]["source_sha"] = "g" * 40
+        self.assert_invalid()
+
+    def test_rejects_collision_with_protected_instance_or_disk(self):
+        self.data["temporary"]["instance_id"] = self.data["protected"]["instance_id"]
+        self.assert_invalid()
+
+    def test_rejects_paths_outside_required_containment(self):
+        self.data["paths"]["run_dir"] = str(self.root)
+        self.assert_invalid()
+        self.data = self.valid_data()
+        self.data["paths"]["source_bundle"] = str(self.root.parent / "outside.bundle")
+        self.assert_invalid()
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_rejects_symlinked_writable_run_path(self):
+        real = self.root / "real"
+        real.mkdir()
+        link = self.root / "linked"
+        try:
+            link.symlink_to(real, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlink creation is unavailable")
+        self.data["paths"]["run_dir"] = str(link / "run")
+        (link / "run").mkdir()
+        self.assert_invalid()
+
+    def test_rejects_expired_unordered_and_runtime_incoherent_deadlines(self):
+        self.data["deadlines"]["start_not_after_utc"] = "2029-12-31T23:59:59Z"
+        self.assert_invalid()
+        self.data = self.valid_data()
+        self.data["deadlines"]["stop_request_utc"] = "2030-01-01T00:09:00Z"
+        self.assert_invalid()
+        self.data = self.valid_data()
+        self.data["deadlines"]["stop_request_utc"] = "2030-01-01T01:41:00Z"
+        self.data["deadlines"]["stop_confirm_by_utc"] = "2030-01-01T01:45:00Z"
+        self.assert_invalid()
+
+    def test_preflight_must_be_recent_and_cover_estimate(self):
+        self.data["preflight"]["checked_at_utc"] = "2029-12-31T23:49:59Z"
+        self.assert_invalid()
+        self.data = self.valid_data()
+        self.data["preflight"]["balance_usd"] = 7.0
+        self.assert_invalid()
+        self.data = self.valid_data()
+        self.data["preflight"]["billing_checked"] = False
+        self.assert_invalid()
+
+    def test_require_future_false_allows_expired_inspection_only(self):
+        self.data["deadlines"]["start_not_after_utc"] = "2029-12-31T23:59:59Z"
+        self.data["deadlines"]["stop_request_utc"] = "2030-01-01T01:27:00Z"
+        self.write_record()
+        self.bundle.write_bytes(b"changed or unavailable")
+        self.manifest.unlink()
+        self.identity.unlink()
+        record = self.load(require_future=False)
+        self.assertIsInstance(record, CloudRunRecord)
+
+    def test_nested_record_data_is_immutable_and_files_are_rehashed(self):
+        record = self.load()
+        with self.assertRaises(TypeError):
+            record.paths["run_dir"] = "changed"
+        with self.assertRaises(TypeError):
+            record.raw["temporary"]["instance_id"] = "changed"
+        self.bundle.write_bytes(b"tampered")
+        with self.assertRaises(RecordError):
+            self.load()
+
+    def test_rejects_duplicate_json_keys(self):
+        self.record_path.write_text('{"schema_version":1,"schema_version":1}', encoding="utf-8")
+        with self.assertRaises(RecordError):
+            self.load()
+
+
+class RunStoreTests(RecordFixture):
+    def setUp(self):
+        super().setUp()
+        self.store = RunStore(self.run_dir)
+        self.store.create("a" * 64)
+
+    def test_create_is_exclusive_and_identity_digest_is_stable(self):
+        with self.assertRaises(RecordError):
+            self.store.create("b" * 64)
+        self.assertEqual(self.store.record_digest, "a" * 64)
+
+    def test_lease_is_exclusive_and_release_requires_owner(self):
+        self.store.acquire_lease("controller-a")
+        with self.assertRaises(RecordError):
+            self.store.acquire_lease("controller-a")
+        with self.assertRaises(RecordError):
+            self.store.acquire_lease("controller-b")
+        with self.assertRaises(RecordError):
+            self.store.release_lease("controller-b")
+        self.store.release_lease("controller-a")
+        self.store.acquire_lease("controller-b")
+        self.store.release_lease("controller-b")
+
+    def test_append_is_durable_and_rejects_unsafe_or_unknown_fields(self):
+        self.store.append("controller_ready", owner_id="controller-a", phase="waiting_release")
+        self.assertEqual(self.store.read_events()[0]["event"], "controller_ready")
+        with self.assertRaises(RecordError):
+            self.store.append("controller_ready", command="nebius start")
+        with self.assertRaises(RecordError):
+            self.store.append("controller_ready", stderr="Authorization: token")
+        self.store.close()
+        with self.store.events_path.open("ab") as stream:
+            stream.write(b'{"event":"truncated')
+        self.assertEqual(len(self.store.read_events()), 1)
+
+    def test_read_rejects_corruption_before_truncated_tail(self):
+        self.store.events_path.write_bytes(b"{bad}\n{\"event\":\"truncated")
+        with self.assertRaises(RecordError):
+            self.store.read_events()
+
+    def test_snapshot_replacement_failure_preserves_previous_status(self):
+        self.store.snapshot({"phase": "ready", "record_digest": "a" * 64})
+        with patch("robot_debug.cloud_run_record.os.replace", side_effect=OSError("simulated interruption")):
+            with self.assertRaises(OSError):
+                self.store.snapshot({"phase": "partial", "record_digest": "a" * 64})
+        self.assertEqual(self.store.read_status()["phase"], "ready")
+
+
+if __name__ == "__main__":
+    unittest.main()
