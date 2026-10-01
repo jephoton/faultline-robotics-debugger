@@ -203,10 +203,14 @@ Preserve all valid videos/traces, including failure episodes; use the existing
 report's fail-closed speedup gate.
 
 The user approved the goal of one reusable launcher, not changing the robot
-configuration on each interruption. A [proposed launcher design](../superpowers/specs/2026-10-01-m3-reusable-launcher-design.md)
-recommends a scheduled workstation controller through setup plus the existing
-guest pair, reusing the watchdog. Topology/spec review precedes implementation
-planning; no cloud start is authorized. It survives chat interruption, not
+configuration on each interruption. The [accepted launcher design](../superpowers/specs/2026-10-01-m3-reusable-launcher-design.md)
+uses a scheduled workstation controller through setup plus the existing
+guest pair, reusing the watchdog. The [implementation plan](../superpowers/plans/2026-10-01-m3-reusable-launcher.md)
+is committed; local record implementation is delegated in the reused clean M3
+worktree. Independent review exposed the storage-deadline gap if the controller
+dies; the separate cleanup-task versus manual-recovery choice is awaiting
+Jethro, while independent local record work proceeds. No cloud start is
+authorized. It survives chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
 execution blocker; preserve experiment settings.
 

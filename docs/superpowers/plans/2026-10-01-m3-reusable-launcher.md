@@ -12,6 +12,20 @@
 
 ## Owners, concurrency and review
 
+**Independent review gate:** Task 1 proceeds independently. Before controller
+integration, settle storage cleanup after controller death: the stop-only
+watchdog cannot guarantee the snapshot/disk deadline. Root asked Jethro to
+choose a separately prearmed exact-temporary-resource cleanup task versus
+explicit manual recovery risk. Neither is silently assumed approved. A
+confirmed watchdog stop is evidence, not a guarantee that every future stop
+succeeds; exhausted retries report unconfirmed stop. Human emergency exact-ID
+stop remains allowed; controller observes it and closes admission.
+
+Historical `status` inspection validates record shape/digest without requiring
+accessible key/bundle files or current hashes of those inputs. Mutating
+prepare/release validates their existence, trust and hashes separately. The
+`require_future=False` loader mode must support this distinction.
+
 Root owns this plan, integration, user checkpoints and any future external lifecycle. Reuse the clean attached M3 worktree on a new `codex/` branch based on this committed plan; do not alter main code during agent execution. Terra is preferred but is not exposed by the subagent API: use available `gpt-6-luna` for isolated record work, and balanced `gpt-6-sol` for multi-file controller/adapter work. Root's active model is not changed.
 
 One builder owns code/tests at a time. A read-only contract reviewer analyzes fault cases alongside Task 1, then checks each task against the approved spec. Only after spec review passes, a separate code-quality reviewer checks implementation/tests. Both reviews must pass before dependent tasks. Fresh builders receive full task text, previous accepted interfaces and evidence. No overlapping writes or agent cloud credentials.
