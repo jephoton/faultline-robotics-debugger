@@ -10,6 +10,8 @@
 
 **Authority boundary:** Jethro accepted H100 snapshot migration as the next design. This plan does **not** authorize creating a billable snapshot or VM, starting compute, extending the former US$3 cap, deleting the original VM/disk, changing task/family/model, public pushing, or claiming an HPC speedup. The numeric cap and retention period are a new red decision after current price/account checks.
 
+**October 1 approval:** Jethro accepted the US$7.50 bounded attempt cap, one H100 start with at most 60 minutes VM-on, and deletion of only the temporary H100 clone/managed disk and snapshot after evidence copy within 24 hours. The original L40S VM/disk remain retained. This approval supersedes the pending-cap wording below; refresh live readiness before spending. CLI access was renewed for this attempt.
+
 ## Task 1 — Read-only financial and technical preflight (green)
 
 **Files:** `docs/experiments/m3-three-task-screen.md`, `FEEDBACK.md` only for new observed provider behavior.
