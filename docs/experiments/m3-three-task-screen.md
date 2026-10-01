@@ -1,6 +1,78 @@
 # M3 three-task nominal screen: allocation attempts
 
-**Status (October 1, 2026): two L40S placement failures followed by an H100 clone that booted but remained unreachable over SSH. No episode ran.** These are infrastructure outcomes, not evidence about task IDs 0, 1, or 2 or the portfolio scheduler.
+**Status (October 1, 2026): hotspot H100 retry completed all three nominal cases successfully.** Earlier placement/access failures below are retained as history, not robot-policy failures. This screen verifies task mapping and compatibility, not nominal reliability or portfolio speedup.
+
+## Completed hotspot retry
+
+Jethro approved a new US$6 total / one H100 start / 45-minute maximum and
+cleanup of only the temporary clone, its managed disk, and snapshot. Fresh
+preflight showed US$9.53 balance, no displayed expiry, US$4.50/hour H100
+compute before tax, and the original L40S VM stopped with its disk ready.
+The snapshot-backed clone was created stopped and an exact-VM scheduled
+watchdog was durably armed before start, with a 10:04 UTC deadline.
+
+The start operation began at 09:21:36 UTC, completed at 09:23:23, and
+cloud-init completed at 09:23:52. Credentialed SSH succeeded at 09:23:55
+on the hotspot using a fresh source-restricted ingress rule. This resolves
+access for this attempt; without a matched hotel-network comparison it does
+not prove the earlier network's cause.
+
+The guest reported an NVIDIA H100 80GB HBM3, driver 580.173.02, and passed
+CUDA allocation, matrix multiplication, and synchronization. Fabric Manager
+still reported a failed Pre-NVL5/NVSwitch "nothing to do" startup path. Actual
+single-GPU inference and episodes succeeded despite that warning; the service
+was not repaired and no general harmlessness claim is made.
+
+Runtime LIBERO catalog inspection inside the pinned simulator container
+verified the three object-to-basket tasks. The offline checkpoint-resolution
+log recorded cached `nvidia/gr00t17-lerobot-libero_object-640` revision
+`1499db357f6ca3762b56c2e8c00b530eb9a09444`; the model-server log recorded
+loading that checkpoint ID using GR00T N1.7, not a separate hash attestation.
+Upstream harness commit was `35f1200eb15608aa898f727a3722f7eef889c6cd`;
+the LIBERO image digest was
+`sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0`.
+Reviewed project source was `797df18`. A local CLI contract repair added an
+explicit one-worker cap and nominal-first capped adaptive admission before
+any VM start; see [the development log](../dev-log.md).
+
+| LIBERO Object task ID | Object placed in basket | Outcome | Steps | Episode seconds |
+| --- | --- | --- | --- | --- |
+| 0 | Alphabet soup | Success | 144 | 30.793 |
+| 1 | Cream cheese | Success | 124 | 21.553 |
+| 2 | Salad dressing | Success | 115 | 21.024 |
+
+All used seed 7 and initial-state index 0, without perturbation. The real
+adaptive-portfolio command used `--max-workers 1 --episodes 3`. Independent
+artifact review reconciled exactly three terminal nominal attempts, three
+valid episodes, zero invalid/uncertain attempts, and observed concurrency one.
+Every episode has a nonempty MP4 and JSONL trace ending in success. No search,
+confirmation, or reduction attempt occurred. Exit 1 with
+`shared_budget_exhausted` and `certified=false` is the expected intentionally
+partial diagnostic session, not an invalid screen or completed diagnosis.
+
+Warm runner elapsed time was 93.4031 seconds and its compute estimate was
+US$0.116754 before tax. That excludes cold startup/model loading. Stop was
+requested at 09:36:33 UTC and completed at 09:38:07; independent read-back
+confirmed STOPPED. The approximately 16m31s start-to-stop operation envelope
+implies about US$1.35 compute including assumed 9% tax, before separate storage.
+Neither figure is posted billing. Evidence was copied before stopping into
+ignored local `artifacts/m3-hotspot-screen-live-20261001/`.
+
+After evidence recovery, the temporary VM/managed disk, snapshot, narrow SSH
+rule, and scheduled watchdog were removed. Fresh resource lists verified only
+the original stopped L40S VM and ready original managed disk remain, no
+snapshots remain, and the security group has only standing egress. Deleted
+temporary infrastructure is not recoverable; the original cached setup and
+local evidence are preserved. The retained original disk remains billable.
+
+**Next gate:** design a separately capped, budget-matched sequential versus
+adaptive multi-task diagnostic comparison, including repeatability controls
+for these newly screened tasks and H100-specific worker calibration. One
+successful episode per task is not a reliability estimate; historical L40S
+worker timings are not H100 calibration. This one-start approval is exhausted.
+Portfolio presentation remains M5; current viewer task-global media lookup
+does not yet match the harness's task-local media filenames for IDs 1 and 2.
+Their recordings are present, not missing.
 
 ## Frozen scope and local proof
 
@@ -34,7 +106,7 @@ The [Nebius Compute API](https://github.com/nebius/api/blob/main/nebius/compute/
 
 At the September 30 calculator rate, L40S-D was US$1.8172/hour with four advised slots at `LOW`; H100 was US$3.85/hour with medium/high advised availability. These exclude additional cloned-disk/snapshot storage and tax. The [public pricing page](https://nebius.com/prices) lists an H100 rate increase effective October 1, so refresh the calculator and cap immediately before any approved migration. The H100 option has stronger capacity evidence but changes hardware and cannot be compared directly with the previous L40S throughput measurements.
 
-## Next gate
+## Historical next gate (superseded by approved H100 attempts below)
 
 Do not count either attempt as a nominal screen or automatically retry with preemptible capacity, another GPU shape, or a different task. Decide with Jethro whether to wait for the current VM's exact shape or investigate a new resource and cache-transfer path under a separately priced cap. Before another paid start, revisit the balance/retention risk that was explicitly skipped for this retry. If the task screen eventually runs, verify served checkpoint and runtime task catalog before launching any evaluator, and interpret each task's episode separately.
 

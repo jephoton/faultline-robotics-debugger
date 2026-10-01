@@ -34,9 +34,10 @@ fault claim is justified. The clone also logged a Fabric Manager startup
 failure, not yet diagnosed or shown to block inference. The attempt was stopped
 early without an episode. See [the screen record](experiments/m3-three-task-screen.md).
 
-Independent review also found that the adaptive command has no two-worker cap
+Independent review of that earlier attempt also found that the adaptive command had no two-worker cap
 and may select four workers using historical L40S estimates. The nominal screen
-selected the existing one-worker `sequential-jobs` mode instead. Do not reuse
+proposed the existing one-worker `sequential-jobs` mode instead; the later real
+CLI check below corrected that unexecuted proposal. Do not reuse
 L40S allocation measurements as H100 performance evidence.
 
 After Jethro switched from hotel Wi-Fi to a phone hotspot on October 1,
@@ -47,3 +48,31 @@ network and does not prove Nebius reachability or establish the earlier cause;
 the temporary H100 VM was already deleted. No compute was started. The public
 egress address changed, so any future temporary ingress rule must be refreshed
 from the active network immediately before guest access.
+
+## October 1 hotspot screen: contract fixes and successful execution
+
+- A real subprocess CLI dry run caught an argparse mismatch: `manifest` was
+  passed to a function expecting `manifest_path`. It also showed sequential
+  mode's three attempts would progress task 0 into search, not screen three
+  tasks. Before VM start, regressions and independent review validated an
+  explicit `--max-workers` cap and nominal-first admission for explicitly
+  capped adaptive mode. Uncapped/default and sequential behavior are preserved.
+  Commits `b9da038` and `797df18` are integrated into main. Focused CLI/runner/
+  report tests passed 34; the Windows suite passed 349 with four platform skips.
+- First GPU/catalog probes selected the lightweight evaluator Python or
+  container system Python, which lack the model/simulator dependencies.
+  Correct model-cache Python and the pinned container's `libero` Conda
+  environment passed. Offline `uv` attempted dependency refresh; directly
+  invoking its existing cached interpreter avoided downloads. These were
+  operator environment-selection mistakes, not invalid robot episodes.
+- Hotspot SSH succeeded. Fabric Manager remained failed with the logged
+  Pre-NVL5/NVSwitch warning, but CUDA computation and all three nominal episodes
+  passed. No driver change or blanket dismissal of the service failure occurred.
+- New task-filtered harness runs name videos/traces `task0000_ep0000_*` using
+  local task ordinal zero, even when aggregate task IDs are globally 1 or 2.
+  The current viewer globs by global task ID, so those recordings are not
+  resolved there. Media were recovered and independently verified; a scoped
+  reader compatibility fix is pending. Preserve the user's one-representative-
+  nominal default, and do not broaden it into show-all navigation silently.
+
+See [the completed screen and cleanup](experiments/m3-three-task-screen.md).

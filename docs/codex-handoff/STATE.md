@@ -16,6 +16,11 @@
   The 12-candidate-attempt budget ended before proving a minimum.
 - The ignored local M4 artifact tree contains 22 aggregates, traces, MP4s,
   SQLite recordings, the summary, and the replay manifest.
+- The October 1 hotspot H100 screen passed one nominal episode each for
+  LIBERO Object IDs 0/1/2 (alphabet soup, cream cheese, salad dressing), seed 7,
+  reset index 0. Exactly three valid attempts, no invalid/uncertain attempts,
+  and three videos/traces were independently verified. This is compatibility
+  evidence, not a reliability or diagnostic-speedup result.
 
 ## Current implementation
 
@@ -66,7 +71,8 @@ implementation. M5 now includes a proposed portfolio overview in the viewer.
 M6 explicitly adds another perturbation family and exploration of
 other LIBERO suites. The former single-loop US$4/90-minute live proposal is
 paused, not authorized. The portfolio core is locally implemented; no live
-portfolio run has begun.
+full diagnostic portfolio comparison has begun. The nominal-only screen is
+complete; a separately scoped comparison remains the next material decision.
 The September 29 read-only preflight found a US$10.42 balance, the exact VM
 stopped, the same US$1.7468/hour pre-tax VM rate, and zero regular launch
 slots for its exact L40S shape (low chance). Refresh all of this and verify
@@ -85,8 +91,9 @@ It adds a frozen three-job manifest, an exact task-ID filter in the local
 and seed. The pinned upstream orchestrator otherwise truncates only a task
 prefix with `max_tasks`; `episode_indices` select reset states rather than
 tasks. Local fake-upstream adapter and config tests pass, but real LIBERO
-task IDs/instructions beyond task 0 and live selector compatibility remain
-unverified. Jethro approved the narrow adapter and the work-conserving
+task IDs/instructions beyond task 0 and live selector compatibility were
+then unverified; the later live nominal screen verified task mapping, not
+multi-worker performance. Jethro approved the narrow adapter and the work-conserving
 round-robin scheduler rule. Its pure policy is implemented and independently
 reviewed; a fairness bug under changing task readiness was caught and fixed
 before runner integration. The runner supplies all frozen manifest job keys,
@@ -100,12 +107,13 @@ CLI sessions passed a paired smoke test without a speedup claim. Windows
 Python 3.11 passed 344 tests (four POSIX-only skips); focused WSL lifecycle
 and driver tests passed 66. An independent reviewer approved the report
 claim guard. Jethro accepted task IDs `(0, 1, 2)` as nominal-screening
-candidates; their runtime catalog and nominal validity are still unverified.
+candidates; their runtime catalog and one nominal episode each were verified
+in the later hotspot retry below, not during this local checkpoint.
 The [bounded screening plan](../superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md)
 received a US$3/60-minute approval. Its September 30 first start and a later
 separately approved same-cap retry were both blocked before guest access by
 `NotEnoughResources`, despite one `LOW`-availability slot in capacity advice.
-No task episode ran, so IDs 1 and 2 remain unscreened. The VM is confirmed
+No task episode ran in those two attempts. The VM was confirmed
 `STOPPED`; temporary SSH ingress and both OS-owned guards were removed after
 verification. Jethro waived the fresh balance check for the retry, so the
 prior US$9.96 reading is not a current balance. The then-open resource choice
@@ -132,28 +140,44 @@ The snapshot-backed H100 clone reached `RUNNING`, but SSH and a Windows
 TCP/22 probe timed out despite the correct ready narrow ingress rule.
 Serial logs confirmed new guest network identity, SSH socket listening,
 cloud-init completion, and a shutdown backup; the remaining access cause
-is unresolved. Fabric Manager also failed at boot, with inference impact
-untested. No guest source transfer or robot episode occurred. The clone was
+was unresolved in that attempt. Fabric Manager also failed at boot, with
+inference impact then untested. No guest source transfer or robot episode occurred. The clone was
 stopped early and independently verified `STOPPED`; local serial/lifecycle
 evidence is retained. Cleanup is verified: temporary clone/managed disk,
 snapshot, ingress rule, and scheduled guard are removed; only the original
 stopped VM and ready disk remain.
-The original L40S VM remains stopped and untouched. No automatic paid retry
-is authorized; investigate access before proposing another bounded attempt.
+The original L40S VM remains stopped and untouched. That one-start authority
+was exhausted; the subsequent separately approved retry is recorded below.
 After switching to a phone hotspot, credential-free probes received SSH
 banners from GitHub on ports 22 and 443. This confirms outbound SSH to those
 endpoints only, not Nebius connectivity or hotel filtering. The active egress
 address changed; refresh the narrow ingress rule for any future approved run.
 The [hotspot retry plan](../superpowers/plans/2026-10-01-m3-hotspot-h100-retry.md)
-proposes a new US$6 total/45-minute/one-start cap, with a five-minute post-boot
-SSH gate and the same three nominal cases only. It is pending explicit cap
-approval. CLI/console access works, balance displays US$9.53, and focused CLI
-tests pass 7/7; no new resources were created during preparation.
-The manifest rejects unsupported family/model labels, but live preflight
-must independently verify the model server actually loaded the pinned
-checkpoint and revision.
-No portfolio episode has run; provider billing for these attempts has not
-yet posted, and the retained disk remains billable.
+received explicit US$6 total/45-minute/one-start approval and completed.
+Fresh balance was US$9.53 with no displayed expiry. Source `797df18` repaired
+the actual CLI manifest mapping and added an explicit adaptive worker cap;
+nominal-first admission applies only to explicitly capped adaptive mode.
+The focused suites passed 34 tests; Windows Python 3.11 passed 349 with four
+platform skips. The live screen used cap 1 and exactly three physical attempts.
+SSH succeeded shortly after boot on the hotspot. H100 CUDA computation,
+runtime task catalog, cached revision-resolution log, and model-server
+checkpoint-ID loading log were verified; the server did not separately log
+a loaded revision hash.
+Fabric Manager remained failed on the Pre-NVL5/NVSwitch warning path; actual
+single-GPU inference worked, without a driver repair or universal claim.
+All three nominal tasks succeeded. Partial exit `shared_budget_exhausted`,
+`certified=false` is expected: no search, repeats, or reduction were allowed.
+Warm time was 93.4031 seconds, estimated US$0.116754 pre-tax. Start-to-stop
+operation bounds were 09:21:36–09:38:07 UTC, about US$1.35 compute including
+assumed tax before storage, not posted billing. Evidence is local/ignored
+under `artifacts/m3-hotspot-screen-live-20261001/`.
+Cleanup is independently verified: temporary clone/managed disk, snapshot,
+ingress, and guard are removed; only original stopped VM/ready disk remain.
+The retry authority is exhausted. Next: plan separately capped repeatability
+controls, H100 worker calibration, and budget-matched sequential/adaptive
+task-level diagnosis. No additional paid start is authorized. Do not infer
+H100 worker performance from historical L40S timings. Posted billing remains
+unreconciled and the original disk continues accruing storage charges.
 
 M4's bounded live run and evidence validation are complete; details are in
 `docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
@@ -181,6 +205,12 @@ integration issues. See the archived handoff under `docs/codex-handoff/tasks/`
 only when investigating M4 history; do not treat it as an active instruction.
 
 ## Known limitations and risks
+
+- Portfolio overview remains proposed M5 work. The new recordings for global
+  task IDs 1/2 use local-ordinal `task0000` filenames; the existing viewer's
+  global-ID glob does not resolve them. They are recorded and recovered, not
+  missing. A scoped compatibility fix is pending; preserve one representative
+  nominal visible by default as Jethro requested.
 
 - The WSL `.venv` may lack NumPy for the complete suite. The focused WSL
   lifecycle and driver tests, including real process signals, have passed;

@@ -94,6 +94,34 @@ before resource creation and is separate from the remote access issue.
 
 ## Maintenance boundary
 
+### October 1 hotspot H100 retry: model execution completed
+
+Snapshot cloning preserved the cached model/simulator environment and the
+original stopped VM. With a fresh narrow ingress rule on the hotspot, SSH
+worked immediately after guest initialization. Serial logs and independently
+read-back lifecycle state made startup/stop diagnosis practical; all temporary
+resources were removed after evidence copy. This supports reusing AI Cloud
+snapshot recovery and serial observability. It does not establish whether
+hotel filtering or a provider path caused the earlier unreachable clone.
+
+NVIDIA GR00T N1.7's LIBERO checkpoint loaded offline (the separate cache
+resolution log recorded the pinned revision) and
+completed three distinct nominal object-to-basket tasks, each with video and
+trace evidence. Cold loading still consumed several minutes, materially more
+than the 93-second warm screen. The cloned image's Fabric Manager service
+reported a Pre-NVL5/NVSwitch startup failure; actual single-GPU CUDA and policy
+inference passed, but we have not repaired or established the wider relevance
+of that service warning. Clearer single-GPU image/service diagnostics would
+help onboarding. Reuse is supported for this simulated evaluation workflow,
+not yet demonstrated for other suites or physical hardware.
+
+Wrong Python-environment probes and offline dependency refresh were operator/
+environment issues; our CLI argument/admission defects were project bugs,
+not provider faults. Token Factory remains untested. Warm US$0.116754 pre-tax
+and roughly US$1.35 operation-envelope compute including assumed tax are
+estimates with different boundaries; storage and posted billing still need
+reconciliation. See [the experiment record](docs/experiments/m3-three-task-screen.md).
+
 The September 29 M3 pilot and bounded 1/2/4-worker comparison completed with
 valid outcomes and media. Warm throughput scaling is measured; end-to-end
 cost and provider billing remain estimates until posting is reconciled.

@@ -6,9 +6,18 @@
 
 **Architecture:** Reuse the accepted snapshot-backed separate H100 design and exact-VM watchdog. Preserve the original stopped L40S VM and managed disk. A strict connectivity gate precedes all model/evaluator work; no automatic start retry or alternate resource.
 
-**Tech Stack:** Nebius CLI, Windows Task Scheduler watchdog, snapshot-backed 200-GiB Network SSD, dedicated WSL SSH key, pinned GR00T/LIBERO harness, existing sequential portfolio runner.
+**Tech Stack:** Nebius CLI, Windows Task Scheduler watchdog, snapshot-backed 200-GiB Network SSD, dedicated WSL SSH key, pinned GR00T/LIBERO harness, explicitly one-worker-capped adaptive portfolio runner.
+
+**Execution status:** Completed October 1 under the approved US$6/45-minute/
+one-start scope. Three nominal tasks passed, with three validated videos and
+traces; no diagnostic search/repeat/reduction occurred. Temporary infrastructure
+cleanup is independently verified; original VM/disk are preserved. This
+one-start authority is exhausted. See [the experiment record](../../experiments/m3-three-task-screen.md).
 
 ## Authority and spend gate
+
+The following pre-execution gate is retained as the approved design history;
+it is not authority for another start now that the scoped attempt is complete.
 
 The earlier one-start approval is exhausted. This plan proposes **US$6 additional total / one H100 start / 45 minutes maximum VM-on**, including temporary storage and the original disk's next 24 hours. At the last verified US$4.50/hour compute rate and approximately US$0.01945/hour per storage object, a conservative 45-minute compute plus 24-hour three-volume estimate is about US$5.21 with assumed 9% tax. These are estimates, not billing. Require explicit new approval and refreshed balance, expiry, price, quota, and capacity before creating resources. If fresh estimates exceed the cap, stop before creation. Delete only new clone/managed disk and snapshot after evidence copy, within 24 hours; never delete the original resources.
 
@@ -16,32 +25,34 @@ The earlier one-start approval is exhausted. This plan proposes **US$6 additiona
 
 **Approval:** Jethro approved the proposed US$6 additional total / one H100
 start / 45-minute cap and temporary-resource cleanup, requesting autonomous
-execution through the scoped result and routine gates. This supersedes pending
-approval wording below, not the preflight or original-resource protections.
+execution through the scoped result and routine gates. Approval did not waive
+preflight or original-resource protections; it is now exhausted.
 
 Preparation verified: intended original VM remains STOPPED; CLI and console
 sessions work; console displays US$9.53 balance with no expiry shown. The
-focused Windows Python 3.11 CLI suite passes 7/7. Billing is still not reconciled
+initial Windows Python 3.11 CLI suite passed 7/7 during preparation; later
+expanded focused suites passed 34 and the full suite passed 349 (four skips).
+Billing is still not reconciled
 to the prior attempt. Price/capacity and source-disk readiness must be refreshed
-at execution; the proposed US$6 cap is not yet approved.
+at execution; the US$6 cap was subsequently approved as recorded above.
 
-**Files:** existing `tests/test_diagnostic_portfolio_cli.py`; ignored fresh control directory under `artifacts/m3-control/`; no code changes.
+**Files:** existing `tests/test_diagnostic_portfolio_cli.py`; ignored fresh control directory under `artifacts/m3-control/`; local repair files listed in Task 3.
 
-- [ ] Read back the original instance `STOPPED`, disk `READY`, unchanged managed ownership, and absence of previous temporary resources.
-- [ ] Confirm active intended project/region, live balance/expiry, H100 price, snapshot/disk tariffs, quota, and capacity. CLI access succeeded in this turn; that is not a balance check.
-- [ ] Resolve direct WSL public egress immediately before firewall creation. The hotspot address differs from hotel Wi-Fi; do not reuse its old rule.
-- [ ] Run `py -3.11 -m unittest tests.test_diagnostic_portfolio_cli -q`; require seven passing tests. Freeze the existing manifest: task IDs 0/1/2, seed 7, current occlusion-family/model labels, checkpoint revision from the previous ignored manifest.
-- [ ] Record fresh cap approval privately and in this plan without secrets or infrastructure IDs.
+- [x] Read back the original instance `STOPPED`, disk `READY`, unchanged managed ownership, and absence of previous temporary resources.
+- [x] Confirm active intended project/region, live balance/expiry, H100 price, snapshot/disk tariffs, quota, and capacity. CLI access succeeded in this turn; that is not a balance check.
+- [x] Resolve direct WSL public egress immediately before firewall creation. The hotspot address differs from hotel Wi-Fi; do not reuse its old rule.
+- [x] Run the focused CLI suite (initially seven tests; expanded with the local repair below). Freeze the existing manifest: task IDs 0/1/2, seed 7, current occlusion-family/model labels, checkpoint revision from the previous ignored manifest.
+- [x] Record fresh cap approval privately and in this plan without secrets or infrastructure IDs.
 
 ## Task 2 — One guarded clone and connectivity gate (amber after red cap)
 
 **Files:** fresh ignored snapshot/instance request, resource record, watchdog record/log; reuse `scripts/run_vm_watchdog.py` without changes.
 
-- [ ] Create one snapshot from the exact original stopped disk, await ready, then one separate explicitly stopped H100 clone with the accepted GPU preset, managed disk, recovery policy FAIL, and guest shutdown backup within 45 minutes of start.
-- [ ] Read the new ID back stopped. Create a temporary stateful TCP/22 ingress rule restricted to the freshly resolved hotspot `/32`; confirm ready and attached group.
-- [ ] Arm a fresh scheduled-task-owned watchdog against only that new ID with a fixed deadline no later than 45 minutes after start. Require durable verified/armed events and task Running before one start.
-- [ ] Capture serial logs and poll guest/TCP readiness with bounded probes. **If SSH cannot complete a credentialed noninteractive command within five minutes after serial boot completion, or ten minutes after the start request (whichever occurs first), copy available logs and stop.** No alternate port, broad ingress, replacement VM, or blind start retry.
-- [ ] If SSH succeeds, verify GPU/CUDA/container runtime and inspect the prior Fabric Manager failure. An unready GPU or unresolved inference-blocking driver failure ends the attempt; do not spend on an unplanned driver migration.
+- [x] Create one snapshot from the exact original stopped disk, await ready, then one separate explicitly stopped H100 clone with the accepted GPU preset, managed disk, recovery policy FAIL, and guest shutdown backup within 45 minutes of start.
+- [x] Read the new ID back stopped. Create a temporary stateful TCP/22 ingress rule restricted to the freshly resolved hotspot `/32`; confirm ready and attached group.
+- [x] Arm a fresh scheduled-task-owned watchdog against only that new ID with a fixed deadline no later than 45 minutes after start. Require durable verified/armed events and task Running before one start.
+- [x] Capture serial logs and poll guest/TCP readiness with bounded probes. **If SSH cannot complete a credentialed noninteractive command within five minutes after serial boot completion, or ten minutes after the start request (whichever occurs first), copy available logs and stop.** No alternate port, broad ingress, replacement VM, or blind start retry.
+- [x] If SSH succeeds, verify GPU/CUDA/container runtime and inspect the prior Fabric Manager failure. An unready GPU or unresolved inference-blocking driver failure ends the attempt; do not spend on an unplanned driver migration.
 
 ## Task 3 — Three nominal episodes only (amber)
 
@@ -71,19 +82,23 @@ any compute start. No speculative paid run while local repair is unfinished.
 
 **Files:** ignored new guest/local source bundle, frozen manifest, fresh results root.
 
-- [ ] Privately transfer the reviewed local source into a fresh session checkout. Verify pinned upstream/checkpoint actually served and runtime task IDs/instructions before evaluating.
-- [ ] Use `scripts/run_diagnostic_portfolio.py` with `--mode adaptive-portfolio --max-workers 1 --episodes 3`, the frozen manifest, actual upstream/project paths, `--hourly-rate` equal to the fresh price, and seconds/dollars bounded by the remaining deadline with at least five minutes reserved for copy and stop.
-- [ ] Expect only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`; no search, confirmation, or reduction. The attempt-limited session may exit 1 with a partial summary; validate exact three attempts, terminal validity, and zero uncertainty rather than interpreting that exit alone as failure.
-- [ ] Copy compact JSON/ledger/traces first, then MP4s. Require per-case task identity, initial-state index 0, nonempty media/trace, and valid terminal outcomes; never compensate with extra attempts.
+- [x] Privately transfer the reviewed local source into a fresh session checkout. Verify pinned upstream/checkpoint actually served and runtime task IDs/instructions before evaluating.
+- [x] Use `scripts/run_diagnostic_portfolio.py` with `--mode adaptive-portfolio --max-workers 1 --episodes 3`, the frozen manifest, actual upstream/project paths, `--hourly-rate` equal to the fresh price, and seconds/dollars bounded by the remaining deadline with at least five minutes reserved for copy and stop.
+- [x] Expect only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`; no search, confirmation, or reduction. The attempt-limited session may exit 1 with a partial summary; validate exact three attempts, terminal validity, and zero uncertainty rather than interpreting that exit alone as failure.
+- [x] Copy compact JSON/ledger/traces first, then MP4s. Require per-case task identity, initial-state index 0, nonempty media/trace, and valid terminal outcomes; never compensate with extra attempts.
 
 ## Task 4 — Stop, cleanup, review (green within approved cleanup)
 
 **Files:** `docs/experiments/m3-three-task-screen.md`, `docs/dev-log.md`, `FEEDBACK.md`, `docs/codex-handoff/STATE.md`, `PROJECT_PLAN.md`.
 
-- [ ] Stop the exact clone and independently verify STOPPED. Remove its temporary ingress and retire its watchdog only after confirmation.
-- [ ] After local evidence recovery, delete only new clone/managed disk and snapshot. Read lists back to verify only the original stopped VM/ready disk remain.
-- [ ] Smaller-model reviewer independently reconciles requested/attempted/valid cases and media, or checks the access-failure evidence. Root synthesizes; do not repeat paid work.
-- [ ] Update the named handoff/experiment/feedback files with outcome, unresolved causes, cleanup, and estimated versus posted charges. Run `git diff --check`; explicitly stage those files and commit `docs(m3): record hotspot H100 retry outcome`. Do not push without separate authority.
+- [x] Stop the exact clone and independently verify STOPPED. Remove its temporary ingress and retire its watchdog only after confirmation.
+- [x] After local evidence recovery, delete only new clone/managed disk and snapshot. Read lists back to verify only the original stopped VM/ready disk remain.
+- [x] Smaller-model reviewer independently reconciles requested/attempted/valid cases and media, or checks the access-failure evidence. Root synthesizes; do not repeat paid work.
+- [x] Update the named handoff/experiment/feedback files with outcome, unresolved causes, cleanup, and estimated versus posted charges; run `git diff --check` and independent review.
+
+Integration owner: explicitly stage those files and commit
+`docs(m3): record hotspot H100 retry outcome` after the checks above.
+Do not push without separate authority.
 
 ## Dependency and learning checkpoints
 
