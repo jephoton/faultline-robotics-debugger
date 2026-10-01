@@ -14,6 +14,11 @@ The earlier one-start approval is exhausted. This plan proposes **US$6 additiona
 
 ## Task 1 — Readiness and local contract (green)
 
+**Approval:** Jethro approved the proposed US$6 additional total / one H100
+start / 45-minute cap and temporary-resource cleanup, requesting autonomous
+execution through the scoped result and routine gates. This supersedes pending
+approval wording below, not the preflight or original-resource protections.
+
 Preparation verified: intended original VM remains STOPPED; CLI and console
 sessions work; console displays US$9.53 balance with no expiry shown. The
 focused Windows Python 3.11 CLI suite passes 7/7. Billing is still not reconciled
