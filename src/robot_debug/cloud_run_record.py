@@ -565,6 +565,12 @@ class RunStore:
         with self._mutex:
             try:
                 existing = self._assert_regular_target(self.events_path, allow_missing=True)
+                if existing is not None:
+                    journal_fd = self._open_checked(self.events_path, os.O_RDONLY)
+                    journal = self._read_fd(journal_fd)
+                    self._parse_events(journal)
+                    if journal and not journal.endswith(b"\n"):
+                        _fail("cannot append while the event journal has a truncated final line")
                 flags = os.O_WRONLY | os.O_APPEND
                 if existing is None:
                     flags |= os.O_CREAT
@@ -592,7 +598,9 @@ class RunStore:
         if self._assert_regular_target(self.events_path, allow_missing=True) is None:
             return []
         fd = self._open_checked(self.events_path, os.O_RDONLY)
-        raw = self._read_fd(fd)
+        return self._parse_events(self._read_fd(fd))
+
+    def _parse_events(self, raw: bytes) -> list[dict[str, Any]]:
         lines = raw.splitlines(keepends=True)
         events = []
         for index, line in enumerate(lines):

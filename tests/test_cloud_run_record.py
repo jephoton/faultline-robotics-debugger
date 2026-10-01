@@ -350,6 +350,17 @@ class RunStoreTests(RecordFixture):
         with self.assertRaises(RecordError):
             self.store.read_events()
 
+    def test_append_refuses_to_join_a_truncated_final_event(self):
+        self.store.append("before", phase="ready")
+        with self.store.events_path.open("ab") as stream:
+            stream.write(b'{"event":"truncated')
+        original = self.store.events_path.read_bytes()
+        self.assertEqual(len(self.store.read_events()), 1)
+        with self.assertRaises(RecordError):
+            self.store.append("after", phase="ready")
+        self.assertEqual(self.store.events_path.read_bytes(), original)
+        self.assertEqual(len(self.store.read_events()), 1)
+
     def test_snapshot_replacement_failure_preserves_previous_status(self):
         self.store.snapshot({"phase": "ready", "record_digest": self.record.digest})
         with patch("robot_debug.cloud_run_record.os.replace", side_effect=OSError("simulated interruption")):
