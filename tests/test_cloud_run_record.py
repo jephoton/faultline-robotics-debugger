@@ -120,6 +120,13 @@ class RecordFixture(unittest.TestCase):
         with self.assertRaises(RecordError):
             self.load()
 
+    def record_for_run_dir(self, run_dir, filename):
+        data = copy.deepcopy(self.data)
+        data["paths"]["run_dir"] = str(run_dir)
+        path = self.root / filename
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path, load_record(path, control_root=self.root, now_utc=NOW)
+
 
 class LoadRecordTests(RecordFixture):
     def test_loads_valid_synthetic_record_and_canonical_digest(self):
@@ -137,10 +144,10 @@ class LoadRecordTests(RecordFixture):
         self.assert_invalid()
 
     def test_approval_reference_is_a_narrow_safe_identifier(self):
-        self.data["approval"]["reference"] = "token=local-test-only"
-        self.assert_invalid()
-        self.data["approval"]["reference"] = "approval reference with spaces"
-        self.assert_invalid()
+        for reference in ("token-abc", "password.foo", "private_key_xyz", "approval reference with spaces"):
+            with self.subTest(reference=reference):
+                self.data["approval"]["reference"] = reference
+                self.assert_invalid()
 
     def test_rejects_wrong_schema_version(self):
         self.data["schema_version"] = True
@@ -281,12 +288,20 @@ class RunStoreTests(RecordFixture):
     def test_create_revalidates_record_digest_after_constructor(self):
         other_dir = self.root / "create-check"
         other_dir.mkdir()
-        store = RunStore(other_dir, record_path=self.record_path)
-        self.data["run_label"] = "changed-after-open"
-        self.write_record()
+        alternate_record_path, alternate_record = self.record_for_run_dir(other_dir, "create-check-record.json")
+        store = RunStore(other_dir, record_path=alternate_record_path)
+        alternate_data = json.loads(alternate_record_path.read_text(encoding="utf-8"))
+        alternate_data["run_label"] = "changed-after-open"
+        alternate_record_path.write_text(json.dumps(alternate_data), encoding="utf-8")
         with self.assertRaises(RecordError):
-            store.create(self.record.digest)
+            store.create(alternate_record.digest)
         self.assertFalse(store.identity_path.exists())
+
+    def test_same_record_cannot_own_two_run_directories(self):
+        other_dir = self.root / "second-run"
+        other_dir.mkdir()
+        with self.assertRaises(RecordError):
+            RunStore(other_dir, record_path=self.record_path)
 
     def test_reopened_store_rejects_identity_digest_replacement(self):
         self.store.snapshot({"phase": "ready"})
@@ -300,9 +315,10 @@ class RunStoreTests(RecordFixture):
                 other = self.root / ("other-" + stale_name.replace("/", "_"))
                 other.mkdir()
                 (other / stale_name).write_text("stale", encoding="utf-8")
-                store = RunStore(other, record_path=self.record_path)
+                record_path, record = self.record_for_run_dir(other, f"record-{stale_name.replace('.', '-')}.json")
+                store = RunStore(other, record_path=record_path)
                 with self.assertRaises(RecordError):
-                    store.create(self.record.digest)
+                    store.create(record.digest)
                 self.assertFalse(store.identity_path.exists())
 
     def test_lease_is_exclusive_and_release_requires_owner(self):
@@ -348,8 +364,10 @@ class RunStoreTests(RecordFixture):
         self.store.acquire_lease("controller-a")
         another_dir = self.root / "another-run"
         another_dir.mkdir()
-        another_store = RunStore(another_dir, record_path=self.record_path)
-        another_store.create(self.record.digest)
+        another_record_path, another_record = self.record_for_run_dir(another_dir, "another-record.json")
+        another_store = RunStore(another_dir, record_path=another_record_path)
+        another_store.create(another_record.digest)
+        original_alternate_record = another_record_path.read_bytes()
         paths = (self.store.identity_path, self.store.events_path, self.store.status_path, self.store.lease_path)
         previous = {path: path.read_bytes() for path in paths[:-1]}
         os.lseek(self.store._lease_fd, 0, os.SEEK_SET)
@@ -360,11 +378,15 @@ class RunStoreTests(RecordFixture):
             for mutate in (
                 lambda: self.store.append("controller_ready", phase="waiting_release"),
                 lambda: self.store.snapshot({"phase": "changed"}),
-                lambda: another_store.acquire_lease("controller-b"),
                 lambda: self.store.release_lease("controller-a"),
             ):
                 with self.assertRaises(RecordError):
                     mutate()
+            alternate_data = json.loads(another_record_path.read_text(encoding="utf-8"))
+            alternate_data["run_label"] = "changed-alternate-record"
+            another_record_path.write_text(json.dumps(alternate_data), encoding="utf-8")
+            with self.assertRaises(RecordError):
+                another_store.acquire_lease("controller-b")
             current = {path: path.read_bytes() for path in paths[:-1]}
             os.lseek(self.store._lease_fd, 0, os.SEEK_SET)
             current[self.store.lease_path] = os.read(self.store._lease_fd, 4096)
@@ -372,6 +394,9 @@ class RunStoreTests(RecordFixture):
             self.assertFalse(another_store.lease_path.exists())
         finally:
             self.record_path.write_bytes(original_record)
+            another_record_path.write_bytes(original_alternate_record)
+            if another_store._lease_fd is not None:
+                another_store.release_lease("controller-b")
             if self.store._lease_fd is not None:
                 self.store.release_lease("controller-a")
 

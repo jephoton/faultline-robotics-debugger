@@ -38,6 +38,7 @@ _KEYS = {
 }
 _SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z", re.ASCII)
 _APPROVAL_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z", re.ASCII)
+_CREDENTIAL_MARKER = re.compile(r"token|password|secret|credential|private[_-]?key", re.IGNORECASE | re.ASCII)
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\Z")
@@ -220,7 +221,11 @@ def load_record(
         _fail("temporary resource identity collides with a protected resource")
 
     approval = obj["approval"]
-    if not isinstance(approval["reference"], str) or not _APPROVAL_REF.fullmatch(approval["reference"]):
+    if (
+        not isinstance(approval["reference"], str)
+        or not _APPROVAL_REF.fullmatch(approval["reference"])
+        or _CREDENTIAL_MARKER.search(approval["reference"])
+    ):
         _fail("approval.reference must be a safe ASCII identifier of at most 128 characters")
     _number(approval["max_total_usd"], "approval.max_total_usd", positive=True)
     if _int(approval["max_starts"], "approval.max_starts") != 1:
@@ -476,7 +481,29 @@ class RunStore:
         self._validate_run_dir()
         self._validate_record_path()
         fd = self._open_checked(self.record_path, os.O_RDONLY)
-        return self._canonical_digest(self._read_fd(fd), "record file")
+        raw = self._read_fd(fd)
+        self._assert_record_run_dir(raw)
+        return self._canonical_digest(raw, "record file")
+
+    def _assert_record_run_dir(self, raw: bytes) -> None:
+        try:
+            data = json.loads(raw.decode("utf-8"), object_pairs_hook=_duplicate_rejector)
+        except (RecordError, UnicodeError, json.JSONDecodeError) as exc:
+            raise RecordError("record file is not valid JSON") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("paths"), dict):
+            _fail("record file does not contain paths.run_dir")
+        recorded = data["paths"].get("run_dir")
+        if not isinstance(recorded, str) or not Path(recorded).is_absolute():
+            _fail("record paths.run_dir must be absolute")
+        try:
+            recorded_path = Path(recorded).resolve(strict=True)
+            store_path = self.run_dir.resolve(strict=True)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise RecordError("record and store run directories must resolve") from exc
+        canonical_recorded = os.path.normcase(os.path.normpath(str(recorded_path)))
+        canonical_store = os.path.normcase(os.path.normpath(str(store_path)))
+        if canonical_recorded != canonical_store:
+            _fail("RunStore directory does not match immutable record paths.run_dir")
 
     def _checked_identity(self) -> str:
         self._validate_run_dir()
