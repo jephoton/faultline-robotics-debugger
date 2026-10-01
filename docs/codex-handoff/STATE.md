@@ -208,8 +208,11 @@ uses a scheduled workstation controller through setup plus the existing
 guest pair, reusing the watchdog. The [implementation plan](../superpowers/plans/2026-10-01-m3-reusable-launcher.md)
 is committed; local record implementation is delegated in the reused clean M3
 worktree. Independent review exposed the storage-deadline gap if the controller
-dies; the separate cleanup-task versus manual-recovery choice is awaiting
-Jethro, while independent local record work proceeds. No cloud start is
+dies; Jethro approved the separate cleanup task and requested the shortest
+fixed-purpose path back to M3. The plan now permits independent guest-script
+porting alongside targeted record review, followed by one controller/cleanup
+assembly and scheduled fake acceptance. No generic workflow engine or new robot
+configuration is needed. No cloud start is
 authorized. It survives chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
 execution blocker; preserve experiment settings.

@@ -80,6 +80,19 @@ Dependency map: Task 1 records → Task 2 controller → Task 4 host wiring; Tas
 
 ## Frozen scope and file ownership
 
+Host trust implementation detail for fresh clones: the approved authenticated
+exact-instance serial logs already contain the guest's SSH public keys and
+fingerprints (verified in the prior local lifecycle evidence). The host adapter
+may enroll that exact boot's ED25519 key through this authenticated control-plane
+channel, bind the derived fingerprint to instance/run identity, and then use
+strict known-host checking for all SSH/scp. It must not trust raw `ssh-keyscan`
+or disable host checking. If serial trust cannot be verified, stop readiness.
+If the immutable record needs a serial-enrollment policy marker instead of a
+pre-known fingerprint, add only the explicit `from_authenticated_serial` enum
+and a test; preserve existing fixed-fingerprint validation. This bounded adapter
+detail avoids an assistant/manual pause after paid start, not new credentials
+or a new trust service. Private trust output stays ignored and is never a key.
+
 New files:
 
 - `src/robot_debug/cloud_run_record.py`: immutable input validation, integrity digests, durable events/status and exclusive run lease.
