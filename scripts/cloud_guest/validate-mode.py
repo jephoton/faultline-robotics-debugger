@@ -46,6 +46,8 @@ def validate(session, mode):
     require(summary.get("execution_kind") == "live" and summary.get("synthetic") is False
             and summary.get("dry_run") is False, "not live evidence")
     require(summary.get("accounting_incomplete") is False, "accounting incomplete")
+    require(not str(summary.get("stop_reason") or "").startswith("runner_exception"),
+            "runner exception is not a valid partial run")
     require(summary.get("invalid_attempts") == 0 and summary.get("uncertain_attempts") == 0,
             "invalid or uncertain attempts")
     physical = summary.get("physical_attempts")

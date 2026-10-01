@@ -173,6 +173,12 @@ class GuestTests(unittest.TestCase):
             cmd = [sys.executable, str(GUEST / "validate-mode.py"), str(session), "sequential-jobs"]
             good = subprocess.run(cmd, capture_output=True, text=True)
             self.assertEqual(0, good.returncode, good.stderr)
+            summary["stop_reason"] = "runner_exception:RuntimeError"
+            path.write_text(json.dumps(summary))
+            bad = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertNotEqual(0, bad.returncode, "internal runner exception must block the next mode")
+            summary["stop_reason"] = "shared_budget_exhausted"
+            path.write_text(json.dumps(summary))
             summary["uncertain_attempts"] = 1; path.write_text(json.dumps(summary))
             bad = subprocess.run([sys.executable, "-O", *cmd[1:]], capture_output=True, text=True)
             self.assertNotEqual(0, bad.returncode)
