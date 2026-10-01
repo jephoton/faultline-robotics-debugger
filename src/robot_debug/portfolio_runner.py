@@ -205,7 +205,8 @@ def run_portfolio(*, manifest: PortfolioManifest, mode: str, results_root: Path 
         # A bounded adaptive screen must first obtain one nominal outcome for
         # every frozen job; otherwise an early task can consume the next slot
         # with search work before a later task has been screened.
-        if any(flows[job_id].phase == "nominal" and cases for job_id, cases in ready.items()):
+        if (mode == "adaptive-portfolio" and max_workers is not None
+                and any(flows[job_id].phase == "nominal" and cases for job_id, cases in ready.items())):
             ready = {job_id: cases if flows[job_id].phase == "nominal" else None
                      for job_id, cases in ready.items()}
         wave = choose_wave(ready, cursor=cursor, slots=1 if mode == "sequential-jobs" else (max_workers or 4),
