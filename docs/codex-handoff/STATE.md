@@ -202,7 +202,15 @@ obtain a new numeric cap. The guard is a cost brake, not a workflow driver.
 Preserve all valid videos/traces, including failure episodes; use the existing
 report's fail-closed speedup gate.
 
-**Next local task: cool project name brainstorming**, requested by Jethro.
+The user approved the goal of one reusable launcher, not changing the robot
+configuration on each interruption. A [proposed launcher design](../superpowers/specs/2026-10-01-m3-reusable-launcher-design.md)
+recommends a scheduled workstation controller through setup plus the existing
+guest pair, reusing the watchdog. Topology/spec review precedes implementation
+planning; no cloud start is authorized. It survives chat interruption, not
+arbitrary laptop/network/authentication failures. This is the immediate
+execution blocker; preserve experiment settings.
+
+**Next product-facing local task: cool project name brainstorming**, requested by Jethro.
 Final naming remains his decision and requires no paid compute. The
 [commit audit](../milestone-commit-audit.md) records M1/M2/M3/M4 as
 13/38/132/17 at frozen checkpoint `7d08e01`; these are scope-attributed
