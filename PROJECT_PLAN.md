@@ -434,6 +434,13 @@ verified on resumption. The three-hour storage deadline was missed. See the
 authority is exhausted; another paid attempt requires balance/billing checks,
 a new numeric cap, and review of an interruption-safe execution controller.
 
+Jethro accepted the reusable workstation-controller design; the committed
+[launcher implementation plan](docs/superpowers/plans/2026-10-01-m3-reusable-launcher.md)
+is now in local implementation with smaller-model builders and independent
+review. Reuse the working robot configuration. The independent storage-cleanup
+task versus manual-recovery risk remains a user checkpoint; record work is
+independent of that choice. No billable execution is included in this step.
+
 **Next local task: cool project name brainstorming.** Keep the final name a
 user decision; no cloud compute is needed. The [milestone commit audit](docs/milestone-commit-audit.md)
 records M1/M2/M3/M4 counts of 13/38/132/17 at frozen checkpoint `7d08e01`.
