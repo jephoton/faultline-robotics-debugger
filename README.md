@@ -1,6 +1,13 @@
 # Robot policy debugging — Nebius × NVIDIA hackathon
 
-Current direction: discover failures in simulated robot manipulation policies, reduce them into reproducible cases, and improve evaluation throughput through profiling and parallel execution.
+Current direction: discover failures in simulated robot manipulation policies
+and reduce them into reproducible regression cases. Measured parallel replay
+throughput is a supporting capability, not the core product requirement.
+
+Expanded multi-task HPC (M3) is frozen as an optional stretch goal, not a
+prerequisite for the core failure-to-regression product. The completed
+fixed-replay throughput result is retained; the unfinished host launcher is
+not ready for paid use. See [the scope decision](docs/decisions/0011-freeze-expanded-m3.md).
 
 ## License
 
@@ -52,8 +59,9 @@ replay contract.
 
 Success therefore means more than producing a robustness score. The final demo
 should show nominal success, a discovered failure, repeated confirmation, a
-reduced trigger, replay against a policy version, and a sequential-versus-
-parallel cost/throughput comparison. Until those experiments exist, describe
+reduced trigger, and replay against a policy version. The existing fixed-replay
+parallel throughput comparison is supporting evidence, not a requirement to
+complete the expanded portfolio benchmark. Until those experiments exist, describe
 the system as a working diagnostic foundation rather than a completed novel
 failure-discovery method.
 

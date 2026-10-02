@@ -1,5 +1,10 @@
 # M3 Live Three-Task Portfolio Comparison Execution Plan
 
+**Execution status (October 2): Frozen, optional M3 stretch.** See accepted
+[ADR 0011](../../decisions/0011-freeze-expanded-m3.md). This comparison is not
+a core release gate. Do not execute without explicit resumption, fresh
+preflight and a new numeric cap; the historical authority below is exhausted.
+
 > **For agentic workers:** Use executing-plans for the root-owned live lifecycle. A smaller-model agent performs independent local evidence/claim review; it never mutates cloud resources. Steps use checkboxes for tracking.
 
 **Goal:** Recover all available videos and traces from matched sequential-job and adaptive-portfolio find → confirm → reduce sessions, and report the measured comparison only when its validity gates pass.

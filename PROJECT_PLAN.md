@@ -2,6 +2,18 @@
 
 # Robot Debugging System Startup Plan
 
+## Current scope decision — October 2
+
+Expanded M3 is **frozen and optional stretch work**, accepted by Jethro in
+[ADR 0011](docs/decisions/0011-freeze-expanded-m3.md). Keep the completed
+fixed-replay parallelism result and implemented scheduler; do not resume the
+unfinished host launcher or paid portfolio comparison automatically. The core
+product remains reproducible robot failure discovery, confirmation, reduction,
+inspection and replay. Portfolio scheduling, its viewer overview and live
+end-to-end speedup validation are not prerequisites for that product or M7.
+A formal-methods component is under consideration, not yet designed/approved.
+This scope decision overrides older next-step instructions below.
+
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
@@ -235,9 +247,10 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | --- | --- | --- |
 | M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
 | M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
-| M3: useful parallelism | Measure equal-work 1/2/4-worker throughput, then schedule multiple task-level diagnostic jobs across one GPU under a shared budget | Equal-work safety/throughput evidence plus a budget-matched sequential-jobs versus adaptive-portfolio comparison and per-job reports |
+| M3 base: useful parallelism — complete | Retain the equal-work 1/2/4-worker replay scheduler and measured throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput at four workers; no end-to-end diagnosis/cost claim |
+| M3 expanded: portfolio HPC — optional stretch, frozen | If Jethro resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
-| M5: diagnostic report and viewer | Show each case's measured violation, original/reduced videos, and replay recipe; add a portfolio overview with one task-job row/card showing status, time/spend, apparent/confirmed/reduced failure, and drill-down to existing evidence | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted jobs |
+| M5: diagnostic report and viewer | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
 | M6: stronger experiments | Add a second perturbation family, more related tasks, and explore other LIBERO suites after within-suite validation | Held-out and cross-suite compatibility/evaluation, budget-matched baselines, uncertainty reported |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
@@ -272,7 +285,7 @@ We have completed **M1: reproducible runner** and the engineering gate for
   claim. This is not a measured end-to-end cloud speedup, and its new summaries
   are not yet represented in the viewer.
 - Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. Jethro selected task IDs `(0, 1, 2)` as **screening candidates** on September 30 and approved the [bounded nominal-screen plan](docs/superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md) with a US$3/60-minute cap. Two separately approved exact-shape starts failed with `NotEnoughResources` before an episode; see the [attempt record](docs/experiments/m3-three-task-screen.md). The later October 1 hotspot H100 retry verified runtime task mapping and one successful nominal episode per task. The full diagnostic comparison remains pending. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
-- M5's proposed UI work is a portfolio overview of all task jobs, their outcomes and resource use, with drill-down to the existing per-case videos, reducer lineage, and replay recipe. It can consume the portfolio summary/report contract after live task validation; it is not implemented yet.
+- M5's proposed portfolio overview is now optional alongside expanded M3, not core UI work. The core viewer prioritizes per-case videos, reducer lineage, evidence and replay recipes. The portfolio summary/report integration is not implemented or a release prerequisite.
 - **H100 resource decision and October 1 result:** Jethro selected a separate snapshot-backed H100 VM, preserving the original L40S VM/disk under [ADR 0010](docs/decisions/0010-h100-snapshot-migration.md) and the [migration plan](docs/superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md). The approved US$7.50/one-start/60-minute attempt created and booted the clone, but SSH remained unreachable despite a verified narrow rule and serial evidence of healthy network setup and an SSH listener. The clone was stopped early without an episode; temporary clone/managed disk, snapshot, ingress, and watchdog were removed and cleanup independently verified after local evidence copy. A separately approved US$6/one-start/45-minute hotspot retry then completed all three nominal tasks with videos/traces. CUDA and pinned-model inference passed; temporary-resource cleanup is verified. This establishes compatibility, not reliability or HPC speedup. The access difference does not prove hotel filtering. See the [experiment record](docs/experiments/m3-three-task-screen.md).
 
 ### Immediate decision after the bounded session
@@ -436,8 +449,10 @@ a new numeric cap, and review of an interruption-safe execution controller.
 
 Jethro accepted the reusable workstation-controller design; the committed
 [launcher implementation plan](docs/superpowers/plans/2026-10-01-m3-reusable-launcher.md)
-is now in local implementation with smaller-model builders and independent
-review. Reuse the working robot configuration. The independent storage-cleanup
+was partially implemented with smaller-model builders and independent
+review, and is now frozen under ADR 0011. Preserve the unfinished work without
+merging unreviewed host code. Reuse the working robot configuration if the
+stretch goal is explicitly resumed. The independent storage-cleanup
 task is now approved. Jethro requested the shortest path: finish record review,
 port existing guest scripts in parallel, assemble one fixed controller/cleanup
 unit, prove local scheduled durability, then return to the unchanged comparison.

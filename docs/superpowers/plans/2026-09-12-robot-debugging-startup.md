@@ -1,5 +1,13 @@
 # Robot Debugging System Startup Plan
 
+**Current scope override (October 2):** Expanded M3 portfolio diagnosis and its
+unfinished host launcher are frozen optional stretch goals under
+[ADR 0011](../../decisions/0011-freeze-expanded-m3.md). Keep the completed
+fixed-replay throughput result; do not treat expanded M3 as a release gate or
+resume it automatically. The repository-root `PROJECT_PLAN.md` is the current
+roadmap; older next-step directions below are historical. Formal-methods scope
+remains undecided.
+
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
@@ -233,7 +241,8 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | --- | --- | --- |
 | M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
 | M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
-| M3: useful parallelism | Profile; use upstream worker sharding and batching where supported | Equal-work sequential vs parallel results, memory use, and speedup |
+| M3 base: useful parallelism — complete | Retain project-owned equal-work replay scheduling and measured 1/2/4-worker throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput; no adaptive diagnosis/cost claim |
+| M3 expanded: portfolio HPC — optional stretch, frozen | Finish/review the persistent launcher and validate multiple task-level diagnosis jobs only if explicitly resumed | Fresh execution/spending approval and budget-matched live sequential/adaptive evidence |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
 | M5: diagnostic report | Show case, measured violation, original/reduced videos, replay recipe | Another session reproduces the report's case from saved artifacts |
 | M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |

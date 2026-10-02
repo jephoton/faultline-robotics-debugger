@@ -1,5 +1,10 @@
 # M3 Reusable Launcher Implementation Plan
 
+**Execution status (October 2): Frozen, optional M3 stretch.** Jethro accepted
+[ADR 0011](../../decisions/0011-freeze-expanded-m3.md). Preserve partial work;
+do not resume agents, integrate unfinished host code or start cloud compute
+from the approvals below. Explicit resumption and fresh spending gates apply.
+
 > **For agentic workers:** Use subagent-driven-development with test-driven-development for each implementation unit. Root integrates; agents never run real Nebius, SSH or resource deletion. Steps use checkboxes.
 
 **Goal:** Build one reusable launcher that persists across chat interruptions, safely executes the existing comparison, and supports read-only reattachment.

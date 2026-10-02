@@ -1,7 +1,9 @@
 # ADR 0009: Portfolio-first HPC for diagnostics
 
 **Status:** Accepted direction on 2026-09-29; local scheduler rule accepted on
-2026-09-30; live experiment pending.
+2026-09-30; frozen as optional stretch on 2026-10-02 by
+[ADR 0011](0011-freeze-expanded-m3.md). Live comparison remains unvalidated;
+this ADR is not an instruction to resume execution.
 
 ## Context
 

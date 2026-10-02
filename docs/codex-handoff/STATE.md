@@ -3,15 +3,18 @@
 > Generated current-state context. Update after material implementation,
 > architecture, workflow, or risk changes.
 
-## Execution pause — October 2
+## Expanded M3 frozen as optional stretch — October 2
 
-Jethro explicitly paused M3 to reconsider its remaining cost/value and whether
-the project should prioritize robotics and a bounded formal-methods component
-instead. Do not resume the launcher implementation, portfolio comparison, or
-new cloud starts without his direction. Preserve completed M3 replay-throughput
-evidence and unfinished work; no abandonment, deletion, or new formal-methods
-architecture has been approved. The product-direction discussion is the active
-next step, superseding execution instructions below while this pause holds.
+Jethro accepted freezing expanded M3 and keeping it as a stretch goal if time
+and interest permit; see `docs/decisions/0011-freeze-expanded-m3.md`. Do not
+resume the launcher implementation, portfolio comparison or associated UI
+automatically. Existing run caps are exhausted; future paid work requires fresh
+preflight and approval. Preserve completed fixed-replay HPC evidence, integrated
+scheduler/guest code and unfinished host work. No deletion or formal-methods
+architecture has been approved. The core product prioritizes the robotics
+failure-to-regression workflow; planning its next bounded step is next, with
+project-name brainstorming still queued. This overrides older execution
+instructions below. The portfolio overview is optional, not a core M5 gate.
 
 ## Completed evidence
 
@@ -219,8 +222,9 @@ guest pair, reusing the watchdog. The [implementation plan](../superpowers/plans
 is committed. The immutable run-record/store foundation is reviewed and
 integrated. Guest scripts also passed independent spec and quality reviews and
 are integrated; the fresh Windows suite passes 385 tests (four platform skips).
-One balanced builder owns the remaining fixed-purpose host assembly
-in the reused M3 worktree. Independent review exposed the storage-deadline gap if the controller
+The unfinished fixed-purpose host assembly is preserved on
+`codex/m3-reusable-launcher`, including uncommitted adapter/CLI/test files;
+no builder is active. It is not approved for paid use. Independent review exposed the storage-deadline gap if the controller
 dies; Jethro approved the separate cleanup task and requested the shortest
 fixed-purpose path back to M3. The plan now permits independent guest-script
 porting alongside targeted record review, followed by one controller/cleanup
@@ -228,7 +232,7 @@ assembly and scheduled fake acceptance. No generic workflow engine or new robot
 configuration is needed. No cloud start is
 authorized. Its intended boundary is surviving chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
-execution blocker; preserve experiment settings.
+execution blocker only if the optional stretch is resumed; preserve experiment settings.
 
 **Next product-facing local task: cool project name brainstorming**, requested by Jethro.
 Final naming remains his decision and requires no paid compute. The
