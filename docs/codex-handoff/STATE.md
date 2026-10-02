@@ -3,6 +3,16 @@
 > Generated current-state context. Update after material implementation,
 > architecture, workflow, or risk changes.
 
+## Execution pause — October 2
+
+Jethro explicitly paused M3 to reconsider its remaining cost/value and whether
+the project should prioritize robotics and a bounded formal-methods component
+instead. Do not resume the launcher implementation, portfolio comparison, or
+new cloud starts without his direction. Preserve completed M3 replay-throughput
+evidence and unfinished work; no abandonment, deletion, or new formal-methods
+architecture has been approved. The product-direction discussion is the active
+next step, superseding execution instructions below while this pause holds.
+
 ## Completed evidence
 
 - The nominal baseline passed 20/20 episodes.
