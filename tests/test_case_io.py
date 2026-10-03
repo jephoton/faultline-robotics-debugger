@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from robot_debug.case_io import SanitizedCaseValidationError, import_m4
 
@@ -123,6 +124,31 @@ class ImportTests(unittest.TestCase):
         case = import_m4(self.root)
         self.assertEqual(case["evidence"]["media_counts"]["videos"], 1)
         self.assertTrue(any("video" in item for item in case["evidence"]["episodes"]))
+
+    def test_unreadable_optional_media_keeps_core_history(self):
+        run = next(self.session.glob("runs/parent*"))
+        (run / "task0000_ep0000_clip.mp4").write_bytes(b"video")
+        from robot_debug import case_io
+        original = case_io._hash
+        def blocked(path):
+            if path.suffix == ".mp4": raise PermissionError("private source path")
+            return original(path)
+        with patch.object(case_io, "_hash", side_effect=blocked): case = import_m4(self.root)
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "confirmed")
+        self.assertEqual(case["evidence"]["media_counts"]["videos"], 0)
+        self.assertNotIn("private source path", json.dumps(case))
+
+    def test_core_read_error_is_sanitized(self):
+        from robot_debug import case_io
+        with patch.object(case_io, "_hash", side_effect=PermissionError("private source path")):
+            with self.assertRaises(SanitizedCaseValidationError) as caught: import_m4(self.root)
+        self.assertNotIn("private source path", str(caught.exception))
+
+    def test_reused_eval_id_cannot_count_as_independent_replays(self):
+        for p in self.session.glob("runs/*/*_aggregate.json"):
+            data = json.loads(p.read_text()); data["eval_id"] = "shared-eval"; p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        self.assertNotEqual(case["capabilities"]["historical_failure"]["status"], "confirmed")
 
     def test_source_identity_is_kept_without_inventing_checkpoint(self):
         case = import_m4(self.root)

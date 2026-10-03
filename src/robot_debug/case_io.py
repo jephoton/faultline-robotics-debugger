@@ -48,14 +48,17 @@ def _path(root: Path, relative: str, *, required=True) -> Path | None:
 
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
+    try:
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError: _fail("source reference cannot be read")
     return digest.hexdigest()
 
 
 def _ref(root: Path, relative: str) -> dict:
-    return {"path": _relative(relative), "sha256": _hash(_path(root, relative))}
+    try: return {"path": _relative(relative), "sha256": _hash(_path(root, relative))}
+    except OSError: _fail("source reference cannot be read")
 
 
 def _pairs(items):
@@ -71,9 +74,12 @@ def _bad_constant(_): _fail("JSON contains nonfinite number")
 
 def _json(root: Path, relative: str) -> dict:
     path = _path(root, relative)
-    if path.stat().st_size > _MAX_JSON: _fail("JSON source exceeds size limit")
     try:
-        value = json.loads(path.read_bytes().decode("utf-8", "strict"), object_pairs_hook=_pairs, parse_constant=_bad_constant)
+        if path.stat().st_size > _MAX_JSON: _fail("JSON source exceeds size limit")
+        content = path.read_bytes()
+    except OSError: _fail("JSON source cannot be read")
+    try:
+        value = json.loads(content.decode("utf-8", "strict"), object_pairs_hook=_pairs, parse_constant=_bad_constant)
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         _fail("JSON source is malformed")
     if not isinstance(value, dict) or ("schema_version" in value and (type(value["schema_version"]) is not int or value["schema_version"] != 1)):
@@ -131,16 +137,17 @@ def _mask(value, rect):
     return isinstance(color, list) and len(color) == 3 and all(type(c) is int and 0 <= c <= 255 for c in color) and len(set(color)) == 1
 
 
-def _media(root: Path, run: Path, benchmark: str, task_id: int, reset_index: int, suffix: str) -> dict | None:
+def _media(root: Path, run: Path, benchmark: str, task_id: int, reset_index: int, suffix: str) -> tuple[dict | None, str | None]:
     pattern = f"task{task_id:04d}_ep{reset_index:04d}_*" + suffix
     paths = []
     directories = [run]
     if re.fullmatch(r"[A-Za-z0-9_.-]+", benchmark): directories.append(run / "episodes" / benchmark)
     for directory in directories:
         if directory.is_dir(): paths.extend(directory.glob(pattern))
-    if len(paths) != 1: return None
-    try: return _ref(root, paths[0].relative_to(root).as_posix())
-    except (SanitizedCaseValidationError, ValueError): return None
+    if not paths: return None, None
+    if len(paths) != 1: return None, "optional media is ambiguous"
+    try: return _ref(root, paths[0].relative_to(root).as_posix()), None
+    except (SanitizedCaseValidationError, ValueError, OSError): return None, "optional media is unavailable"
 
 
 def _profile(root: Path, relative: str | None, summary: dict, replay: dict) -> tuple[dict, dict, dict | None]:
@@ -203,6 +210,7 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
     except (ValueError, TypeError, OverflowError, KeyError): structural = None
     if structural is None: reasons.append("reduction structure is incomplete")
     episodes, refs, selected, seed_values, fill_values, media_counts = [], [], [], set(), set(), {"videos": 0, "traces": 0}
+    media_problems, episode_ids = [], set()
     session_rel = summary.rpartition("/")[0]
     seen = set()
     for stage in stages:
@@ -255,9 +263,12 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
         raw_outcome = "infrastructure_error" if result.outcome == "infrastructure_error" else "success" if result.outcome == "success" else "episode_timeout" if reason == "timeout" else "task_failure"
         identity = f"{aggregate.get('eval_id') or rel}:{task_id}:{reset_index}"
         episode_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+        if episode_id in episode_ids: conflicting.append("stable episode identity repeats")
+        episode_ids.add(episode_id)
         entry = {"episode_id": episode_id, "stage": name, "role": role, "aggregate": refs[-1], "task_id": task_id, "reset_index": reset_index, "raw_outcome": raw_outcome, "gate_outcome": result.outcome, "instruction": None}
         for key, suffix, count in (("video", ".mp4", "videos"), ("trace", ".jsonl", "traces")):
-            media = _media(root, run, aggregate.get("benchmark") if isinstance(aggregate.get("benchmark"), str) else "", task_id, reset_index, suffix)
+            media, media_problem = _media(root, run, aggregate.get("benchmark") if isinstance(aggregate.get("benchmark"), str) else "", task_id, reset_index, suffix)
+            if media_problem: media_problems.append(media_problem)
             if media is not None:
                 entry[key] = media
                 media_counts[count] += 1
@@ -303,19 +314,20 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
                 continue
             lineage.append({"rectangle": _rect(item["rectangle"]), "edge": item["edge"], "delta": float(item["delta"])})
     if conflicting: history = "conflicting"; history_reasons = sorted(set(conflicting))
-    media_availability = {"status": "available" if sum(media_counts.values()) else "unavailable", "reasons": [] if sum(media_counts.values()) else ["media absent"]}
+    media_availability = {"status": "available" if sum(media_counts.values()) else "unavailable", "reasons": sorted(set(media_problems)) if media_problems else ([] if sum(media_counts.values()) else ["media absent"])}
     case = {"schema_version": 1, "source": source, "task": {"suite": "libero-object", "task_id": task_id, "reset_index": reset_index, "seed": seed, "env_seed": env_seed, "reset_strategy": "libero-init-state-index"}, "policy": policy, "runtime": runtime, "perturbation": {"family": "agentview-opaque-rectangle", "rectangle": final, "fill_value": next(iter(fill_values)) if len(fill_values) == 1 else None}, "protocol": {"failures": 4, "max_attempts": 5, "reject_successes": 2, "nominal_controls": 5}, "evidence": {"episodes": episodes, "aggregate_refs": refs, "lineage": lineage, "media_counts": media_counts, "media_availability": media_availability}, "measurements": {"source_reported_elapsed_seconds": _nonnegative_finite_number(src.get("elapsed_seconds")), "physical_episode_count": reported_physical if _nonnegative_int(reported_physical) else None, "valid_episode_count": reported_valid if _nonnegative_int(reported_valid) and not conflicting and evidence_complete else None, "cost": None}, "capabilities": {}, "limitations": ["Historical evidence does not establish fresh replay or billing cost."]}
     try: case = normalize_case(case)
-    except CaseValidationError: _fail("normalized case is invalid")
+    except (CaseValidationError, RecursionError, OverflowError, TypeError): _fail("normalized case is invalid")
     missing = recipe_missing(case)
     case["capabilities"] = {"inspection": {"status": "available" if episodes else "unavailable", "reasons": [] if episodes else ["no validated episodes"]}, "replay_recipe": {"status": "complete" if not missing else "incomplete", "missing": missing}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": history, "reasons": history_reasons}}
-    return normalize_case(case)
+    try: return normalize_case(case)
+    except (CaseValidationError, RecursionError, OverflowError, TypeError): _fail("normalized case is invalid")
 
 
 def revalidate_case(case: dict, source_root: Path) -> dict:
     """Rebuild claims from source bytes; never trust saved capability flags."""
     try: saved = normalize_case(case)
-    except CaseValidationError: _fail("stored case is invalid")
+    except (CaseValidationError, RecursionError, OverflowError, TypeError): _fail("stored case is invalid")
     def unavailable():
         degraded = dict(saved)
         degraded["capabilities"] = {"inspection": {"status": "unavailable", "reasons": ["source binding is unavailable or changed"]}, "replay_recipe": {"status": "incomplete", "missing": sorted(set(recipe_missing(saved) + ["source.summary", "source.replay"]))}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": "not-established", "reasons": ["source binding is unavailable or changed"]}}

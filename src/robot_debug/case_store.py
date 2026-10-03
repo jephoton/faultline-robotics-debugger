@@ -43,7 +43,7 @@ def _read(path: Path) -> dict:
     try:
         value = _json(path.parent, path.name)
         return normalize_case(value)
-    except (CaseValidationError, SanitizedCaseValidationError): _fail("stored case metadata is invalid")
+    except (CaseValidationError, SanitizedCaseValidationError, RecursionError, OverflowError, TypeError): _fail("stored case metadata is invalid")
 
 
 def _core(case: dict) -> dict:
@@ -65,7 +65,7 @@ def register_case(case: dict, source_root: Path, workspace: Path) -> Path:
     """Persist a validated case and private source binding, exclusively."""
     base = _workspace(workspace, source_root)
     try: proposed = normalize_case(case)
-    except CaseValidationError: _fail("case metadata is invalid")
+    except (CaseValidationError, RecursionError, OverflowError, TypeError): _fail("case metadata is invalid")
     fresh = revalidate_case(proposed, source_root)
     if fresh["capabilities"]["inspection"]["status"] != "available": _fail("source evidence is unavailable or changed")
     if _core(proposed) != _core(fresh): _fail("case metadata differs from source evidence")

@@ -47,5 +47,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("error", json.loads(result.stdout))
         self.assertNotIn(str(self.source), result.stdout)
 
+    def test_deep_saved_metadata_returns_json_error_without_traceback(self):
+        imported = self.invoke("import-m4", "--source-root", self.source, "--workspace", self.workspace)
+        case_id = json.loads(imported.stdout)["case_id"]
+        p = self.workspace / case_id / "case.json"; data = json.loads(p.read_text())
+        nested = "leaf"
+        for _ in range(600): nested = [nested]
+        data["evidence"]["deep"] = nested; p.write_text(json.dumps(data))
+        result = self.invoke("inspect", "--workspace", self.workspace, "--case-id", case_id)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error", json.loads(result.stdout))
+        self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__": unittest.main()

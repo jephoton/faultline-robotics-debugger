@@ -55,7 +55,7 @@ def main(argv=None) -> int:
     except SanitizedCaseValidationError as exc:
         print(json.dumps({"error": str(exc)}))
         return 2
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, RecursionError, OverflowError):
         print(json.dumps({"error": "case operation failed"}))
         return 2
 
