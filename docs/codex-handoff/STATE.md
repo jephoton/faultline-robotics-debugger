@@ -33,7 +33,13 @@ smaller agent in isolated `codex/m5-case-schema` and integrated as `46a3419`/
 computes deterministic identity and lists missing recipe prerequisites; it
 does not inspect files or certify imported evidence. Ten focused tests pass.
 Source reconciliation, persistence/CLI and viewer
-integration follow reviewed kernel integration; no completed importer is claimed.
+integration are now executing autonomously within accepted M5A scope. The
+`2026-10-03-m5-case-io.md` plan is handed to one balanced builder in isolated
+`codex/m5-case-io`; the subsequent viewer plan is committed and waits for reviewed
+case APIs. No completed importer/viewer journey is claimed yet. Two read-only
+feasibility scouts completed B/C research; no external sample acquired or
+provider request sent. Specific sample-acquisition and Nemotron model/data/cap
+decisions were queued asynchronously while offline implementation continued.
 CLI-first and independent capabilities are recorded in ADRs 0012/0013. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.

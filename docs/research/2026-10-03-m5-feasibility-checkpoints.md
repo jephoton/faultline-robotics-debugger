@@ -18,6 +18,19 @@ controller/action semantics and state/model closure require separate inspection.
 The [robomimic schema](https://robomimic.github.io/docs/datasets/overview.html)
 does not guarantee useful simulator states for every environment.
 
+The [official downloader change](https://github.com/Lifelong-Robot-Learning/LIBERO/commit/8f1084e3132a39270c3a13ebe37270a43ece2a01)
+endorses `yifengzhu-hf/LIBERO-datasets`; its helper downloads a whole suite.
+A single task file is available at repository revision
+`97773100c1474cd0d686ebd173cc0e4fd5442466`, path
+`libero_object/pick_up_the_alphabet_soup_and_place_it_in_the_basket_demo.hdf5`.
+Root verified public HF metadata: 780,145,352 bytes (744.1 MiB), SHA-256
+`42189d4415d4c51aaaf0708300653fccc39239cd3f2709079a713cd8d1678a8d`.
+It bundles the task's demos, not a standalone episode. The mirror card declares
+Apache-2.0, conflicting with the upstream README's CC BY 4.0. Do not conceal the
+discrepancy or present mirror metadata as an authoritative relicensing grant.
+One-file acquisition/isolated h5py metadata inspection with an 800 MB bound was
+requested from Jethro; no download happened merely because the source is public.
+
 Recommendation: identify one official Object task file, bound acquisition size
 and inspect one episode's metadata before proposing an adapter. Dataset/frame
 playback is not closed-loop robot-policy replay. HDF5 dependency/adapter and a
