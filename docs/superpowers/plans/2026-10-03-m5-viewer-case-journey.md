@@ -20,8 +20,9 @@ the existing dark industrial console aesthetic. Preserve equal video panels,
 one representative nominal default, keyboard navigation, linked playback and
 range-streaming containment. No dependencies or cloud/model/browser-write API.
 
-Balanced smaller builder owns only `viewer/server.py`, `viewer/web/index.html`,
-`app.js`, `styles.css`, `tests/test_viewer_server.py` and a new
+Balanced smaller builder owns only `src/robot_debug/viewer/server.py`,
+`src/robot_debug/viewer/web/index.html`, `app.js`, `styles.css` in that same
+web directory, `tests/test_viewer_server.py` and a new
 `tests/test_viewer_cases.py` if needed. Root owns walkthrough/research/handoff,
 real case setup, Git integration and browser QA. No overlapping builders.
 
