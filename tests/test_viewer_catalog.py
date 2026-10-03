@@ -79,6 +79,18 @@ class ArtifactCatalogTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
+    @staticmethod
+    def configure_filtered_task(run: Path, task_id=2, *, benchmark_class=None):
+        aggregate_path = run / "libero-object_aggregate.json"
+        aggregate = json.loads(aggregate_path.read_text(encoding="utf-8"))
+        aggregate["config"]["params"]["task_id"] = task_id
+        if benchmark_class is not None:
+            aggregate["config"]["benchmark"] = benchmark_class
+        for episode in aggregate["tasks"][0]["episodes"]:
+            episode["task_id"] = task_id
+        aggregate_path.write_text(json.dumps(aggregate), encoding="utf-8")
+        return aggregate_path
+
     def test_catalog_classifies_success_and_exposes_perturbation(self):
         write_episode(self.root, "valid", success=True)
 
@@ -157,6 +169,105 @@ class ArtifactCatalogTests(unittest.TestCase):
 
         self.assertEqual(episode.video_path, "flat/task0000_ep0000_success.mp4")
         self.assertEqual(episode.trace_path, "flat/task0000_ep0000_success.jsonl")
+
+    def test_filtered_global_tasks_resolve_local_ordinal_zero_media(self):
+        for task_id in (1, 2):
+            with self.subTest(task_id=task_id):
+                task_root = self.root / str(task_id)
+                run = write_episode(task_root, "filtered-{}".format(task_id), success=True)
+                self.configure_filtered_task(run, task_id)
+
+                episode = ArtifactCatalog(task_root).list_episodes()[0]
+
+                self.assertEqual(episode.task_id, task_id)
+                self.assertEqual(episode.episode_index, 0)
+                self.assertIn("task0000_ep0000", episode.video_path)
+                self.assertIn("task0000_ep0000", episode.trace_path)
+
+    def test_task_local_fallback_requires_proven_single_filtered_task(self):
+        rejected_cases = (
+            ("absent", "absent", None, None),
+            ("boolean", True, None, None),
+            ("mismatched", 1, None, None),
+            ("wrong benchmark", 2, "some.OtherBenchmark", None),
+            ("multiple groups", 2, None, "multiple"),
+            ("mixed global ids", 2, None, "mixed"),
+        )
+        for name, filter_id, benchmark_class, group_shape in rejected_cases:
+            with self.subTest(case=name):
+                case_root = self.root / name.replace(" ", "-")
+                run = write_episode(case_root, name.replace(" ", "-"), success=True)
+                path = run / "libero-object_aggregate.json"
+                aggregate = json.loads(path.read_text(encoding="utf-8"))
+                if filter_id != "absent":
+                    aggregate["config"]["params"]["task_id"] = filter_id
+                if benchmark_class is not None:
+                    aggregate["config"]["benchmark"] = benchmark_class
+                aggregate["tasks"][0]["episodes"][0]["task_id"] = 2
+                if group_shape == "multiple":
+                    aggregate["tasks"].append({"task": "another", "episodes": []})
+                elif group_shape == "mixed":
+                    aggregate["tasks"][0]["episodes"].append(
+                        {**aggregate["tasks"][0]["episodes"][0], "task_id": 3, "episode_idx": 1}
+                    )
+                path.write_text(json.dumps(aggregate), encoding="utf-8")
+
+                episodes = ArtifactCatalog(case_root).list_episodes()
+
+                expected_count = 2 if group_shape == "mixed" else 1
+                self.assertEqual(len(episodes), expected_count)
+                self.assertTrue(all(item.video_path is None for item in episodes))
+                self.assertTrue(all(item.trace_path is None for item in episodes))
+
+    def test_duplicate_local_media_is_ambiguous_and_keeps_episode(self):
+        case_root = self.root / "duplicate-root"
+        run = write_episode(case_root, "duplicate", success=True)
+        self.configure_filtered_task(run, 2)
+        root_copy = run / "task0000_ep0000_success.mp4"
+        root_copy.write_bytes(b"second video")
+
+        snapshot = ArtifactCatalog(case_root).snapshot()
+
+        self.assertEqual(len(snapshot.episodes), 1)
+        self.assertIsNone(snapshot.episodes[0].video_path)
+        self.assertIsNotNone(snapshot.episodes[0].trace_path)
+        self.assertTrue(any("ambiguous" in warning.lower() for warning in snapshot.warnings))
+
+    def test_global_media_ambiguity_does_not_fall_back_to_local_media(self):
+        case_root = self.root / "global-ambiguity-root"
+        run = write_episode(case_root, "ambiguous-global", success=True)
+        self.configure_filtered_task(run, 2)
+        episode_dir = run / "episodes" / "libero-object"
+        (episode_dir / "task0002_ep0000_success.mp4").write_bytes(b"global one")
+        (run / "task0002_ep0000_success.mp4").write_bytes(b"global two")
+
+        snapshot = ArtifactCatalog(case_root).snapshot()
+
+        self.assertEqual(len(snapshot.episodes), 1)
+        self.assertIsNone(snapshot.episodes[0].video_path)
+        self.assertTrue(any("ambiguous video" in warning.lower() for warning in snapshot.warnings))
+
+    def test_escaping_media_symlink_is_rejected_with_warning(self):
+        case_root = self.root / "escaping-root"
+        run = write_episode(case_root, "escaping", success=True)
+        self.configure_filtered_task(run, 2)
+        outside = case_root.parent / (case_root.name + "-outside.mp4")
+        outside.write_bytes(b"outside")
+        link = run / "episodes" / "libero-object" / "task0000_ep0000_success.mp4"
+        link.unlink()
+        try:
+            link.symlink_to(outside)
+        except (OSError, NotImplementedError):
+            self.skipTest("symbolic links are unavailable")
+        try:
+            snapshot = ArtifactCatalog(case_root).snapshot()
+        finally:
+            outside.unlink(missing_ok=True)
+
+        self.assertEqual(len(snapshot.episodes), 1)
+        self.assertIsNone(snapshot.episodes[0].video_path)
+        self.assertIsNotNone(snapshot.episodes[0].trace_path)
+        self.assertTrue(any("escape" in warning.lower() for warning in snapshot.warnings))
 
     def test_media_path_cannot_escape_artifact_root(self):
         write_episode(self.root, "valid", success=True)

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,80 @@ class ArtifactCatalog:
     def __init__(self, artifact_root: Path) -> None:
         self.artifact_root = artifact_root.resolve()
 
+    def _unique_media(
+        self,
+        directories: Sequence[Path],
+        pattern: str,
+        media_kind: str,
+        aggregate_path: Path,
+        warnings: List[str],
+    ) -> Tuple[Optional[Path], str]:
+        matches = {}
+        unsafe = False
+        for directory in directories:
+            try:
+                resolved_directory = directory.resolve()
+                resolved_directory.relative_to(self.artifact_root)
+                if not resolved_directory.is_dir():
+                    continue
+                candidates = resolved_directory.glob(pattern)
+                for candidate in candidates:
+                    try:
+                        resolved = candidate.resolve(strict=True)
+                        resolved.relative_to(self.artifact_root)
+                    except (OSError, RuntimeError, ValueError):
+                        unsafe = True
+                        continue
+                    if resolved.is_file():
+                        matches[str(resolved)] = resolved
+            except (OSError, RuntimeError, ValueError):
+                unsafe = True
+
+        if unsafe:
+            warnings.append(
+                "{}: {} media match escapes artifact root".format(
+                    aggregate_path.name, media_kind
+                )
+            )
+            return None, "unsafe"
+        if len(matches) > 1:
+            warnings.append(
+                "{}: ambiguous {} media match".format(aggregate_path.name, media_kind)
+            )
+            return None, "ambiguous"
+        if matches:
+            return next(iter(matches.values())), "unique"
+        return None, "absent"
+
+    @staticmethod
+    def _proves_task_local_media(aggregate: Mapping[str, Any], requested_task_id: int) -> bool:
+        config = aggregate.get("config")
+        if not isinstance(config, Mapping) or config.get("benchmark") != (
+            "robot_debug.libero:DiagnosticLIBEROBenchmark"
+        ):
+            return False
+        params = config.get("params", {})
+        filtered_task_id = params.get("task_id") if isinstance(params, Mapping) else None
+        if (
+            type(filtered_task_id) is not int
+            or filtered_task_id < 0
+            or filtered_task_id != requested_task_id
+        ):
+            return False
+        task_groups = aggregate.get("tasks")
+        if not isinstance(task_groups, list) or len(task_groups) != 1:
+            return False
+        episodes = task_groups[0].get("episodes") if isinstance(task_groups[0], Mapping) else None
+        return (
+            isinstance(episodes, list)
+            and all(
+                isinstance(episode, Mapping)
+                and type(episode.get("task_id")) is int
+                and episode["task_id"] == requested_task_id
+                for episode in episodes
+            )
+        )
+
     def snapshot(self) -> CatalogSnapshot:
         episodes_by_identity = {}
         warnings = []
@@ -74,27 +148,52 @@ class ArtifactCatalog:
                             eval_id if eval_id else relative, task_id, episode_index
                         )
                         episode_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-                        stem = "task{:04d}_ep{:04d}_*".format(task_id, episode_index)
-                        media_directories = (
-                            resolved_aggregate.parent / "episodes" / benchmark,
-                            resolved_aggregate.parent,
-                        )
-                        video = next(
+                        global_pattern = "task{:04d}_ep{:04d}_*.mp4".format(task_id, episode_index)
+                        global_video, global_video_status = self._unique_media(
                             (
-                                match
-                                for directory in media_directories
-                                for match in sorted(directory.glob(stem + ".mp4"))
+                                resolved_aggregate.parent / "episodes" / benchmark,
+                                resolved_aggregate.parent,
                             ),
-                            None,
+                            global_pattern,
+                            "video",
+                            resolved_aggregate,
+                            warnings,
                         )
-                        trace = next(
+                        global_trace, global_trace_status = self._unique_media(
                             (
-                                match
-                                for directory in media_directories
-                                for match in sorted(directory.glob(stem + ".jsonl"))
+                                resolved_aggregate.parent / "episodes" / benchmark,
+                                resolved_aggregate.parent,
                             ),
-                            None,
+                            "task{:04d}_ep{:04d}_*.jsonl".format(task_id, episode_index),
+                            "trace",
+                            resolved_aggregate,
+                            warnings,
                         )
+                        task_local_allowed = self._proves_task_local_media(aggregate, task_id)
+                        video = global_video
+                        trace = global_trace
+                        if task_local_allowed and global_video_status == "absent":
+                            video, _ = self._unique_media(
+                                (
+                                    resolved_aggregate.parent / "episodes" / benchmark,
+                                    resolved_aggregate.parent,
+                                ),
+                                "task0000_ep{:04d}_*.mp4".format(episode_index),
+                                "video",
+                                resolved_aggregate,
+                                warnings,
+                            )
+                        if task_local_allowed and global_trace_status == "absent":
+                            trace, _ = self._unique_media(
+                                (
+                                    resolved_aggregate.parent / "episodes" / benchmark,
+                                    resolved_aggregate.parent,
+                                ),
+                                "task0000_ep{:04d}_*.jsonl".format(episode_index),
+                                "trace",
+                                resolved_aggregate,
+                                warnings,
+                            )
                         reason = raw.get("failure_reason")
                         if reason == "exception":
                             outcome = "infrastructure_error"
@@ -128,12 +227,12 @@ class ArtifactCatalog:
                                 },
                                 failure_detail=raw.get("failure_detail"),
                                 video_path=(
-                                    video.resolve().relative_to(self.artifact_root).as_posix()
+                                    video.relative_to(self.artifact_root).as_posix()
                                     if video is not None
                                     else None
                                 ),
                                 trace_path=(
-                                    trace.resolve().relative_to(self.artifact_root).as_posix()
+                                    trace.relative_to(self.artifact_root).as_posix()
                                     if trace is not None
                                     else None
                                 ),
