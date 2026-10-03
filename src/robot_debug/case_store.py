@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from robot_debug.case_io import SanitizedCaseValidationError, _json, import_m4, revalidate_case
+from robot_debug.case_io import SanitizedCaseValidationError, _json, revalidate_case
 from robot_debug.cases import CaseValidationError, normalize_case
 
 
@@ -53,7 +53,10 @@ def _core(case: dict) -> dict:
     result["source"] = source
     evidence = dict(result["evidence"])
     evidence.pop("media_counts", None)
-    evidence["episodes"] = [{k: v for k, v in episode.items() if k not in {"video", "trace"}} for episode in evidence.get("episodes", [])]
+    evidence.pop("media_availability", None)
+    episodes = evidence.get("episodes")
+    if isinstance(episodes, list):
+        evidence["episodes"] = [{k: v for k, v in episode.items() if k not in {"video", "trace"}} if isinstance(episode, dict) else episode for episode in episodes]
     result["evidence"] = evidence
     return result
 
@@ -155,8 +158,6 @@ def export_case(workspace: Path, case_id: str, output: Path) -> Path:
 def reimport_case(index: Path, source_root: Path, workspace: Path) -> Path:
     """Rebind portable metadata to explicit local sources and rebuilt claims."""
     raw = _read(Path(index))
-    source = raw["source"]
-    profile = source.get("profile")
-    fresh = import_m4(source_root, source["summary"]["path"], source["replay"]["path"], profile["path"] if isinstance(profile, dict) else None)
-    if raw["case_id"] != fresh["case_id"] or _core(raw) != _core(fresh): _fail("portable case differs from source evidence")
+    fresh = revalidate_case(raw, source_root)
+    if fresh["capabilities"]["inspection"]["status"] != "available" or raw["case_id"] != fresh["case_id"] or _core(raw) != _core(fresh): _fail("portable case differs from source evidence")
     return register_case(fresh, source_root, workspace)

@@ -159,6 +159,72 @@ class ImportTests(unittest.TestCase):
         data["completed"]["decisions"][0]["outcomes"] = ["success"] * 4; p.write_text(json.dumps(data))
         self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
 
+    def test_parent_stage_geometry_must_match_declared_parent(self):
+        other = {"x": .25, "y": 0, "width": .5, "height": .5}
+        p = self.session / "session_summary.json"; summary = json.loads(p.read_text())
+        for stage in summary["completed"]["stages"]:
+            if stage["stage"].startswith("parent-"): stage["rectangle"] = other
+        p.write_text(json.dumps(summary))
+        for aggregate in self.session.glob("runs/parent*/*_aggregate.json"):
+            data = json.loads(aggregate.read_text()); data["config"]["params"]["agentview_occlusion"].update(other)
+            aggregate.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_lineage_never_copies_untrusted_edge_or_delta_payload(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["lineage"][0]["edge"] = "private_command=token-do-not-copy"
+        data["lineage"][0]["delta"] = "https://private.invalid/secret"
+        p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        self.assertNotIn("token-do-not-copy", json.dumps(case))
+        self.assertNotIn("private.invalid", json.dumps(case))
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_unhashable_lineage_edge_and_huge_delta_are_sanitized(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["lineage"][0]["edge"] = {"private_command": "token-do-not-copy"}
+        data["lineage"][0]["delta"] = 10 ** 1000
+        p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        self.assertNotIn("token-do-not-copy", json.dumps(case))
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_bool_aggregate_seed_and_result_count_cannot_confirm_history(self):
+        p = next(self.session.glob("runs/parent*/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["config"]["params"]["seed"] = True; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+        data["config"]["params"]["seed"] = 7; p.write_text(json.dumps(data))
+        summary_path = self.session / "session_summary.json"; summary = json.loads(summary_path.read_text())
+        summary["completed"]["stages"][1]["physical_episode_count"] = True; summary_path.write_text(json.dumps(summary))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_arbitrary_reported_count_is_not_copied(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["physical_episode_count"] = {"private_command": "token-do-not-copy"}; p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        self.assertNotIn("token-do-not-copy", json.dumps(case))
+        self.assertIsNone(case["measurements"]["physical_episode_count"])
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_explicit_wrong_server_policy_is_conflicting(self):
+        p = next(self.session.glob("runs/parent*/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["server_info"]["model_identity"] = "other-model"; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_no_selected_aggregates_means_inspection_unavailable(self):
+        for p in self.session.glob("runs/*/*_aggregate.json"): p.unlink()
+        case = import_m4(self.root)
+        self.assertEqual(case["capabilities"]["inspection"]["status"], "unavailable")
+
+    def test_accepted_count_must_be_supported_by_raw_reduced_episodes(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        removed = next(stage for stage in data["completed"]["stages"] if stage["stage"].startswith("delta-"))
+        data["completed"]["stages"].remove(removed)
+        data["valid_episode_count"] = 13; data["physical_episode_count"] = 13
+        p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        self.assertNotEqual(case["capabilities"]["historical_failure"]["status"], "confirmed")
+
     def test_stage_result_episode_index_mismatch_conflicts(self):
         p = self.session / "session_summary.json"; data = json.loads(p.read_text())
         data["completed"]["stages"][2]["results"][0]["episode_index"] = 1; p.write_text(json.dumps(data))

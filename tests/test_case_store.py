@@ -66,9 +66,42 @@ class StoreTests(unittest.TestCase):
         media.unlink()
         inspected = inspect_case(self.workspace, original["case_id"])
         self.assertEqual(inspected["capabilities"]["historical_failure"]["status"], "confirmed")
-        self.assertEqual(inspected["capabilities"]["inspection"]["status"], "unavailable")
+        self.assertEqual(inspected["capabilities"]["inspection"]["status"], "available")
+        self.assertEqual(inspected["evidence"]["media_availability"]["status"], "changed")
         output = self.base / "portable"; export_case(self.workspace, original["case_id"], output)
         reimport_case(output / "case.json", self.source, self.base / "other")
+
+    def test_profile_loss_only_invalidates_dependent_recipe(self):
+        proof = self.source / "failure-reduction" / "proof.txt"; proof.write_text("evidence")
+        import hashlib
+        ref = {"path": "failure-reduction/proof.txt", "sha256": hashlib.sha256(proof.read_bytes()).hexdigest()}
+        profile = {"schema_version": 1, "policy": {"model_id": "opaque-model", "checkpoint_revision": "checkpoint"}, "runtime": {"project_revision": "revision", "upstream_harness_revision": "upstream", "simulator_image_digest": "sha256:" + "a" * 64}, "provenance": {key: ref for key in ("policy.model_id", "policy.checkpoint_revision", "runtime.project_revision", "runtime.upstream_harness_revision", "runtime.simulator_image_digest")}}
+        p = self.source / "failure-reduction" / "profile.json"; p.write_text(json.dumps(profile))
+        case = import_m4(self.source, profile="failure-reduction/profile.json")
+        register_case(case, self.source, self.workspace)
+        p.unlink()
+        inspected = inspect_case(self.workspace, case["case_id"])
+        self.assertEqual(inspected["capabilities"]["historical_failure"]["status"], "confirmed")
+        self.assertEqual(inspected["capabilities"]["inspection"]["status"], "available")
+        self.assertEqual(inspected["capabilities"]["replay_recipe"]["status"], "incomplete")
+        self.assertIn("policy.checkpoint_revision", inspected["capabilities"]["replay_recipe"]["missing"])
+        output = self.base / "without-profile"; export_case(self.workspace, case["case_id"], output)
+        rebound = reimport_case(output / "case.json", self.source, self.base / "other")
+        self.assertEqual(rebound.name, case["case_id"])
+
+    def test_profile_proof_loss_preserves_historical_evidence(self):
+        proof = self.source / "failure-reduction" / "proof.txt"; proof.write_text("evidence")
+        import hashlib
+        ref = {"path": "failure-reduction/proof.txt", "sha256": hashlib.sha256(proof.read_bytes()).hexdigest()}
+        profile = {"schema_version": 1, "policy": {"checkpoint_revision": "checkpoint"}, "runtime": {}, "provenance": {"policy.checkpoint_revision": ref}}
+        p = self.source / "failure-reduction" / "profile.json"; p.write_text(json.dumps(profile))
+        case = import_m4(self.source, profile="failure-reduction/profile.json")
+        register_case(case, self.source, self.workspace)
+        proof.unlink()
+        inspected = inspect_case(self.workspace, case["case_id"])
+        self.assertEqual(inspected["capabilities"]["inspection"]["status"], "available")
+        self.assertEqual(inspected["capabilities"]["historical_failure"]["status"], "confirmed")
+        self.assertIn("policy.checkpoint_revision", inspected["capabilities"]["replay_recipe"]["missing"])
 
     def test_reimport_rejects_tampered_core(self):
         register_case(self.case, self.source, self.workspace)
