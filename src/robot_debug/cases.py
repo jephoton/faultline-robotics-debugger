@@ -99,7 +99,7 @@ def _reference(value: Any, label: str) -> dict:
     ref = _object(value, {"path", "sha256"}, set(), label)
     path = _string(ref["path"], f"{label}.path")
     if (
-        path.startswith("/") or "\\" in path or ":" in path
+        path.startswith("/") or "\\" in path or ":" in path or "\x00" in path
         or any(part in ("", ".", "..") for part in path.split("/"))
     ):
         raise CaseValidationError(f"{label}.path must be a portable relative POSIX path")
@@ -143,12 +143,18 @@ def _identity_parts(case: dict) -> dict:
     }
 
 
+def _json_utf8(value: dict) -> bytes:
+    try:
+        return json.dumps(
+            value, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8")
+    except (UnicodeError, ValueError, OverflowError, TypeError, RecursionError) as exc:
+        raise CaseValidationError("case must be serializable as finite UTF-8 JSON") from exc
+
+
 def _identity_hash(case: dict) -> str:
-    canonical = json.dumps(
-        _identity_parts(case), sort_keys=True, separators=(",", ":"),
-        ensure_ascii=False, allow_nan=False,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashlib.sha256(_json_utf8(_identity_parts(case))).hexdigest()
 
 
 def _normalize(value: dict, check_stored_id: bool) -> dict:
@@ -237,6 +243,7 @@ def _normalize(value: dict, check_stored_id: bool) -> dict:
     if check_stored_id and "case_id" in raw and raw["case_id"] != computed:
         raise CaseValidationError("stored case_id does not match the case recipe")
     normalized["case_id"] = computed
+    _json_utf8(normalized)
     return normalized
 
 

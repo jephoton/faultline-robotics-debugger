@@ -175,6 +175,12 @@ class CaseSchemaTests(unittest.TestCase):
                 field[path[-1]] = "unexpected"
                 with self.assertRaises(CaseValidationError):
                     normalize_case(raw)
+        for key in complete_case():
+            with self.subTest(missing=key):
+                raw = complete_case()
+                del raw[key]
+                with self.assertRaises(CaseValidationError):
+                    normalize_case(raw)
 
     def test_rejects_cyclic_metadata_and_unbounded_geometry(self):
         raw = complete_case()
@@ -185,12 +191,27 @@ class CaseSchemaTests(unittest.TestCase):
         raw["perturbation"]["rectangle"]["x"] = 10 ** 400
         with self.assertRaises(CaseValidationError):
             normalize_case(raw)
-        for key in complete_case():
-            with self.subTest(missing=key):
+
+    def test_rejects_unserializable_values_with_stable_error_type(self):
+        invalid = [
+            (("policy", "model_id"), "\ud800"),
+            (("task", "seed"), 10 ** 4300),
+            (("evidence",), {"bad": "\ud800"}),
+            (("evidence",), {"bad": 10 ** 4300}),
+            (("evidence",), {"\ud800": "bad"}),
+            (("source", "summary", "path"), "runs/bad\x00name.json"),
+        ]
+        for path, replacement in invalid:
+            with self.subTest(path=path):
                 raw = complete_case()
-                del raw[key]
-                with self.assertRaises(CaseValidationError):
-                    normalize_case(raw)
+                field = raw
+                for key in path[:-1]:
+                    field = field[key]
+                field[path[-1]] = replacement
+                for operation in (normalize_case, case_identity, recipe_missing):
+                    with self.subTest(operation=operation.__name__):
+                        with self.assertRaises(CaseValidationError):
+                            operation(raw)
 
 
 if __name__ == "__main__":
