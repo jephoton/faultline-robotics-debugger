@@ -5,7 +5,10 @@
 > Steps use checkboxes. This is a proposed milestone plan, not approval to
 > implement undecided interfaces, send data to providers, or spend credits.
 
-**Status:** Written for Jethro's scope/design review. No implementation started.
+**Status:** Scope/design and CLI-first entry point approved by Jethro on
+October 3. Proceed with independent A3 media compatibility work and prepare
+A1's exact case contract for review. Importer/UI/model implementations remain
+gated by their specific contracts and spending approvals.
 
 **Goal:** Let a simulation-based robotics developer bring a supported case,
 understand replay readiness, inspect confirmed/reduced evidence, and export a
@@ -49,7 +52,7 @@ delivers external closed-loop diagnosis or actual Nemotron use.
 
 ## 2. Decisions before dependent work
 
-### D1 — Product entry point (red; recommendation pending approval)
+### D1 — Product entry point (accepted October 3)
 
 1. **Read-only viewer plus CLI import/export/execution — recommended.** Reuses
    the working UI and keeps local mutations and paid operations explicit.
