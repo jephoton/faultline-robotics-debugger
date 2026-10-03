@@ -74,6 +74,14 @@ industrial safety. An infrastructure error is never a policy failure. Existing
 M4 evidence can therefore be inspectable and historically confirmed while
 its portable recipe remains incomplete and newly exercised replay unverified.
 
+Historical confirmation requires reconciling the summary/replay gate counts
+with the referenced aggregate episodes: task/reset/seeds, recorded policy
+identity, masks, raw outcomes and matching nominal controls must agree. The
+existing reduction-summary validator alone is insufficient. Missing core
+evidence gives `not-established`; contradictory evidence gives `conflicting`.
+Supplemented runtime pins are proposed replay inputs, not proof that those
+pins were used historically unless their provenance establishes that link.
+
 ## Local registration and export boundary
 
 - First adapter accepts one existing M4 summary/replay pair and its associated
@@ -85,6 +93,10 @@ its portable recipe remains incomplete and newly exercised replay unverified.
   source root; reject escaping paths/symlinks. Hash inputs and recheck hashes
   on inspection/export. Changed or unavailable source files invalidate dependent
   evidence/readiness instead of retaining stale positive badges.
+  Missing/changed optional video or trace affects media availability, not
+  recipe completeness. Missing/changed aggregates or summary/replay sources
+  invalidate historical confirmation. Recipe completeness depends on intact,
+  validated recipe inputs, including any metadata profile it relies on.
 - Optional explicit `runtime-profile.json` supplies missing pinned metadata
   and its provenance. It cannot override conflicting source values, invent
   exercised-replay evidence or claim that a seed is a portable world snapshot.
@@ -99,6 +111,11 @@ its portable recipe remains incomplete and newly exercised replay unverified.
   mark referenced media as not included. A user can inspect these on the source
   machine; another machine does not magically acquire recordings or weights.
   Copying videos/datasets or adding a portable archive is separate scope.
+- A second narrow entry path reimports exported normalized `case.json` with
+  an explicit local source root. Validate schema and recompute case identity,
+  source hashes and capabilities; never accept stored positive badges on trust.
+  Equivalence covers normalized identity, recipe inputs and intact core evidence,
+  not machine-local configuration or unavailable media.
 
 ## Acceptance tests and human checkpoint
 
@@ -107,6 +124,9 @@ confirmation without complete replay pins, complete recipe without exercised
 replay, missing media, conflicting identities/gates, infrastructure errors,
 duplicate registration, unknown versions, nonfinite/bool geometry, path escape,
 source mutation and normalized export/reimport equivalence. No live calls.
+An internally consistent summary that contradicts its aggregate must never
+receive `confirmed`. An unavailable optional recording must not turn otherwise
+intact recipe inputs into an incomplete recipe.
 
 After approval, root writes the exact implementation sub-plan, CLI/API
 signatures and test/commit boundaries. A smaller case builder implements it;
