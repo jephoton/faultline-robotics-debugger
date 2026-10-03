@@ -1,8 +1,9 @@
 # M5A case contract
 
-**Status:** Proposed exact A1 contract for review. M5 scope and the CLI-first,
-read-only-viewer boundary are accepted. This document does not authorize an
-importer implementation, external reset adapter, model call or cloud start.
+**Status:** Accepted by Jethro on October 3 ("go" after the contract review).
+M5 scope and the CLI-first, read-only-viewer boundary are accepted. Proceed
+through bounded offline implementation plans. External reset adapters, model
+calls and cloud starts remain separately gated.
 
 ## Purpose and inspected evidence
 
