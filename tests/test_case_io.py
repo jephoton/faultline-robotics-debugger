@@ -29,7 +29,7 @@ def fixture(root: Path, *, linked=True):
     for i in range(4): add(f"parent-attempt-{i+1:02d}", PARENT, "policy_failure")
     for i in range(4): add(f"delta-0125-bottom-attempt-{i+1:02d}", FINAL, "policy_failure")
     for i in range(5): add(f"nominal-control-attempt-{i+1:02d}", None, "success")
-    summary = {"schema_version": 1, "model_identity": "opaque-model", "repository_revision": "revision", "planned": {"model_identity": "opaque-model"}, "completed": {"stages": stages, "sentinel_outcome": "success", "control_outcomes": ["success"] * 5, "decisions": [{"label": "candidate", "decision": "pass", "rectangle": FINAL, "outcomes": ["policy_failure"] * 4}]}, "geometry": {"parent": PARENT, "current": FINAL, "final": FINAL}, "certified_rectangle": FINAL, "lineage": [{"edge": "bottom", "delta": .125, "rectangle": FINAL}], "stop_reason": "reduced_failure_with_nominal_controls", "elapsed_seconds": 42.0, "physical_episode_count": 14, "valid_episode_count": 14}
+    summary = {"schema_version": 1, "model_identity": "opaque-model", "repository_revision": "revision", "planned": {"model_identity": "opaque-model"}, "completed": {"stages": stages, "sentinel_outcome": "success", "control_outcomes": ["success"] * 5, "decisions": [{"label": "parent", "decision": "pass", "rectangle": PARENT, "outcomes": ["policy_failure"] * 4}, {"label": "candidate", "decision": "pass", "rectangle": FINAL, "outcomes": ["policy_failure"] * 4}]}, "geometry": {"parent": PARENT, "current": FINAL, "final": FINAL}, "certified_rectangle": FINAL, "lineage": [{"edge": "bottom", "delta": .125, "rectangle": FINAL}], "stop_reason": "reduced_failure_with_nominal_controls", "elapsed_seconds": 42.0, "physical_episode_count": 14, "valid_episode_count": 14}
     replay = {"schema_version": 1, "task_id": 0, "episode_index": 0, "seed": 7, "expected_outcome": "policy_failure", "acceptance_rule": {"failures": 4, "attempts": 5}, "rectangle": FINAL, "model_identity": "opaque-model", "repository_revision": "revision", "replay_command": "private --token secret"}
     (session / "session_summary.json").write_text(json.dumps(summary), encoding="utf-8")
     (session / "replay_case.json").write_text(json.dumps(replay), encoding="utf-8")
@@ -67,6 +67,10 @@ class ImportTests(unittest.TestCase):
 
     def test_missing_aggregate_is_insufficient(self):
         next(self.session.glob("runs/parent*/*_aggregate.json")).unlink()
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "not-established")
+
+    def test_missing_control_aggregate_is_insufficient(self):
+        next(self.session.glob("runs/nominal-control*/*_aggregate.json")).unlink()
         self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "not-established")
 
     def test_escape_is_rejected_without_leaking_path(self):
@@ -107,6 +111,105 @@ class ImportTests(unittest.TestCase):
         case = import_m4(self.root, profile="failure-reduction/profile.json")
         self.assertEqual(case["capabilities"]["replay_recipe"]["status"], "complete")
         self.assertEqual(case["capabilities"]["exercised_replay"]["status"], "unverified")
+
+    def test_raw_instruction_is_not_copied_to_public_metadata(self):
+        p = next(self.session.glob("runs/parent*/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["tasks"][0]["episodes"][0]["name"] = "private endpoint token-do-not-copy"; p.write_text(json.dumps(data))
+        self.assertNotIn("token-do-not-copy", json.dumps(import_m4(self.root)))
+
+    def test_media_is_referenced_and_counted_without_copying_bytes(self):
+        run = next(self.session.glob("runs/parent*"))
+        (run / "task0000_ep0000_clip.mp4").write_bytes(b"video")
+        case = import_m4(self.root)
+        self.assertEqual(case["evidence"]["media_counts"]["videos"], 1)
+        self.assertTrue(any("video" in item for item in case["evidence"]["episodes"]))
+
+    def test_source_identity_is_kept_without_inventing_checkpoint(self):
+        case = import_m4(self.root)
+        self.assertEqual(case["policy"]["model_id"], "opaque-model")
+        self.assertIsNone(case["policy"]["checkpoint_revision"])
+        self.assertEqual(case["runtime"]["project_revision"], "revision")
+        self.assertEqual(len(case["evidence"]["episodes"][0]["episode_id"]), 16)
+
+    def test_task_reset_and_gray_fill_derive_from_source(self):
+        for p in self.session.glob("runs/*/*_aggregate.json"):
+            data = json.loads(p.read_text()); data["config"]["params"]["task_id"] = 2
+            raw = data["tasks"][0]["episodes"][0]; raw["task_id"] = 2; raw["episode_idx"] = 3
+            mask = data["config"]["params"]["agentview_occlusion"]
+            if mask["enabled"]: mask["color"] = [17, 17, 17]
+            p.write_text(json.dumps(data))
+        summary = json.loads((self.session / "session_summary.json").read_text())
+        for stage in summary["completed"]["stages"]: stage["results"][0]["episode_index"] = 3
+        (self.session / "session_summary.json").write_text(json.dumps(summary))
+        replay = json.loads((self.session / "replay_case.json").read_text()); replay["task_id"] = 2; replay["episode_index"] = 3
+        (self.session / "replay_case.json").write_text(json.dumps(replay))
+        case = import_m4(self.root)
+        self.assertEqual((case["task"]["task_id"], case["task"]["reset_index"], case["perturbation"]["fill_value"]), (2, 3, 17))
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "confirmed")
+
+    def test_timeout_keeps_raw_category_separate_from_gate_policy_failure(self):
+        p = next(self.session.glob("runs/parent*/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["tasks"][0]["episodes"][0]["failure_reason"] = "timeout"; p.write_text(json.dumps(data))
+        case = import_m4(self.root)
+        episode = next(x for x in case["evidence"]["episodes"] if x["stage"] == p.parent.name)
+        self.assertEqual((episode["raw_outcome"], episode["gate_outcome"]), ("episode_timeout", "policy_failure"))
+
+    def test_parent_decision_must_match_raw_gate_sequence(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["completed"]["decisions"][0]["outcomes"] = ["success"] * 4; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_stage_result_episode_index_mismatch_conflicts(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["completed"]["stages"][2]["results"][0]["episode_index"] = 1; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_nominal_sentinel_raw_failure_conflicts(self):
+        p = next(self.session.glob("runs/nominal-sentinel/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["tasks"][0]["episodes"][0]["metrics"]["success"] = False; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
+
+    def test_invalid_final_geometry_refused(self):
+        p = self.session / "session_summary.json"; data = json.loads(p.read_text())
+        data["geometry"]["final"] = None; p.write_text(json.dumps(data))
+        with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
+
+    def test_oversize_json_and_escaping_symlink_are_rejected(self):
+        p = self.session / "replay_case.json"
+        p.write_bytes(b" " * (8 * 1024 * 1024 + 1))
+        with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
+        outside = self.root.parent / (self.root.name + "-outside.json")
+        outside.write_text("{}")
+        p.unlink()
+        try:
+            p.symlink_to(outside)
+        except OSError:
+            outside.unlink(); self.skipTest("symlinks unavailable")
+        try:
+            with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
+        finally: outside.unlink()
+
+    def test_profile_conflicting_pin_and_bad_hash_refused(self):
+        proof = self.session / "proof.txt"; proof.write_text("proof")
+        ref = {"path": "failure-reduction/proof.txt", "sha256": "0" * 64}
+        data = {"schema_version": 1, "policy": {"model_id": "opaque-model"}, "runtime": {}, "provenance": {"policy.model_id": ref}}
+        p = self.session / "profile.json"; p.write_text(json.dumps(data))
+        with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root, profile="failure-reduction/profile.json")
+        import hashlib
+        ref["sha256"] = hashlib.sha256(proof.read_bytes()).hexdigest(); data["policy"]["model_id"] = "other"; p.write_text(json.dumps(data))
+        with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root, profile="failure-reduction/profile.json")
+
+    def test_infrastructure_episode_cannot_confirm_history(self):
+        p = next(self.session.glob("runs/parent*/*_aggregate.json"))
+        data = json.loads(p.read_text()); data["tasks"][0]["episodes"][0]["failure_reason"] = "exception"; p.write_text(json.dumps(data))
+        self.assertNotEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "confirmed")
+
+    def test_summary_parent_controls_run_lookup(self):
+        import shutil
+        target = self.root / "other-session"
+        shutil.move(str(self.session), target)
+        case = import_m4(self.root, summary="other-session/session_summary.json", replay="other-session/replay_case.json")
+        self.assertEqual(case["capabilities"]["historical_failure"]["status"], "confirmed")
 
 
 if __name__ == "__main__": unittest.main()

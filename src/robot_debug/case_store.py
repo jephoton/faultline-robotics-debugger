@@ -47,7 +47,15 @@ def _read(path: Path) -> dict:
 
 
 def _core(case: dict) -> dict:
-    return {key: value for key, value in case.items() if key not in {"capabilities", "measurements", "limitations"}}
+    result = {key: value for key, value in case.items() if key not in {"capabilities", "measurements", "limitations"}}
+    source = dict(result["source"])
+    if source.get("profile") is None: source.pop("profile", None)
+    result["source"] = source
+    evidence = dict(result["evidence"])
+    evidence.pop("media_counts", None)
+    evidence["episodes"] = [{k: v for k, v in episode.items() if k not in {"video", "trace"}} for episode in evidence.get("episodes", [])]
+    result["evidence"] = evidence
+    return result
 
 
 def register_case(case: dict, source_root: Path, workspace: Path) -> Path:
@@ -56,6 +64,7 @@ def register_case(case: dict, source_root: Path, workspace: Path) -> Path:
     try: proposed = normalize_case(case)
     except CaseValidationError: _fail("case metadata is invalid")
     fresh = revalidate_case(proposed, source_root)
+    if fresh["capabilities"]["inspection"]["status"] != "available": _fail("source evidence is unavailable or changed")
     if _core(proposed) != _core(fresh): _fail("case metadata differs from source evidence")
     base.mkdir(parents=True, exist_ok=True)
     target = _case_dir(base, proposed["case_id"])
@@ -92,7 +101,7 @@ def inspect_case(workspace: Path, case_id: str) -> dict:
     if saved["case_id"] != case_id: _fail("stored case ID differs from directory")
     source = _binding(target)
     if source is None:
-        saved["capabilities"] = {"inspection": {"status": "unavailable", "reasons": ["source binding is unavailable"]}, "replay_recipe": {"status": "incomplete", "missing": ["source binding"]}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": "not-established", "reasons": ["source binding is unavailable"]}}
+        saved["capabilities"] = {"inspection": {"status": "unavailable", "reasons": ["source binding is unavailable"]}, "replay_recipe": {"status": "incomplete", "missing": ["source.summary", "source.replay"]}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": "not-established", "reasons": ["source binding is unavailable"]}}
         return normalize_case(saved)
     return revalidate_case(saved, source)
 
@@ -114,9 +123,14 @@ def list_cases(workspace: Path) -> list[dict]:
 def export_case(workspace: Path, case_id: str, output: Path) -> Path:
     """Create a new portable metadata directory after full revalidation."""
     case = inspect_case(workspace, case_id)
-    if case["capabilities"]["inspection"]["status"] != "available": _fail("core evidence is unavailable or changed")
+    if case["capabilities"]["inspection"]["status"] != "available" and case["capabilities"]["inspection"]["reasons"] != ["optional media changed"]: _fail("core evidence is unavailable or changed")
     if case["capabilities"]["historical_failure"]["status"] == "conflicting": _fail("conflicting core evidence cannot be exported")
     out = Path(output)
+    bound = _binding(_case_dir(workspace, case_id))
+    if bound is not None:
+        source = bound.resolve()
+        destination = out.resolve()
+        if destination == source or source in destination.parents: _fail("export target must be outside source root")
     if out.exists(): _fail("export target already exists")
     recipe = {key: case[key] for key in ("schema_version", "case_id", "task", "policy", "runtime", "perturbation", "protocol")}
     note = ("# Offline diagnostic case\n\n"
@@ -142,6 +156,7 @@ def reimport_case(index: Path, source_root: Path, workspace: Path) -> Path:
     """Rebind portable metadata to explicit local sources and rebuilt claims."""
     raw = _read(Path(index))
     source = raw["source"]
-    fresh = import_m4(source_root, source["summary"]["path"], source["replay"]["path"], source.get("profile", {}).get("path"))
+    profile = source.get("profile")
+    fresh = import_m4(source_root, source["summary"]["path"], source["replay"]["path"], profile["path"] if isinstance(profile, dict) else None)
     if raw["case_id"] != fresh["case_id"] or _core(raw) != _core(fresh): _fail("portable case differs from source evidence")
     return register_case(fresh, source_root, workspace)

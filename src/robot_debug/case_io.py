@@ -98,14 +98,29 @@ def _same(a, b): return _rect(a) is not None and _rect(a) == _rect(b)
 def _mask(value, rect):
     if rect is None: return value == {"enabled": False} or value is None
     if not isinstance(value, dict) or value.get("enabled") is not True or not _same(value, rect): return False
+    if set(value) != {"enabled", "x", "y", "width", "height", "color", "opacity"}: return False
     if value.get("opacity") != 1 or type(value.get("opacity")) not in (int, float): return False
     color = value.get("color")
     return isinstance(color, list) and len(color) == 3 and all(type(c) is int and 0 <= c <= 255 for c in color) and len(set(color)) == 1
 
 
+def _media(root: Path, run: Path, benchmark: str, task_id: int, reset_index: int, suffix: str) -> dict | None:
+    pattern = f"task{task_id:04d}_ep{reset_index:04d}_*" + suffix
+    paths = []
+    directories = [run]
+    if re.fullmatch(r"[A-Za-z0-9_.-]+", benchmark): directories.append(run / "episodes" / benchmark)
+    for directory in directories:
+        if directory.is_dir(): paths.extend(directory.glob(pattern))
+    if len(paths) != 1: return None
+    try: return _ref(root, paths[0].relative_to(root).as_posix())
+    except (SanitizedCaseValidationError, ValueError): return None
+
+
 def _profile(root: Path, relative: str | None, summary: dict, replay: dict) -> tuple[dict, dict, dict | None]:
-    policy = {"model_id": None, "checkpoint_revision": None, "provenance": {}}
-    runtime = {"project_revision": None, "upstream_harness_revision": None, "simulator_image_digest": None, "provenance": {}}
+    model = summary.get("model_identity") if isinstance(summary.get("model_identity"), str) and summary["model_identity"] else None
+    revision = summary.get("repository_revision") if isinstance(summary.get("repository_revision"), str) and summary["repository_revision"] not in ("", "unknown") else None
+    policy = {"model_id": model, "checkpoint_revision": None, "provenance": {"model_id": "source.summary.model_identity"} if model else {}}
+    runtime = {"project_revision": revision, "upstream_harness_revision": None, "simulator_image_digest": None, "provenance": {"project_revision": "source.summary.repository_revision"} if revision else {}}
     if relative is None: return policy, runtime, None
     data = _json(root, relative)
     if data.get("schema_version") != 1 or set(data) != {"schema_version", "policy", "runtime", "provenance"}: _fail("profile schema is unsupported")
@@ -143,15 +158,24 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
     conflicting = []
     if src.get("model_identity") != manifest.get("model_identity") or src.get("repository_revision") != manifest.get("repository_revision"):
         conflicting.append("summary and replay identity differ")
-    if manifest.get("task_id") != 0 or manifest.get("episode_index") != 0 or type(manifest.get("seed")) is not int: conflicting.append("replay task, episode, or seed is inconsistent")
+    task_id, reset_index, seed = (manifest.get(key) for key in ("task_id", "episode_index", "seed"))
+    if any(type(value) is not int or value < 0 for value in (task_id, reset_index, seed)):
+        _fail("replay task, episode, or seed is invalid")
     completed = src.get("completed") if isinstance(src.get("completed"), dict) else {}
     stages = completed.get("stages") if isinstance(completed.get("stages"), list) else []
     final = _rect(src.get("geometry", {}).get("final") if isinstance(src.get("geometry"), dict) else None)
-    if final is None or not _same(final, manifest.get("rectangle")) or not _same(final, src.get("certified_rectangle")): conflicting.append("final rectangle differs")
+    if final is None: _fail("final rectangle is invalid")
+    if not _same(final, manifest.get("rectangle")) or not _same(final, src.get("certified_rectangle")): conflicting.append("final rectangle differs")
     if manifest.get("acceptance_rule") != {"failures": 4, "attempts": 5}: conflicting.append("replay acceptance rule differs")
-    structural = ArtifactCatalog._validate_reduction(src, manifest)
+    if manifest.get("expected_outcome") != "policy_failure": conflicting.append("replay expected outcome differs")
+    if manifest.get("source_summary") not in (None, summary.rsplit("/", 1)[-1]): conflicting.append("replay source summary differs")
+    planned = src.get("planned")
+    if isinstance(planned, dict) and planned.get("model_identity") != src.get("model_identity"): conflicting.append("planned policy identity differs")
+    try: structural = ArtifactCatalog._validate_reduction(src, manifest)
+    except (ValueError, TypeError, OverflowError, KeyError): structural = None
     if structural is None: reasons.append("reduction structure is incomplete")
-    episodes, refs, selected, seed_values, media_counts = [], [], [], set(), {"videos": 0, "traces": 0}
+    episodes, refs, selected, seed_values, fill_values, media_counts = [], [], [], set(), set(), {"videos": 0, "traces": 0}
+    session_rel = summary.rpartition("/")[0]
     seen = set()
     for stage in stages:
         if not isinstance(stage, dict) or not isinstance(stage.get("stage"), str) or not _STAGE.fullmatch(stage["stage"]): conflicting.append("stage name is invalid"); continue
@@ -160,7 +184,11 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
         seen.add(name)
         if stage.get("status") != "completed": continue
         stage_rect = _rect(stage.get("rectangle")) if stage.get("rectangle") is not None else None
-        run = root / "failure-reduction" / "runs" / name
+        if stage.get("rectangle") is not None and stage_rect is None:
+            conflicting.append("stage rectangle is invalid"); continue
+        if stage.get("planned_episode_indices") is not None and stage["planned_episode_indices"] != [reset_index]:
+            conflicting.append("stage planned reset differs"); continue
+        run = root.joinpath(*session_rel.split("/")) / "runs" / name
         if not run.is_dir(): reasons.append("stage aggregate is unavailable"); continue
         matches = sorted(run.rglob("*_aggregate.json"))
         if len(matches) == 0: reasons.append("stage aggregate is unavailable"); continue
@@ -173,33 +201,54 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
         params = config.get("params") if isinstance(config.get("params"), dict) else {}
         groups = aggregate.get("tasks")
         raw = groups[0].get("episodes") if isinstance(groups, list) and len(groups) == 1 and isinstance(groups[0], dict) else None
-        if config.get("benchmark") != "robot_debug.libero:DiagnosticLIBEROBenchmark" or params.get("suite") != "libero_object" or params.get("task_id", 0) != 0 or not isinstance(raw, list) or len(raw) != 1:
+        if config.get("benchmark") != "robot_debug.libero:DiagnosticLIBEROBenchmark" or params.get("suite") != "libero_object" or type(params.get("task_id", task_id)) is not int or params.get("task_id", task_id) != task_id or not isinstance(raw, list) or len(raw) != 1:
             conflicting.append("stage benchmark or episode count differs"); continue
         episode = raw[0]
-        if not isinstance(episode, dict) or episode.get("task_id") != 0 or episode.get("episode_idx", episode.get("episode_id")) != 0 or not _mask(params.get("agentview_occlusion"), stage_rect):
+        if not isinstance(episode, dict) or type(episode.get("task_id")) is not int or episode.get("task_id") != task_id or type(episode.get("episode_idx", episode.get("episode_id"))) is not int or episode.get("episode_idx", episode.get("episode_id")) != reset_index or not _mask(params.get("agentview_occlusion"), stage_rect):
             conflicting.append("stage task, episode, or mask differs"); continue
-        if params.get("seed") != manifest.get("seed") or type(params.get("env_seed")) is not int:
+        if stage_rect is not None:
+            fill_values.add(params["agentview_occlusion"]["color"][0])
+        if params.get("seed") != seed or type(params.get("env_seed")) is not int or params["env_seed"] < 0:
             conflicting.append("stage seed differs"); continue
         seed_values.add(params["env_seed"])
         try: result = classify_aggregate({"tasks": [{"episodes": [episode]}]})
         except ValueError: conflicting.append("raw episode is invalid"); continue
         reported = stage.get("results")
-        if not isinstance(reported, list) or len(reported) != 1 or reported[0].get("outcome") != result.outcome:
+        if not isinstance(reported, list) or len(reported) != 1 or not isinstance(reported[0], dict) or reported[0].get("outcome") != result.outcome or reported[0].get("episode_index") != reset_index or stage.get("physical_episode_count") != 1:
             conflicting.append("summary result differs from raw episode"); continue
         role = "nominal" if stage_rect is None else "reduced" if _same(stage_rect, final) and name.startswith("delta-") else "parent" if name.startswith("parent-") else "other"
         server = aggregate.get("server_info") if isinstance(aggregate.get("server_info"), dict) else {}
         if role in ("parent", "reduced", "nominal") and server.get("model_identity") != src.get("model_identity"):
             reasons.append("historical policy identity is not linked to aggregate")
-        entry = {"episode_id": f"{name}:0", "stage": name, "role": role, "aggregate": refs[-1], "task_id": 0, "reset_index": 0, "raw_outcome": result.outcome, "instruction": episode.get("name") if isinstance(episode.get("name"), str) and len(episode["name"]) < 300 else None}
+        reason = episode.get("failure_reason")
+        raw_outcome = "infrastructure_error" if result.outcome == "infrastructure_error" else "success" if result.outcome == "success" else "episode_timeout" if reason == "timeout" else "task_failure"
+        identity = f"{aggregate.get('eval_id') or rel}:{task_id}:{reset_index}"
+        episode_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+        entry = {"episode_id": episode_id, "stage": name, "role": role, "aggregate": refs[-1], "task_id": task_id, "reset_index": reset_index, "raw_outcome": raw_outcome, "gate_outcome": result.outcome, "instruction": None}
+        for key, suffix, count in (("video", ".mp4", "videos"), ("trace", ".jsonl", "traces")):
+            media = _media(root, run, aggregate.get("benchmark") if isinstance(aggregate.get("benchmark"), str) else "", task_id, reset_index, suffix)
+            if media is not None:
+                entry[key] = media
+                media_counts[count] += 1
         episodes.append(entry)
         selected.append((name, role, result.outcome, stage_rect))
     if len(seed_values) > 1: conflicting.append("stage environment seeds differ")
+    if len(fill_values) > 1: conflicting.append("stage fill colors differ")
     env_seed = next(iter(seed_values)) if len(seed_values) == 1 else None
     if not stages or len(episodes) != len([s for s in stages if isinstance(s, dict) and s.get("status") == "completed"]): reasons.append("completed stage evidence is incomplete")
     evidence_complete = len(episodes) == len([s for s in stages if isinstance(s, dict) and s.get("status") == "completed"])
     if evidence_complete and (src.get("valid_episode_count") != len(episodes) or src.get("physical_episode_count") != len(episodes)): conflicting.append("summary episode counts differ")
-    if completed.get("sentinel_outcome") != "success" or [outcome for name, role, outcome, rect in selected if role == "nominal" and name.startswith("nominal-control-")] != completed.get("control_outcomes"):
+    if completed.get("sentinel_outcome") != "success":
         conflicting.append("nominal control outcomes differ")
+    if evidence_complete:
+        if [outcome for name, role, outcome, rect in selected if name == "nominal-sentinel"] != ["success"] or [outcome for name, role, outcome, rect in selected if role == "nominal" and name.startswith("nominal-control-")] != completed.get("control_outcomes"):
+            conflicting.append("nominal control outcomes differ")
+    else:
+        reasons.append("nominal control evidence is incomplete")
+    parent = [d for d in completed.get("decisions", []) if isinstance(d, dict) and d.get("label") == "parent" and d.get("decision") == "pass" and _same(d.get("rectangle"), src.get("geometry", {}).get("parent"))] if isinstance(completed.get("decisions"), list) else []
+    parent_raw = [outcome for name, role, outcome, rect in selected if role == "parent"]
+    if evidence_complete and parent and parent[-1].get("outcomes") != parent_raw: conflicting.append("parent outcomes differ from raw episodes")
+    if not parent or parent_raw.count("policy_failure") < 4 or len(parent_raw) > 5: reasons.append("parent reproducibility is not established")
     accepted = [d for d in completed.get("decisions", []) if isinstance(d, dict) and d.get("label") == "candidate" and d.get("decision") == "pass" and _same(d.get("rectangle"), final)] if isinstance(completed.get("decisions"), list) else []
     if evidence_complete and accepted and accepted[-1].get("outcomes") != [o for _, role, o, rect in selected if role == "reduced" and _same(rect, final)]: conflicting.append("accepted outcomes differ from raw episodes")
     if not any(role == "parent" and outcome == "policy_failure" for _, role, outcome, _ in selected): reasons.append("parent failure evidence is missing")
@@ -207,7 +256,7 @@ def import_m4(source_root: Path, summary: str = "failure-reduction/session_summa
     if conflicting: history = "conflicting"; history_reasons = sorted(set(conflicting))
     elif reasons: history = "not-established"; history_reasons = sorted(set(reasons))
     else: history = "confirmed"; history_reasons = []
-    case = {"schema_version": 1, "source": source, "task": {"suite": "libero-object", "task_id": 0, "reset_index": 0, "seed": manifest.get("seed") if type(manifest.get("seed")) is int else None, "env_seed": env_seed, "reset_strategy": "libero-init-state-index"}, "policy": policy, "runtime": runtime, "perturbation": {"family": "agentview-opaque-rectangle", "rectangle": final or {"x": .5, "y": 0, "width": .5, "height": .375}, "fill_value": 0}, "protocol": {"failures": 4, "max_attempts": 5, "reject_successes": 2, "nominal_controls": 5}, "evidence": {"episodes": episodes, "aggregate_refs": refs, "lineage": [{"rectangle": _rect(x.get("rectangle")), "edge": x.get("edge"), "delta": x.get("delta")} for x in src.get("lineage", []) if isinstance(x, dict) and _rect(x.get("rectangle"))], "media_counts": media_counts}, "measurements": {"source_reported_elapsed_seconds": src.get("elapsed_seconds") if type(src.get("elapsed_seconds")) in (int, float) and math.isfinite(src["elapsed_seconds"]) else None, "physical_episode_count": src.get("physical_episode_count"), "valid_episode_count": len(episodes) if not conflicting else None, "cost": None}, "capabilities": {}, "limitations": ["Historical evidence does not establish fresh replay or billing cost."]}
+    case = {"schema_version": 1, "source": source, "task": {"suite": "libero-object", "task_id": task_id, "reset_index": reset_index, "seed": seed, "env_seed": env_seed, "reset_strategy": "libero-init-state-index"}, "policy": policy, "runtime": runtime, "perturbation": {"family": "agentview-opaque-rectangle", "rectangle": final, "fill_value": next(iter(fill_values)) if len(fill_values) == 1 else None}, "protocol": {"failures": 4, "max_attempts": 5, "reject_successes": 2, "nominal_controls": 5}, "evidence": {"episodes": episodes, "aggregate_refs": refs, "lineage": [{"rectangle": _rect(x.get("rectangle")), "edge": x.get("edge"), "delta": x.get("delta")} for x in src.get("lineage", []) if isinstance(x, dict) and _rect(x.get("rectangle"))], "media_counts": media_counts}, "measurements": {"source_reported_elapsed_seconds": src.get("elapsed_seconds") if type(src.get("elapsed_seconds")) in (int, float) and math.isfinite(src["elapsed_seconds"]) else None, "physical_episode_count": src.get("physical_episode_count"), "valid_episode_count": len(episodes) if not conflicting else None, "cost": None}, "capabilities": {}, "limitations": ["Historical evidence does not establish fresh replay or billing cost."]}
     try: case = normalize_case(case)
     except CaseValidationError: _fail("normalized case is invalid")
     missing = recipe_missing(case)
@@ -219,20 +268,36 @@ def revalidate_case(case: dict, source_root: Path) -> dict:
     """Rebuild claims from source bytes; never trust saved capability flags."""
     try: saved = normalize_case(case)
     except CaseValidationError: _fail("stored case is invalid")
+    def unavailable():
+        degraded = dict(saved)
+        degraded["capabilities"] = {"inspection": {"status": "unavailable", "reasons": ["source binding is unavailable or changed"]}, "replay_recipe": {"status": "incomplete", "missing": sorted(set(recipe_missing(saved) + ["source.summary", "source.replay"]))}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": "not-established", "reasons": ["source binding is unavailable or changed"]}}
+        return normalize_case(degraded)
     source = saved["source"]
     for key in ("summary", "replay", "profile"):
         ref = source.get(key)
         if ref is not None:
             path = _path(Path(source_root), ref["path"], required=False)
-            if path is None:
-                degraded = dict(saved)
-                degraded["capabilities"] = {"inspection": {"status": "unavailable", "reasons": ["source binding is unavailable"]}, "replay_recipe": {"status": "incomplete", "missing": recipe_missing(saved)}, "exercised_replay": {"status": "unverified", "reasons": ["no fresh replay executed"]}, "historical_failure": {"status": "not-established", "reasons": ["source binding is unavailable"]}}
-                return normalize_case(degraded)
-            if _hash(path) != ref["sha256"]: _fail("core source hash differs")
-    fresh = import_m4(Path(source_root), source["summary"]["path"], source["replay"]["path"], source.get("profile", {}).get("path"))
+            if path is None or _hash(path) != ref["sha256"]: return unavailable()
+    profile = source.get("profile")
+    fresh = import_m4(Path(source_root), source["summary"]["path"], source["replay"]["path"], profile["path"] if isinstance(profile, dict) else None)
     if fresh["case_id"] != saved["case_id"]: _fail("case identity differs from source")
-    core_keys = {"source", "task", "policy", "runtime", "perturbation", "protocol", "evidence"}
-    if any(saved[key] != fresh[key] for key in core_keys):
+    core_keys = {"task", "policy", "runtime", "perturbation", "protocol"}
+    def source_core(value):
+        result = dict(value)
+        if result.get("profile") is None: result.pop("profile", None)
+        return result
+    if source_core(saved["source"]) != source_core(fresh["source"]) or any(saved[key] != fresh[key] for key in core_keys):
         fresh["capabilities"]["inspection"] = {"status": "unavailable", "reasons": ["core evidence changed"]}
         fresh["capabilities"]["historical_failure"] = {"status": "not-established", "reasons": ["core evidence changed"]}
+    else:
+        def evidence_core(value):
+            result = dict(value)
+            result.pop("media_counts", None)
+            result["episodes"] = [{k: v for k, v in episode.items() if k not in {"video", "trace"}} for episode in result.get("episodes", [])]
+            return result
+        if evidence_core(saved["evidence"]) != evidence_core(fresh["evidence"]):
+            fresh["capabilities"]["inspection"] = {"status": "unavailable", "reasons": ["core evidence changed"]}
+            fresh["capabilities"]["historical_failure"] = {"status": "not-established", "reasons": ["core evidence changed"]}
+        elif saved["evidence"] != fresh["evidence"]:
+            fresh["capabilities"]["inspection"] = {"status": "unavailable", "reasons": ["optional media changed"]}
     return fresh
