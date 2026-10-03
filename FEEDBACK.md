@@ -12,6 +12,22 @@ identifiers, tokens, private addresses, or payment details here.
 | AllenAI VLA evaluation harness and LIBERO image | Hosted the evaluator, simulator, recordings, and model-server adapter. | Structured aggregates, traces, SQLite recordings, and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user. Generic schema warnings appeared even on successful episodes. M3 local review also found that the pinned CLI can leave its Docker client child alive after the evaluator exits; this is an upstream process-lifecycle integration risk, not evidence of a Nebius or NVIDIA fault. | Yes for the pinned benchmark, with explicit version, compatibility, and process-cleanup checks. |
 | Nebius Token Factory / Nemotron | Not used yet. Planned small evidence-grounded explanation pilot in M5C, subject to model/API, data scope and price verification. | No first-hand result to report. | Do not claim model quality, onboarding success, or API problems before a real pilot. AI Cloud CLI authentication does not itself configure a Token Factory key. | Undecided until a bounded pilot compares it with a deterministic report. |
 
+## October 3 M5 documentation-only preparation
+
+The [public Nemotron catalog](https://nebius.com/services/token-factory/models/nvidia-nemotron-models-inference)
+made a small text-only explanation pilot easy to price. The
+[structured-output documentation](https://docs.tokenfactory.nebius.com/ai-models-inference/json)
+explicitly conditions JSON support on the model-card tag, so we still need to
+verify that capability for the exact selected Nano endpoint rather than assume
+all OpenAI-compatible endpoints support the same response format. Account
+entitlement, credentials, actual request behavior, retention settings and cost
+are untested. These are documentation/planning observations, not API bug or
+model-quality claims. See [the feasibility note](docs/research/2026-10-03-m5-feasibility-checkpoints.md).
+
+Offline case/viewer implementation and its local validation bugs are recorded
+in `docs/dev-log.md`, not attributed to Nebius or NVIDIA. No additional cloud
+or inference usage was created by this implementation batch.
+
 ## September 30 read-only AI Cloud preflight
 
 The CLI's calculator returned separate hourly estimates for the same L40S VM
