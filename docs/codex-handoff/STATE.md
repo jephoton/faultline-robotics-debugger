@@ -16,6 +16,16 @@ failure-to-regression workflow; planning its next bounded step is next, with
 project-name brainstorming still queued. This overrides older execution
 instructions below. The portfolio overview is optional, not a core M5 gate.
 
+## Next scoped work — M5 planning, October 3
+
+The proposed `docs/superpowers/plans/2026-10-03-m5-case-workbench.md` divides M5
+into A: offline case inspection/export on existing evidence; B: one externally
+supplied, genuinely restorable simulation episode; C: grounded Nemotron
+explanations. No implementation started. First review the recommended
+read-only-viewer/CLI boundary and case readiness contract with Jethro. Exact
+external format, simulator restore adapter, hosted model/input, data transfer
+and live budgets remain gated. M3's unfinished launcher is not a dependency.
+
 ## Completed evidence
 
 - The nominal baseline passed 20/20 episodes.

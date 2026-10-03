@@ -14,6 +14,12 @@ end-to-end speedup validation are not prerequisites for that product or M7.
 A formal-methods component is under consideration, not yet designed/approved.
 This scope decision overrides older next-step instructions below.
 
+**Next scoped milestone:** [M5 case workbench plan](docs/superpowers/plans/2026-10-03-m5-case-workbench.md)
+is proposed for review: offline existing-case import/inspection/export, then
+one verified external replay adapter and a separately approved grounded
+Nemotron explanation pilot. CLI-first mutations with a read-only viewer are
+recommended, not approved. No implementation or paid execution has started.
+
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
