@@ -7,8 +7,9 @@
 
 **Status:** Scope/design and CLI-first entry point approved by Jethro on
 October 3. A3 media compatibility is implemented and independently reviewed;
-A1's exact case contract is written for review. Importer/UI/model implementations remain
-gated by their specific contracts and spending approvals.
+A1's exact case contract is accepted; the bounded schema-kernel plan is in
+execution. Case-I/O and UI follow reviewed schema integration; external adapters,
+model calls and paid execution retain their separate gates.
 
 **Goal:** Let a simulation-based robotics developer bring a supported case,
 understand replay readiness, inspect confirmed/reduced evidence, and export a
@@ -189,7 +190,7 @@ Review the schema and state transitions with Jethro before implementation.
 Integrated as `1d79c01`: 14 catalog and 14 server tests passed independently.
 Real saved three-task screen media resolves for IDs 0/1/2; M4 retains all 22
 videos/traces and its reduction view, with zero catalog warnings in both sets.
-The [A1 contract](../specs/2026-10-03-m5-case-contract-design.md) awaits approval;
+The [A1 contract](../specs/2026-10-03-m5-case-contract-design.md) is accepted;
 this fix alone is not the completed workbench.
 
 ### A4: Add the case journey to the viewer (amber after A2/A3 review)

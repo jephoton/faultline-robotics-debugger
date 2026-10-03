@@ -19,7 +19,8 @@ has its scope and CLI-first boundary approved: offline existing-case import/insp
 one verified external replay adapter and a separately approved grounded
 Nemotron explanation pilot. The independent task-local media fix is integrated
 and reviewed; the [exact case contract](docs/superpowers/specs/2026-10-03-m5-case-contract-design.md)
-is proposed for review before importer/UI implementation. No paid execution
+is accepted. Its bounded schema-kernel implementation is underway before
+source reconciliation, CLI import/export and dependent viewer integration. No paid execution
 has started. Expanded M3 remains frozen.
 
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.

@@ -26,8 +26,12 @@ Luna builder completed the approved task-local media fix, integrated as
 `1d79c01` after independent spec and quality review. IDs 0/1/2 all resolve saved
 screen video/trace; M4 retains 22/22 videos and traces with no warnings. Root prepared
 `docs/superpowers/specs/2026-10-03-m5-case-contract-design.md` for the exact A1
-review gate. Importer/UI implementation awaits that contract approval. The
-CLI-first decision is recorded in ADR 0012. Exact
+review gate; Jethro approved it with "go". The bounded schema-kernel plan
+`docs/superpowers/plans/2026-10-03-m5-case-schema.md` is handed to a balanced
+smaller agent in isolated `codex/m5-case-schema`. Only cases.py/test_cases.py
+are owned by that builder. Source reconciliation, persistence/CLI and viewer
+integration follow reviewed kernel integration; no completed importer is claimed.
+CLI-first and independent capabilities are recorded in ADRs 0012/0013. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.
 
