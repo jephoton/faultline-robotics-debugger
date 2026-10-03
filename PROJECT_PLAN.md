@@ -17,8 +17,8 @@ This scope decision overrides older next-step instructions below.
 **Next scoped milestone:** [M5 case workbench plan](docs/superpowers/plans/2026-10-03-m5-case-workbench.md)
 has its scope and CLI-first boundary approved: offline existing-case import/inspection/export, then
 one verified external replay adapter and a separately approved grounded
-Nemotron explanation pilot. The independent task-local media fix is being
-implemented; the [exact case contract](docs/superpowers/specs/2026-10-03-m5-case-contract-design.md)
+Nemotron explanation pilot. The independent task-local media fix is integrated
+and reviewed; the [exact case contract](docs/superpowers/specs/2026-10-03-m5-case-contract-design.md)
 is proposed for review before importer/UI implementation. No paid execution
 has started. Expanded M3 remains frozen.
 

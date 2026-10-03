@@ -22,11 +22,18 @@ The scope-approved `docs/superpowers/plans/2026-10-03-m5-case-workbench.md` divi
 into A: offline case inspection/export on existing evidence; B: one externally
 supplied, genuinely restorable simulation episode; C: grounded Nemotron
 explanations. Jethro accepted the read-only-viewer/CLI boundary. An isolated
-Luna builder is implementing the approved task-local media fix; root prepared
+Luna builder completed the approved task-local media fix, integrated as
+`1d79c01` after independent spec and quality review. IDs 0/1/2 all resolve saved
+screen video/trace; M4 retains 22/22 videos and traces with no warnings. Root prepared
 `docs/superpowers/specs/2026-10-03-m5-case-contract-design.md` for the exact A1
-review gate. Importer/UI implementation awaits that contract approval. Exact
+review gate. Importer/UI implementation awaits that contract approval. The
+CLI-first decision is recorded in ADR 0012. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.
+
+Fresh integrated Windows Python 3.11 suite: 390 tests passed, four known
+platform skips. Safety-test fixtures print simulated stop/argument errors;
+this test run did not access or start cloud resources.
 
 ## Completed evidence
 

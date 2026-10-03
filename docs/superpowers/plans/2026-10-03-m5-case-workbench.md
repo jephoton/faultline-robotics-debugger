@@ -6,8 +6,8 @@
 > implement undecided interfaces, send data to providers, or spend credits.
 
 **Status:** Scope/design and CLI-first entry point approved by Jethro on
-October 3. Proceed with independent A3 media compatibility work and prepare
-A1's exact case contract for review. Importer/UI/model implementations remain
+October 3. A3 media compatibility is implemented and independently reviewed;
+A1's exact case contract is written for review. Importer/UI/model implementations remain
 gated by their specific contracts and spending approvals.
 
 **Goal:** Let a simulation-based robotics developer bring a supported case,
@@ -178,13 +178,19 @@ Review the schema and state transitions with Jethro before implementation.
 
 ### A3: Fix task-local media identity (green, parallel to A2)
 
-- [ ] Add fixtures where global task IDs 1/2 have local-ordinal `task0000`
+- [x] Add fixtures where global task IDs 1/2 have local-ordinal `task0000`
   filenames, plus multi-task and ambiguous-media negatives.
-- [ ] Prefer explicit artifact identity; allow local-ordinal fallback only
+- [x] Prefer explicit artifact identity; allow local-ordinal fallback only
   when aggregate/output context proves the mapping. Ambiguity is a warning,
   not an arbitrary first match. Preserve deduplication and nominal filtering.
-- [ ] Run focused catalog/server regressions. Commit boundary:
+- [x] Run focused catalog/server regressions. Commit boundary:
   `fix(viewer): resolve task-local evidence with proven identity`.
+
+Integrated as `1d79c01`: 14 catalog and 14 server tests passed independently.
+Real saved three-task screen media resolves for IDs 0/1/2; M4 retains all 22
+videos/traces and its reduction view, with zero catalog warnings in both sets.
+The [A1 contract](../specs/2026-10-03-m5-case-contract-design.md) awaits approval;
+this fix alone is not the completed workbench.
 
 ### A4: Add the case journey to the viewer (amber after A2/A3 review)
 

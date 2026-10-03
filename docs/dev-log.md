@@ -4,6 +4,29 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## M5A: task-local media compatibility — October 3
+
+The task-filtered diagnostic benchmark keeps the global task ID in aggregates,
+but the harness names selected-task recordings using local ordinal zero. The
+viewer previously looked only for the global filename stem, so saved task-1/2
+recordings could appear unavailable despite existing. This is our catalog
+integration bug, not a Nebius or NVIDIA failure or a cost-saving recording choice.
+
+`1d79c01` prefers unique contained global matches, then permits local-zero
+lookup only when the exact benchmark/filter and all episode identities prove
+the mapping. Ambiguous or escaping media produces warnings, never an arbitrary
+selection or loss of otherwise valid episode metadata. Global IDs stay intact.
+Independent spec and quality review passed; focused catalog/server suites each
+passed 14 tests. Root verified all three real screen recordings/traces resolve,
+and all 22 M4 videos/traces plus reduction evidence remain available, with zero
+catalog warnings. No new robotics runs, provider calls or artifacts were created.
+
+The proposed M5A case contract is separate: independent inspection, recipe,
+exercised-replay and historical-confirmation capabilities. Root incorporated
+review findings requiring aggregate/summary reconciliation, dependency-specific
+source invalidation and validated normalized reimport before asking Jethro to
+approve that contract. Importer and dependent UI code have not started.
+
 ## M3: parallel replay, pilot, and equal-work comparison
 
 | Issue | Evidence and cause | Resolution or boundary | Status |

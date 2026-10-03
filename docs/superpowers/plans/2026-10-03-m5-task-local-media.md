@@ -29,7 +29,7 @@ API calls, artifact mutation or web/frontend edits. No new dependencies.
 
 ## Task 1 — Regressions and minimal lookup fix (green)
 
-- [ ] Extend existing tiny `write_episode` fixtures to cover global IDs 1/2
+- [x] Extend existing tiny `write_episode` fixtures to cover global IDs 1/2
   with local-ordinal-zero media. One failing test must assert the global
   identity stays 1/2 while video and trace resolve to `task0000` files.
 
@@ -47,35 +47,35 @@ self.assertIn("task0000_ep0000", episode.video_path)
 self.assertIn("task0000_ep0000", episode.trace_path)
 ```
 
-- [ ] Run focused tests and observe the new positive regression fail before
+- [x] Run focused tests and observe the new positive regression fail before
   implementing the fix. Add negative fixtures for absent/bool/mismatched
   filter, a different benchmark class, multiple task groups/mixed episode
   task IDs, duplicate matching media, and escaping media symlinks when the
   platform supports creating them. Missing/ambiguous media must not remove
   an otherwise valid episode from the catalog.
-- [ ] Implement a small contained unique-match helper within `catalog.py`.
+- [x] Implement a small contained unique-match helper within `catalog.py`.
   Use the two existing candidate directories, inspect regular contained files
   only, deduplicate identical resolved paths. More than one candidate for a
   media kind is ambiguous: warn and return None, never choose sorted first.
   Preserve direct global lookup; do not fall back after global ambiguity.
-- [ ] If no global match exists, allow ordinal-zero lookup only for the exact
+- [x] If no global match exists, allow ordinal-zero lookup only for the exact
   benchmark class above, one task group, a non-bool nonnegative integer filter
   matching the requested global task and all episodes in that group. Keep
   episode index unchanged. No heuristic based solely on a lone video or name.
   Resolve video/trace independently; preserve global episode identity,
   deduplication and all existing classifications. Do not parse video contents
   or change reduction semantics. Implement only enough for these tests.
-- [ ] Run focused catalog and server tests; preserve the existing suite.
-- [ ] Self-review, explicit-path commit:
+- [x] Run focused catalog and server tests; preserve the existing suite.
+- [x] Self-review, explicit-path commit:
   `fix(viewer): resolve proven task-local episode media`.
 
 ## Task 2 — Independent review and root integration
 
-- [ ] Read-only spec reviewer verifies exact mapping/ambiguity/containment and
+- [x] Read-only spec reviewer verifies exact mapping/ambiguity/containment and
   no unsupported single-task guessing; run focused tests independently.
-- [ ] Only after spec pass, quality reviewer checks behavior and tests against
+- [x] Only after spec pass, quality reviewer checks behavior and tests against
   the requirements. Fix actual blocking findings, not speculative refactors.
-- [ ] Root cherry-picks reviewed commits, runs fresh full tests and checks
+- [x] Root cherry-picks reviewed commits, runs fresh full tests and checks
   the three real screen aggregates against their actual media paths. Do not
   modify recordings or alter one-representative-nominal UI filtering.
 - [ ] Root records bug and evidence in dev-log/handoff; no provider fault or
@@ -93,3 +93,9 @@ git diff --check
 Expected: new targeted tests pass, existing tests pass with known platform
 skips reported. No task starts the viewer, accesses a provider or changes
 the user's selected recordings. Stop for a material contract ambiguity.
+
+**Verified October 3:** integrated `1d79c01`; focused catalog/server 14 tests
+each, full main suite 390 tests/four platform skips. Both independent reviews
+passed. Real screen 3/3 videos/traces and M4 22/22 videos/traces resolve with
+zero warnings; M4 reduction still loads. Development/handoff notes updated.
+Final publication verification is recorded in the coordinating turn.
