@@ -6,6 +6,24 @@ tests is not necessarily a failure seen in the live pilot.
 
 ## M5A: task-local media compatibility — October 3
 
+### Case import review (local fixtures, not provider incidents)
+
+The first importer/store/CLI unit passed 440 tests (four platform skips), but
+independent spec review reproduced a false historical-confirmation path:
+parent episode masks could disagree with the declared parent geometry while
+their outcome counts still matched. The review also reproduced arbitrary
+lineage/measurement payload leakage, Boolean seeds comparing equal to integer
+seeds, optional-media loss disabling otherwise intact inspection, supplemental
+profile loss downgrading unrelated historical proof, and contradictory policy
+identity being classified as absent proof. Repairs and regression tests are in
+progress before integration; a green suite alone did not establish correctness.
+
+Root's read-only check of the real saved M4 bundle resolved 22 videos and 22
+traces. It reported missing checkpoint, simulator-image and upstream-harness
+pins, and no aggregate-linked exact policy identity. These are legacy metadata
+limitations, not fresh replay failures. No original source files, cloud resources
+or provider requests were changed during these checks.
+
 ### Case schema review
 
 The approved case contract is being implemented as a pure schema kernel before
