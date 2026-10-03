@@ -108,11 +108,11 @@ not that a run was exercised or that failure was confirmed.
 
 Files: create `cases.py` and `test_cases.py` above. Fixtures synthetic and tiny.
 
-- [ ] Write a reusable complete fixture with source summary/replay dummy
+- [x] Write a reusable complete fixture with source summary/replay dummy
   relative paths/hash, task0/reset0/seeds7, model `example-policy`/revision
   `example-revision`, runtime dummy pins, rectangle x=.625/y=0/w=.375/h=.375,
   fill0 and fixed protocol. Set nonidentity maps empty and limitations empty.
-- [ ] Add the first failing test before implementation:
+- [x] Add the first failing test before implementation:
 
 ```python
 raw = complete_case_fixture()
@@ -125,16 +125,16 @@ self.assertEqual(recipe_missing(normalized), [])
 self.assertNotIn('case_id', raw)  # no mutation
 ```
 
-- [ ] Run and observe missing API failure with a nonzero test count after
+- [x] Run and observe missing API failure with a nonzero test count after
   scaffolding imports as needed. Implement the API and the structural contract.
-- [ ] Add parameterized tests for unknown schema/top/identity-group keys,
+- [x] Add parameterized tests for unknown schema/top/identity-group keys,
   boolean IDs/protocol/geometry, bad digests/hashes/paths, invalid/nonfinite
   rectangles, non-JSON values, stored identity mismatch and deep-copy behavior.
-- [ ] Test all missing replay fields are enumerated; excluding optional media
+- [x] Test all missing replay fields are enumerated; excluding optional media
   and changing evidence/capabilities/measurement/provenance/source placement
   leaves identity unchanged. Changing a runtime pin, task/reset, mask or fill
   changes identity. Stored positive badges must not affect recipe_missing.
-- [ ] Run focused tests, self-review, commit explicit owned paths:
+- [x] Run focused tests, self-review, commit explicit owned paths:
   `feat(cases): validate deterministic case schema and recipe inputs`.
 
 ```powershell
@@ -145,12 +145,12 @@ git diff --check
 
 ## Task 2 — Reviews, integration and next boundary
 
-- [ ] Independent spec reviewer checks every identity exclusion, prerequisite,
+- [x] Independent spec reviewer checks every identity exclusion, prerequisite,
   strict numeric/path rule, no input mutation and no evidence-certification
   claim; runs focused tests. Fix blocking findings in the builder worktree.
-- [ ] Independent quality reviewer checks pure API behavior, deterministic
+- [x] Independent quality reviewer checks pure API behavior, deterministic
   hashing, recursive JSON validation and tests after spec pass.
-- [ ] Root integrates only reviewed commits and runs the full suite (baseline
+- [x] Root integrates only reviewed commits and runs the full suite (baseline
   main 390 tests/four platform skips). Record exact results, not an estimate.
 - [ ] Update master plan/current-state/dev-log and push with remote verification.
   Leave A2 incomplete: no CLI or real-case reconciliation exists yet.
@@ -161,3 +161,8 @@ git diff --check
 No spending gate is opened by finishing this unit. No new human question is
 needed for routine plan-conforming implementation. Escalate only a material
 contract conflict; do not repeatedly ask about the accepted schema direction.
+
+**Verified implementation:** main `46a3419` / `d29f87a`, ten focused tests and
+400 full-suite tests/four known platform skips. Both independent review gates
+passed, including the malformed Unicode/integer correction. The next case-I/O
+plan is not implemented by this unit; A2 and the viewer journey remain incomplete.

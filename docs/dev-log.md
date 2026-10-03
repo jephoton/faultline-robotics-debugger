@@ -6,6 +6,25 @@ tests is not necessarily a failure seen in the live pilot.
 
 ## M5A: task-local media compatibility — October 3
 
+### Case schema review
+
+The approved case contract is being implemented as a pure schema kernel before
+source reconciliation and CLI persistence. It computes recipe identity and
+missing-input lists, not historical failure confirmation. Root inspected saved
+M4 source layout independently; see
+[`the source map`](research/2026-10-03-m5-existing-m4-source-map.md).
+
+Quality review reproduced an escaped lone-surrogate string leaking an encoding
+exception instead of `CaseValidationError`. Direct-Python oversized integers
+also exposed serialization inconsistencies. These are local malformed-input
+issues, not provider incidents. The builder added UTF-8 JSON serializability
+regressions, stable validation errors and NUL-path rejection; independent spec
+and quality rechecks passed. Integrated as `46a3419` and `d29f87a`. Ten focused
+tests pass. No importer, file-integrity check or verified-failure badge is
+implemented by this pure kernel.
+Fresh integrated Windows Python 3.11 full suite: 400 tests, four known platform
+skips, no failures. Safety-test stop warnings are simulated fixture output.
+
 The task-filtered diagnostic benchmark keeps the global task ID in aggregates,
 but the harness names selected-task recordings using local ordinal zero. The
 viewer previously looked only for the global filename stem, so saved task-1/2

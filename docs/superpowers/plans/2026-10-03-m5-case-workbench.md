@@ -7,8 +7,8 @@
 
 **Status:** Scope/design and CLI-first entry point approved by Jethro on
 October 3. A3 media compatibility is implemented and independently reviewed;
-A1's exact case contract is accepted; the bounded schema-kernel plan is in
-execution. Case-I/O and UI follow reviewed schema integration; external adapters,
+A1's exact case contract is accepted; the bounded schema kernel is implemented
+and reviewed. Case-I/O and UI are next; external adapters,
 model calls and paid execution retain their separate gates.
 
 **Goal:** Let a simulation-based robotics developer bring a supported case,

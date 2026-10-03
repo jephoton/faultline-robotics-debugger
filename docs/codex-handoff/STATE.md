@@ -27,15 +27,18 @@ Luna builder completed the approved task-local media fix, integrated as
 screen video/trace; M4 retains 22/22 videos and traces with no warnings. Root prepared
 `docs/superpowers/specs/2026-10-03-m5-case-contract-design.md` for the exact A1
 review gate; Jethro approved it with "go". The bounded schema-kernel plan
-`docs/superpowers/plans/2026-10-03-m5-case-schema.md` is handed to a balanced
-smaller agent in isolated `codex/m5-case-schema`. Only cases.py/test_cases.py
-are owned by that builder. Source reconciliation, persistence/CLI and viewer
+`docs/superpowers/plans/2026-10-03-m5-case-schema.md` was implemented by a balanced
+smaller agent in isolated `codex/m5-case-schema` and integrated as `46a3419`/
+`d29f87a` after independent spec/quality review. `cases.py` validates structure,
+computes deterministic identity and lists missing recipe prerequisites; it
+does not inspect files or certify imported evidence. Ten focused tests pass.
+Source reconciliation, persistence/CLI and viewer
 integration follow reviewed kernel integration; no completed importer is claimed.
 CLI-first and independent capabilities are recorded in ADRs 0012/0013. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.
 
-Fresh integrated Windows Python 3.11 suite: 390 tests passed, four known
+Fresh integrated Windows Python 3.11 suite: 400 tests passed, four known
 platform skips. Safety-test fixtures print simulated stop/argument errors;
 this test run did not access or start cloud resources.
 
