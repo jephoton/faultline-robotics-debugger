@@ -88,6 +88,13 @@ class ImportTests(unittest.TestCase):
         p = self.session / "replay_case.json"
         p.write_text('{"schema_version":1,"schema_version":1}')
         with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
+
+    def test_bool_version_and_numeric_string_rectangle_are_rejected(self):
+        p = self.session / "replay_case.json"
+        data = json.loads(p.read_text()); data["schema_version"] = True; p.write_text(json.dumps(data))
+        with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
+        data["schema_version"] = 1; data["rectangle"]["x"] = "0.5"; p.write_text(json.dumps(data))
+        self.assertEqual(import_m4(self.root)["capabilities"]["historical_failure"]["status"], "conflicting")
         p.write_text('{"schema_version":1,"seed":NaN}')
         with self.assertRaises(SanitizedCaseValidationError): import_m4(self.root)
 

@@ -12,7 +12,7 @@ from robot_debug.session import classify_aggregate
 from robot_debug.viewer.catalog import ArtifactCatalog
 
 
-class SanitizedCaseValidationError(ValueError):
+class SanitizedCaseValidationError(CaseValidationError):
     """Invalid source evidence; messages contain no source values or paths."""
 
 
@@ -76,7 +76,7 @@ def _json(root: Path, relative: str) -> dict:
         value = json.loads(path.read_bytes().decode("utf-8", "strict"), object_pairs_hook=_pairs, parse_constant=_bad_constant)
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         _fail("JSON source is malformed")
-    if not isinstance(value, dict) or value.get("schema_version", 1) != 1:
+    if not isinstance(value, dict) or ("schema_version" in value and (type(value["schema_version"]) is not int or value["schema_version"] != 1)):
         _fail("JSON source schema is unsupported")
     return value
 
@@ -84,6 +84,7 @@ def _json(root: Path, relative: str) -> dict:
 def _rect(value):
     if not isinstance(value, dict): return None
     try:
+        if any(type(value[key]) not in (int, float) for key in ("x", "y", "width", "height")): return None
         nums = {key: float(value[key]) for key in ("x", "y", "width", "height")}
         if any(not math.isfinite(v) for v in nums.values()): return None
         if not (0 <= nums["x"] <= 1 and 0 <= nums["y"] <= 1 and nums["width"] > 0 and nums["height"] > 0 and nums["x"] + nums["width"] <= 1 and nums["y"] + nums["height"] <= 1): return None
@@ -230,4 +231,8 @@ def revalidate_case(case: dict, source_root: Path) -> dict:
             if _hash(path) != ref["sha256"]: _fail("core source hash differs")
     fresh = import_m4(Path(source_root), source["summary"]["path"], source["replay"]["path"], source.get("profile", {}).get("path"))
     if fresh["case_id"] != saved["case_id"]: _fail("case identity differs from source")
+    core_keys = {"source", "task", "policy", "runtime", "perturbation", "protocol", "evidence"}
+    if any(saved[key] != fresh[key] for key in core_keys):
+        fresh["capabilities"]["inspection"] = {"status": "unavailable", "reasons": ["core evidence changed"]}
+        fresh["capabilities"]["historical_failure"] = {"status": "not-established", "reasons": ["core evidence changed"]}
     return fresh
