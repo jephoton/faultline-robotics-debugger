@@ -14,6 +14,14 @@ Neither track implements a restore adapter or upgrades imported case claims.
 **Tech stack:** PowerShell streaming HTTPS, Python 3.11, isolated binary h5py,
 official provider documentation. No production dependency changes.
 
+**October 4 result:** Acquisition, checksum and actual metadata inspection
+completed; independent review agrees this is a feasible restore candidate,
+not a demonstrated replay. The sample is not self-contained. Root verified
+the inspector fixtures and isolated environment. Token Factory key setup is
+requested; no inference has occurred. Account/balance and client-plan gates
+remain before the approved pilot. See the external-sample and model-access
+research notes for observations, unknowns and exact next checks.
+
 ## Authority and boundaries
 
 Jethro's October 4 "go" accepts the two preceding bounded proposals:

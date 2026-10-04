@@ -64,6 +64,20 @@ this test run did not access or start cloud resources.
 
 ## Completed evidence
 
+October 4 M5 follow-up: ADR 0014 accepts the 744.1 MiB sample acquisition and
+text-only Nano Nemotron pilot (ten calls / US$0.02 maximum). Sample bytes/hash
+verified in ignored `artifacts/m5-sample-preflight`; actual demo_0 has 148
+steps, 110-value simulator states, matching init_state, model XML and paired
+128px camera data. BDDL content absent; XML assets/runtime compatibility are
+not self-contained or exercised. See the new external-sample research note.
+The isolated h5py environment needed pip truststore, with TLS kept enabled.
+No relevant inference key is configured in process/user/machine variables or
+a repo env file; an async request asks Jethro to save NEBIUS_API_KEY in ignored
+root .env and report Token Factory balance/expiry. Never print or commit it.
+Public cookbook lowercase API identifier and regional base differ from older
+examples; verify exact account catalog before requests. No inference or VM
+start occurred. Next is adapter design/client planning, not live replay.
+
 - The nominal baseline passed 20/20 episodes.
 - Centered opaque-square occlusions through 25% image area succeeded.
 - The fixed-area position grid found a reproducible failure at normalized

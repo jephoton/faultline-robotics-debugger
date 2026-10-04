@@ -29,6 +29,16 @@ M5B external replay and M5C real Nemotron explanations remain pending their
 sample, model/data-transfer and spending gates. No M5 paid execution has
 started. Expanded M3 remains frozen.
 
+October 4 follow-up: sample acquisition and the $0.02 text-only Nemotron pilot
+are approved in [ADR 0014](docs/decisions/0014-m5-bounded-sample-and-nemotron-pilot.md).
+The actual external sample's hash/size and demo_0 metadata are verified; it has
+states/XML but requires external BDDL/assets and runtime restore validation.
+See [sample findings](docs/research/2026-10-04-m5-external-sample.md).
+Token Factory access remains blocked on locally configured API credentials
+and account/balance checks, not on renewed AI Cloud CLI sign-in. Next: review
+the narrow restore adapter design and prepare the bounded explanation client;
+neither sample inspection nor documentation counts as completed M5B/C.
+
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.

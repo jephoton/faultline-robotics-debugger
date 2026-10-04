@@ -6,6 +6,25 @@ tests is not necessarily a failure seen in the live pilot.
 
 ## M5A: task-local media compatibility — October 3
 
+### M5 sample preflight environment — October 4
+
+The isolated Python 3.11 environment's pip 24.0 failed to verify PyPI's
+certificate chain using its bundled certificate roots. Retrying with pip's
+`--use-feature=truststore` succeeded with Windows' existing trusted roots:
+h5py 3.14.0 and NumPy 2.4.6 binary wheels installed only in the ignored research
+venv. Certificate verification stayed enabled; no `--trusted-host`, disabled
+TLS or machine-wide trust changes were used. This is local dependency setup
+friction, not a Nebius or NVIDIA incident.
+
+Review of the one-off sample inspector caught a schema-location mistake before
+the actual file was opened: LIBERO stores `problem_info` on `data`, not the
+episode group. The helper and fixture were corrected to inspect the real
+attribute ownership, BDDL reference, image convention and matching init state.
+Independent actual-file review also identified asset basename collisions:
+81 references / 80 paths / 72 basenames. A future restore adapter cannot treat
+basename matching as proof it resolved the correct scene. No robot restore
+or policy execution was attempted during this metadata preflight.
+
 ### Case viewer completion — October 4
 
 Independent review caught stale recipes after readiness changed, unsafe

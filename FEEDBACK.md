@@ -157,3 +157,19 @@ valid outcomes and media. Warm throughput scaling is measured; end-to-end
 cost and provider billing remain estimates until posting is reconciled.
 Engineering issues and operator errors are tracked in [`docs/dev-log.md`](docs/dev-log.md);
 do not misattribute them to Nebius or NVIDIA.
+
+### October 4: Token Factory documentation preflight only
+
+No inference has occurred; Token Factory and hosted Nemotron remain untested
+in this project. The official model cookbook supplies a concrete Nano 30B A3B
+chat-completions example and describes structured output. Onboarding still
+requires a separately configured inference key and account/billing checks;
+AI Cloud CLI sign-in does not provide that key automatically.
+
+Documentation friction: the model cookbook uses a lowercase model identifier
+and US-central regional base, while the generic quickstart uses the global
+base. We will verify the account's live catalog rather than assume aliases or
+switch processing regions. This is an example-consistency observation, not an
+observed API defect. API reliability, output quality, latency, actual charges
+and willingness to reuse cannot be judged until the approved real pilot.
+See [access research](docs/research/2026-10-04-m5-nemotron-access.md).
