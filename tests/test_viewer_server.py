@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -125,6 +126,54 @@ class ViewerServerTests(unittest.TestCase):
             self.assertIn(identifier, page)
         for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
             self.assertIn(landmark, page)
+
+    def test_case_workbench_assets_expose_read_only_journey(self):
+        _, _, page_body = self.get("/")
+        _, _, app_body = self.get("/app.js")
+        page = page_body.decode("utf-8")
+        app = app_body.decode("utf-8")
+        self.assertLess(page.index('id="case-workbench"'), page.index('id="comparison-conclusion"'))
+        for identifier in ("case-select", "case-status", "case-inspection", "case-recipe-status",
+                           "case-replay", "case-history", "case-prerequisites", "case-measurements",
+                           "case-recipe", "case-export"):
+            self.assertIn(f'id="{identifier}"', page)
+        for caption in ("Current saved source", "Required inputs", "Fresh execution", "Recorded outcome"):
+            self.assertIn(caption, page)
+        self.assertIn('value="all"', page)
+        self.assertIn('aria-live="polite"', page)
+        for token in ("/api/cases", "refreshCases", "caseEpisodeMatches", "case_id", "manage_cases.py export",
+                      "textContent", "source_reported_elapsed_seconds", "physical_episode_count",
+                      "valid_episode_count"):
+            self.assertIn(token, app)
+        self.assertNotIn("innerHTML", app)
+        self.assertIn("selected.evidence.lineage", app)
+        self.assertIn("savedRoleFor", app)
+        self.assertIn("Validated recipe unavailable", app)
+        self.assertIn("caseSignature", app)
+        self.assertIn("saved.episode_id === episode.episode_id", app)
+        self.assertNotIn("saved.stage === episode.run_name", app)
+        self.assertIn("<case-workspace-outside-source-root>", app)
+
+    def test_case_javascript_rejects_ambiguous_links_and_handles_unavailable_entry(self):
+        script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('assert');
+let source = fs.readFileSync(process.argv[1], 'utf8');
+source = source.replace(/^refreshCatalog\(\)\.catch\(showFatalError\);$/m, '');
+const element = { addEventListener() {}, dataset: {} };
+const context = { document: { getElementById() { return element; } }, window: { setInterval() {} } };
+vm.runInNewContext(source + '\nglobalThis.exposed = { caseEpisodeMatches, caseSignature };', context);
+const { caseEpisodeMatches, caseSignature } = context.exposed;
+assert.strictEqual(caseEpisodeMatches({ episode_id: 'saved', stage: 'parent', task_id: 1, reset_index: 0 },
+  { episode_id: 'other', run_name: 'parent', task_id: 1, episode_index: 0 }), false);
+assert.strictEqual(caseEpisodeMatches({ episode_id: 'saved' }, { episode_id: 'saved' }), true);
+assert.strictEqual(caseSignature({ case_id: 'a'.repeat(64), status: 'unavailable' }), 'a'.repeat(64) + ':unavailable');
+"""
+        asset = self.web_root / "app.js"
+        result = subprocess.run([r"C:\Program Files\nodejs\node.exe", "-e", script, str(asset)],
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_javascript_asset_uses_stable_content_type(self):
         with patch.object(

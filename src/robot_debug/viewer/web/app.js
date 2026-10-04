@@ -1,6 +1,8 @@
 const state = {
   episodes: [], warnings: [], primaryId: null, comparisonId: null,
   traces: new Map(), linked: true, refreshMs: 2000, reduction: null,
+  cases: [], caseId: "all", caseSelected: false, caseError: null,
+  recipe: null, recipeCaseId: null, caseSignature: null,
 };
 
 const outcomeLabels = {
@@ -9,6 +11,32 @@ const outcomeLabels = {
 };
 const byId = (id) => document.getElementById(id);
 const episodeById = (id) => state.episodes.find((episode) => episode.episode_id === id);
+const selectedCase = () => state.cases.find((item) => item.case_id === state.caseId);
+function caseSignature(item) {
+  if (!item) return state.caseId;
+  if (item.status === "unavailable") return `${item.case_id}:unavailable`;
+  return JSON.stringify([item.case_id, item.capabilities, item.policy, item.runtime, item.evidence.episodes]);
+}
+function caseEpisodeMatches(saved, episode) {
+  return saved.episode_id === episode.episode_id;
+}
+function savedRoleFor(episode) {
+  const chosen = selectedCase();
+  if (!episode || !chosen || chosen.status === "unavailable") return null;
+  const saved = chosen.evidence.episodes.find((item) => caseEpisodeMatches(item, episode));
+  return saved ? saved.role : null;
+}
+function caseEpisodes() {
+  const selected = selectedCase();
+  if (!selected || selected.status === "unavailable" ||
+      selected.capabilities.inspection.status !== "available") return [];
+  const matches = [];
+  selected.evidence.episodes.forEach((saved) => {
+    const exact = state.episodes.find((episode) => caseEpisodeMatches(saved, episode));
+    if (exact && !matches.some((episode) => episode.episode_id === exact.episode_id)) matches.push(exact);
+  });
+  return matches;
+}
 function isPerturbed(episode) {
   const fault = episode && episode.perturbation;
   return Boolean(fault && typeof fault === "object" && fault.enabled === true);
@@ -29,8 +57,9 @@ function representativeNominal(episodes, primary) {
   })[0] || null;
 }
 function displayEpisodes(primary = episodeById(state.primaryId)) {
-  const nominal = representativeNominal(state.episodes, primary);
-  return state.episodes.filter((episode) => !isNominal(episode) || episode.episode_id === (nominal && nominal.episode_id));
+  const source = state.caseId === "all" ? state.episodes : caseEpisodes();
+  const nominal = representativeNominal(source, primary);
+  return source.filter((episode) => !isNominal(episode) || episode.episode_id === (nominal && nominal.episode_id));
 }
 const formatSeconds = (value) => `${Number(value || 0).toFixed(2)} s`;
 function setText(element, value) { element.textContent = value == null ? "—" : String(value); }
@@ -61,6 +90,104 @@ async function refreshReduction() {
   } catch (_) { state.reduction = null; }
 }
 
+async function refreshRecipe(caseId) {
+  state.recipeCaseId = caseId;
+  state.recipe = null;
+  if (!/^[0-9a-f]{64}$/.test(caseId)) return;
+  const requestedSignature = state.caseSignature;
+  try {
+    const response = await fetch(`/api/cases/${caseId}/recipe`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`recipe request failed: ${response.status}`);
+    const payload = await response.json();
+    if (state.caseId === caseId && state.caseSignature === requestedSignature) state.recipe = payload;
+  } catch (_) {
+    if (state.caseId === caseId && state.caseSignature === requestedSignature) state.recipe = { recipe: null, missing: ["recipe endpoint unavailable"] };
+  }
+  renderCaseWorkbench();
+}
+
+async function refreshCases() {
+  try {
+    const response = await fetch("/api/cases", { cache: "no-store" });
+    if (!response.ok) throw new Error(`case request failed: ${response.status}`);
+    const payload = await response.json();
+    state.cases = Array.isArray(payload.cases) ? payload.cases : [];
+    state.caseError = null;
+    const previous = state.caseId;
+    if (!state.caseSelected && (state.caseId === "all" || !selectedCase())) {
+      const first = state.cases.find((item) => item.case_id && item.status !== "unavailable");
+      state.caseId = first ? first.case_id : "all";
+    } else if (state.caseId !== "all" && !selectedCase()) state.caseId = "all";
+    const chosen = selectedCase();
+    const signature = caseSignature(chosen);
+    if (previous !== state.caseId || state.caseSignature !== signature ||
+        (state.recipe && state.recipe.missing && state.recipe.missing.includes("recipe endpoint unavailable")) ||
+        (state.caseId !== "all" && state.recipeCaseId !== state.caseId)) {
+      state.caseSignature = signature;
+      refreshRecipe(state.caseId);
+    }
+  } catch (_) { state.caseError = "Saved case index unavailable; showing existing episode evidence."; }
+  renderCaseWorkbench();
+}
+
+function renderCaseWorkbench() {
+  const select = byId("case-select");
+  const signature = state.cases.map((item) => `${item.case_id || "invalid"}:${item.status || "case"}`).join("|");
+  if (select.dataset.signature !== signature) {
+    select.replaceChildren();
+    const all = document.createElement("option"); all.value = "all"; all.textContent = "All saved evidence"; select.append(all);
+    state.cases.forEach((item) => {
+      if (!item.case_id || !/^[0-9a-f]{64}$/.test(item.case_id)) return;
+      const option = document.createElement("option"); option.value = item.case_id;
+      option.textContent = `${item.case_id.slice(0, 12)} · ${item.status === "unavailable" ? "UNAVAILABLE" : item.task.suite + " task " + item.task.task_id}`;
+      select.append(option);
+    });
+    select.dataset.signature = signature;
+  }
+  select.value = state.caseId;
+  const chosen = selectedCase();
+  const status = byId("case-status");
+  if (state.caseError) setText(status, state.caseError);
+  else if (!state.cases.length) setText(status, "No saved cases yet. Import an existing M4 reduction locally: python scripts/manage_cases.py import-m4 --source-root <artifacts-directory> --workspace <case-workspace-outside-source-root>");
+  else if (state.caseId === "all") setText(status, "All saved evidence · choose a case to inspect its verified scope.");
+  else if (chosen && chosen.status === "unavailable") setText(status, "Saved case entry unavailable. Its source evidence cannot be inspected.");
+  else setText(status, `Case ${state.caseId.slice(0, 12)} · ${caseEpisodes().length}/${chosen.evidence.episodes.length} exactly linked episode(s) · saved historical evidence`);
+  const fields = [["case-inspection", "inspection"], ["case-recipe-status", "replay_recipe"],
+    ["case-replay", "exercised_replay"], ["case-history", "historical_failure"]];
+  fields.forEach(([id, key]) => {
+    const capability = chosen && chosen.capabilities && chosen.capabilities[key];
+    setText(byId(id), capability ? capability.status : "—");
+  });
+  setText(byId("case-detail-reasons"), chosen && chosen.capabilities
+    ? fields.map(([, key]) => {
+      const capability = chosen.capabilities[key];
+      return `${key.replaceAll("_", " ")}: ${(capability.reasons || capability.missing || []).join(", ") || "no additional reason recorded"}`;
+    }).join(" · ") : "");
+  if (!chosen || chosen.status === "unavailable") {
+    setText(byId("case-prerequisites"), "Select an available case to inspect recipe prerequisites.");
+    setText(byId("case-measurements"), "Source-reported measurements unavailable.");
+    setText(byId("case-recipe"), "");
+    setText(byId("case-export"), "");
+    return;
+  }
+  const missing = chosen.capabilities.replay_recipe.missing || [];
+  const media = chosen.evidence.media_availability || {};
+  setText(byId("case-prerequisites"), `Missing replay inputs: ${missing.length ? missing.join(", ") : "none"}. Media: ${media.status || "unknown"}. Reduced rectangle is local to this saved search budget; global minimality is unverified. Stopping reason was not retained in this imported case. ${missing.length ? "A metadata directory can still be exported, but the replay recipe remains incomplete." : ""}`);
+  const measurements = chosen.measurements || {};
+  const shown = (value) => value == null ? "unknown" : value;
+  setText(byId("case-measurements"), `Source-reported time: ${shown(measurements.source_reported_elapsed_seconds)} s · Physical episodes: ${shown(measurements.physical_episode_count)} · Valid episodes: ${shown(measurements.valid_episode_count)} · Cost: ${shown(measurements.cost)}`);
+  setText(byId("case-recipe"), state.recipeCaseId === state.caseId && state.recipe &&
+    state.recipe.missing && state.recipe.missing.includes("recipe endpoint unavailable")
+    ? "Validated recipe unavailable. The case endpoint could not be read; retry by refreshing this page."
+    : chosen.capabilities.replay_recipe.status === "complete" &&
+    state.recipeCaseId === state.caseId && state.recipe && state.recipe.recipe
+    ? JSON.stringify(state.recipe.recipe, null, 2)
+    : `Replay recipe ${chosen.capabilities.replay_recipe.status}. ${missing.length ? "Add the missing pinned inputs before replay." : "Loading validated recipe…"}`);
+  setText(byId("case-export"), chosen.capabilities.inspection.status === "available"
+    ? `python scripts/manage_cases.py export --workspace <case-workspace-outside-source-root> --case-id ${chosen.case_id} --output <new-directory>`
+    : "Export unavailable while inspection is unavailable.");
+}
+
 function renderComparisonStory(primary, comparison) {
   const perturbed = isPerturbed(primary) ? primary : isPerturbed(comparison) ? comparison : null;
   const perturbedArea = perturbationArea(perturbed);
@@ -70,9 +197,11 @@ function renderComparisonStory(primary, comparison) {
   setText(byId("comparison-conclusion"), primary && comparison
     ? `${outcomeLabel(primary)} → ${outcomeLabel(comparison)}${suffix}${perturbationPosition(perturbed)}${policyNote}`
     : primary ? "Add a second episode to enable comparison" : "No experiment evidence found");
-  setText(byId("primary-role"), primary && !isPerturbed(primary)
+  const firstRole = savedRoleFor(primary);
+  const secondRole = savedRoleFor(comparison);
+  setText(byId("primary-role"), firstRole ? `SAVED CASE / ${firstRole.toUpperCase()}` : primary && !isPerturbed(primary)
     ? "REFERENCE / NOMINAL" : "PRIMARY / INVESTIGATION");
-  setText(byId("comparison-role"), isPerturbed(comparison)
+  setText(byId("comparison-role"), secondRole ? `SAVED CASE / ${secondRole.toUpperCase()}` : isPerturbed(comparison)
     ? "INVESTIGATION / PERTURBED" : "COMPARISON / REFERENCE");
   byId("comparison-conclusion").dataset.outcome = displayed ? displayed.outcome : "";
 }
@@ -88,6 +217,7 @@ async function refreshCatalog() {
   const response = await fetch("/api/runs", { cache: "no-store" });
   if (!response.ok) throw new Error(`catalog request failed: ${response.status}`);
   const snapshot = await response.json();
+  await refreshCases();
   await refreshReduction();
   state.episodes = snapshot.episodes;
   state.warnings = snapshot.warnings;
@@ -107,13 +237,13 @@ async function refreshCatalog() {
 function renderChannel(channel, id) {
   const select = byId(`${channel}-select`);
   const visible = displayEpisodes();
-  const signature = visible.map((item) => item.episode_id).join("|");
+  const signature = `${state.caseId}:` + visible.map((item) => item.episode_id).join("|");
   if (select.dataset.signature !== signature) {
     select.replaceChildren();
     visible.forEach((item) => {
       const option = document.createElement("option");
       option.value = item.episode_id;
-      option.textContent = `${item.run_name} / ${outcomeLabels[item.outcome]}`;
+      option.textContent = `${savedRoleFor(item) ? savedRoleFor(item) + " · " : ""}${item.run_name} / ${outcomeLabels[item.outcome]}`;
       select.append(option);
     });
     select.dataset.signature = signature;
@@ -137,15 +267,17 @@ function renderChannel(channel, id) {
 function renderDiagnostics(episode) {
   const aside = byId("diagnostics");
   aside.replaceChildren();
-  if (!episode) { setText(aside, "NO DIAGNOSTIC EVIDENCE"); return; }
-  const title = document.createElement("h2"); title.textContent = "Diagnostic identity";
-  const detail = document.createElement("pre");
-  detail.textContent = JSON.stringify({ task: episode.instruction, task_id: episode.task_id,
-    initial_state: episode.episode_index, seed: episode.seed, env_seed: episode.env_seed,
-    perturbation: isPerturbed(episode) ? episode.perturbation : "NOMINAL / NO FAULT",
-    provenance: episode.provenance }, null, 2);
-  aside.append(title, detail);
-  if (state.reduction) {
+  if (!episode) setText(aside, state.caseId === "all" ? "NO DIAGNOSTIC EVIDENCE" : "NO EXACTLY LINKED EPISODE VIDEO OR TRACE");
+  else {
+    const title = document.createElement("h2"); title.textContent = "Diagnostic identity";
+    const detail = document.createElement("pre");
+    detail.textContent = JSON.stringify({ task: episode.instruction, task_id: episode.task_id,
+      initial_state: episode.episode_index, seed: episode.seed, env_seed: episode.env_seed,
+      perturbation: isPerturbed(episode) ? episode.perturbation : "NOMINAL / NO FAULT",
+      provenance: episode.provenance }, null, 2);
+    aside.append(title, detail);
+  }
+  if (episode && state.reduction && state.caseId === "all") {
     const reduction = document.createElement("section"); reduction.className = "reduction-lineage";
     const heading = document.createElement("h2"); heading.textContent = `Reduction session / ${state.reduction.session_name}`;
     const facts = document.createElement("dl");
@@ -167,11 +299,29 @@ function renderDiagnostics(episode) {
     }
     aside.append(reduction);
   }
-  if (episode.outcome === "infrastructure_error") {
+  const selected = selectedCase();
+  if (selected && selected.status !== "unavailable" && selected.capabilities.inspection.status === "available") {
+    const lineage = document.createElement("section"); lineage.className = "reduction-lineage";
+    const heading = document.createElement("h2"); heading.textContent = "Saved case reduction lineage"; lineage.append(heading);
+    const entries = selected.evidence.lineage || [];
+    const summary = document.createElement("p");
+    summary.textContent = entries.length
+      ? `${entries.length} accepted reduction step(s), within this case's search budget. The final rectangle is not a proven global minimum.`
+      : "No reduction lineage stored for this case.";
+    lineage.append(summary);
+    entries.forEach((entry, index) => {
+      const detail = document.createElement("p");
+      const rect = entry.rectangle;
+      detail.textContent = `${index + 1}. ${entry.edge} by ${entry.delta}: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`;
+      lineage.append(detail);
+    });
+    aside.append(lineage);
+  }
+  if (episode && episode.outcome === "infrastructure_error") {
     const status = document.createElement("p"); status.className = "failure-detail";
     status.textContent = "INFRA ERROR — POLICY NOT EVALUATED"; aside.append(status);
   }
-  if (episode.failure_detail) {
+  if (episode && episode.failure_detail) {
     const error = document.createElement("pre"); error.className = "failure-detail";
     error.textContent = episode.failure_detail; aside.append(error);
   }
@@ -180,7 +330,7 @@ function renderDiagnostics(episode) {
 function renderRunList() {
   const list = byId("run-list"); const filter = byId("outcome-filter");
   const visible = displayEpisodes().filter((item) => filter.value === "all" || item.outcome === filter.value);
-  const signature = visible.map((item) => item.episode_id).join("|");
+  const signature = `${state.caseId}:` + visible.map((item) => item.episode_id).join("|");
   if (list.dataset.signature !== signature) {
     list.replaceChildren();
     visible.forEach((episode) => {
@@ -188,7 +338,7 @@ function renderRunList() {
       const fault = episode.perturbation;
       const area = isPerturbed(episode) ? `${((fault.width || 0) * (fault.height || 0) * 100).toFixed(2)}% MASK` : "NOMINAL";
       button.type = "button"; button.dataset.episodeId = episode.episode_id; button.dataset.outcome = episode.outcome;
-      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${episode.run_name}\n${area}${perturbationPosition(episode)}`;
+      button.textContent = `${outcomeLabels[episode.outcome]} · ${episode.steps} STEPS\n${savedRoleFor(episode) ? savedRoleFor(episode) + " · " : ""}${episode.run_name}\n${area}${perturbationPosition(episode)}`;
       button.addEventListener("click", () => { state.primaryId = episode.episode_id; render(); });
       item.append(button); list.append(item);
     });
@@ -199,6 +349,7 @@ function renderRunList() {
 }
 
 function render() {
+  renderCaseWorkbench();
   setText(byId("connection-status"), `READ ONLY / ${displayEpisodes().length} EPISODES`);
   const filter = byId("outcome-filter");
   if (filter.options.length === 1) Object.entries(outcomeLabels).forEach(([value, label]) => {
@@ -210,7 +361,7 @@ function render() {
   const comparison = episodeById(state.comparisonId);
   renderComparisonStory(primary, comparison);
   renderChannel("primary", state.primaryId); renderChannel("comparison", state.comparisonId); renderDiagnostics(primary);
-  setText(byId("notices"), state.warnings.join(" · "));
+  setText(byId("notices"), state.caseId === "all" ? state.warnings.join(" · ") : "");
   if (primary) refreshTrace(primary.episode_id).catch(showNonFatalError); else drawTimeline([]);
 }
 
@@ -266,6 +417,16 @@ byId("link-playback").addEventListener("change", (event) => {
 });
 byId("playback-rate").addEventListener("change", (event) => videos.forEach((video) => { video.playbackRate = Number(event.target.value); }));
 byId("outcome-filter").addEventListener("change", render);
+byId("case-select").addEventListener("change", (event) => {
+  state.caseId = event.target.value;
+  state.caseSelected = true;
+  state.caseSignature = caseSignature(selectedCase());
+  refreshRecipe(state.caseId);
+  const visible = displayEpisodes();
+  state.primaryId = (visible.find(isPerturbed) || visible[0] || {}).episode_id || null;
+  state.comparisonId = (defaultComparison() || {}).episode_id || null;
+  render();
+});
 ["primary", "comparison"].forEach((channel) => byId(`${channel}-select`).addEventListener("change", (event) => { state[channel === "primary" ? "primaryId" : "comparisonId"] = event.target.value; render(); }));
 window.setInterval(() => { if (state.linked && !primaryVideo.paused && comparisonVideo.src && Math.abs(primaryVideo.currentTime - comparisonVideo.currentTime) > .12) comparisonVideo.currentTime = Math.min(primaryVideo.currentTime, comparisonVideo.duration || primaryVideo.currentTime); }, 250);
 refreshCatalog().catch(showFatalError);

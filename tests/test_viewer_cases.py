@@ -13,6 +13,7 @@ from robot_debug.case_io import import_m4
 from robot_debug.case_store import register_case
 from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.viewer.server import make_handler, build_parser
+from robot_debug.viewer.server import public_recipe
 from test_case_io import fixture
 
 
@@ -106,6 +107,52 @@ class ViewerCaseTests(unittest.TestCase):
         self.assertEqual(set(payload["recipe"]), {"schema_version", "case_id", "task", "policy", "runtime", "perturbation", "protocol"})
         self.assertNotIn("provenance", json.dumps(payload))
         self.assertNotIn(str(self.source), json.dumps(payload))
+
+    def test_unbound_case_does_not_expose_untrusted_freeform_metadata(self):
+        target = register_case(self.case, self.source, self.workspace)
+        path = target / "case.json"
+        saved = json.loads(path.read_text())
+        saved["measurements"]["cost"] = {"private_config": str(self.source)}
+        saved["limitations"] = [str(self.source)]
+        saved["evidence"]["lineage"] = [{"rectangle": {"x": 0, "y": 0, "width": 1, "height": 1}, "edge": {"private_config": str(self.source)}, "delta": 1}]
+        path.write_text(json.dumps(saved))
+        (target / "local-source.json").unlink()
+        _, payload = self.get(f"/api/cases/{self.case['case_id']}")
+        self.assertNotIn(str(self.source), payload["case"].get("limitations", []))
+        self.assertNotEqual(payload["case"]["measurements"].get("cost"), {"private_config": str(self.source)})
+        self.assertEqual(payload["case"]["evidence"].get("lineage"), [])
+
+    def test_redacted_required_pin_makes_public_recipe_incomplete(self):
+        case = dict(self.case)
+        case["policy"] = dict(case["policy"], model_id=str(self.source))
+        case["capabilities"] = dict(case["capabilities"], replay_recipe={"status": "complete", "missing": []})
+        recipe = public_recipe(case)
+        self.assertIsNone(recipe["recipe"])
+        self.assertIn("policy.model_id", recipe["missing"])
+
+    def test_malformed_unbound_evidence_is_an_unavailable_entry(self):
+        target = register_case(self.case, self.source, self.workspace)
+        path = target / "case.json"
+        saved = json.loads(path.read_text())
+        saved["evidence"]["episodes"] = [None]
+        saved["evidence"]["media_counts"] = []
+        path.write_text(json.dumps(saved))
+        (target / "local-source.json").unlink()
+        status, payload = self.get("/api/cases")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["cases"][0]["status"], "unavailable")
+        self.assertEqual(self.get(f"/api/cases/{self.case['case_id']}/recipe")[1]["recipe"], None)
+
+    def test_nested_unbound_episode_metadata_is_never_projected(self):
+        target = register_case(self.case, self.source, self.workspace)
+        path = target / "case.json"
+        saved = json.loads(path.read_text())
+        saved["evidence"]["episodes"] = [{"instruction": {"private_config": str(self.source)}}]
+        path.write_text(json.dumps(saved))
+        (target / "local-source.json").unlink()
+        status, payload = self.get("/api/cases")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["cases"][0]["status"], "unavailable")
 
     def test_corrupt_entry_is_contained_and_ids_are_strict(self):
         register_case(self.case, self.source, self.workspace)

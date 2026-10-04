@@ -30,6 +30,25 @@
           <li><strong>03</strong> Inspect result</li>
         </ol>
       </section>
+      <section id="case-workbench" aria-labelledby="case-heading">
+        <div class="case-heading"><div><p class="eyebrow">SAVED DIAGNOSTIC CASE</p><h2 id="case-heading">Inspect → evidence → regression recipe</h2></div>
+          <div><label for="case-select">Case</label><select id="case-select"><option value="all">All saved evidence</option></select></div></div>
+        <p id="case-status" role="status" aria-live="polite">Loading saved cases…</p>
+        <div class="case-capabilities" aria-label="Independent case capabilities">
+          <p><strong>Inspection</strong><span id="case-inspection">—</span><small>Current saved source</small></p>
+          <p><strong>Replay recipe</strong><span id="case-recipe-status">—</span><small>Required inputs</small></p>
+          <p><strong>Exercised replay</strong><span id="case-replay">—</span><small>Fresh execution</small></p>
+          <p><strong>Historical failure</strong><span id="case-history">—</span><small>Recorded outcome</small></p>
+        </div>
+        <details id="case-details"><summary>Replay inputs and export details</summary>
+          <p id="case-detail-reasons"></p>
+          <p id="case-prerequisites"></p>
+          <p id="case-measurements"></p>
+          <pre id="case-recipe" aria-label="Validated replay recipe"></pre>
+          <p class="case-export-label">Export portable regression metadata locally:</p>
+          <code id="case-export"></code>
+        </details>
+      </section>
       <section id="comparison-conclusion" aria-live="polite">Loading experiment evidence…</section>
       <section id="summary-strip" aria-label="Selected episode summary">NO EVIDENCE</section>
       <section class="comparison-deck" aria-label="Synchronized episode comparison">

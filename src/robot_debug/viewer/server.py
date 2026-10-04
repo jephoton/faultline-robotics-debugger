@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,34 +21,87 @@ from robot_debug.case_store import inspect_case, list_cases
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
 
 
+def public_value(value: Any) -> Any:
+    if isinstance(value, str) and (re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith(("/", "\\\\"))):
+        return "[local path omitted]"
+    return value
+
+
+def public_measurements(measurements: dict) -> dict:
+    result = {}
+    for key in ("source_reported_elapsed_seconds", "physical_episode_count", "valid_episode_count", "cost"):
+        value = measurements.get(key)
+        result[key] = value if (value is None or (type(value) in (int, float) and math.isfinite(value) and value >= 0)) else None
+    return result
+
+
+def valid_public_episode(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if not isinstance(item.get("episode_id"), str) or re.fullmatch(r"[0-9a-f]{16}", item["episode_id"]) is None:
+        return False
+    if any(not isinstance(item.get(key), str) or public_value(item[key]) != item[key]
+           for key in ("stage", "role", "raw_outcome", "gate_outcome")):
+        return False
+    if any(type(item.get(key)) is not int or item[key] < 0 for key in ("task_id", "reset_index")):
+        return False
+    return item.get("instruction") is None or (isinstance(item["instruction"], str) and public_value(item["instruction"]) == item["instruction"])
+
+
 def public_case(case: dict) -> dict:
     """Project revalidated case evidence without local source references."""
     if case.get("status") == "unavailable":
         return {"case_id": case.get("case_id"), "status": "unavailable", "reasons": case.get("reasons", [])}
     evidence = case["evidence"]
+    if (not isinstance(evidence, dict) or
+        not isinstance(evidence.get("episodes"), list) or
+        any(not valid_public_episode(item) for item in evidence["episodes"]) or
+        not isinstance(evidence.get("lineage"), list) or
+        not isinstance(evidence.get("media_counts"), dict) or
+        not isinstance(evidence.get("media_availability"), dict) or
+        not isinstance(case.get("measurements"), dict)):
+        return {"case_id": case["case_id"], "status": "unavailable", "reasons": ["case evidence metadata is invalid"]}
+    policy = {key: public_value(case["policy"][key]) for key in ("model_id", "checkpoint_revision")}
+    runtime = {key: public_value(case["runtime"][key]) for key in ("project_revision", "upstream_harness_revision", "simulator_image_digest")}
+    redacted = [f"{group}.{key}" for group, projected, original in
+                (("policy", policy, case["policy"]), ("runtime", runtime, case["runtime"]))
+                for key in projected if projected[key] != original[key]]
+    capabilities = dict(case["capabilities"])
+    if redacted:
+        replay = capabilities["replay_recipe"]
+        capabilities["replay_recipe"] = {"status": "incomplete", "missing": sorted(set(replay["missing"] + redacted))}
+    media_status = evidence["media_availability"].get("status")
     return {
         "schema_version": case["schema_version"], "case_id": case["case_id"],
         "task": case["task"],
-        "policy": {key: case["policy"][key] for key in ("model_id", "checkpoint_revision")},
-        "runtime": {key: case["runtime"][key] for key in ("project_revision", "upstream_harness_revision", "simulator_image_digest")},
+        "policy": policy,
+        "runtime": runtime,
         "perturbation": case["perturbation"], "protocol": case["protocol"],
         "evidence": {
-            "episodes": [{key: episode.get(key) for key in ("episode_id", "stage", "role", "task_id", "reset_index", "raw_outcome", "gate_outcome", "instruction")}
+            "episodes": [{key: public_value(episode.get(key)) for key in ("episode_id", "stage", "role", "task_id", "reset_index", "raw_outcome", "gate_outcome", "instruction")}
                          for episode in evidence.get("episodes", [])],
-            "lineage": evidence.get("lineage", []),
-            "media_counts": evidence.get("media_counts", {}),
-            "media_availability": evidence.get("media_availability", {}),
+            "lineage": [{"rectangle": {key: item["rectangle"][key] for key in ("x", "y", "width", "height")},
+                         "edge": item["edge"], "delta": item["delta"]}
+                        for item in evidence.get("lineage", []) if isinstance(item, dict) and
+                        isinstance(item.get("rectangle"), dict) and isinstance(item.get("edge"), str) and item["edge"] in {"left", "right", "top", "bottom"} and
+                        all(type(item["rectangle"].get(key)) in (int, float) and math.isfinite(item["rectangle"][key]) for key in ("x", "y", "width", "height")) and
+                        type(item.get("delta")) in (int, float) and math.isfinite(item["delta"])],
+            "media_counts": {key: value if type(value) is int and value >= 0 else 0
+                             for key, value in ((key, evidence["media_counts"].get(key)) for key in ("videos", "traces"))},
+            "media_availability": {"status": media_status
+                                   if isinstance(media_status, str) and media_status in {"available", "unavailable", "changed"} else "unknown"},
         },
-        "measurements": case["measurements"], "capabilities": case["capabilities"],
-        "limitations": case["limitations"],
+        "measurements": public_measurements(case["measurements"]), "capabilities": capabilities,
     }
 
 
 def public_recipe(case: dict) -> dict:
-    missing = case["capabilities"]["replay_recipe"]["missing"]
+    projected = public_case(case)
+    if projected.get("status") == "unavailable":
+        return {"recipe": None, "missing": ["case evidence metadata is unavailable"]}
+    missing = projected["capabilities"]["replay_recipe"]["missing"]
     if missing:
         return {"recipe": None, "missing": missing}
-    projected = public_case(case)
     return {"recipe": {key: projected[key] for key in ("schema_version", "case_id", "task", "policy", "runtime", "perturbation", "protocol")}, "missing": []}
 
 

@@ -45,6 +45,24 @@ h1 { margin: var(--space-1) 0 0; font-size: clamp(1.5rem, 3vw, 2.4rem); }
 [data-outcome="infrastructure_error"] { --outcome: var(--infrastructure); }
 main { min-width: 0; padding: var(--space-3); }
 #demo-guide, #comparison-conclusion { border: 1px solid var(--line); background: var(--panel); }
+#case-workbench { border: 1px solid var(--line); border-left: 3px solid var(--cyan); background: var(--panel); padding: var(--space-2); margin-top: var(--space-2); }
+.case-heading { display: flex; justify-content: space-between; align-items: end; gap: var(--space-3); }
+.case-heading h2 { font-size: 1rem; margin: var(--space-1) 0; }
+.case-heading label { display: block; color: var(--muted); font-size: .72rem; margin-bottom: var(--space-1); }
+#case-select { max-width: 100%; width: 22rem; }
+#case-status { color: var(--cyan); font-size: .78rem; }
+.case-capabilities { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
+.case-capabilities p { margin: 0; padding: var(--space-1) var(--space-2); border-top: 1px solid var(--line); font-size: .7rem; }
+.case-capabilities strong { display: block; color: var(--muted); font-weight: normal; text-transform: uppercase; }
+.case-capabilities span { display: block; margin-top: var(--space-1); overflow-wrap: anywhere; }
+.case-capabilities small { display: block; color: var(--muted); font-size: .65rem; margin-top: var(--space-1); }
+#case-details { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-1); }
+#case-details summary { color: var(--cyan); cursor: pointer; font-size: .75rem; }
+#case-details summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#case-detail-reasons { color: var(--muted); font-size: .72rem; }
+#case-prerequisites, #case-measurements, .case-export-label { color: var(--muted); font-size: .75rem; margin: var(--space-2) 0 var(--space-1); }
+#case-recipe { max-height: 12rem; overflow: auto; margin: var(--space-1) 0; }
+#case-export { display: block; overflow-wrap: anywhere; color: var(--amber); font-size: .72rem; }
 #demo-guide { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
 #demo-guide ol { display: flex; gap: var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .76rem; }
 #demo-guide strong { color: var(--cyan); margin-right: var(--space-1); }
@@ -77,5 +95,5 @@ pre { white-space: pre-wrap; font-size: .75rem; color: var(--muted); }
 .reduction-certification { color: var(--success); }
 .reduction-warning { color: var(--amber); }
 @media (max-width: 1050px) { .workspace { grid-template-columns: 17rem minmax(0, 1fr); } #diagnostics { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } }
-@media (max-width: 768px) { .masthead { align-items: start; flex-direction: column; } .workspace { display: block; } .run-rail, #diagnostics { border: 0; border-bottom: 1px solid var(--line); } .comparison-deck { grid-template-columns: 1fr; } #demo-guide { align-items: start; flex-direction: column; } #demo-guide ol { display: grid; gap: var(--space-1); } main { padding: var(--space-2); } .transport p { margin-left: 0; } }
+@media (max-width: 768px) { .masthead { align-items: start; flex-direction: column; } .workspace { display: block; } .run-rail, #diagnostics { border: 0; border-bottom: 1px solid var(--line); } .comparison-deck, .case-capabilities { grid-template-columns: 1fr; } .case-heading, #demo-guide { align-items: start; flex-direction: column; } #demo-guide ol { display: grid; gap: var(--space-1); } main { padding: var(--space-2); } .transport p { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
