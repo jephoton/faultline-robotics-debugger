@@ -64,6 +64,14 @@ this test run did not access or start cloud resources.
 
 ## Completed evidence
 
+Unblocked M5C preparation: the proposed offline packet/report contract is
+`docs/superpowers/specs/2026-10-04-m5-offline-explanation-contract-design.md`.
+It strips arbitrary case strings and paths, keeps reported raw/gate outcomes
+separate, validates cited episode IDs and preserves deterministic summaries
+when supplied interpretations fail. No API client, key loader or provider call
+is included. Await Jethro's contract review before writing its detailed smaller-
+model implementation plan; credentials do not block that offline increment.
+
 October 4 M5 follow-up: ADR 0014 accepts the 744.1 MiB sample acquisition and
 text-only Nano Nemotron pilot (ten calls / US$0.02 maximum). Sample bytes/hash
 verified in ignored `artifacts/m5-sample-preflight`; actual demo_0 has 148
