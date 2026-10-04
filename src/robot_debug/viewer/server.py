@@ -13,10 +13,46 @@ from typing import Any, Mapping, Optional, Sequence, Type
 from urllib.parse import unquote, urlsplit
 
 from robot_debug.viewer.catalog import ArtifactCatalog
+from robot_debug.case_io import SanitizedCaseValidationError
+from robot_debug.case_store import inspect_case, list_cases
+
+
+CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def public_case(case: dict) -> dict:
+    """Project revalidated case evidence without local source references."""
+    if case.get("status") == "unavailable":
+        return {"case_id": case.get("case_id"), "status": "unavailable", "reasons": case.get("reasons", [])}
+    evidence = case["evidence"]
+    return {
+        "schema_version": case["schema_version"], "case_id": case["case_id"],
+        "task": case["task"],
+        "policy": {key: case["policy"][key] for key in ("model_id", "checkpoint_revision")},
+        "runtime": {key: case["runtime"][key] for key in ("project_revision", "upstream_harness_revision", "simulator_image_digest")},
+        "perturbation": case["perturbation"], "protocol": case["protocol"],
+        "evidence": {
+            "episodes": [{key: episode.get(key) for key in ("episode_id", "stage", "role", "task_id", "reset_index", "raw_outcome", "gate_outcome", "instruction")}
+                         for episode in evidence.get("episodes", [])],
+            "lineage": evidence.get("lineage", []),
+            "media_counts": evidence.get("media_counts", {}),
+            "media_availability": evidence.get("media_availability", {}),
+        },
+        "measurements": case["measurements"], "capabilities": case["capabilities"],
+        "limitations": case["limitations"],
+    }
+
+
+def public_recipe(case: dict) -> dict:
+    missing = case["capabilities"]["replay_recipe"]["missing"]
+    if missing:
+        return {"recipe": None, "missing": missing}
+    projected = public_case(case)
+    return {"recipe": {key: projected[key] for key in ("schema_version", "case_id", "task", "policy", "runtime", "perturbation", "protocol")}, "missing": []}
 
 
 def make_handler(
-    catalog: ArtifactCatalog, web_root: Path
+    catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None
 ) -> Type[BaseHTTPRequestHandler]:
     """Create a handler closed over a catalog and the packaged static assets."""
 
@@ -30,6 +66,15 @@ def make_handler(
                     self.send_json(200, catalog.snapshot().to_dict())
                 elif path == "/api/reduction":
                     self.send_json(200, catalog.load_reduction())
+                elif path == "/api/cases":
+                    self.send_json(200, {"cases": [public_case(case) for case in list_cases(case_workspace or catalog.artifact_root / "cases")], "warnings": []})
+                elif path.startswith("/api/cases/"):
+                    parts = path.split("/")
+                    if len(parts) not in (4, 5) or (len(parts) == 5 and parts[4] != "recipe") or CASE_ID.fullmatch(parts[3]) is None:
+                        self.send_json(400, {"error": "case ID must be a full lowercase SHA-256 digest"})
+                    else:
+                        case = inspect_case(case_workspace or catalog.artifact_root / "cases", parts[3])
+                        self.send_json(200, public_recipe(case) if len(parts) == 5 else {"case": public_case(case)})
                 elif path.startswith("/api/episodes/") and path.endswith("/trace"):
                     episode_id = path[len("/api/episodes/") : -len("/trace")]
                     self.send_json(200, catalog.load_trace(episode_id))
@@ -43,7 +88,7 @@ def make_handler(
                     self.stream_file(asset, allow_range=False)
                 else:
                     self.send_json(404, {"error": "not found"})
-            except (KeyError, FileNotFoundError):
+            except (KeyError, FileNotFoundError, SanitizedCaseValidationError):
                 self.send_json(404, {"error": "evidence not found"})
             except ValueError as error:
                 self.send_json(400, {"error": str(error)})
@@ -122,16 +167,18 @@ def make_handler(
 
 
 def create_server(
-    artifact_root: Path, host: str = "127.0.0.1", port: int = 8765
+    artifact_root: Path, host: str = "127.0.0.1", port: int = 8765,
+    case_workspace: Optional[Path] = None,
 ) -> ThreadingHTTPServer:
     catalog = ArtifactCatalog(artifact_root)
     web_root = Path(__file__).with_name("web")
-    return ThreadingHTTPServer((host, port), make_handler(catalog, web_root))
+    return ThreadingHTTPServer((host, port), make_handler(catalog, web_root, case_workspace))
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only robot episode evidence viewer")
     parser.add_argument("--artifacts", default="artifacts")
+    parser.add_argument("--cases")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     return parser
@@ -139,7 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
-    server = create_server(Path(args.artifacts), args.host, args.port)
+    server = create_server(Path(args.artifacts), args.host, args.port, Path(args.cases) if args.cases else None)
     print("Robot Debug Viewer: http://{}:{}".format(*server.server_address))
     try:
         server.serve_forever()
