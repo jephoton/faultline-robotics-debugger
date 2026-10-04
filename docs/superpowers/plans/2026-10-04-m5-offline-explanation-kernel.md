@@ -14,6 +14,13 @@ adapter is part of this increment.
 
 **Tech stack:** Python 3.11, standard library, existing unittest fixtures.
 
+**Status: complete — October 4.** Reviewed implementation through `557eb36`
+is integrated into main. Fresh full suite: 485 tests, four platform skips;
+17 focused tests pass. Actual 22-episode M4 acceptance preserves 0.140625
+mask area and all 116 original source-file hashes. Linux GitHub CI passed
+for integration/handoff commit `15a6129` (run `37212554657`). No provider
+call, report persistence, secret loading or viewer change occurred.
+
 ## Authority, ownership and dependencies
 
 Jethro approved the exact contract on October 4:
@@ -173,7 +180,7 @@ self.assertIsNone(rejected['interpretation'])
 - [x] Root records implemented APIs and fresh results in `PROJECT_PLAN.md`,
   `docs/codex-handoff/STATE.md`, `docs/dev-log.md` and this plan. No provider
   feedback entry implies actual Nemotron use; Token Factory stays untested.
-- [ ] Commit handoff, push under existing authority and verify newest CI.
+- [x] Commit handoff, push under existing authority and verify newest CI.
   Hand off the bounded provider/client/persistence and viewer integration as
   next material work; credentials/account/price/cap still precede live calls.
 

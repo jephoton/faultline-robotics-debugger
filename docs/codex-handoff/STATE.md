@@ -78,7 +78,8 @@ absent/validated-structure/rejected reports. These are pure functions, not a
 provider integration or evidence-truth detector. Future live callers must
 revalidate source files with `case_store.inspect_case` first.
 Fresh main Windows Python 3.11 suite: 485 tests, four known platform skips;
-17 focused kernel tests pass. Actual revalidated M4 case: 22 episodes,
+17 focused kernel tests pass. Linux GitHub CI passed for integration/handoff
+commit `15a6129` (run `37212554657`). Actual revalidated M4 case: 22 episodes,
 0.140625 mask area; all three interpretation states preserve identical facts.
 The packet/report contain no private source paths or arbitrary source metadata;
 all 116 original source-file hashes are unchanged. No report artifact was saved,
