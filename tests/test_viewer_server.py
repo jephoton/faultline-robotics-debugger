@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -155,6 +156,9 @@ class ViewerServerTests(unittest.TestCase):
         self.assertIn("<case-workspace-outside-source-root>", app)
 
     def test_case_javascript_rejects_ambiguous_links_and_handles_unavailable_entry(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node.js runtime unavailable")
         script = r"""
 const fs = require('fs');
 const vm = require('vm');
@@ -171,7 +175,7 @@ assert.strictEqual(caseEpisodeMatches({ episode_id: 'saved' }, { episode_id: 'sa
 assert.strictEqual(caseSignature({ case_id: 'a'.repeat(64), status: 'unavailable' }), 'a'.repeat(64) + ':unavailable');
 """
         asset = self.web_root / "app.js"
-        result = subprocess.run([r"C:\Program Files\nodejs\node.exe", "-e", script, str(asset)],
+        result = subprocess.run([node, "-e", script, str(asset)],
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
