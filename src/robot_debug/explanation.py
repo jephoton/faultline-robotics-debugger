@@ -19,7 +19,7 @@ _DISCLAIMER = (
     "Facts count reported evidence only. The reduced mask is budget-local; "
     "these inputs provide no causal proof. Supplied interpretation requires human review."
 )
-_LINE_BREAKS = "\r\n\v\f\x85\u2028\u2029"
+_LINE_BREAKS = "\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029"
 
 
 def _require(condition: bool) -> None:

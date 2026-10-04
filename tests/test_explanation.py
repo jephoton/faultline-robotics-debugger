@@ -123,6 +123,25 @@ class ExplanationTests(unittest.TestCase):
             with self.subTest(response=response[:80]), self.assertRaisesRegex(ExplanationValidationError, "^invalid explanation$"):
                 validate_explanation(response, self.packet)
 
+    def test_all_python_line_separators_reject_every_text_field_and_preserve_facts(self):
+        absent = build_offline_report(self.packet)
+        separators = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+        for separator in separators:
+            for field in ("observations", "hypotheses", "limitations"):
+                with self.subTest(separator=hex(ord(separator)), field=field):
+                    text = f"first{separator}second"
+                    if field == "limitations":
+                        response = self.response(limitations=[text])
+                    else:
+                        response = self.response(**{field: [{"text": text, "evidence_ids": [self.eid]}]})
+                    with self.assertRaisesRegex(ExplanationValidationError, "^invalid explanation$"):
+                        validate_explanation(response, self.packet)
+                    report = build_offline_report(self.packet, response)
+                    self.assertEqual(report["interpretation_status"], "rejected")
+                    self.assertIsNone(report["interpretation"])
+                    self.assertEqual(report["error_code"], "invalid_explanation")
+                    self.assertEqual(report["facts"], absent["facts"])
+
     def test_bad_packet_raises_packet_error_before_response_fallback(self):
         packet = copy.deepcopy(self.packet); packet["episodes"] = []
         for response in (None, "SECRET invalid"):
