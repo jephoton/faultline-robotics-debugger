@@ -31,6 +31,18 @@ warnings/errors were recorded. Full integrated suite: 468 tests, four known
 platform skips. Source core JSON hashes remain unchanged. M5A is complete;
 external restored replay and real Nemotron calls are not yet demonstrated.
 
+The first integrated viewer push (`c1f0ff5`) passed the full Windows suite but
+failed Linux GitHub CI in one JavaScript regression test: it invoked a
+hard-coded Windows Node executable. CI's traceback identified executable
+discovery, not a viewer or robotics failure. Independently reviewed repair
+`e6f3c50` uses Node from PATH and explicitly skips that optional-runtime test
+when unavailable; it retains the behavioral assertions. The target test ran
+with Node available, and simulated absence produced exactly one expected skip.
+The test must still run, not skip, on CI where Node is installed. Linux CI
+verification is required before declaring this repair complete. Root also
+rehashed all 44 saved M4 video/trace files against registered checksums: no
+mismatches; the original media remains intact.
+
 ### Case import review (local fixtures, not provider incidents)
 
 The first importer/store/CLI unit passed 440 tests (four platform skips), but
