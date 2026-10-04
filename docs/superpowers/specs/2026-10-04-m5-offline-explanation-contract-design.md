@@ -1,6 +1,6 @@
 # M5C offline explanation contract
 
-Status: Proposed for Jethro's review, October 4, 2026.
+Status: Accepted by Jethro's "yes go", October 4, 2026.
 The model/data/cap decision is already accepted in ADR 0014; this document
 settles the smaller packet/report contract before implementation. No key,
 provider call, new dependency, simulator or UI change is required.
