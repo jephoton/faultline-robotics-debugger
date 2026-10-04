@@ -17,6 +17,9 @@ LIBERO/MuJoCo on Nebius GPU compute.
 - `scripts/run_position_grid_search.py`: bounded fixed-area spatial search.
 - `src/robot_debug/`: records, perturbation, runner, and reporting code.
 - `src/robot_debug/viewer/`: read-only artifact catalog and local web viewer.
+- `src/robot_debug/evidence_packet.py` and `explanation.py`: pure allowlisted
+  packets, reported outcome counts and optional interpretation validation;
+  no provider client, persistence or truth certification.
 - `configs/`: validated experiment configuration.
 - `docs/decisions/`: accepted architecture and experiment decisions.
 - `PROJECT_PLAN.md`: milestone roadmap and current project position.
@@ -34,4 +37,3 @@ LIBERO/MuJoCo on Nebius GPU compute.
 - Never commit credentials, tokens, private keys, model weights, or
   secret-bearing logs.
 - Use one owner for stateful Nebius execution and spending.
-

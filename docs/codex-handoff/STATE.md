@@ -64,14 +64,28 @@ this test run did not access or start cloud resources.
 
 ## Completed evidence
 
-Unblocked M5C preparation: the proposed offline packet/report contract is
+Completed offline M5C increment: the accepted packet/report contract is
 `docs/superpowers/specs/2026-10-04-m5-offline-explanation-contract-design.md`.
 It strips arbitrary case strings and paths, keeps reported raw/gate outcomes
 separate, validates cited episode IDs and preserves deterministic summaries
 when supplied interpretations fail. No API client, key loader or provider call
-is included. Jethro approved this contract with "yes go"; execute
-`docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md` with a smaller
-builder and independent reviews. Credentials do not block this offline increment.
+is included. Jethro approved this contract with "yes go"; the bounded
+`docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md` is implemented
+and integrated through `557eb36` after independent spec and quality reviews.
+`evidence_packet.py` provides make/validate/hash functions;
+`explanation.py` provides structural validation, deterministic summaries and
+absent/validated-structure/rejected reports. These are pure functions, not a
+provider integration or evidence-truth detector. Future live callers must
+revalidate source files with `case_store.inspect_case` first.
+Fresh main Windows Python 3.11 suite: 485 tests, four known platform skips;
+17 focused kernel tests pass. Actual revalidated M4 case: 22 episodes,
+0.140625 mask area; all three interpretation states preserve identical facts.
+The packet/report contain no private source paths or arbitrary source metadata;
+all 116 original source-file hashes are unchanged. No report artifact was saved,
+no model called, and no viewer explanation added. Next bounded material step:
+provider CLI and locally bound report persistence, then viewer read integration
+and the approved real pilot. Credentials/account/catalog/price/balance checks
+still gate provider use. Full M5B/C remains incomplete.
 
 October 4 M5 follow-up: ADR 0014 accepts the 744.1 MiB sample acquisition and
 text-only Nano Nemotron pilot (ten calls / US$0.02 maximum). Sample bytes/hash

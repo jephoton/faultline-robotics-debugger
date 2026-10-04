@@ -4,6 +4,30 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## M5C offline explanation review — October 4
+
+The smaller builder implemented a privacy-safe packet projection and separate
+factual/interpretation report kernel. Independent spec review reproduced three
+omitted single-line separators (U+001C/U+001D/U+001E), accepted in observations,
+hypotheses and limitations. The fix covers every Python line separator and
+keeps rejected interpretations from changing facts (`18f54fe`).
+
+Independent quality review then reproduced a direct-Python input edge case:
+a forged string subclass could claim enum equality while serializing arbitrary
+text. Exact ordinary-string checks for role/raw/gate fields now prevent a
+packet's serialized text from contradicting the summary (`557eb36`). Both
+repairs had failing regression tests before fixes, and final spec/quality
+reviews passed at the exact integrated commit. These are local validation
+defects, not Nebius or NVIDIA incidents.
+
+Root fast-forwarded the reviewed commits into main and ran 485 tests successfully
+(four platform skips). Offline acceptance on the real 22-episode M4 registration
+preserves 14.0625% final mask area and identical facts for absent, structurally
+valid and rejected supplied interpretations. All 116 original source-file
+hashes are unchanged. No inference, secret loading, cloud start, report
+persistence or viewer change occurred. Structural citation validation does
+not prove that the prose is true or supported by its cited episodes.
+
 ## M5A: task-local media compatibility — October 3
 
 ### M5 sample preflight environment — October 4

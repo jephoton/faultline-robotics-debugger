@@ -39,6 +39,17 @@ and account/balance checks, not on renewed AI Cloud CLI sign-in. Next: review
 the narrow restore adapter design and prepare the bounded explanation client;
 neither sample inspection nor documentation counts as completed M5B/C.
 
+The approved [offline explanation kernel](docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md)
+is integrated and independently spec/quality reviewed through `557eb36`.
+It allowlists evidence packets, preserves deterministic raw/gate counts and
+validates optional interpretation structure/citations without certifying truth.
+Fresh main suite: 485 tests, four platform skips. Real M4 acceptance preserves
+22 episodes and 14.0625% mask area across absent/valid/rejected interpretations;
+all 116 original source-file hashes are unchanged. No provider call or viewer
+explanation integration is included. M5C remains pending the bounded provider
+client/artifact binding, viewer read path and real approved pilot; M5B still
+requires a designed and exercised restore adapter.
+
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 
 **Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
