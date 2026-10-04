@@ -132,5 +132,35 @@ class EvidencePacketTests(unittest.TestCase):
             packet["episodes"][0].update(raw_outcome=raw, gate_outcome=gate)
             self.assertEqual(validate_evidence_packet(packet)["episodes"][0]["raw_outcome"], raw)
 
+    def test_forged_string_enum_values_are_rejected_without_echo(self):
+        class ForgedString(str):
+            def __new__(cls, target):
+                instance = str.__new__(cls, "SECRET")
+                instance.target = target
+                return instance
+
+            def __hash__(self):
+                return hash(self.target)
+
+            def __eq__(self, other):
+                return other == self.target
+
+        packet = make_evidence_packet(self.case)
+        for field, allowed in (("role", "nominal"), ("raw_outcome", "success"),
+                               ("gate_outcome", "success")):
+            with self.subTest(field=field):
+                forged = copy.deepcopy(packet)
+                forged["episodes"][0].update(role="nominal", raw_outcome="success", gate_outcome="success")
+                forged["episodes"][0][field] = ForgedString(allowed)
+                with self.assertRaisesRegex(EvidencePacketError, "^invalid evidence packet$") as caught:
+                    validate_evidence_packet(forged)
+                self.assertNotIn("SECRET", str(caught.exception))
+
+                source = copy.deepcopy(self.case)
+                source["evidence"]["episodes"][0][field] = ForgedString(allowed)
+                with self.assertRaisesRegex(EvidencePacketError, "^invalid evidence packet$") as caught:
+                    make_evidence_packet(source)
+                self.assertNotIn("SECRET", str(caught.exception))
+
 
 if __name__ == "__main__": unittest.main()

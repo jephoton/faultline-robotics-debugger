@@ -86,6 +86,7 @@ def _validate(packet: dict) -> dict:
                  and evidence_id not in seen)
         seen.add(evidence_id)
         role, raw, gate = (episode[key] for key in ("role", "raw_outcome", "gate_outcome"))
+        _require(type(role) is str and type(raw) is str and type(gate) is str)
         _require(role in _ROLES and (raw, gate) in _PAIRS)
         normalized_episodes.append({"evidence_id": evidence_id, "role": role,
                                     "raw_outcome": raw, "gate_outcome": gate})
