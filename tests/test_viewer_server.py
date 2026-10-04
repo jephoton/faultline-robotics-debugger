@@ -175,6 +175,11 @@ assert.strictEqual(caseSignature({ case_id: 'a'.repeat(64), status: 'unavailable
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_case_select_container_can_shrink_on_narrow_screens(self):
+        _, _, body = self.get("/styles.css")
+        css = body.decode("utf-8")
+        self.assertIn(".case-heading > div { min-width: 0; max-width: 100%; }", css)
+
     def test_javascript_asset_uses_stable_content_type(self):
         with patch.object(
             viewer_server.mimetypes,

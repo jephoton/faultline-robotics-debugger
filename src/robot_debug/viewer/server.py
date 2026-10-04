@@ -27,11 +27,20 @@ def public_value(value: Any) -> Any:
     return value
 
 
+def finite_number(value: Any, minimum: float = 0) -> bool:
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(float(value)) and value >= minimum
+    except (OverflowError, ValueError, TypeError):
+        return False
+
+
 def public_measurements(measurements: dict) -> dict:
     result = {}
     for key in ("source_reported_elapsed_seconds", "physical_episode_count", "valid_episode_count", "cost"):
         value = measurements.get(key)
-        result[key] = value if (value is None or (type(value) in (int, float) and math.isfinite(value) and value >= 0)) else None
+        result[key] = value if (value is None or finite_number(value)) else None
     return result
 
 
@@ -84,8 +93,8 @@ def public_case(case: dict) -> dict:
                          "edge": item["edge"], "delta": item["delta"]}
                         for item in evidence.get("lineage", []) if isinstance(item, dict) and
                         isinstance(item.get("rectangle"), dict) and isinstance(item.get("edge"), str) and item["edge"] in {"left", "right", "top", "bottom"} and
-                        all(type(item["rectangle"].get(key)) in (int, float) and math.isfinite(item["rectangle"][key]) for key in ("x", "y", "width", "height")) and
-                        type(item.get("delta")) in (int, float) and math.isfinite(item["delta"])],
+                        all(finite_number(item["rectangle"].get(key)) for key in ("x", "y", "width", "height")) and
+                        finite_number(item.get("delta")) and item["delta"] > 0],
             "media_counts": {key: value if type(value) is int and value >= 0 else 0
                              for key, value in ((key, evidence["media_counts"].get(key)) for key in ("videos", "traces"))},
             "media_availability": {"status": media_status

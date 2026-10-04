@@ -154,6 +154,30 @@ class ViewerCaseTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["cases"][0]["status"], "unavailable")
 
+    def test_huge_unbound_measurement_does_not_break_other_cases(self):
+        first = register_case(self.case, self.source, self.workspace)
+        proof = self.source / "failure-reduction/proof.txt"
+        proof.write_text("proof")
+        ref = {"path": "failure-reduction/proof.txt", "sha256": hashlib.sha256(proof.read_bytes()).hexdigest()}
+        profile = {"schema_version": 1, "policy": {"checkpoint_revision": "checkpoint"},
+                   "runtime": {}, "provenance": {"policy.checkpoint_revision": ref}}
+        (self.source / "failure-reduction/profile.json").write_text(json.dumps(profile))
+        second_case = import_m4(self.source, profile="failure-reduction/profile.json")
+        register_case(second_case, self.source, self.workspace)
+        path = first / "case.json"
+        saved = json.loads(path.read_text())
+        saved["measurements"]["cost"] = 10 ** 400
+        saved["evidence"]["lineage"] = [{"rectangle": {"x": 10 ** 400, "y": 0, "width": 1, "height": 1}, "edge": "left", "delta": 10 ** 400}]
+        path.write_text(json.dumps(saved))
+        (first / "local-source.json").unlink()
+        status, payload = self.get("/api/cases")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload["cases"]), 2)
+        self.assertEqual({case["case_id"] for case in payload["cases"]}, {self.case["case_id"], second_case["case_id"]})
+        bad = next(case for case in payload["cases"] if case["case_id"] == self.case["case_id"])
+        self.assertIsNone(bad["measurements"]["cost"])
+        self.assertEqual(bad["evidence"]["lineage"], [])
+
     def test_corrupt_entry_is_contained_and_ids_are_strict(self):
         register_case(self.case, self.source, self.workspace)
         (self.workspace / "bad-name").mkdir()

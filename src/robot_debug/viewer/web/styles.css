@@ -47,6 +47,7 @@ main { min-width: 0; padding: var(--space-3); }
 #demo-guide, #comparison-conclusion { border: 1px solid var(--line); background: var(--panel); }
 #case-workbench { border: 1px solid var(--line); border-left: 3px solid var(--cyan); background: var(--panel); padding: var(--space-2); margin-top: var(--space-2); }
 .case-heading { display: flex; justify-content: space-between; align-items: end; gap: var(--space-3); }
+.case-heading > div { min-width: 0; max-width: 100%; }
 .case-heading h2 { font-size: 1rem; margin: var(--space-1) 0; }
 .case-heading label { display: block; color: var(--muted); font-size: .72rem; margin-bottom: var(--space-1); }
 #case-select { max-width: 100%; width: 22rem; }
