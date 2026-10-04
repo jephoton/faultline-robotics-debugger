@@ -36,6 +36,7 @@ Collaboration: cloud compute is an available main resource; architectural and de
 - [M4 reduction evidence](docs/experiments/m4-reducer.md): exact candidate outcomes, budget, replay manifest, and claim limits.
 - [M3 parallel evidence](docs/experiments/m3-parallel.md): fixed-work 1/2/4-worker results, local evidence, cost boundary, and claim limits.
 - [Hackathon tool feedback](FEEDBACK.md): observed Nebius and NVIDIA strengths and friction, with Token Factory clearly marked untested.
+- [Offline case workbench](docs/setup/case-workbench.md): register saved M4 evidence, inspect readiness in the viewer, export metadata, and rebind it without changing recordings. External replay and actual Nemotron explanations remain separately gated.
 
 Model training and formal verification are outside the initial scope.
 

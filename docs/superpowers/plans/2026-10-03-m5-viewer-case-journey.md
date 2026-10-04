@@ -13,6 +13,16 @@ not assume that every case is confirmed or replay-ready.
 
 **Tech Stack:** Existing vanilla HTML/CSS/JavaScript, Python HTTP server/unittest.
 
+**Completed October 4:** Integrated as `01c8ea2`, `557c00b`, and `2e2e125` after
+independent spec then quality review. Root checked real M4 case registration,
+22/22 exact episode links, paired playback, traces, lineage, missing pins,
+keyboard/refresh stability and 375/768/1440px layouts. Full suite: 468 tests,
+four platform skips; Node syntax and diff checks pass. Operator documentation:
+`docs/setup/case-workbench.md`. The legacy source cannot support a safe fallback
+for missing IDs, so unsupported IDs remain explicitly unlinked; no guessed
+mapping was added. Reduction stop reason absent from retained case metadata is
+disclosed rather than invented. M5B/C remain gated separately.
+
 ## Scope and ownership
 
 Accepted M5A contract and CLI-first decision; green/amber presentation within

@@ -10,8 +10,12 @@ October 3. A3 media compatibility is implemented and independently reviewed;
 A1's exact case contract is accepted; the bounded schema kernel is implemented
 and reviewed. Case-I/O/store/CLI are integrated and reviewed (`4851908` through
 `9c87294`); real-source metadata export/reimport and unchanged core JSON hashes
-are verified. The viewer journey is implementing next; external adapters,
-model calls and paid execution retain their separate gates.
+are verified. **M5A completed October 4:** the viewer journey is integrated after
+independent spec/quality review and real browser acceptance. The integrated
+suite runs 468 tests successfully with four platform skips; source core hashes
+remain unchanged. The operator walkthrough is `docs/setup/case-workbench.md`.
+External adapters, model calls and paid execution retain their separate gates;
+full M5 is not complete.
 
 **Goal:** Let a simulation-based robotics developer bring a supported case,
 understand replay readiness, inspect confirmed/reduced evidence, and export a
@@ -162,20 +166,20 @@ Review the schema and state transitions with Jethro before implementation.
 
 ### A2: Import and export existing supported evidence (green after A1)
 
-- [ ] Write failing tests for a complete existing case, missing media, absent
+- [x] Write failing tests for a complete existing case, missing media, absent
   reset/model revisions, inconsistent rectangle/outcome, duplicate identity,
   unknown schema, escaping paths and symlink references.
-- [ ] Implement non-destructive local registration under a separate dedicated
+- [x] Implement non-destructive local registration under a separate dedicated
   case workspace. Hash referenced inputs; never execute embedded commands,
   deserialize executable objects, fetch model weights or start compute.
-- [ ] Preserve raw outcome categories; infrastructure errors cannot certify
+- [x] Preserve raw outcome categories; infrastructure errors cannot certify
   policy failure. Missing or conflicting measurements stay unknown.
-- [ ] Export a machine-readable recipe plus a human summary: pinned versions,
+- [x] Export a machine-readable recipe when complete plus a human summary: pinned versions,
   task/reset, exact mask, expected outcome, gate rules, evidence references and
   limitations. Validate source integrity and identities before export. Report
   missing prerequisites explicitly; generate commands only from trusted
   templates/validated fields, not copied arbitrary shell strings.
-- [ ] Test export/reimport equivalence and invalid-case refusal. Large artifacts
+- [x] Test export/reimport equivalence and invalid-case refusal. Large artifacts
   remain ignored; source files are unchanged. Commit boundary:
   `feat(cases): register and export supported replay evidence`.
 
@@ -197,25 +201,25 @@ this fix alone is not the completed workbench.
 
 ### A4: Add the case journey to the viewer (amber after A2/A3 review)
 
-- [ ] Expose validated read-only case/status/recipe data through the existing
+- [x] Expose validated read-only case/status/recipe data through the existing
   loopback server; keep media containment and range streaming intact.
-- [ ] Show case identity and readiness/missing prerequisites before findings;
+- [x] Show case identity and readiness/missing prerequisites before findings;
   then nominal, suspected, confirmed and reduced evidence, measured counts,
   lineage and an export/replay recipe. Labels reflect actual records, not an
   assumed linear success path. Budget-exhausted and unavailable are valid views.
-- [ ] Keep both evidence panels equal in size and one nominal representative
+- [x] Keep both evidence panels equal in size and one nominal representative
   visible by default. No portfolio cards, dashboard redesign or browser-run
   cloud buttons. Explain CLI next steps without implying they were executed.
-- [ ] Separate warm estimates, full-allocation estimates and billed values;
+- [x] Separate warm estimates, full-allocation estimates and billed values;
   show absent values as unknown. Do not display 3.715× as case diagnosis speedup.
-- [ ] Add HTTP fixture tests for complete, inspection-only, missing evidence,
+- [x] Add HTTP fixture tests for complete, inspection-only, missing evidence,
   conflicting metadata and partial/budget-exhausted cases; perform visual QA
   against real saved M4 evidence without running robotics again.
-- [ ] Commit boundary: `feat(viewer): present the case-to-regression journey`.
+- [x] Commit boundary: `feat(viewer): present the case-to-regression journey`.
 
 **A exit gate:** A fresh operator registers existing saved evidence, identifies
 what is/is not replayable, inspects parent/reduced videos and gate counts, and
-exports a valid recipe. This proves offline usability, not a new live replay
+exports validated metadata (and a recipe only when complete). This proves offline usability, not a new live replay
 or external-input diagnosis. Checkpoint with Jethro before B/C implementation.
 
 ## 5. M5B — One genuinely replayable external artifact
@@ -324,18 +328,21 @@ logs. Invite interpretation of live results before turning them into claims.
 
 ### Final M5 acceptance and next milestones
 
-- [ ] Demonstrate the supported import/readiness/evidence/export journey with
+- [x] Demonstrate the supported import/readiness/evidence/export journey with
   source provenance and correct distinctions between saved and fresh evidence.
 - [ ] Demonstrate the approved external replay path, or record a human-approved
   narrower scope rather than implying unimplemented restoration.
 - [ ] Demonstrate actual Nemotron use and honest deterministic fallback.
-- [ ] Document a fresh-operator walkthrough in `docs/setup/case-workbench.md`
+- [x] Document a fresh-operator walkthrough in `docs/setup/case-workbench.md`
   and known limitations; no universal video-to-regression promise.
 - [ ] Keep project naming brainstorming queued for Jethro's decision. M6 adds
   broader validation under separate scope; M7 handles final video pitch,
   feedback reconciliation, licensing/data rights and judge-run public-repo audit.
 
-**Immediate next step after plan review:** settle D1 and A1, then write only
-the bounded M5A implementation contract. Do not start B/C or revive M3 while
-waiting. This milestone plan deliberately keeps undecided architecture out of
+**Immediate next step after M5A acceptance:** settle D2 sample acquisition and
+D3 Nemotron model/data-transfer/cap decisions using the bounded proposals in
+`docs/research/2026-10-03-m5-feasibility-checkpoints.md`. Inspect the actual
+external sample before approving an adapter; configure Token Factory access
+locally before the real pilot. A later cloud replay requires a fresh D4 cap and
+preflight. Do not revive M3 while waiting. Undecided architecture stays out of
 mechanical implementation handoffs.

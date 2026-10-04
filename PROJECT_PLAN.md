@@ -22,9 +22,12 @@ and reviewed; the [exact case contract](docs/superpowers/specs/2026-10-03-m5-cas
 is accepted. Its schema kernel is implemented and independently reviewed;
 source reconciliation and CLI import/export are integrated and independently
 reviewed. Real saved M4 metadata exported/reimported with unchanged core source
-hashes; missing runtime/checkpoint pins remain explicit. Dependent viewer
-integration is in progress. No paid execution
-has started. Expanded M3 remains frozen.
+hashes; missing runtime/checkpoint pins remain explicit. **M5A is complete:**
+the read-only case journey is integrated, independently reviewed and checked
+against real saved media. See the [operator walkthrough](docs/setup/case-workbench.md).
+M5B external replay and M5C real Nemotron explanations remain pending their
+sample, model/data-transfer and spending gates. No M5 paid execution has
+started. Expanded M3 remains frozen.
 
 > **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
 

@@ -16,7 +16,7 @@ failure-to-regression workflow; planning its next bounded step is next, with
 project-name brainstorming still queued. This overrides older execution
 instructions below. The portfolio overview is optional, not a core M5 gate.
 
-## Next scoped work — M5A, October 3
+## M5A complete; next gates are M5B/C — October 4
 
 The scope-approved `docs/superpowers/plans/2026-10-03-m5-case-workbench.md` divides M5
 into A: offline case inspection/export on existing evidence; B: one externally
@@ -41,9 +41,16 @@ workspace. Summary/replay/aggregate hashes match the pre-import baseline.
 The case is inspectable; checkpoint/upstream-harness/image pins are missing;
 exact aggregate-linked historical policy identity is absent; fresh replay is
 unverified. Do not fabricate those pins or upgrade imported claims.
-The viewer plan is executing with a balanced builder in reused clean isolated
-`codex/m5-viewer` (base `9c87294`). Root owns docs, real registration, integration
-and browser QA. No completed viewer journey is claimed yet. Two read-only
+The viewer journey is integrated as `01c8ea2`, `557c00b`, and `2e2e125` after
+independent spec and quality reviews. It exposes GET-only case/readiness/recipe
+APIs, exact-ID evidence scoping, four independent capability labels, selected
+reduction lineage and a static CLI export template. Technical details collapse
+to keep paired videos prominent. Real browser checks verified both recordings,
+linked playback, traces, keyboard focus and refresh stability; 375/768/1440px
+layouts have equal evidence panels and no horizontal overflow. The operator
+walkthrough is `docs/setup/case-workbench.md`. The owned main viewer runs at
+http://127.0.0.1:8765/ with ignored `artifacts/cases` registrations.
+M5A is complete; full M5 is not. Two read-only
 feasibility scouts completed B/C research; no external sample acquired or
 provider request sent. Specific sample-acquisition and Nemotron model/data/cap
 decisions were queued asynchronously while offline implementation continued.
@@ -51,7 +58,7 @@ CLI-first and independent capabilities are recorded in ADRs 0012/0013. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.
 
-Fresh integrated Windows Python 3.11 suite: 454 tests passed, four known
+Fresh integrated Windows Python 3.11 suite: 468 tests run successfully, four known
 platform skips. Safety-test fixtures print simulated stop/argument errors;
 this test run did not access or start cloud resources.
 

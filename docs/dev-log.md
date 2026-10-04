@@ -6,6 +6,31 @@ tests is not necessarily a failure seen in the live pilot.
 
 ## M5A: task-local media compatibility — October 3
 
+### Case viewer completion — October 4
+
+Independent review caught stale recipes after readiness changed, unsafe
+missing-ID fallback, missing selected-case lineage, and malformed registration
+payloads that could disable the case API. The repaired viewer uses validated
+exact episode IDs only, isolates corrupt entries, refreshes recipes when their
+capabilities change, and displays the selected case's lineage rather than an
+unrelated catalog reduction. Unsupported evidence links remain explicit.
+
+Quality review reproduced an oversized JSON integer overflowing metric
+conversion and disconnecting HTTP instead of returning controlled data.
+Finite-number conversion now rejects that input safely, with regression tests.
+Browser QA found narrow-layout overflow; allowing the case heading to shrink
+removed it at 375px without changing equal comparison-video sizing. Technical
+details use a native collapsed disclosure to keep the demo focused on evidence.
+These are project UI/input-handling defects, not provider incidents.
+
+Spec and quality reviews passed before integration (`01c8ea2` through
+`2e2e125`). Root verified the real case's 22 exact links, playable comparison
+videos, traces/lineage, linked playback, keyboard focus and polling stability,
+plus equal panels without horizontal overflow at 375/768/1440px. No browser
+warnings/errors were recorded. Full integrated suite: 468 tests, four known
+platform skips. Source core JSON hashes remain unchanged. M5A is complete;
+external restored replay and real Nemotron calls are not yet demonstrated.
+
 ### Case import review (local fixtures, not provider incidents)
 
 The first importer/store/CLI unit passed 440 tests (four platform skips), but
