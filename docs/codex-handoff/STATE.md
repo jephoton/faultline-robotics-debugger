@@ -32,11 +32,18 @@ smaller agent in isolated `codex/m5-case-schema` and integrated as `46a3419`/
 `d29f87a` after independent spec/quality review. `cases.py` validates structure,
 computes deterministic identity and lists missing recipe prerequisites; it
 does not inspect files or certify imported evidence. Ten focused tests pass.
-Source reconciliation, persistence/CLI and viewer
-integration are now executing autonomously within accepted M5A scope. The
-`2026-10-03-m5-case-io.md` plan is handed to one balanced builder in isolated
-`codex/m5-case-io`; the subsequent viewer plan is committed and waits for reviewed
-case APIs. No completed importer/viewer journey is claimed yet. Two read-only
+Source reconciliation, persistence and CLI are integrated on main as `4851908`
+through `9c87294` after independent spec/quality repair cycles. Fresh integrated
+suite: 454 tests, four skips. Root registered the saved M4 case in ignored
+`artifacts/cases`, matched all 22 episode IDs and videos/traces, exported metadata
+to `artifacts/m5-export-20261003-reviewed` and reimported it in a separate ignored
+workspace. Summary/replay/aggregate hashes match the pre-import baseline.
+The case is inspectable; checkpoint/upstream-harness/image pins are missing;
+exact aggregate-linked historical policy identity is absent; fresh replay is
+unverified. Do not fabricate those pins or upgrade imported claims.
+The viewer plan is executing with a balanced builder in reused clean isolated
+`codex/m5-viewer` (base `9c87294`). Root owns docs, real registration, integration
+and browser QA. No completed viewer journey is claimed yet. Two read-only
 feasibility scouts completed B/C research; no external sample acquired or
 provider request sent. Specific sample-acquisition and Nemotron model/data/cap
 decisions were queued asynchronously while offline implementation continued.
@@ -44,7 +51,7 @@ CLI-first and independent capabilities are recorded in ADRs 0012/0013. Exact
 external format, simulator restore adapter, hosted model/input, data transfer
 and live budgets remain gated. M3's unfinished launcher is not a dependency.
 
-Fresh integrated Windows Python 3.11 suite: 400 tests passed, four known
+Fresh integrated Windows Python 3.11 suite: 454 tests passed, four known
 platform skips. Safety-test fixtures print simulated stop/argument errors;
 this test run did not access or start cloud resources.
 

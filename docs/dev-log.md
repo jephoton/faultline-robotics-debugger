@@ -18,6 +18,17 @@ profile loss downgrading unrelated historical proof, and contradictory policy
 identity being classified as absent proof. Repairs and regression tests are in
 progress before integration; a green suite alone did not establish correctness.
 
+Resolved in the independently re-reviewed import/store/CLI unit, integrated as
+`4851908` through `9c87294`. Quality review additionally reproduced duplicate
+episode IDs counting as independent trials, unreadable optional media leaking
+filesystem errors, and deeply nested metadata escaping CLI error sanitization.
+Regression fixes make duplicate identity conflicting, preserve intact claims
+when optional media cannot be read, sanitize core read failures, and return
+JSON/exit 2 for malformed nested metadata rather than private tracebacks.
+Root's fresh integrated suite passed 454 tests with four platform skips. Real
+metadata export/reimport passed, with original core JSON hashes unchanged.
+These are local importer robustness issues, not Nebius/NVIDIA incidents.
+
 Root's read-only check of the real saved M4 bundle resolved 22 videos and 22
 traces. It reported missing checkpoint, simulator-image and upstream-harness
 pins, and no aggregate-linked exact policy identity. These are legacy metadata
