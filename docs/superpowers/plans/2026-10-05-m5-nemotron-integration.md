@@ -39,7 +39,7 @@ Accepted decisions persist; no repeated model-downscale questions.
 
 ## Task 1 — Stored reports (independent builder)
 
-- [ ] Build fixture with `tests.test_case_io.fixture`, `case_io.import_m4`,
+- [x] Build fixture with `tests.test_case_io.fixture`, `case_io.import_m4`,
   `case_store.register_case` in separate temporary source/workspace directories.
   Write red test for source-bound offline round trip:
 
@@ -52,16 +52,20 @@ assert read_case_reports(workspace, case_id)['reports'] == [stored]
 assert path.name == stored['report_id'] + '.json'
 ```
 
-- [ ] Implement five public APIs and error class in `explanation_store.py`
+- [x] Implement five public APIs and error class in `explanation_store.py`
   exactly as the spec. Recompute kernel report and canonical identity; validate
   provenance; bound reads; refuse changed/unavailable source and symlink escapes;
   immutable atomic publication; malformed sidecars isolate safe warnings.
-- [ ] Add rejection tests for forged facts/hash/provider/IDs/cost, Boolean and
+- [x] Add rejection tests for forged facts/hash/provider/IDs/cost, Boolean and
   oversized numbers, duplicate JSON keys, changed source/packet, symlink case
   and report directories/files, corrupt/oversized records, 101 reports, invalid
   timestamps, fake offline-as-live metadata, detached results and nonmutation.
   Mock network entry points to fail; no real key reads.
-- [ ] Run focused test then commit `feat(explanation): persist evidence-bound reports`.
+- [x] Run focused test then commit `feat(explanation): persist evidence-bound reports`.
+
+Task1 integrated `466b0d7`/`731b82b` after independent spec/quality review.
+Root fresh main:20focused passed,505full passed/four platform skips. Review
+and repair details are in dev-log; no real inference was executed.
 
 ## Task 2 — Client and conservative reservation (independent builder)
 

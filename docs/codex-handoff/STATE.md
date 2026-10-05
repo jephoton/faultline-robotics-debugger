@@ -87,6 +87,14 @@ no new explanation UI yet. M5B kernel builder runs independently on
 `codex/m5-external-reset-kernel`. Full source/sample runtime validation is
 pending; no model/evaluator/cloud launch has occurred.
 
+Root fresh integrated store-suite acceptance:505testsOK/four Windows skips,
+132.274seconds, plus20focusedOK. The isolated client batch encountered one
+15-second WSL Bash-syntax timeout; root's separate rerun passed12.796seconds
+and the fresh main full suite passed. No WSL/provider fix or causal attribution
+follows from that transient observation. Read-only explanation viewer work
+now proceeds independently fromCLI after store integration under the updated
+plan; baseline42viewer tests passed in its clean isolated worktree.
+
 October 5 Token Factory readiness update: Jethro reports the inference account
 is funded. Root verified a single nonempty `NEBIUS_API_KEY` entry in the known
 repo-root `.env`, which is ignored and untracked; no key value was displayed.
