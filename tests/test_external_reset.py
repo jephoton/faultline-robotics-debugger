@@ -13,6 +13,7 @@ from unittest import mock
 from robot_debug.external_reset import (
     ExternalResetError,
     read_external_reset,
+    resolve_external_assets,
     validate_external_reset,
 )
 
@@ -266,6 +267,98 @@ class SourceReaderTests(unittest.TestCase):
                 with self.assertRaisesRegex(ExternalResetError, "h5py is required for external reset reading"):
                     read_external_reset(path)
 
+
+class AssetResolutionTests(unittest.TestCase):
+    def make_roots(self, directory):
+        libero = Path(directory) / "libero"
+        robosuite = Path(directory) / "robosuite"
+        libero.mkdir()
+        robosuite.mkdir()
+        return {"libero": libero, "robosuite": robosuite}
+
+    def write_asset(self, root, relative, content=b"asset"):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        return target
+
+    def test_resolves_explicit_aliases_full_suffixes_and_normalized_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            first = self.write_asset(roots["libero"], "textures/shared.png", b"libero")
+            second = self.write_asset(roots["robosuite"], "meshes/shared.png", b"robosuite")
+            xml = (
+                '<mujoco><compiler meshdir="meshes/"/><asset>'
+                '<texture file="/chiliocosm/assets/scenes/../textures/shared.png"/>'
+                '<mesh file="/robosuite/models/assets/meshes/shared.png"/>'
+                "</asset></mujoco>"
+            )
+            result = resolve_external_assets(xml, roots)
+        self.assertNotIn("meshdir", result["xml"])
+        self.assertIn(str(first.resolve()), result["xml"])
+        self.assertIn(str(second.resolve()), result["xml"])
+        self.assertEqual(
+            [(item["namespace"], item["relative_path"]) for item in result["assets"]],
+            [("libero", "textures/shared.png"), ("robosuite", "meshes/shared.png")],
+        )
+        self.assertEqual(result["source_xml_sha256"], _sha(xml.encode()))
+        self.assertEqual(set(result), {"xml", "source_xml_sha256", "resolved_xml_sha256", "assets", "asset_closure_sha256"})
+
+    def test_deduplicates_repeated_full_path_without_changing_source_xml(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            self.write_asset(roots["libero"], "textures/a.png")
+            xml = (
+                '<mujoco><asset><texture file="/chiliocosm/assets/textures/a.png"/>'
+                '<texture file="/chiliocosm/assets/textures/a.png"/></asset></mujoco>'
+            )
+            original = xml[:]
+            result = resolve_external_assets(xml, roots)
+        self.assertEqual(xml, original)
+        self.assertEqual(len(result["assets"]), 1)
+
+    def test_rejects_escape_unknown_ambiguous_backslash_url_and_empty_suffix(self):
+        unsafe = [
+            "/chiliocosm/assets/../escape.obj",
+            "/unknown/assets/a.obj",
+            "/chiliocosm/assets/a/robosuite/models/assets/b.obj",
+            "/chiliocosm/assets/folder\\a.obj",
+            "https://example.test/chiliocosm/assets/a.obj",
+            "/chiliocosm/assets/",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            for filename in unsafe:
+                xml = f'<mujoco><asset><mesh file="{filename}"/></asset></mujoco>'
+                with self.subTest(filename=filename):
+                    with self.assertRaisesRegex(ExternalResetError, "invalid external asset reference"):
+                        resolve_external_assets(xml, roots)
+
+    def test_rejects_missing_or_extra_roots_and_missing_asset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            xml = '<mujoco><asset><mesh file="/chiliocosm/assets/missing.obj"/></asset></mujoco>'
+            for bad_roots in ({"libero": roots["libero"]}, {**roots, "other": roots["libero"]}, roots):
+                with self.subTest(keys=set(bad_roots)):
+                    with self.assertRaises(ExternalResetError):
+                        resolve_external_assets(xml, bad_roots)
+
+    def test_rejects_more_than_128_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            self.write_asset(roots["libero"], "a.obj")
+            refs = "".join('<mesh file="/chiliocosm/assets/a.obj"/>' for _ in range(129))
+            with self.assertRaisesRegex(ExternalResetError, "external asset closure exceeds limits"):
+                resolve_external_assets(f"<mujoco><asset>{refs}</asset></mujoco>", roots)
+
+    def test_rejects_asset_over_per_file_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            self.write_asset(roots["libero"], "large.obj")
+            xml = '<mujoco><asset><mesh file="/chiliocosm/assets/large.obj"/></asset></mujoco>'
+            with mock.patch("robot_debug.external_reset.MAX_ASSET_BYTES", 0):
+                with self.assertRaisesRegex(ExternalResetError, "external asset closure exceeds limits"):
+                    resolve_external_assets(xml, roots)
 
 if __name__ == "__main__":
     unittest.main()

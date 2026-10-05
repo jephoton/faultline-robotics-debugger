@@ -7,6 +7,7 @@ import json
 import math
 import os
 from pathlib import Path
+from pathlib import PurePosixPath
 import stat
 import struct
 import xml.etree.ElementTree as ET
@@ -19,6 +20,9 @@ STATE_LENGTH = 110
 MAX_XML_BYTES = 2 * 1024 * 1024
 MAX_METADATA_BYTES = 64 * 1024
 MAX_XML_ELEMENTS = 50_000
+MAX_ASSET_BYTES = 64 * 1024 * 1024
+MAX_CLOSURE_BYTES = 256 * 1024 * 1024
+MAX_ASSET_REFERENCES = 128
 
 _CANDIDATE_KEYS = {
     "schema_version",
@@ -340,3 +344,143 @@ def read_external_reset(path: Path) -> dict:
     }
     result["reset_id"] = _sha256(_canonical_bytes(result))
     return validate_external_reset(result)
+
+
+_ASSET_MARKERS = {
+    "/chiliocosm/assets/": "libero",
+    "/robosuite/models/assets/": "robosuite",
+}
+_RESOLVED_KEYS = {
+    "xml",
+    "source_xml_sha256",
+    "resolved_xml_sha256",
+    "assets",
+    "asset_closure_sha256",
+}
+
+
+def _asset_reference(filename: str) -> tuple[str, str]:
+    if (
+        type(filename) is not str
+        or not filename
+        or "\\" in filename
+        or any(ord(character) < 32 for character in filename)
+        or "://" in filename
+    ):
+        raise ExternalResetError("invalid external asset reference")
+    matches = [
+        (marker, namespace)
+        for marker, namespace in _ASSET_MARKERS.items()
+        for _ in range(filename.count(marker))
+    ]
+    if len(matches) != 1:
+        raise ExternalResetError("invalid external asset reference")
+    marker, namespace = matches[0]
+    if not filename.startswith(marker):
+        raise ExternalResetError("invalid external asset reference")
+    suffix = filename[len(marker) :]
+    if not suffix or suffix.startswith("/") or ":" in suffix:
+        raise ExternalResetError("invalid external asset reference")
+    normalized: list[str] = []
+    for part in PurePosixPath(suffix).parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not normalized:
+                raise ExternalResetError("invalid external asset reference")
+            normalized.pop()
+        else:
+            normalized.append(part)
+    if not normalized:
+        raise ExternalResetError("invalid external asset reference")
+    return namespace, "/".join(normalized)
+
+
+def _asset_digest(path: Path) -> tuple[str, int]:
+    info = _safe_regular_path(path)
+    if info.st_size > MAX_ASSET_BYTES:
+        raise ExternalResetError("external asset closure exceeds limits")
+    before = _identity(info)
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            if _identity(os.fstat(stream.fileno())) != before:
+                raise OSError
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    except OSError:
+        raise ExternalResetError("invalid external asset") from None
+    if not _same_file_identity(path, before):
+        raise ExternalResetError("external asset changed")
+    return digest.hexdigest(), info.st_size
+
+
+def _asset_target(root: Path, relative_path: str) -> Path:
+    root_absolute = root.absolute()
+    target = root_absolute.joinpath(*relative_path.split("/"))
+    try:
+        if os.path.commonpath((str(root_absolute), str(target.absolute()))) != str(root_absolute):
+            raise ValueError
+    except ValueError:
+        raise ExternalResetError("invalid external asset reference") from None
+    _safe_regular_path(target)
+    return target.resolve(strict=True)
+
+
+def resolve_external_assets(xml: str, roots: dict) -> dict:
+    """Rewrite recognized source aliases to a bounded installed asset closure."""
+    root = _parse_xml(xml)
+    if type(roots) is not dict or set(roots) != {"libero", "robosuite"}:
+        raise ExternalResetError("invalid external asset roots")
+    checked_roots: dict[str, Path] = {}
+    for namespace in ("libero", "robosuite"):
+        value = roots[namespace]
+        if not isinstance(value, Path):
+            raise ExternalResetError("invalid external asset roots")
+        _safe_regular_path(value, directory=True)
+        checked_roots[namespace] = value.resolve(strict=True)
+
+    references = []
+    for element in root.iter():
+        if "file" not in element.attrib:
+            continue
+        references.append((element, *_asset_reference(element.attrib["file"])))
+        if len(references) > MAX_ASSET_REFERENCES:
+            raise ExternalResetError("external asset closure exceeds limits")
+
+    assets_by_key: dict[tuple[str, str], dict] = {}
+    targets: dict[tuple[str, str], Path] = {}
+    closure_bytes = 0
+    for _element, namespace, relative_path in references:
+        key = (namespace, relative_path)
+        if key in assets_by_key:
+            continue
+        target = _asset_target(checked_roots[namespace], relative_path)
+        digest, byte_count = _asset_digest(target)
+        closure_bytes += byte_count
+        if closure_bytes > MAX_CLOSURE_BYTES:
+            raise ExternalResetError("external asset closure exceeds limits")
+        targets[key] = target
+        assets_by_key[key] = {
+            "namespace": namespace,
+            "relative_path": relative_path,
+            "sha256": digest,
+        }
+
+    for element, namespace, relative_path in references:
+        element.attrib["file"] = str(targets[(namespace, relative_path)])
+    for element in root.iter("compiler"):
+        element.attrib.pop("meshdir", None)
+
+    assets = sorted(
+        assets_by_key.values(),
+        key=lambda item: (item["namespace"], item["relative_path"], item["sha256"]),
+    )
+    rewritten = ET.tostring(root, encoding="unicode", short_empty_elements=True)
+    return {
+        "xml": rewritten,
+        "source_xml_sha256": _sha256(xml.encode("utf-8")),
+        "resolved_xml_sha256": _sha256(rewritten.encode("utf-8")),
+        "assets": assets,
+        "asset_closure_sha256": _sha256(_canonical_bytes(assets)),
+    }
