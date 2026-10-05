@@ -321,5 +321,8 @@ it, and a bounded byte count does not guarantee every JSON number is parseable.
 Required fixes: inspect all absolute path ancestors before case/storage access,
 and convert JSON parser ValueError into the fixed safe store error. Add link/
 junction and5000-digit-integer regression tests. Repair and exact-commit
-independent re-review are pending; do not call the store integrated or safe
-for live use yet. These are local implementation bugs, not provider faults.
+independent re-review were required. Repair `a34d74e` passed root's exact-commit
+spec recheck and a different agent's quality/security review, including20
+focused tests and seven additional malformed-JSON probes. Integrated as
+`466b0d7`/`731b82b`; live use still waits for client/CLI integration reviews.
+These are local implementation bugs, not provider faults.

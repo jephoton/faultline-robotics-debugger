@@ -77,6 +77,16 @@ has not been attempted. Credit expiry remains unknown. The full US$0.02 is
 reserved before the first POST, without automatic refund/retry. M5B local
 adapter implementation is approved; paid simulator validation is not.
 
+M5C report store is integrated as `466b0d7`/`731b82b` after independent spec
+review exposed and repaired ancestor-link traversal and oversized-integer
+parser failures. Root rechecked the repaired exact commit; a different quality
+reviewer passed20focused tests plus malformed-record isolation probes. The
+client, guardedCLI, viewer explanations and actual inference still remain.
+Local viewer restarted in this turn on loopback8765, healthread-onlyOK; it has
+no new explanation UI yet. M5B kernel builder runs independently on
+`codex/m5-external-reset-kernel`. Full source/sample runtime validation is
+pending; no model/evaluator/cloud launch has occurred.
+
 October 5 Token Factory readiness update: Jethro reports the inference account
 is funded. Root verified a single nonempty `NEBIUS_API_KEY` entry in the known
 repo-root `.env`, which is ignored and untracked; no key value was displayed.
