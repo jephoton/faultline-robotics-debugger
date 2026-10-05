@@ -64,13 +64,27 @@ this test run did not access or start cloud resources.
 
 ## Completed evidence
 
+October 5 accepted execution boundaries: immutable case/packet-bound report
+sidecars (ADR 0015) and narrow task-0/demo_0/state-0 restoration with installed
+asset resolution, ten settling steps and fresh policy actions (ADR 0016).
+The committed Nemotron integration plan is
+`docs/superpowers/plans/2026-10-05-m5-nemotron-integration.md`. Independent client
+and store builders use isolated worktrees; model-capacity failures produced no
+implementation and were handed to an available balanced smaller model.
+Root alone owns Git integration and any live call. The authenticated global
+model catalog returned the exact approved capitalized model ID; generation
+has not been attempted. Credit expiry remains unknown. The full US$0.02 is
+reserved before the first POST, without automatic refund/retry. M5B local
+adapter implementation is approved; paid simulator validation is not.
+
 October 5 Token Factory readiness update: Jethro reports the inference account
 is funded. Root verified a single nonempty `NEBIUS_API_KEY` entry in the known
 repo-root `.env`, which is ignored and untracked; no key value was displayed.
 The key is not in the current process environment, so the future CLI must
 explicitly load the approved local secret source. Credential validity, active
-account/model entitlement and credit expiry remain unverified. No authenticated
-request or inference was made. Preserve the ten-call / US$0.02 pilot cap;
+account/model entitlement and credit expiry were unverified at this earlier
+readiness checkpoint. The later catalog check above resolves catalog access,
+not generation or expiry. Preserve the ten-call / US$0.02 pilot cap;
 settle the bounded provider/client/report-binding plan before live execution.
 
 Completed offline M5C increment: the accepted packet/report contract is

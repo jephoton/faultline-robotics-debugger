@@ -173,3 +173,15 @@ switch processing regions. This is an example-consistency observation, not an
 observed API defect. API reliability, output quality, latency, actual charges
 and willingness to reuse cannot be judged until the approved real pilot.
 See [access research](docs/research/2026-10-04-m5-nemotron-access.md).
+
+### October 5: Authenticated Token Factory catalog check
+
+The locally configured, ignored inference key authenticated a read-only model
+catalog request on the global endpoint. It returned the exact capitalized
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` identifier. Checking the catalog resolved
+the cookbook/quickstart naming ambiguity without guessing aliases or changing
+processing regions. No inference occurred, so this is onboarding/access
+feedback only: output quality, generation latency, charges and willingness to
+reuse hosted Nemotron remain untested. AI Cloud CLI authentication and this
+inference key remain separate. No secrets or private infrastructure data are
+included in this log.
