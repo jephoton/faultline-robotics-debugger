@@ -107,6 +107,9 @@ def _read_env_file(path: Path) -> str | None:
         if len(raw) > _MAX_ENV_BYTES:
             raise TokenFactoryError("invalid_api_key")
         text = raw.decode("utf-8")
+        if (any(not char.isprintable() and char not in "\r\n" for char in text)
+                or "\r" in text.replace("\r\n", "")):
+            raise TokenFactoryError("invalid_api_key")
     except TokenFactoryError:
         raise
     except Exception:
@@ -135,7 +138,7 @@ def _read_env_file(path: Path) -> str | None:
             value = value[1:-1]
             if quote in value:
                 raise TokenFactoryError("invalid_api_key")
-        elif value.endswith(("'", '"')):
+        elif "'" in value or '"' in value:
             raise TokenFactoryError("invalid_api_key")
         if not _valid_key(value):
             raise TokenFactoryError("invalid_api_key")

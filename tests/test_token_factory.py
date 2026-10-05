@@ -355,11 +355,29 @@ class TokenFactoryTests(unittest.TestCase):
                 with self.assertRaisesRegex(TokenFactoryError, "^invalid_api_key$"):
                     load_api_key(path)
 
+    def test_load_api_key_accepts_lf_crlf_comments_and_ascii_spaces(self):
+        contents = [
+            b"  # comment\n  NEBIUS_API_KEY = fixture-key  \n",
+            b"  # comment\r\n  export NEBIUS_API_KEY = \"fixture-key\"  \r\n",
+        ]
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+                os.environ, {}, clear=True):
+            path = Path(tmp) / "selected.env"
+            for content in contents:
+                with self.subTest(content=content):
+                    path.write_bytes(content)
+                    self.assertEqual(load_api_key(path), "fixture-key")
+
     def test_load_api_key_rejects_unsafe_files_and_values(self):
         cases = [
             "NEBIUS_API_KEY=one\nNEBIUS_API_KEY=two\n",
             'NEBIUS_API_KEY="unterminated\n',
+            'NEBIUS_API_KEY=fixture"tail\n',
+            "NEBIUS_API_KEY=fixture'tail\n",
             "NEBIUS_API_KEY=bad\x01value\n",
+            "NEBIUS_API_KEY=fixture\x1chidden\n",
+            "NEBIUS_API_KEY=fixture\u0085hidden\n",
+            "NEBIUS_API_KEY=fixture\u2028hidden\n",
             "NEBIUS_API_KEY=\n",
         ]
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
