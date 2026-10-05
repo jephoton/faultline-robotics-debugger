@@ -34,10 +34,16 @@ are approved in [ADR 0014](docs/decisions/0014-m5-bounded-sample-and-nemotron-pi
 The actual external sample's hash/size and demo_0 metadata are verified; it has
 states/XML but requires external BDDL/assets and runtime restore validation.
 See [sample findings](docs/research/2026-10-04-m5-external-sample.md).
-Token Factory access remains blocked on locally configured API credentials
-and account/balance checks, not on renewed AI Cloud CLI sign-in. Next: review
-the narrow restore adapter design and prepare the bounded explanation client;
-neither sample inspection nor documentation counts as completed M5B/C.
+October 5: the locally configured inference key authenticated a read-only
+global model catalog check, returning the exact approved Nemotron model ID.
+Generation and credit expiry remain unverified. Immutable evidence-bound
+sidecars and the narrow task-0/demo_0/state-0 restore adapter are accepted in
+[ADR 0015](docs/decisions/0015-m5-evidence-bound-interpretations.md) and
+[ADR 0016](docs/decisions/0016-m5-narrow-external-state-restore.md).
+Next: execute the [bounded Nemotron integration plan](docs/superpowers/plans/2026-10-05-m5-nemotron-integration.md)
+and independently the [local reset-kernel plan](docs/superpowers/plans/2026-10-05-m5-external-reset-kernel.md).
+Neither catalog access nor local fixtures completes M5B/C. No paid GPU start
+is approved; M5B needs actual runtime/case wiring and fresh bounded live validation.
 
 The approved [offline explanation kernel](docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md)
 is integrated and independently spec/quality reviewed through `557eb36`.
