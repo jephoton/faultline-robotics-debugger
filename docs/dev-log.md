@@ -305,3 +305,21 @@ integration and actual scheduled fake acceptance remain pending. These are
 local project defects, not Nebius or NVIDIA model failures. No cloud run was
 started. Publication retries failed with an HTTPS low-speed timeout; these
 changes are committed locally, not confirmed pushed.
+
+## October 5 M5C report-store adversarial review
+
+The first isolated implementation passed 17 focused tests and the502-test
+suite, but independent review at `d6e6e3d` found two project defects before
+integration. A symlinked parent of the workspace bypassed checks on only the
+workspace/case leaves; report writing and reading followed that parent. Also,
+Python3.11 rejects sufficiently long JSON integers with ValueError, not only
+JSONDecodeError; the reader let that exception escape instead of isolating the
+corrupt record. Both were reproduced using temporary synthetic cases only.
+
+Why: checking a final directory does not check every directory used to reach
+it, and a bounded byte count does not guarantee every JSON number is parseable.
+Required fixes: inspect all absolute path ancestors before case/storage access,
+and convert JSON parser ValueError into the fixed safe store error. Add link/
+junction and5000-digit-integer regression tests. Repair and exact-commit
+independent re-review are pending; do not call the store integrated or safe
+for live use yet. These are local implementation bugs, not provider faults.
