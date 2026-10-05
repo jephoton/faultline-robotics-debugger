@@ -21,14 +21,18 @@ committed design/plan -> clean isolated baseline
  -> balanced store builder: explanation_store.py + test_explanation_store.py
  -> independent spec then quality/security reviews -> root integration
  -> CLI builder: scripts/explain_case.py + tests/test_explain_case.py
- -> review/integration -> viewer builder: server/web + tests
+store review/integration -> viewer builder: server/web + tests (parallel to CLI)
  -> review/integration -> root one live pilot/browser acceptance -> handoff
 root: external adapter planning/research continues independently
 ```
 
 Builders use separate clean attached worktrees; no overlapping ownership.
+The read-only viewer depends on the reviewed store APIs, not the live client
+or CLI. It can therefore proceed independently once the store is integrated;
+real-output browser acceptance still waits for the fully reviewed CLI.
 Root owns this plan/spec, docs/ADR, Git, credentials and paid execution. Smaller
-balanced fallback is gpt-6-sol medium (Terra unavailable); reviews use stronger
+balanced fallback is gpt-5.6-sol medium (Terra unavailable and gpt-6-sol hit
+capacity); reviews use stronger
 agents. Green: exact-contract implementation/tests/docs; amber: small helpers,
 safe parsing/presentation inside contract; red: new model/data/reset/cloud cap.
 Accepted decisions persist; no repeated model-downscale questions.
