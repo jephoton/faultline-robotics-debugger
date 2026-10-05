@@ -4,16 +4,19 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import types
 import unittest
 from unittest import mock
 
+import robot_debug.external_reset as external_reset_module
 from robot_debug.external_reset import (
     ExternalResetError,
     read_external_reset,
     resolve_external_assets,
+    restore_external_reset,
     validate_external_reset,
 )
 
@@ -25,6 +28,10 @@ XML = '<mujoco><asset><mesh file="/chiliocosm/assets/meshes/a.obj"/></asset></mu
 
 def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _float_sha(values) -> str:
+    return _sha(b"".join(struct.pack("<d", float(value)) for value in values))
 
 
 def candidate(**changes):
@@ -96,7 +103,11 @@ class FakeGroup:
         child = self.children.get(name)
         if child is None:
             return default
-        return child.link if getlink else child
+        if getlink:
+            return child.link
+        if not isinstance(child.link, FakeHardLink):
+            raise AssertionError("linked child must not be dereferenced")
+        return child
 
 
 class FakeFile(FakeGroup):
@@ -132,7 +143,7 @@ def fake_source(state=None):
                         "robots": ["Panda"],
                         "controller_configs": {"type": "OSC_POSE"},
                         "control_freq": 20,
-                        "camera_names": ["agentview", "robot0_eye_in_hand"],
+                        "camera_names": ["robot0_eye_in_hand", "agentview"],
                         "camera_heights": 128,
                         "camera_widths": 128,
                     },
@@ -140,8 +151,8 @@ def fake_source(state=None):
             ),
             "problem_info": json.dumps(
                 {
-                    "problem_name": "pick_up_the_alphabet_soup_and_place_it_in_the_basket",
-                    "domain_name": "libero_object",
+                    "problem_name": "libero_floor_manipulation",
+                    "domain_name": "robosuite",
                     "language_instruction": "pick up the alphabet soup and place it in the basket",
                 }
             ),
@@ -182,6 +193,12 @@ class CandidateValidationTests(unittest.TestCase):
             with self.subTest(kind=type(value["state"]).__name__):
                 with self.assertRaises(ExternalResetError):
                     validate_external_reset(value)
+
+    def test_rejects_huge_integer_with_fixed_safe_error(self):
+        value = candidate()
+        value["state"][0] = 10**1000
+        with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
+            validate_external_reset(value)
 
     def test_rejects_forged_hashes_and_oversized_or_unsafe_xml(self):
         unsafe = [
@@ -243,6 +260,15 @@ class SourceReaderTests(unittest.TestCase):
             with self.assertRaises(ExternalResetError):
                 self.read_fixture(handle)
 
+    def test_rejects_malformed_controller_metadata_safely(self):
+        handle = fake_source()
+        data = handle.children["data"]
+        metadata = json.loads(data.attrs["env_args"])
+        metadata["env_kwargs"]["controller_configs"] = []
+        data.attrs["env_args"] = json.dumps(metadata)
+        with self.assertRaisesRegex(ExternalResetError, "invalid external reset source"):
+            self.read_fixture(handle)
+
     def test_rejects_changed_source_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.hdf5"
@@ -266,6 +292,35 @@ class SourceReaderTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(ExternalResetError, "h5py is required for external reset reading"):
                     read_external_reset(path)
+
+    def test_rejects_source_that_grows_past_bound_while_reading(self):
+        info = types.SimpleNamespace(st_dev=1, st_ino=2, st_size=5, st_mtime_ns=3)
+
+        class Stream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def fileno(self):
+                return 10
+
+            def read(self, _size):
+                if hasattr(self, "done"):
+                    return b""
+                self.done = True
+                return b"123456"
+
+        fake_path = types.SimpleNamespace(open=lambda _mode: Stream())
+        with (
+            mock.patch("robot_debug.external_reset.SOURCE_SIZE", 5),
+            mock.patch("robot_debug.external_reset.SOURCE_SHA256", _sha(b"123456")),
+            mock.patch("robot_debug.external_reset._safe_regular_path", return_value=info),
+            mock.patch("robot_debug.external_reset.os.fstat", return_value=info),
+        ):
+            with self.assertRaisesRegex(ExternalResetError, "invalid external reset source"):
+                external_reset_module._verified_source(fake_path)
 
 
 class AssetResolutionTests(unittest.TestCase):
@@ -359,6 +414,149 @@ class AssetResolutionTests(unittest.TestCase):
             with mock.patch("robot_debug.external_reset.MAX_ASSET_BYTES", 0):
                 with self.assertRaisesRegex(ExternalResetError, "external asset closure exceeds limits"):
                     resolve_external_assets(xml, roots)
+
+    def test_rejects_asset_that_grows_past_limit_while_reading(self):
+        info = types.SimpleNamespace(st_dev=1, st_ino=2, st_size=1, st_mtime_ns=3)
+
+        class Stream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def fileno(self):
+                return 10
+
+            def read(self, _size):
+                if hasattr(self, "done"):
+                    return b""
+                self.done = True
+                return b"123456"
+
+        fake_path = types.SimpleNamespace(open=lambda _mode: Stream())
+        with (
+            mock.patch("robot_debug.external_reset.MAX_ASSET_BYTES", 5),
+            mock.patch("robot_debug.external_reset._safe_regular_path", return_value=info),
+            mock.patch("robot_debug.external_reset.os.fstat", return_value=info),
+            mock.patch("robot_debug.external_reset._same_file_identity", return_value=True),
+        ):
+            with self.assertRaisesRegex(ExternalResetError, "external asset closure exceeds limits"):
+                external_reset_module._asset_digest(fake_path)
+
+
+class FakeEnvironment:
+    def __init__(self, state, *, dimension=110, pre_state=None, post_state=None, fail_step=None):
+        self.calls = []
+        self.state = [0.0] * dimension
+        self.requested_state = list(state)
+        self.pre_state = list(pre_state) if pre_state is not None else list(state)
+        self.post_state = list(post_state) if post_state is not None else [value + 0.25 for value in state]
+        self.fail_step = fail_step
+        self.steps = 0
+
+    def reset(self):
+        self.calls.append(("reset",))
+
+    def reset_from_xml_string(self, xml):
+        self.calls.append(("reset_from_xml_string", xml))
+
+    def get_sim_state(self):
+        self.calls.append(("get_sim_state",))
+        return list(self.state)
+
+    def set_init_state(self, state):
+        self.calls.append(("set_init_state", list(state)))
+        self.state = list(self.pre_state)
+        return {"set": True}
+
+    def step(self, action):
+        self.steps += 1
+        self.calls.append(("step", list(action)))
+        if self.fail_step == self.steps:
+            raise RuntimeError("private simulator detail")
+        if self.steps == 10:
+            self.state = list(self.post_state)
+        return ({"step": self.steps}, 0.0, False, {})
+
+
+class RestorationTests(unittest.TestCase):
+    def fixture(self, directory):
+        state = [float(index) for index in range(110)]
+        value = candidate(state=state)
+        libero = Path(directory) / "libero"
+        robosuite = Path(directory) / "robosuite"
+        (libero / "meshes").mkdir(parents=True)
+        robosuite.mkdir()
+        (libero / "meshes" / "a.obj").write_bytes(b"asset")
+        roots = {"libero": libero, "robosuite": robosuite}
+        resolved = resolve_external_assets(XML, roots)
+        return state, value, resolved, libero / "meshes" / "a.obj"
+
+    def restore(self, env, value, resolved, state):
+        real = lambda values: STATE_SHA256 if list(values) == state else _float_sha(values)
+        with mock.patch("robot_debug.external_reset._state_sha256", side_effect=real):
+            return restore_external_reset(env, value, resolved)
+
+    def test_restores_in_order_settles_ten_steps_and_returns_last_observation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            env = FakeEnvironment(state)
+            result = self.restore(env, value, resolved, state)
+        self.assertEqual(env.calls[0], ("reset",))
+        self.assertEqual(env.calls[1], ("reset_from_xml_string", resolved["xml"]))
+        self.assertEqual(env.calls[2], ("get_sim_state",))
+        self.assertEqual(env.calls[3], ("set_init_state", state))
+        self.assertEqual(env.calls[4], ("get_sim_state",))
+        self.assertEqual([call for call in env.calls if call[0] == "step"], [("step", [0, 0, 0, 0, 0, 0, -1])] * 10)
+        self.assertEqual(result["observation"], {"step": 10})
+        metadata = result["reset_metadata"]
+        self.assertEqual(
+            set(metadata),
+            {
+                "reset_id", "source_sha256", "state_sha256", "source_xml_sha256",
+                "resolved_xml_sha256", "asset_closure_sha256", "pre_settle_state_sha256",
+                "post_settle_state_sha256", "settling_steps", "restoration_verified",
+            },
+        )
+        self.assertEqual(metadata["settling_steps"], 10)
+        self.assertIs(metadata["restoration_verified"], False)
+        self.assertEqual(metadata["pre_settle_state_sha256"], STATE_SHA256)
+
+    def test_dimension_mismatch_stops_before_state_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            env = FakeEnvironment(state, dimension=109)
+            with self.assertRaisesRegex(ExternalResetError, "external simulator state dimension mismatch"):
+                self.restore(env, value, resolved, state)
+        self.assertFalse(any(call[0] == "set_init_state" for call in env.calls))
+
+    def test_pre_settle_mismatch_stops_before_steps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            env = FakeEnvironment(state, pre_state=[-1.0] * 110)
+            with self.assertRaisesRegex(ExternalResetError, "external simulator state mismatch"):
+                self.restore(env, value, resolved, state)
+        self.assertFalse(any(call[0] == "step" for call in env.calls))
+
+    def test_step_failure_is_safe_and_nonfinite_post_state_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            failing = FakeEnvironment(state, fail_step=3)
+            with self.assertRaisesRegex(ExternalResetError, "external simulator settling failed"):
+                self.restore(failing, value, resolved, state)
+            nonfinite = FakeEnvironment(state, post_state=[math.nan] + [0.0] * 109)
+            with self.assertRaisesRegex(ExternalResetError, "invalid settled simulator state"):
+                self.restore(nonfinite, value, resolved, state)
+
+    def test_changed_asset_is_rejected_before_environment_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, asset = self.fixture(directory)
+            asset.write_bytes(b"changed")
+            env = FakeEnvironment(state)
+            with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
+                self.restore(env, value, resolved, state)
+        self.assertEqual(env.calls, [])
 
 if __name__ == "__main__":
     unittest.main()

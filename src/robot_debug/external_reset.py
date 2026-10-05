@@ -12,6 +12,8 @@ import stat
 import struct
 import xml.etree.ElementTree as ET
 
+import numpy as np
+
 
 SOURCE_SHA256 = "42189d4415d4c51aaaf0708300653fccc39239cd3f2709079a713cd8d1678a8d"
 SOURCE_SIZE = 780_145_352
@@ -38,8 +40,8 @@ _CANDIDATE_KEYS = {
     "reset_id",
 }
 _EXPECTED_PROBLEM = {
-    "problem_name": "pick_up_the_alphabet_soup_and_place_it_in_the_basket",
-    "domain_name": "libero_object",
+    "problem_name": "libero_floor_manipulation",
+    "domain_name": "robosuite",
     "language_instruction": "pick up the alphabet soup and place it in the basket",
 }
 _EXPECTED_BDDL = "pick_up_the_alphabet_soup_and_place_it_in_the_basket.bddl"
@@ -135,7 +137,12 @@ def validate_external_reset(value: dict) -> dict:
     if type(state) is not list or len(state) != STATE_LENGTH:
         _fail()
     for item in state:
-        if type(item) not in (int, float) or not math.isfinite(item):
+        if type(item) not in (int, float):
+            _fail()
+        try:
+            if not math.isfinite(item):
+                _fail()
+        except (OverflowError, TypeError, ValueError):
             _fail()
     if _state_sha256(state) != STATE_SHA256:
         _fail()
@@ -191,8 +198,14 @@ def _verified_source(path: Path) -> tuple[int, int, int, int]:
         with path.open("rb") as stream:
             if _identity(os.fstat(stream.fileno())) != _identity(info):
                 raise OSError
+            bytes_read = 0
             while chunk := stream.read(1024 * 1024):
+                bytes_read += len(chunk)
+                if bytes_read > SOURCE_SIZE:
+                    raise OSError
                 digest.update(chunk)
+            if bytes_read != SOURCE_SIZE:
+                raise OSError
     except OSError:
         raise ExternalResetError("invalid external reset source") from None
     if digest.hexdigest() != SOURCE_SHA256:
@@ -243,11 +256,15 @@ def _text_attr(obj, key: str, limit: int) -> str:
 def _hard_child(h5py, group, name: str, expected_type):
     try:
         link = group.get(name, getlink=True)
+    except (KeyError, OSError, TypeError, ValueError):
+        link = None
+    if not isinstance(link, h5py.HardLink):
+        raise ExternalResetError("invalid external reset source")
+    try:
         child = group.get(name)
     except (KeyError, OSError, TypeError, ValueError):
         child = None
-        link = None
-    if not isinstance(link, h5py.HardLink) or not isinstance(child, expected_type):
+    if not isinstance(child, expected_type):
         raise ExternalResetError("invalid external reset source")
     return child
 
@@ -264,12 +281,14 @@ def _validate_metadata(data) -> None:
         (env.get("env_name"), "Libero_Floor_Manipulation"),
         (kwargs.get("robots"), ["Panda"]),
         (kwargs.get("control_freq"), 20),
-        (kwargs.get("camera_names"), ["agentview", "robot0_eye_in_hand"]),
+        (kwargs.get("camera_names"), ["robot0_eye_in_hand", "agentview"]),
         (kwargs.get("camera_heights"), 128),
         (kwargs.get("camera_widths"), 128),
-        ((kwargs.get("controller_configs") or {}).get("type"), "OSC_POSE"),
     )
     if any(actual != wanted for actual, wanted in expected):
+        raise ExternalResetError("invalid external reset source")
+    controller = kwargs.get("controller_configs")
+    if type(controller) is not dict or controller.get("type") != "OSC_POSE":
         raise ExternalResetError("invalid external reset source")
     bddl = _text_attr(data, "bddl_file_name", MAX_METADATA_BYTES).replace("\\", "/").rsplit("/", 1)[-1]
     if bddl != _EXPECTED_BDDL or _text_attr(data, "macros_image_convention", MAX_METADATA_BYTES) != "opengl":
@@ -310,11 +329,11 @@ def read_external_reset(path: Path) -> dict:
     """Read the sole accepted state/XML pair from a verified local HDF5 file."""
     if not isinstance(path, Path):
         raise ExternalResetError("invalid external reset path")
-    before = _verified_source(path)
     try:
         import h5py  # type: ignore[import-not-found]
     except (ImportError, ModuleNotFoundError):
         raise ExternalResetError("h5py is required for external reset reading") from None
+    before = _verified_source(path)
     try:
         with h5py.File(path, "r") as handle:
             data = _hard_child(h5py, handle, "data", h5py.Group)
@@ -406,8 +425,16 @@ def _asset_digest(path: Path) -> tuple[str, int]:
         with path.open("rb") as stream:
             if _identity(os.fstat(stream.fileno())) != before:
                 raise OSError
+            bytes_read = 0
             while chunk := stream.read(1024 * 1024):
+                bytes_read += len(chunk)
+                if bytes_read > MAX_ASSET_BYTES:
+                    raise ExternalResetError("external asset closure exceeds limits")
                 digest.update(chunk)
+            if bytes_read != info.st_size:
+                raise OSError
+    except ExternalResetError:
+        raise
     except OSError:
         raise ExternalResetError("invalid external asset") from None
     if not _same_file_identity(path, before):
@@ -483,4 +510,164 @@ def resolve_external_assets(xml: str, roots: dict) -> dict:
         "resolved_xml_sha256": _sha256(rewritten.encode("utf-8")),
         "assets": assets,
         "asset_closure_sha256": _sha256(_canonical_bytes(assets)),
+    }
+
+
+def _xml_shape(root: ET.Element) -> bytes:
+    for element in root.iter():
+        if "file" in element.attrib:
+            element.attrib["file"] = "[resolved-asset]"
+        if element.tag == "compiler":
+            element.attrib.pop("meshdir", None)
+    return ET.tostring(root, encoding="utf-8", short_empty_elements=True)
+
+
+def _validated_resolved(candidate: dict, resolved: dict) -> dict:
+    if type(resolved) is not dict or set(resolved) != _RESOLVED_KEYS:
+        raise ExternalResetError("invalid resolved external assets")
+    string_keys = ("xml", "source_xml_sha256", "resolved_xml_sha256", "asset_closure_sha256")
+    if any(type(resolved.get(key)) is not str for key in string_keys):
+        raise ExternalResetError("invalid resolved external assets")
+    if resolved["source_xml_sha256"] != candidate["model_xml_sha256"]:
+        raise ExternalResetError("invalid resolved external assets")
+    if _sha256(resolved["xml"].encode("utf-8")) != resolved["resolved_xml_sha256"]:
+        raise ExternalResetError("invalid resolved external assets")
+    assets = resolved.get("assets")
+    if type(assets) is not list or len(assets) > MAX_ASSET_REFERENCES:
+        raise ExternalResetError("invalid resolved external assets")
+    canonical_assets = []
+    for item in assets:
+        if type(item) is not dict or set(item) != {"namespace", "relative_path", "sha256"}:
+            raise ExternalResetError("invalid resolved external assets")
+        namespace = item.get("namespace")
+        relative_path = item.get("relative_path")
+        digest = item.get("sha256")
+        if (
+            namespace not in {"libero", "robosuite"}
+            or type(relative_path) is not str
+            or type(digest) is not str
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise ExternalResetError("invalid resolved external assets")
+        canonical_assets.append(dict(item))
+    expected_order = sorted(
+        canonical_assets,
+        key=lambda item: (item["namespace"], item["relative_path"], item["sha256"]),
+    )
+    if canonical_assets != expected_order or len({(item["namespace"], item["relative_path"]) for item in assets}) != len(assets):
+        raise ExternalResetError("invalid resolved external assets")
+    if _sha256(_canonical_bytes(canonical_assets)) != resolved["asset_closure_sha256"]:
+        raise ExternalResetError("invalid resolved external assets")
+
+    source_root = _parse_xml(candidate["model_xml"])
+    resolved_root = _parse_xml(resolved["xml"])
+    source_files = [element.attrib["file"] for element in source_root.iter() if "file" in element.attrib]
+    resolved_files = [element.attrib["file"] for element in resolved_root.iter() if "file" in element.attrib]
+    if len(source_files) != len(resolved_files) or len(source_files) > MAX_ASSET_REFERENCES:
+        raise ExternalResetError("invalid resolved external assets")
+    if _xml_shape(source_root) != _xml_shape(resolved_root):
+        raise ExternalResetError("invalid resolved external assets")
+
+    records = {(item["namespace"], item["relative_path"]): item for item in canonical_assets}
+    seen = set()
+    total_bytes = 0
+    for source_file, resolved_file in zip(source_files, resolved_files):
+        try:
+            namespace, relative_path = _asset_reference(source_file)
+            target = Path(resolved_file)
+            if not target.is_absolute():
+                raise ValueError
+            relative_parts = tuple(relative_path.split("/"))
+            if tuple(target.parts[-len(relative_parts) :]) != relative_parts:
+                raise ValueError
+            record = records[(namespace, relative_path)]
+            digest, byte_count = _asset_digest(target)
+        except (ExternalResetError, KeyError, OSError, TypeError, ValueError):
+            raise ExternalResetError("invalid resolved external assets") from None
+        if digest != record["sha256"]:
+            raise ExternalResetError("invalid resolved external assets")
+        key = (namespace, relative_path)
+        if key not in seen:
+            total_bytes += byte_count
+        seen.add(key)
+        if total_bytes > MAX_CLOSURE_BYTES:
+            raise ExternalResetError("invalid resolved external assets")
+    if seen != set(records):
+        raise ExternalResetError("invalid resolved external assets")
+    return {
+        "xml": resolved["xml"],
+        "source_xml_sha256": resolved["source_xml_sha256"],
+        "resolved_xml_sha256": resolved["resolved_xml_sha256"],
+        "asset_closure_sha256": resolved["asset_closure_sha256"],
+    }
+
+
+def _sim_state(value, error: str) -> list[float]:
+    try:
+        array = np.asarray(value)
+        if array.dtype.kind not in "fiu" or array.size != STATE_LENGTH:
+            raise ValueError
+        flattened = [float(item) for item in array.reshape(-1)]
+    except (OverflowError, TypeError, ValueError):
+        raise ExternalResetError(error) from None
+    if any(not math.isfinite(item) for item in flattened):
+        raise ExternalResetError(error)
+    return flattened
+
+
+def restore_external_reset(env, candidate: dict, resolved: dict) -> dict:
+    """Restore one validated external state and collect ten-step settle evidence."""
+    candidate = validate_external_reset(candidate)
+    checked = _validated_resolved(candidate, resolved)
+    try:
+        env.reset()
+        env.reset_from_xml_string(checked["xml"])
+        dimension_state = _sim_state(env.get_sim_state(), "external simulator state dimension mismatch")
+    except ExternalResetError:
+        raise
+    except Exception:
+        raise ExternalResetError("external simulator reset failed") from None
+    if len(dimension_state) != STATE_LENGTH:
+        raise ExternalResetError("external simulator state dimension mismatch")
+    try:
+        env.set_init_state(list(candidate["state"]))
+        pre_state = _sim_state(env.get_sim_state(), "external simulator state mismatch")
+    except ExternalResetError:
+        raise
+    except Exception:
+        raise ExternalResetError("external simulator state restore failed") from None
+    pre_hash = _state_sha256(pre_state)
+    if pre_hash != candidate["state_sha256"]:
+        raise ExternalResetError("external simulator state mismatch")
+    observation = None
+    try:
+        for _ in range(10):
+            step_result = env.step([0, 0, 0, 0, 0, 0, -1])
+            if not isinstance(step_result, (tuple, list)) or not step_result:
+                raise ValueError
+            observation = step_result[0]
+    except Exception:
+        raise ExternalResetError("external simulator settling failed") from None
+    try:
+        post_state = _sim_state(env.get_sim_state(), "invalid settled simulator state")
+    except ExternalResetError:
+        raise
+    except Exception:
+        raise ExternalResetError("invalid settled simulator state") from None
+    post_hash = _state_sha256(post_state)
+    return {
+        "observation": observation,
+        "reset_metadata": {
+            "reset_id": candidate["reset_id"],
+            "source_sha256": candidate["source_sha256"],
+            "state_sha256": candidate["state_sha256"],
+            "source_xml_sha256": checked["source_xml_sha256"],
+            "resolved_xml_sha256": checked["resolved_xml_sha256"],
+            "asset_closure_sha256": checked["asset_closure_sha256"],
+            "pre_settle_state_sha256": pre_hash,
+            "post_settle_state_sha256": post_hash,
+            "settling_steps": 10,
+            "restoration_verified": False,
+        },
     }
