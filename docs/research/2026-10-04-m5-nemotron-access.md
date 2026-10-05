@@ -30,3 +30,23 @@ At the published rates, the proposed conservative cap is at most 10 calls, each 
 - Confirm whether billing requires a card even when trial credit is available, and ensure the account settings cannot exceed the approved $0.02 exposure. The published rates alone do not enforce a spend cap.
 - Confirm JSON mode against the exact model card if machine-readable responses are required; otherwise request plain text and store only approved metadata/evidence IDs.
 - AI Cloud compute balance, quota, and resource limits are outside this inference check and remain separate.
+
+## October 5 execution update (supersedes earlier readiness assumptions)
+
+The known ignored local key authenticated the global catalog and returned
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. No generation has occurred. The later
+accepted client contract bounds request JSON to6000UTF-8 bytes, not6000tokens;
+the earlier token arithmetic above is not an enforceable tokenizer guarantee.
+The entire approvedUS$0.02 is conservatively reserved before one paid attempt,
+without automatic retry/refund. See the October5 integration spec/plan.
+
+One generation risk remains: NVIDIA's
+[exact Nano model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16)
+documents default reasoning in self-hosted vLLM, which could use a short token
+budget before final JSON. This does not establish Nebius's deployed default.
+The current [Nebius chat API](https://docs.tokenfactory.nebius.com/api-reference/inference/create-chat-completion)
+documents general output limits and extra parameters, but does not establish
+the exact model's thinking toggle in the reviewed text. Do not infer hosted
+support from self-hosted examples or add undocumented knobs. Keep the compact
+600-token attempt and honest truncated/invalid fallback; reconcile the actual
+response before proposing a different limit/mode or another attempt.
