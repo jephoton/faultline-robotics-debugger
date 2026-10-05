@@ -20,6 +20,10 @@ LIBERO/MuJoCo on Nebius GPU compute.
 - `src/robot_debug/evidence_packet.py` and `explanation.py`: pure allowlisted
   packets, reported outcome counts and optional interpretation validation;
   no provider client, persistence or truth certification.
+- `src/robot_debug/explanation_store.py`: reviewed immutable case/packet-bound
+  sidecars, provenance validation and fresh-source checks. The local store is
+  integrated; live client/CLI and viewer explanation integration remain active
+  M5C work, not demonstrated inference yet.
 - `configs/`: validated experiment configuration.
 - `docs/decisions/`: accepted architecture and experiment decisions.
 - `PROJECT_PLAN.md`: milestone roadmap and current project position.
