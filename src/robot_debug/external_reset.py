@@ -345,7 +345,7 @@ def read_external_reset(path: Path) -> dict:
             _validate_metadata(data)
     except ExternalResetError:
         raise
-    except (OSError, TypeError, ValueError):
+    except Exception:
         raise ExternalResetError("invalid external reset source") from None
     if not _same_file_identity(path, before):
         raise ExternalResetError("external reset source changed")
@@ -530,7 +530,11 @@ def _validated_resolved(candidate: dict, resolved: dict) -> dict:
         raise ExternalResetError("invalid resolved external assets")
     if resolved["source_xml_sha256"] != candidate["model_xml_sha256"]:
         raise ExternalResetError("invalid resolved external assets")
-    if _sha256(resolved["xml"].encode("utf-8")) != resolved["resolved_xml_sha256"]:
+    try:
+        resolved_xml_sha256 = _sha256(resolved["xml"].encode("utf-8", errors="strict"))
+    except UnicodeError:
+        raise ExternalResetError("invalid resolved external assets") from None
+    if resolved_xml_sha256 != resolved["resolved_xml_sha256"]:
         raise ExternalResetError("invalid resolved external assets")
     assets = resolved.get("assets")
     if type(assets) is not list or len(assets) > MAX_ASSET_REFERENCES:

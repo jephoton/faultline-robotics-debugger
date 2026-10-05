@@ -269,6 +269,12 @@ class SourceReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ExternalResetError, "invalid external reset source"):
             self.read_fixture(handle)
 
+    def test_wraps_unexpected_hdf5_failure_with_safe_error(self):
+        handle = fake_source()
+        handle.get = mock.Mock(side_effect=RuntimeError("private HDF5 detail"))
+        with self.assertRaisesRegex(ExternalResetError, "invalid external reset source"):
+            self.read_fixture(handle)
+
     def test_rejects_changed_source_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sample.hdf5"
@@ -553,6 +559,15 @@ class RestorationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state, value, resolved, asset = self.fixture(directory)
             asset.write_bytes(b"changed")
+            env = FakeEnvironment(state)
+            with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
+                self.restore(env, value, resolved, state)
+        self.assertEqual(env.calls, [])
+
+    def test_malformed_resolved_text_is_rejected_before_environment_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            resolved["xml"] = "\ud800"
             env = FakeEnvironment(state)
             with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
                 self.restore(env, value, resolved, state)
