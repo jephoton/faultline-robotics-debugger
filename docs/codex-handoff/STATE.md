@@ -64,6 +64,15 @@ this test run did not access or start cloud resources.
 
 ## Completed evidence
 
+October 5 Token Factory readiness update: Jethro reports the inference account
+is funded. Root verified a single nonempty `NEBIUS_API_KEY` entry in the known
+repo-root `.env`, which is ignored and untracked; no key value was displayed.
+The key is not in the current process environment, so the future CLI must
+explicitly load the approved local secret source. Credential validity, active
+account/model entitlement and credit expiry remain unverified. No authenticated
+request or inference was made. Preserve the ten-call / US$0.02 pilot cap;
+settle the bounded provider/client/report-binding plan before live execution.
+
 Completed offline M5C increment: the accepted packet/report contract is
 `docs/superpowers/specs/2026-10-04-m5-offline-explanation-contract-design.md`.
 It strips arbitrary case strings and paths, keeps reported raw/gate outcomes
