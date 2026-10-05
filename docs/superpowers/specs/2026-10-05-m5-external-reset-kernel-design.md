@@ -51,8 +51,11 @@ is unknown and must remain unknown; candidate does not assert parity.
 
 Reject DTD/entity declarations, includes, non-mujoco root, over50000elements,
 invalid encoding, empty/control-bearing file paths, arbitrary file attributes
-outside mesh/texture/hfield, and compiler meshdir/texturedir settings that could
-change resolution. Parse using standard-library ElementTree, no expansion.
+outside mesh/texture/hfield, and compiler directory settings other than the
+actual sample's `meshdir="meshes/"`. Remove that meshdir from the rewritten XML
+once every asset file is an explicitly resolved absolute installed path;
+reject other meshdir/texturedir settings. Parse using standard-library
+ElementTree, no expansion.
 
 Actual sample references 81 assets, from two explicit source namespaces:
 `/chiliocosm/assets/` (18 references) and `/robosuite/models/assets/`
