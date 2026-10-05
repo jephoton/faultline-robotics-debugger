@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -241,6 +242,52 @@ class ExplanationStoreTests(unittest.TestCase):
         self.assertEqual(len(result["warnings"]), 1)
         path.write_bytes(b"\xff")
         self.assertEqual(read_case_reports(self.workspace, self.case["case_id"])["reports"], [])
+
+    def test_read_isolates_integer_conversion_limit_from_valid_report(self):
+        record = self.record()
+        path = store_report(self.workspace, record)
+        (path.parent / ("a" * 64 + ".json")).write_bytes(
+            b'{"schema_version":' + b"9" * 5000 + b"}")
+        self.assertEqual(read_case_reports(self.workspace, self.case["case_id"]),
+                         {"reports": [record], "warnings": [
+                             "one or more report records are unavailable or invalid"]})
+
+    def _assert_ancestor_link_refused(self, alias):
+        from robot_debug import explanation_store
+        via = alias / "workspace"
+        record = self.record()
+        with patch.object(explanation_store, "inspect_case",
+                          wraps=explanation_store.inspect_case) as inspect:
+            with self.assertRaises(ExplanationStoreError):
+                store_report(via, record)
+            self.assertEqual(read_case_reports(via, self.case["case_id"])["reports"], [])
+            inspect.assert_not_called()
+        self.assertFalse((self.workspace / self.case["case_id"] / "reports").exists())
+
+    def test_workspace_ancestor_symlink_refused_before_inspection(self):
+        alias = self.base / "alias"
+        try:
+            os.symlink(self.base, alias, target_is_directory=True)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        try:
+            self._assert_ancestor_link_refused(alias)
+        finally:
+            alias.unlink()
+
+    @unittest.skipUnless(os.name == "nt", "Windows junctions only")
+    def test_workspace_ancestor_junction_refused_before_inspection(self):
+        alias = self.base / "alias"
+        # Relative names keep cmd's junction syntax independent of temp-path quoting.
+        result = subprocess.run(
+            [str(Path(os.environ["SystemRoot"]) / "System32" / "cmd.exe"),
+             "/c", "mklink", "/J", "alias", "."],
+            cwd=self.base, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, "temporary junction creation failed")
+        try:
+            self._assert_ancestor_link_refused(alias)
+        finally:
+            alias.rmdir()
 
     def test_read_fails_closed_after_100_entries_without_unbounded_processing(self):
         reports = self.workspace / self.case["case_id"] / "reports"; reports.mkdir()

@@ -78,7 +78,7 @@ def _decode(data: bytes) -> dict:
                            parse_constant=_constant)
     except ExplanationStoreError:
         raise
-    except (UnicodeError, json.JSONDecodeError, RecursionError, OverflowError, TypeError):
+    except (UnicodeError, ValueError, RecursionError, OverflowError, TypeError):
         _fail()
     if type(value) is not dict:
         _fail()
@@ -250,8 +250,11 @@ def _is_reparse(path: Path) -> bool:
 
 
 def _safe_existing(path: Path, *, directory: bool | None = None) -> None:
-    if _is_reparse(path):
-        _fail(_STORAGE)
+    # Do not resolve first: resolution would hide a linked ancestor.
+    absolute = path.absolute()
+    for component in (*reversed(absolute.parents), absolute):
+        if _is_reparse(component):
+            _fail(_STORAGE)
     try:
         if directory is True and not path.is_dir():
             _fail(_STORAGE)
@@ -263,6 +266,7 @@ def _safe_existing(path: Path, *, directory: bool | None = None) -> None:
 
 def _fresh_packet(workspace: Path, case_id: str) -> dict:
     try:
+        _paths(workspace, case_id)
         case = inspect_case(workspace, case_id)
         if case["capabilities"]["inspection"]["status"] != "available":
             _fail(_CASE_CHANGED)
