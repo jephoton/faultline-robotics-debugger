@@ -11,6 +11,17 @@ save replayable regression evidence. The current validated stack is GR00T N1.7
 with the LIBERO Object checkpoint, the AllenAI VLA evaluation harness, and
 LIBERO/MuJoCo on Nebius GPU compute.
 
+## Approved future deployment
+
+[ADR 0018](../decisions/0018-serverless-jobs-for-future-runs.md) moves future
+evaluations to one finite single-GPU Serverless Job, containing a warm localhost
+model server and one direct simulator evaluator in separate Python environments.
+Closed local recordings are exported to private Object Storage and downloaded
+for the same read-only viewer. Historical VM evidence is retained with its
+original provenance, not rerun or relabeled. Local implementation and one US$3
+validation allowance are approved; a real Job has not yet validated this backend.
+Expanded M3 and external replay remain out of this migration's scope.
+
 ## Important components
 
 - `scripts/run_failure_search.py`: bounded centered-severity session driver.
