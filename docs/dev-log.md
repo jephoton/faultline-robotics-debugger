@@ -363,3 +363,22 @@ report selection and replacing focused citation buttons. Repair `1b33c71`
 preserves unchanged selection/DOM; independent re-review is pending. No model
 request, robot evidence rewrite or provider behaviour is involved in these
 UI defects.
+
+October6 follow-up: all adapter findings were repaired and independently
+rechecked through `977bb52`, integrated through `8b2dae3`. Negative XML tests
+also needed matching XML/reset hashes so they actually exercised parsing,
+rather than passing on stale hashes. Viewer quality review then caught a
+render-cache dependency: a report arriving before catalog episodes could keep
+valid citations permanently unavailable. Including exact available case
+episode IDs repaired it (`8870857`, integrated `30f9376`); unchanged refresh
+still preserves focus and historical selection.
+
+Linux CI at `b8b63ba` failed only in a fixture inserting a lone surrogate into
+real `os.environ`; POSIX UTF-8 encoding rejected it before the loader ran.
+`47ad012` injects the module's mapping directly instead. Focused23tests and
+exact-SHA Linux CI passed; production credential handling did not change.
+CLI review passed, integrated `bd5abf1`; fresh full578testsOK/four skips.
+The browser automation kernel failed to initialise twice, so new actual
+viewport QA remains pending. This environment failure is not attributed to
+Nebius/NVIDIA or claimed to be a viewer bug. Real inference outcome and its
+unconfirmed truncation hypothesis are in the M5 pilot note and FEEDBACK.md.

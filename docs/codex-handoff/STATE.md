@@ -2,6 +2,29 @@
 
 ## October 6 continuation and submission review
 
+Latest verified checkpoint: reviewed external reset kernel, explanation viewer
+and guarded CLI are integrated through `bd5abf1`. Fresh full suite578OK/four
+platform skips. Root actual HDF5 reader and all81reference normalization passed;
+installed assets/simulator and fresh GR00T replay remain unverified. M5B is not
+complete. The local main viewer runs on loopback8765 and serves the explanation
+API. Automated browser QA is blocked by the browser tool failing to initialise,
+not a proven viewer defect.
+
+One authorized real Nemotron attempt completed with1096input/600output tokens,
+8.703seconds, invalid_response/absent interpretation and estimatedUS$0.00020976.
+Original116M4evidence files are unchanged. Two local immutable reports (offline
+and live factual fallback) are readable with no warnings. No useful model
+interpretation exists yet, so M5C is not complete. FullUS$0.02 reservation is
+retained; do not retry or remove/refund its marker. The [pilot record](../experiments/m5-nemotron-pilot.md)
+proposes another separately approvedUS$0.02 attempt with4096output tokens and
+90-second socket timeout. User approval and a committed exact implementation
+plan/reviews precede dependent changes or another POST. No GPU start approved.
+
+Linux CI passed the isolated credential-fixture fix at `47ad012`; final
+integration publication/CI is next. Naming choice remains open, with Faultline
+recommended. Repository is still PRIVATE; public audit/approval remains a
+submission gate. Earlier entries below preserve historical review stages.
+
 Jethro requested naming first, a fresh rules/judging check, then continued M5.
 The [alignment review](../research/2026-10-06-submission-alignment.md) records
 the submission gaps and provisional name options; no final name/rename is
