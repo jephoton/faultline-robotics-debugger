@@ -585,7 +585,7 @@ def _validated_resolved(candidate: dict, resolved: dict) -> dict:
         raise ExternalResetError("invalid resolved external assets")
 
     records = {(item["namespace"], item["relative_path"]): item for item in canonical_assets}
-    seen = set()
+    verified_targets: dict[tuple[str, str], Path] = {}
     total_bytes = 0
     for source_file, resolved_file in zip(source_files, resolved_files):
         try:
@@ -596,19 +596,22 @@ def _validated_resolved(candidate: dict, resolved: dict) -> dict:
             relative_parts = tuple(relative_path.split("/"))
             if tuple(target.parts[-len(relative_parts) :]) != relative_parts:
                 raise ValueError
-            record = records[(namespace, relative_path)]
+            key = (namespace, relative_path)
+            record = records[key]
+            if key in verified_targets:
+                if target != verified_targets[key]:
+                    raise ValueError
+                continue
             digest, byte_count = _asset_digest(target)
         except (ExternalResetError, KeyError, OSError, TypeError, ValueError):
             raise ExternalResetError("invalid resolved external assets") from None
         if digest != record["sha256"]:
             raise ExternalResetError("invalid resolved external assets")
-        key = (namespace, relative_path)
-        if key not in seen:
-            total_bytes += byte_count
-        seen.add(key)
+        verified_targets[key] = target
+        total_bytes += byte_count
         if total_bytes > MAX_CLOSURE_BYTES:
             raise ExternalResetError("invalid resolved external assets")
-    if seen != set(records):
+    if set(verified_targets) != set(records):
         raise ExternalResetError("invalid resolved external assets")
     return {
         "xml": resolved["xml"],

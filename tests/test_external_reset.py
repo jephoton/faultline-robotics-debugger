@@ -580,16 +580,20 @@ class FakeEnvironment:
 
 
 class RestorationTests(unittest.TestCase):
-    def fixture(self, directory):
+    def fixture(self, directory, xml=XML):
         state = list(SYNTHETIC_STATE)
-        value = candidate(state=state)
+        value = candidate(
+            state=state,
+            model_xml=xml,
+            model_xml_sha256=_sha(xml.encode("utf-8")),
+        )
         libero = Path(directory) / "libero"
         robosuite = Path(directory) / "robosuite"
         (libero / "meshes").mkdir(parents=True)
         robosuite.mkdir()
         (libero / "meshes" / "a.obj").write_bytes(b"asset")
         roots = {"libero": libero, "robosuite": robosuite}
-        resolved = resolve_external_assets(XML, roots)
+        resolved = resolve_external_assets(xml, roots)
         return state, value, resolved, libero / "meshes" / "a.obj"
 
     def restore(self, env, value, resolved, state):
@@ -654,6 +658,54 @@ class RestorationTests(unittest.TestCase):
             env = FakeEnvironment(state)
             with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
                 self.restore(env, value, resolved, state)
+        self.assertEqual(env.calls, [])
+
+    def test_duplicate_references_hash_unique_asset_once(self):
+        duplicate_xml = (
+            '<mujoco><asset>'
+            '<mesh file="/chiliocosm/assets/meshes/a.obj"/>'
+            '<mesh file="/chiliocosm/assets/meshes/a.obj"/>'
+            '</asset></mujoco>'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory, duplicate_xml)
+            env = FakeEnvironment(state)
+            real_digest = external_reset_module._asset_digest
+            with mock.patch("robot_debug.external_reset._asset_digest", wraps=real_digest) as digest:
+                self.restore(env, value, resolved, state)
+        self.assertEqual(digest.call_count, 1)
+
+    def test_duplicate_references_must_use_same_absolute_target(self):
+        duplicate_xml = (
+            '<mujoco><asset>'
+            '<mesh file="/chiliocosm/assets/meshes/a.obj"/>'
+            '<mesh file="/chiliocosm/assets/meshes/a.obj"/>'
+            '</asset></mujoco>'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory, duplicate_xml)
+            alternative = Path(directory) / "alternative" / "meshes" / "a.obj"
+            alternative.parent.mkdir(parents=True)
+            alternative.write_bytes(b"asset")
+            resolved_root = external_reset_module.ET.fromstring(resolved["xml"])
+            references = [element for element in resolved_root.iter() if "file" in element.attrib]
+            references[1].attrib["file"] = str(alternative.resolve())
+            rewritten = external_reset_module.ET.tostring(
+                resolved_root,
+                encoding="unicode",
+                short_empty_elements=True,
+            )
+            malformed = {
+                **resolved,
+                "xml": rewritten,
+                "resolved_xml_sha256": _sha(rewritten.encode("utf-8")),
+            }
+            env = FakeEnvironment(state)
+            real_digest = external_reset_module._asset_digest
+            with mock.patch("robot_debug.external_reset._asset_digest", wraps=real_digest) as digest:
+                with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
+                    self.restore(env, value, malformed, state)
+        self.assertEqual(digest.call_count, 1)
         self.assertEqual(env.calls, [])
 
     def test_malformed_resolved_text_is_rejected_before_environment_mutation(self):
