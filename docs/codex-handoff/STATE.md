@@ -2,6 +2,15 @@
 
 ## October 6 continuation and submission review
 
+**Active human checkpoint:** Jethro chose to defer external replay and review
+the real Nemotron report first. External-state identity planning/wiring is
+not approved; do not start it or paid GPU work. Root freshly reread the actual
+stored interpretation and recomputed packet facts: nominal6/6successes,
+parent4/4failures, reduced4/4failures, final area14.0625%. The interpretation
+omits this key contrast and supplies no hypotheses. Integration is working;
+semantic usefulness/human acceptance is not established. No additional call,
+prompt/model change or report rewrite is approved by this checkpoint.
+
 Newest checkpoint: approved repair integrated as `8110001` after independent
 spec and quality reviews; full581testsOK/fourWindows skips. One new real call
 completed with1096input/2142output tokens in20.656seconds, estimatedUS$0.00057984,

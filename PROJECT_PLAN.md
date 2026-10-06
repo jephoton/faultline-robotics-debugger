@@ -4,6 +4,11 @@
 
 ## Latest submission alignment — October 6
 
+**Immediate priority:** review the actual Nemotron report with Jethro.
+He explicitly deferred external replay and its next identity/design plan.
+Do not begin M5B wiring or GPU execution. M5C integration works, but the
+current shallow interpretation is not accepted as demo-ready diagnosis.
+
 M5 continuation: A is complete. B's reviewed local restoration kernel is now
 integrated and reads the real sample, but actual simulator/case wiring and
 fresh policy replay remain. C's client/store/CLI/viewer are integrated; the
@@ -17,8 +22,8 @@ because browser automation cannot initialise in this session.
 
 See the [current rules and judging review](docs/research/2026-10-06-submission-alignment.md).
 Faultline is the preferred name, kept in view rather than finalized (no rename
-or branding approved). Continue already-approved M5B/C work in
-parallel. Simulation-only Physical AI is explicitly permitted by current rules.
+or branding approved). External replay is deferred pending the report review.
+Simulation-only Physical AI is explicitly permitted by current rules.
 Do not assume VM-only runtime eligibility: finish genuine Token Factory
 inference and seek clarification on the track's Serverless Jobs wording before
 deciding whether any infrastructure migration is necessary. Expanded M3 stays

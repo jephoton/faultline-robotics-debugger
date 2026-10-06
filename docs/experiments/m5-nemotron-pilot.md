@@ -94,3 +94,27 @@ No hypotheses were supplied. The output is cautious but shallow, not a root
 cause diagnosis or proof of semantic grounding. Preserve the original output,
 not a rewritten favourable version. Human usefulness review and actual browser
 viewport QA remain pending. No more calls are approved by these results.
+
+## Human review checkpoint — external replay deferred
+
+Jethro explicitly chose to defer external replay and review this report first.
+Root freshly fetched the persisted report and recomputed deterministic facts
+from the registered case. The report passes transport/schema checks, but its
+two generic observations do not summarize the strongest available evidence:
+nominal6/6successes versus parent4/4 and reduced4/4failures at a14.0625% final
+mask area. These are reported outcomes within this case, not universal rates
+or causal proof. The supplied packet does not include parent-mask geometry,
+so a future interpretation must not invent its size from these inputs.
+
+The success observation is correct but vague. The budget-local caveat belongs
+with limitations/global metadata, not nominal-episode support for minimality.
+Empty hypotheses are safer than an invented robot failure mechanism: text-only
+outcomes cannot identify missed object tracking or gripper control as the cause.
+
+Recommendation for a future approved quality iteration: require a concise
+nominal/parent/reduced comparison, citations to both success and failure
+evidence, and a bounded next-check suggestion clearly separated from measured
+facts. Test those semantics offline before seeking another inference allowance.
+Do not force a hypothesis, add video reasoning, change model/prompt, relabel
+the current report or make another call under the consumed allowances.
+This is a review recommendation, not an implementation approval.
