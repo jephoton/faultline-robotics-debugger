@@ -4,6 +4,26 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## Serverless migration preparation — October 6
+
+The user approved future single-GPU Jobs, preserving all historical VM results,
+and private Object Storage export. Read-only Job configuration validation passed;
+no real Job has run. See [pilot/preflight record](experiments/serverless-job-pilot.md).
+
+Local Docker Desktop failed before the Linux engine started: its inference
+manager could not remove an inaccessible zero-byte runtime socket reparse point.
+A single-file quarantine move failed too; no file was moved or deleted. This is
+a workstation/container-build blocker, not a Nebius or robot-policy fault.
+No factory reset, image/volume deletion, settings change or reboot was attempted.
+
+The isolated direct-process runner passed real POSIX fixtures, but independent
+spec review reproduced an integration gap: the existing drivers resolve an
+installed absolute `vla-eval` path, whereas the first wrapper accepted only the
+literal short name. The fix is pending regression/review, not a live simulator
+failure. Process-group tests also demonstrated the need to reap adopted orphan
+children before declaring cleanup complete. Keep both findings separate from
+the frozen M3 implementation and from historical outcome evidence.
+
 ## M5C offline explanation review — October 4
 
 The smaller builder implemented a privacy-safe packet projection and separate
