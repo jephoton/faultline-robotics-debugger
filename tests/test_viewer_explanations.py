@@ -249,6 +249,22 @@ renderExplanations();
 assert.strictEqual(context.document.activeElement, buttons[0]);
 assert.strictEqual(interpretation.querySelectorAll('button')[0], buttons[0]);
 
+element('case-explanations').dataset.renderSignature = '';
+state.episodes = [];
+renderExplanations();
+assert.strictEqual(interpretation.querySelectorAll('button').length, 0);
+assert.strictEqual(interpretation.querySelectorAll('span').length, 2);
+state.episodes = [{episode_id: E}, {episode_id: '2'.repeat(16)}];
+renderExplanations();
+assert.strictEqual(interpretation.querySelectorAll('button').length, 1);
+assert.strictEqual(interpretation.querySelectorAll('button')[0].textContent, E);
+assert.strictEqual(interpretation.querySelectorAll('span').length, 1);
+state.episodes = [];
+renderExplanations();
+assert.strictEqual(interpretation.querySelectorAll('button').length, 0);
+assert.strictEqual(interpretation.querySelectorAll('span').length, 2);
+state.episodes = [{episode_id: E}, {episode_id: '2'.repeat(16)}];
+
 const absent = JSON.parse(JSON.stringify(baseReport));
 absent.report_id = 'c'.repeat(64); absent.report.interpretation_status = 'absent'; absent.report.interpretation = null;
 absent.provenance = { source: 'offline', provider: null, model: null, created_at: '2026-10-05T13:30:00Z',

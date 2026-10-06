@@ -214,12 +214,14 @@ function renderExplanationProvenance(container, provenance) {
 }
 function renderExplanations() {
   const disclosure = byId("case-explanations");
+  const availableEvidenceIds = caseEpisodes().map((episode) => episode.episode_id);
   const renderSignature = state.caseId === "all"
     ? "all"
     : state.explanationCaseId !== state.caseId || state.explanations === null
     ? `${state.caseId}:loading`
     : JSON.stringify([state.caseId, state.explanationReportId,
-      state.explanations.reports.map((record) => record.report_id), state.explanations.warnings]);
+      state.explanations.reports.map((record) => record.report_id), state.explanations.warnings,
+      availableEvidenceIds]);
   if (disclosure.dataset.renderSignature === renderSignature) return;
   disclosure.dataset.renderSignature = renderSignature;
   const status = byId("explanation-status");
