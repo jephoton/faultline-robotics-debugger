@@ -237,15 +237,25 @@ class CandidateValidationTests(unittest.TestCase):
         ]
         baseline = candidate()
         self.validate_synthetic(baseline)
-        mutations = [
-            ("source_sha256", "0" * 64),
-            ("state_sha256", "0" * 64),
-            ("model_xml_sha256", "0" * 64),
-            ("reset_id", "0" * 64),
-        ] + [("model_xml", xml) for xml in unsafe]
-        for field, forged in mutations:
-            value = {**baseline, field: forged}
-            with self.subTest(field=field, value=str(forged)[:30]):
+
+        for field in ("source_sha256", "state_sha256", "model_xml_sha256"):
+            value = candidate(**{field: "0" * 64})
+            with self.subTest(field=field):
+                with self.assertRaises(ExternalResetError):
+                    self.validate_synthetic(value)
+
+        forged_reset = candidate()
+        forged_reset["reset_id"] = "0" * 64
+        with self.subTest(field="reset_id"):
+            with self.assertRaises(ExternalResetError):
+                self.validate_synthetic(forged_reset)
+
+        for xml in unsafe:
+            value = candidate(
+                model_xml=xml,
+                model_xml_sha256=_sha(xml.encode("utf-8")),
+            )
+            with self.subTest(field="model_xml", value=xml[:30]):
                 with self.assertRaises(ExternalResetError):
                     self.validate_synthetic(value)
 
