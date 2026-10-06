@@ -34,6 +34,10 @@ def _float_sha(values) -> str:
     return _sha(b"".join(struct.pack("<d", float(value)) for value in values))
 
 
+SYNTHETIC_STATE = [float(index) for index in range(110)]
+SYNTHETIC_STATE_SHA256 = _float_sha(SYNTHETIC_STATE)
+
+
 def candidate(**changes):
     value = {
         "schema_version": 1,
@@ -42,8 +46,8 @@ def candidate(**changes):
         "demo": "demo_0",
         "state_index": 0,
         "source_sha256": SOURCE_SHA256,
-        "state_sha256": STATE_SHA256,
-        "state": [float(index) for index in range(110)],
+        "state_sha256": SYNTHETIC_STATE_SHA256,
+        "state": list(SYNTHETIC_STATE),
         "model_xml": XML,
         "model_xml_sha256": _sha(XML.encode("utf-8")),
     }
@@ -118,6 +122,12 @@ class FakeFile(FakeGroup):
         return False
 
 
+class ForbiddenHDF5Child:
+    @property
+    def link(self):
+        raise AssertionError("reader must not access saved actions or images")
+
+
 def fake_h5py(handle):
     return types.SimpleNamespace(
         HardLink=FakeHardLink,
@@ -128,9 +138,13 @@ def fake_h5py(handle):
 
 
 def fake_source(state=None):
-    state = state or [float(index) for index in range(110)]
+    state = state or list(SYNTHETIC_STATE)
     demo = FakeGroup(
-        {"states": FakeDataset(state)},
+        {
+            "states": FakeDataset(state),
+            "actions": ForbiddenHDF5Child(),
+            "obs": ForbiddenHDF5Child(),
+        },
         {"init_state": state, "model_file": XML},
     )
     data = FakeGroup(
@@ -164,13 +178,26 @@ def fake_source(state=None):
 
 
 class CandidateValidationTests(unittest.TestCase):
+    def validate_synthetic(self, value):
+        with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256):
+            return validate_external_reset(value)
+
     def test_valid_candidate_is_detached_and_canonical(self):
         value = candidate()
-        with mock.patch("robot_debug.external_reset._state_sha256", return_value=STATE_SHA256):
-            result = validate_external_reset(value)
+        result = self.validate_synthetic(value)
         self.assertEqual(result, value)
         self.assertIsNot(result, value)
         self.assertIsNot(result["state"], value["state"])
+
+    def test_production_state_hash_is_fixed_and_synthetic_mismatch_is_rejected(self):
+        self.assertEqual(external_reset_module.STATE_SHA256, STATE_SHA256)
+        with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
+            validate_external_reset(candidate())
+
+        mismatched = candidate()
+        mismatched["state"][0] = -1.0
+        with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
+            self.validate_synthetic(mismatched)
 
     def test_rejects_unknown_or_missing_keys_and_boolean_integers(self):
         cases = [
@@ -182,7 +209,7 @@ class CandidateValidationTests(unittest.TestCase):
         for value in cases:
             with self.subTest(value=value):
                 with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
-                    validate_external_reset(value)
+                    self.validate_synthetic(value)
 
     def test_rejects_nonfinite_wrong_length_and_cycles(self):
         cycle = candidate()
@@ -192,13 +219,13 @@ class CandidateValidationTests(unittest.TestCase):
         for value in (candidate(state=[0.0] * 109), nonfinite, cycle):
             with self.subTest(kind=type(value["state"]).__name__):
                 with self.assertRaises(ExternalResetError):
-                    validate_external_reset(value)
+                    self.validate_synthetic(value)
 
     def test_rejects_huge_integer_with_fixed_safe_error(self):
         value = candidate()
         value["state"][0] = 10**1000
         with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
-            validate_external_reset(value)
+            self.validate_synthetic(value)
 
     def test_rejects_forged_hashes_and_oversized_or_unsafe_xml(self):
         unsafe = [
@@ -208,16 +235,19 @@ class CandidateValidationTests(unittest.TestCase):
             "<not-mujoco/>",
             "<mujoco>" + ("x" * (2 * 1024 * 1024)) + "</mujoco>",
         ]
-        values = [
-            candidate(source_sha256="0" * 64),
-            candidate(state_sha256="0" * 64),
-            candidate(model_xml_sha256="0" * 64),
-            candidate(reset_id="0" * 64),
-        ] + [candidate(model_xml=xml) for xml in unsafe]
-        for value in values:
-            with self.subTest(field=value.get("model_xml", "hash")[:30]):
+        baseline = candidate()
+        self.validate_synthetic(baseline)
+        mutations = [
+            ("source_sha256", "0" * 64),
+            ("state_sha256", "0" * 64),
+            ("model_xml_sha256", "0" * 64),
+            ("reset_id", "0" * 64),
+        ] + [("model_xml", xml) for xml in unsafe]
+        for field, forged in mutations:
+            value = {**baseline, field: forged}
+            with self.subTest(field=field, value=str(forged)[:30]):
                 with self.assertRaises(ExternalResetError):
-                    validate_external_reset(value)
+                    self.validate_synthetic(value)
 
 
 class SourceReaderTests(unittest.TestCase):
@@ -236,7 +266,7 @@ class SourceReaderTests(unittest.TestCase):
 
     def test_reads_only_first_hard_linked_state_and_required_metadata(self):
         result = self.read_fixture(fake_source())
-        self.assertEqual(result["reset_id"], candidate()["reset_id"])
+        self.assertEqual(result["reset_id"], candidate(state_sha256=STATE_SHA256)["reset_id"])
         self.assertEqual(len(result["state"]), 110)
 
     def test_rejects_soft_virtual_and_external_storage_states(self):
@@ -508,7 +538,7 @@ class FakeEnvironment:
 
 class RestorationTests(unittest.TestCase):
     def fixture(self, directory):
-        state = [float(index) for index in range(110)]
+        state = list(SYNTHETIC_STATE)
         value = candidate(state=state)
         libero = Path(directory) / "libero"
         robosuite = Path(directory) / "robosuite"
@@ -520,8 +550,7 @@ class RestorationTests(unittest.TestCase):
         return state, value, resolved, libero / "meshes" / "a.obj"
 
     def restore(self, env, value, resolved, state):
-        real = lambda values: STATE_SHA256 if list(values) == state else _float_sha(values)
-        with mock.patch("robot_debug.external_reset._state_sha256", side_effect=real):
+        with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256):
             return restore_external_reset(env, value, resolved)
 
     def test_restores_in_order_settles_ten_steps_and_returns_last_observation(self):
@@ -547,7 +576,7 @@ class RestorationTests(unittest.TestCase):
         )
         self.assertEqual(metadata["settling_steps"], 10)
         self.assertIs(metadata["restoration_verified"], False)
-        self.assertEqual(metadata["pre_settle_state_sha256"], STATE_SHA256)
+        self.assertEqual(metadata["pre_settle_state_sha256"], SYNTHETIC_STATE_SHA256)
 
     def test_dimension_mismatch_stops_before_state_apply(self):
         with tempfile.TemporaryDirectory() as directory:
