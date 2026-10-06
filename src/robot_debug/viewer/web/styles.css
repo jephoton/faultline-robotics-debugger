@@ -21,7 +21,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background-color: var(--field); }
-button, select { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-1) var(--space-2); }
+button, select { min-height: 24px; min-width: 24px; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-1) var(--space-2); }
 button:hover { border-color: var(--cyan); cursor: pointer; }
 button:focus-visible, select:focus-visible, .skip-link:focus { outline: 2px solid var(--amber); outline-offset: 2px; }
 .skip-link { position: absolute; left: var(--space-2); top: -4rem; background: var(--amber); color: #111; padding: var(--space-2); z-index: 2; }
@@ -58,12 +58,25 @@ main { min-width: 0; padding: var(--space-3); }
 .case-capabilities span { display: block; margin-top: var(--space-1); overflow-wrap: anywhere; }
 .case-capabilities small { display: block; color: var(--muted); font-size: .65rem; margin-top: var(--space-1); }
 #case-details { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-1); }
-#case-details summary { color: var(--cyan); cursor: pointer; font-size: .75rem; }
-#case-details summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#case-details summary, #case-explanations summary { align-items: center; color: var(--cyan); cursor: pointer; display: flex; font-size: .75rem; min-height: 24px; }
+#case-details summary:focus-visible, #case-explanations summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 #case-detail-reasons { color: var(--muted); font-size: .72rem; }
 #case-prerequisites, #case-measurements, .case-export-label { color: var(--muted); font-size: .75rem; margin: var(--space-2) 0 var(--space-1); }
 #case-recipe { max-height: 12rem; overflow: auto; margin: var(--space-1) 0; }
 #case-export { display: block; overflow-wrap: anywhere; color: var(--amber); font-size: .72rem; }
+#case-explanations { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-1); }
+#explanation-status { color: var(--muted); font-size: .75rem; }
+#explanation-history-control { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0; }
+#explanation-history-control[hidden] { display: none; }
+#explanation-history-control label { color: var(--muted); font-size: .72rem; }
+#explanation-history { max-width: 100%; }
+.explanation-block { border-left: 2px solid var(--line); margin-top: var(--space-2); padding-left: var(--space-2); }
+.explanation-block h3 { color: var(--amber); font-family: "Arial Narrow", "Roboto Condensed", sans-serif; font-size: .82rem; letter-spacing: .04em; margin: 0 0 var(--space-1); text-transform: uppercase; }
+.explanation-block p, .explanation-block li { color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+.explanation-block ul { margin: var(--space-1) 0; padding-left: var(--space-3); }
+.evidence-citations { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+.evidence-citations button { font-size: .7rem; }
+.unavailable-citation { color: var(--amber); font-size: .7rem; }
 #demo-guide { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
 #demo-guide ol { display: flex; gap: var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .76rem; }
 #demo-guide strong { color: var(--cyan); margin-right: var(--space-1); }

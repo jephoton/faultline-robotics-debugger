@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlsplit
 from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.case_io import SanitizedCaseValidationError
 from robot_debug.case_store import inspect_case, list_cases
+from robot_debug.explanation_store import read_case_reports
 
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
@@ -133,8 +134,13 @@ def make_handler(
                     self.send_json(200, {"cases": [public_case(case) for case in list_cases(case_workspace or catalog.artifact_root / "cases")], "warnings": []})
                 elif path.startswith("/api/cases/"):
                     parts = path.split("/")
-                    if len(parts) not in (4, 5) or (len(parts) == 5 and parts[4] != "recipe") or CASE_ID.fullmatch(parts[3]) is None:
+                    if (len(parts) not in (4, 5)
+                            or (len(parts) == 5 and parts[4] not in {"recipe", "explanations"})
+                            or CASE_ID.fullmatch(parts[3]) is None):
                         self.send_json(400, {"error": "case ID must be a full lowercase SHA-256 digest"})
+                    elif len(parts) == 5 and parts[4] == "explanations":
+                        self.send_json(200, read_case_reports(
+                            case_workspace or catalog.artifact_root / "cases", parts[3]))
                     else:
                         case = inspect_case(case_workspace or catalog.artifact_root / "cases", parts[3])
                         self.send_json(200, public_recipe(case) if len(parts) == 5 else {"case": public_case(case)})

@@ -3,6 +3,8 @@ const state = {
   traces: new Map(), linked: true, refreshMs: 2000, reduction: null,
   cases: [], caseId: "all", caseSelected: false, caseError: null,
   recipe: null, recipeCaseId: null, caseSignature: null,
+  explanations: null, explanationCaseId: null, explanationReportId: null,
+  explanationRequestGeneration: 0,
 };
 
 const outcomeLabels = {
@@ -80,6 +82,164 @@ function perturbationPosition(episode) {
     : "";
 }
 
+function compareExplanationReports(left, right) {
+  const time = left.provenance.created_at.localeCompare(right.provenance.created_at);
+  return time || left.report_id.localeCompare(right.report_id);
+}
+function newestExplanationReport(envelope) {
+  if (!envelope || !Array.isArray(envelope.reports) || !envelope.reports.length) return null;
+  return envelope.reports.slice().sort(compareExplanationReports).at(-1) || null;
+}
+function availableEpisodeForEvidence(evidenceId) {
+  return caseEpisodes().find((episode) => episode.episode_id === evidenceId) || null;
+}
+function beginExplanationRequest(caseId, clearPrevious) {
+  state.explanationRequestGeneration += 1;
+  state.explanationCaseId = caseId;
+  if (clearPrevious) {
+    state.explanations = null;
+    state.explanationReportId = null;
+  }
+  return state.explanationRequestGeneration;
+}
+function commitExplanationResponse(caseId, generation, payload) {
+  if (state.caseId !== caseId || state.explanationCaseId !== caseId ||
+      state.explanationRequestGeneration !== generation) return false;
+  const envelope = payload && Array.isArray(payload.reports) && Array.isArray(payload.warnings)
+    ? payload : { reports: [], warnings: ["Explanation records are unavailable."] };
+  state.explanations = envelope;
+  const newest = newestExplanationReport(envelope);
+  state.explanationReportId = newest ? newest.report_id : null;
+  return true;
+}
+async function refreshExplanations(caseId) {
+  const generation = beginExplanationRequest(caseId, false);
+  if (!/^[0-9a-f]{64}$/.test(caseId)) {
+    commitExplanationResponse(caseId, generation, { reports: [], warnings: [] });
+    renderExplanations();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/cases/${caseId}/explanations`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`explanation request failed: ${response.status}`);
+    const payload = await response.json();
+    if (commitExplanationResponse(caseId, generation, payload)) renderExplanations();
+  } catch (_) {
+    if (commitExplanationResponse(caseId, generation, {
+      reports: [], warnings: ["Explanation records are temporarily unavailable."],
+    })) renderExplanations();
+  }
+}
+
+function appendText(container, text, className) {
+  const paragraph = document.createElement("p");
+  if (className) paragraph.className = className;
+  paragraph.textContent = text;
+  container.append(paragraph);
+  return paragraph;
+}
+function appendCitations(container, evidenceIds) {
+  const citations = document.createElement("div"); citations.className = "evidence-citations";
+  evidenceIds.forEach((evidenceId) => {
+    const episode = availableEpisodeForEvidence(evidenceId);
+    if (!episode) {
+      const unavailable = document.createElement("span"); unavailable.className = "unavailable-citation";
+      unavailable.textContent = `${evidenceId} · episode unavailable`; citations.append(unavailable); return;
+    }
+    const button = document.createElement("button"); button.type = "button";
+    button.textContent = evidenceId; button.setAttribute("aria-label", `Show evidence episode ${evidenceId}`);
+    button.addEventListener("click", () => {
+      const exact = availableEpisodeForEvidence(evidenceId);
+      if (!exact) return;
+      state.primaryId = exact.episode_id;
+      if (state.comparisonId === exact.episode_id) state.comparisonId = (defaultComparison() || {}).episode_id || null;
+      render();
+    });
+    citations.append(button);
+  });
+  container.append(citations);
+}
+function renderExplanationFacts(container, report) {
+  const facts = report.report.facts;
+  appendText(container, `Reported episodes: ${facts.total_episodes} · Reduced mask area: ${(facts.reduced_mask_area_fraction * 100).toFixed(2)}%.`);
+  Object.entries(facts.counts_by_role).forEach(([role, counts]) => {
+    const raw = Object.entries(counts.raw_outcomes).filter(([, count]) => count).map(([name, count]) => `${name} ${count}`).join(", ") || "none";
+    const gate = Object.entries(counts.gate_outcomes).filter(([, count]) => count).map(([name, count]) => `${name} ${count}`).join(", ") || "none";
+    appendText(container, `${role}: raw ${raw}; gate ${gate}.`);
+  });
+  appendText(container, report.report.disclaimer);
+}
+function renderExplanationInterpretation(container, record) {
+  const report = record.report;
+  if (report.interpretation_status === "absent") {
+    appendText(container, "Absent — no model interpretation was supplied. Review the deterministic facts above.");
+    return;
+  }
+  if (report.interpretation_status === "rejected") {
+    appendText(container, "Rejected — supplied model output failed local structural validation and is not shown.");
+    return;
+  }
+  const interpretation = report.interpretation;
+  [["Observations", interpretation.observations], ["Hypotheses", interpretation.hypotheses]].forEach(([label, entries]) => {
+    appendText(container, label);
+    if (!entries.length) appendText(container, "None supplied.");
+    entries.forEach((entry) => {
+      const item = appendText(container, entry.text);
+      appendCitations(item, entry.evidence_ids);
+    });
+  });
+  appendText(container, "Limitations");
+  if (!interpretation.limitations.length) appendText(container, "None supplied; human review is still required.");
+  interpretation.limitations.forEach((text) => appendText(container, text));
+}
+function renderExplanationProvenance(container, provenance) {
+  appendText(container, "Modality: Text-only");
+  appendText(container, provenance.source === "offline"
+    ? "Source: offline · Provider: not used · Model: not used"
+    : `Source: live · Provider: ${provenance.provider} · Model: ${provenance.model}`);
+  const latency = provenance.latency_seconds == null ? "unknown" : `${provenance.latency_seconds} s`;
+  const tokens = provenance.prompt_tokens == null ? "unknown" : `${provenance.prompt_tokens} input + ${provenance.completion_tokens} output`;
+  const estimate = provenance.estimated_cost_usd == null ? "unknown" : `$${provenance.estimated_cost_usd}`;
+  appendText(container, `Request status: ${provenance.request_status} · Latency (recorded): ${latency}`);
+  appendText(container, `Token usage (recorded): ${tokens} · Estimated cost: ${estimate} · Billed cost: unknown`);
+  appendText(container, `Recorded at: ${provenance.created_at}`);
+}
+function renderExplanations() {
+  const status = byId("explanation-status");
+  const historyControl = byId("explanation-history-control");
+  const history = byId("explanation-history");
+  const facts = byId("explanation-facts");
+  const interpretation = byId("explanation-interpretation");
+  const provenance = byId("explanation-provenance");
+  [facts, interpretation, provenance].forEach((container) => container.replaceChildren());
+  history.replaceChildren(); historyControl.hidden = true;
+  if (state.caseId === "all") {
+    setText(status, "Select an available case to inspect deterministic facts and stored interpretations."); return;
+  }
+  if (state.explanationCaseId !== state.caseId || state.explanations === null) {
+    setText(status, "Loading explanation history…"); return;
+  }
+  const reports = state.explanations.reports.slice().sort(compareExplanationReports).reverse();
+  const warnings = state.explanations.warnings;
+  if (!reports.length) {
+    setText(status, warnings.length ? `No current report. ${warnings.join(" · ")}` : "No explanation report stored for this case.");
+    return;
+  }
+  reports.forEach((record) => {
+    const option = document.createElement("option"); option.value = record.report_id;
+    option.textContent = `${record.provenance.created_at} · ${record.report.interpretation_status} · ${record.report_id.slice(0, 12)}`;
+    history.append(option);
+  });
+  historyControl.hidden = false;
+  if (!reports.some((record) => record.report_id === state.explanationReportId)) state.explanationReportId = reports[0].report_id;
+  history.value = state.explanationReportId;
+  const record = reports.find((item) => item.report_id === state.explanationReportId) || reports[0];
+  setText(status, `${reports.length} stored report(s) · showing ${record.provenance.created_at}${warnings.length ? ` · ${warnings.join(" · ")}` : ""}`);
+  renderExplanationFacts(facts, record);
+  renderExplanationInterpretation(interpretation, record);
+  renderExplanationProvenance(provenance, record.provenance);
+}
+
 async function refreshReduction() {
   // The read-only API validates session_summary.json, replay_case.json, and accepted lineage.
   try {
@@ -126,6 +286,11 @@ async function refreshCases() {
       state.caseSignature = signature;
       refreshRecipe(state.caseId);
     }
+    if (previous !== state.caseId || state.explanationCaseId !== state.caseId) {
+      beginExplanationRequest(state.caseId, true);
+      renderExplanations();
+    }
+    refreshExplanations(state.caseId);
   } catch (_) { state.caseError = "Saved case index unavailable; showing existing episode evidence."; }
   renderCaseWorkbench();
 }
@@ -350,6 +515,7 @@ function renderRunList() {
 
 function render() {
   renderCaseWorkbench();
+  renderExplanations();
   setText(byId("connection-status"), `READ ONLY / ${displayEpisodes().length} EPISODES`);
   const filter = byId("outcome-filter");
   if (filter.options.length === 1) Object.entries(outcomeLabels).forEach(([value, label]) => {
@@ -421,11 +587,18 @@ byId("case-select").addEventListener("change", (event) => {
   state.caseId = event.target.value;
   state.caseSelected = true;
   state.caseSignature = caseSignature(selectedCase());
+  beginExplanationRequest(state.caseId, true);
+  renderExplanations();
   refreshRecipe(state.caseId);
+  refreshExplanations(state.caseId);
   const visible = displayEpisodes();
   state.primaryId = (visible.find(isPerturbed) || visible[0] || {}).episode_id || null;
   state.comparisonId = (defaultComparison() || {}).episode_id || null;
   render();
+});
+byId("explanation-history").addEventListener("change", (event) => {
+  state.explanationReportId = event.target.value;
+  renderExplanations();
 });
 ["primary", "comparison"].forEach((channel) => byId(`${channel}-select`).addEventListener("change", (event) => { state[channel === "primary" ? "primaryId" : "comparisonId"] = event.target.value; render(); }));
 window.setInterval(() => { if (state.linked && !primaryVideo.paused && comparisonVideo.src && Math.abs(primaryVideo.currentTime - comparisonVideo.currentTime) > .12) comparisonVideo.currentTime = Math.min(primaryVideo.currentTime, comparisonVideo.duration || primaryVideo.currentTime); }, 250);

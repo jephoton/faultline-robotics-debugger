@@ -40,6 +40,26 @@
           <p><strong>Exercised replay</strong><span id="case-replay">—</span><small>Fresh execution</small></p>
           <p><strong>Historical failure</strong><span id="case-history">—</span><small>Recorded outcome</small></p>
         </div>
+        <details id="case-explanations">
+          <summary id="explanation-summary">Deterministic facts and optional interpretation</summary>
+          <p id="explanation-status" role="status" aria-live="polite">Select a case to inspect its explanation history.</p>
+          <div id="explanation-history-control" hidden>
+            <label for="explanation-history">Stored report</label>
+            <select id="explanation-history"></select>
+          </div>
+          <section class="explanation-block" aria-labelledby="explanation-facts-heading">
+            <h3 id="explanation-facts-heading">Deterministic facts</h3>
+            <div id="explanation-facts"></div>
+          </section>
+          <section class="explanation-block" aria-labelledby="explanation-interpretation-heading">
+            <h3 id="explanation-interpretation-heading">Nemotron interpretation — human review required</h3>
+            <div id="explanation-interpretation"></div>
+          </section>
+          <section class="explanation-block" aria-labelledby="explanation-provenance-heading">
+            <h3 id="explanation-provenance-heading">Recorded provenance</h3>
+            <div id="explanation-provenance"></div>
+          </section>
+        </details>
         <details id="case-details"><summary>Replay inputs and export details</summary>
           <p id="case-detail-reasons"></p>
           <p id="case-prerequisites"></p>
