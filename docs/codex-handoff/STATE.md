@@ -1,5 +1,24 @@
 # Current project state
 
+## October 6 continuation and submission review
+
+Jethro requested naming first, a fresh rules/judging check, then continued M5.
+The [alignment review](../research/2026-10-06-submission-alignment.md) records
+the submission gaps and provisional name options; no final name/rename is
+approved. M5A remains complete; M5B/C are not complete. Main is clean at
+`eb2eb14` before this documentation update; last published checkpoint was
+`8912763`. Earlier agents hit usage limits, leaving client repair committed
+in its worktree and viewer work uncommitted. New isolated reviewers/builders
+continue the approved plan without restarting cloud work.
+
+Root actual HDF5 reader acceptance on external-kernel commit `35c26c4`
+matched the fixed source/state hashes and read 110 state values. This is not
+simulator validation. Applying the asset-reference helper to actual XML
+failed because it required a recognized marker at the start of the path,
+although the actual paths have a prefix. Independent review/fix is pending;
+do not integrate this kernel as replay-ready. No paid inference/GPU start
+occurred in this continuation.
+
 > Generated current-state context. Update after material implementation,
 > architecture, workflow, or risk changes.
 
