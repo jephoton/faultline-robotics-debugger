@@ -4,6 +4,14 @@
 
 ## Latest submission alignment — October 6
 
+**Newest priority:** Jethro approved moving future evaluations to a single-GPU
+Serverless Job and private Object Storage export; preserve historical VM results
+without rerunning them. See [ADR 0018](docs/decisions/0018-serverless-jobs-for-future-runs.md)
+and the [migration plan](docs/superpowers/plans/2026-10-06-serverless-job-migration.md).
+Local implementation is approved; paid validation still requires a fresh numeric
+cap after account/price/quota/balance checks. This does not reopen expanded M3,
+external replay or Nemotron retries. Older priority statements below are historical.
+
 **Immediate priority:** review the actual Nemotron report with Jethro.
 He explicitly deferred external replay and its next identity/design plan.
 Do not begin M5B wiring or GPU execution. M5C integration works, but the

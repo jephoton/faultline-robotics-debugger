@@ -2,6 +2,16 @@
 
 ## October 6 continuation and submission review
 
+**Newest execution priority:** approved single-GPU Serverless Job migration for
+future evaluations, with private Object Storage export of closed evidence files.
+Historical VM results remain untouched; no reruns to change their provenance.
+[ADR 0018](../decisions/0018-serverless-jobs-for-future-runs.md) and the
+[migration plan](../superpowers/plans/2026-10-06-serverless-job-migration.md)
+define local work and the fresh paid validation gate. Nebius CLI sign-in renewed
+and read-only project access works; exact resource/balance preflight is not yet
+complete. No numeric GPU/storage cap, provisioning or Job submission approved.
+Expanded M3 frozen, external replay deferred, M5C human acceptance remains open.
+
 **Active human checkpoint:** Jethro chose to defer external replay and review
 the real Nemotron report first. External-state identity planning/wiring is
 not approved; do not start it or paid GPU work. Root freshly reread the actual
