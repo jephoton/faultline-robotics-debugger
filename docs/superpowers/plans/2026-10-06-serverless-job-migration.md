@@ -10,7 +10,11 @@
 
 ## Ownership, concurrency and gates
 
-The user approved [the topology and storage](../../decisions/0018-serverless-jobs-for-future-runs.md). No paid cap yet.
+The user approved [the topology and storage](../../decisions/0018-serverless-jobs-for-future-runs.md),
+then one US$3 / one-hour single-L40S validation allowance and 24-hour private
+output retention. This is not permission to start before local image checks.
+Actual balance/expiry are unknown; Jethro asserted adequate funds and declined
+the console check. Record this exception rather than treating them as verified.
 Root owns docs, integration, registry/cloud state and any spending. A balanced
 smaller-model builder owns Tasks 1–3 in a clean attached worktree; Terra is not
 available, use `gpt-5.6-sol` at medium. Root supplies task text. A separate
@@ -130,7 +134,8 @@ Files: create `deploy/serverless/Dockerfile`, `deploy/serverless/Dockerfile.dock
 
 ### Task 4: Live pilot and recovery — red cap, then bounded amber
 
-Root owns all commands and temporary resources. No prior spend cap is reusable.
+Root owns all commands and temporary resources. The fresh US$3 allowance is
+specific to this one-hour single-L40S validation; no earlier cap is reusable.
 
 - [ ] Read-only: account/project/region active state, Serverless support, GPU quota,
   exact-shape capacity, live resource/disk/bucket/registry rates, actual available
@@ -139,6 +144,8 @@ Root owns all commands and temporary resources. No prior spend cap is reusable.
   duration and storage-retention deadline; wait for approval before provision,
   registry publication or Job submission. Include image pull/model download/startup,
   temporary storage and applicable tax, not just episode wall time.
+  Jethro approved US$3 / one hour / 24-hour output retention on October 6;
+  do not request it again unless a resource/price/scope change exceeds it.
 - [ ] Configure secrets locally/SecretStash without asking for token text in chat.
   Create only approved private resources. Prepare one stable configuration and
   record its hash. Arm a workstation exact-Job cancel-and-poll deadline before

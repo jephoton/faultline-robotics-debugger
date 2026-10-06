@@ -8,8 +8,10 @@
 Serverless Job and private Object Storage export; preserve historical VM results
 without rerunning them. See [ADR 0018](docs/decisions/0018-serverless-jobs-for-future-runs.md)
 and the [migration plan](docs/superpowers/plans/2026-10-06-serverless-job-migration.md).
-Local implementation is approved; paid validation still requires a fresh numeric
-cap after account/price/quota/balance checks. This does not reopen expanded M3,
+Local implementation is approved, followed by one US$3 / one-hour single-L40S
+validation and 24-hour private output retention. Local image validation still
+precedes provision/start. Actual balance/expiry remain unknown; Jethro asserted
+sufficient funds and asked to proceed without the console check. This does not reopen expanded M3,
 external replay or Nemotron retries. Older priority statements below are historical.
 
 **Immediate priority:** review the actual Nemotron report with Jethro.

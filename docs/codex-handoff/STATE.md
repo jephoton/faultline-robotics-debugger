@@ -9,7 +9,13 @@ Historical VM results remain untouched; no reruns to change their provenance.
 [migration plan](../superpowers/plans/2026-10-06-serverless-job-migration.md)
 define local work and the fresh paid validation gate. Nebius CLI sign-in renewed
 and read-only project access works; exact resource/balance preflight is not yet
-complete. No numeric GPU/storage cap, provisioning or Job submission approved.
+complete. One US$3 / one-hour L40S validation and 24-hour private output retention
+are now approved; actual balance/expiry remain unknown after Jethro declined the
+console check and asserted sufficient funds. Local image checks precede spending.
+Read-only Job dry-run succeeded with no resource created. The original VM is
+freshly observed STOPPED. No bucket/image publication/Job submission occurred.
+Local Docker Desktop failed before engine readiness on an inaccessible runtime
+inference socket; targeted reversible folder repair is awaiting user approval.
 Expanded M3 frozen, external replay deferred, M5C human acceptance remains open.
 
 **Active human checkpoint:** Jethro chose to defer external replay and review

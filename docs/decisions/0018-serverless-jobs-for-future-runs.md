@@ -1,7 +1,13 @@
 # ADR 0018: Serverless Jobs for future robot evaluations
 
 Status: accepted topology and output-storage direction, October 6, 2026.
-Paid execution: not yet approved; read-only preflight is authorized.
+Paid execution: Jethro subsequently approved one US$3 incremental allowance,
+one L40S Job for at most one hour, and a private output bucket retained for at
+most 24 hours, including recovery of at most 1 GiB and assumed tax. Local image
+validation precedes any provisioning/submission. No Job has been submitted.
+Jethro stated the AI Cloud balance is sufficient and asked us to proceed rather
+than supplying its current value/expiry; neither value has been independently
+verified. Do not substitute the Token Factory balance or invent a balance.
 
 Jethro approved migrating future evaluations to one finite, single-GPU Nebius
 Serverless Job. Keep the model server and one simulator evaluator in the same
