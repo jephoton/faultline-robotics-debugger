@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from robot_debug.case_io import import_m4
 from robot_debug.case_store import inspect_case, register_case
@@ -115,7 +116,9 @@ class ExplainCaseCliTests(unittest.TestCase):
                          ["inspect", "key", "catalog", "inspect", "reserve", "post",
                           "inspect", "store"])
         reservation = events[4]
-        self.assertEqual(reservation[1], ROOT / "artifacts" / "m5-nemotron-pilot")
+        self.assertEqual(
+            reservation[1],
+            ROOT / "artifacts" / "m5-nemotron-pilot-repair-20261006")
         self.assertEqual(reservation[2:], (self.case_id, packet_identity(packet)))
         self.assertEqual(output["interpretation_status"], "validated-structure")
         self.assertEqual(output["request_status"], "completed")
@@ -175,27 +178,36 @@ class ExplainCaseCliTests(unittest.TestCase):
             module.run_live(self.workspace, self.case_id, None, deps=deps)
         self.assertEqual(calls, ["reserve", "post"])
 
-    def test_existing_reservation_prevents_a_second_post(self):
+    def test_repair_reservation_preserves_old_attempt_and_prevents_another_post(self):
         module = load_script()
-        pilot = self.base / "pilot"
+        artifacts = self.base / "artifacts"
+        old_pilot = artifacts / "m5-nemotron-pilot"
+        repair_pilot = artifacts / "m5-nemotron-pilot-repair-20261006"
+        old_pilot.mkdir(parents=True)
+        old_marker = b'{"immutable":"first-attempt"}'
+        (old_pilot / "reservation.json").write_bytes(old_marker)
         posts = []
-
-        def reserve(_fixed_root, case_id, packet_id):
-            return reserve_pilot(pilot, case_id, packet_id)
 
         deps = module.Dependencies(
             inspect_case=inspect_case, load_api_key=lambda _: "secret",
-            preflight=lambda _: {}, reserve_pilot=reserve,
+            preflight=lambda _: {}, reserve_pilot=reserve_pilot,
             request_interpretation=lambda *args: posts.append("post") or {
                 "response_json": None,
                 "provenance": live_provenance("transport_error", "timeout")},
             store_report=lambda workspace, record: Path("report"),
         )
-        module.run_live(self.workspace, self.case_id, None, deps=deps)
-        with self.assertRaisesRegex(TokenFactoryError, "^reservation_exists$"):
+        with patch.object(module, "PILOT_ROOT", repair_pilot):
             module.run_live(self.workspace, self.case_id, None, deps=deps)
+            self.assertEqual((old_pilot / "reservation.json").read_bytes(), old_marker)
+            marker = repair_pilot / "reservation.json"
+            self.assertEqual(json.loads(marker.read_bytes())["attempt_number"], 1)
+            with self.assertRaisesRegex(TokenFactoryError, "^reservation_exists$"):
+                module.run_live(self.workspace, self.case_id, None, deps=deps)
+            marker.write_bytes(b'{"partial"')
+            with self.assertRaisesRegex(TokenFactoryError, "^reservation_exists$"):
+                module.run_live(self.workspace, self.case_id, None, deps=deps)
         self.assertEqual(posts, ["post"])
-        self.assertTrue((pilot / "reservation.json").is_file())
+        self.assertEqual((old_pilot / "reservation.json").read_bytes(), old_marker)
 
     def test_live_transport_failure_stores_factual_fallback(self):
         module = load_script()

@@ -113,11 +113,13 @@ class ExplanationStoreTests(unittest.TestCase):
         changes = [
             {"created_at": "2026-02-30T00:00:00Z"}, {"created_at": "2026-10-05T12:34:56+00:00"},
             {"latency_seconds": True}, {"latency_seconds": math.inf}, {"latency_seconds": -1},
-            {"prompt_tokens": True}, {"prompt_tokens": 262145}, {"completion_tokens": 601},
+            {"prompt_tokens": True}, {"prompt_tokens": 262145}, {"completion_tokens": 4097},
             {"estimated_cost_usd": 0.02}, {"billed_cost_usd": 0},
             {"reservation_usd": 0}, {"provider": None}, {"model": "other"},
             {"request_status": "transport_error", "error_code": "http_error"},
             {"request_status": "completed", "error_code": "timeout"},
+            {"request_status": "completed", "error_code": "output_limit"},
+            {"request_status": "invalid_response", "error_code": "private"},
             {"prompt_tokens": None}, {"completion_tokens": None},
         ]
         for change in changes:
@@ -137,11 +139,38 @@ class ExplanationStoreTests(unittest.TestCase):
             ("transport_error", "timeout"), ("http_error", "http_error"),
             ("http_error", "authentication_failed"), ("http_error", "catalog_missing"),
             ("invalid_response", "invalid_response"),
+            ("invalid_response", "output_limit"),
         ]
         for status, code in cases:
             provenance = self.live(request_status=status, error_code=code, prompt_tokens=None,
                                    completion_tokens=None, estimated_cost_usd=None)
             self.assertEqual(validate_stored_report(self.record(provenance=provenance))["provenance"], provenance)
+
+    def test_live_reports_round_trip_new_limit_legacy_limit_and_output_fallback(self):
+        completed = self.live(completion_tokens=4096,
+                              estimated_cost_usd=0.00098904)
+        completed_record = self.record(provenance=completed)
+        self.assertEqual(validate_stored_report(completed_record), completed_record)
+
+        legacy = self.live(completion_tokens=600, estimated_cost_usd=0.00015)
+        legacy_record = self.record(provenance=legacy)
+        self.assertEqual(legacy_record["report_id"],
+                         "81a8de7f3734074371485378da1a2d47cc04b0eccbff78531eb771ba1b53c8c3")
+        self.assertEqual(validate_stored_report(legacy_record), legacy_record)
+
+        fallback = self.live(
+            request_status="invalid_response", error_code="output_limit",
+            completion_tokens=4096, estimated_cost_usd=0.00098904)
+        fallback_record = self.record(provenance=fallback)
+        self.assertEqual(validate_stored_report(fallback_record), fallback_record)
+        for record in (completed_record, legacy_record, fallback_record):
+            store_report(self.workspace, record)
+        round_tripped = read_case_reports(self.workspace, self.case["case_id"])
+        self.assertEqual(round_tripped["warnings"], [])
+        self.assertEqual(
+            {record["report_id"] for record in round_tripped["reports"]},
+            {completed_record["report_id"], legacy_record["report_id"],
+             fallback_record["report_id"]})
 
     def test_cycles_encoding_depth_and_size_have_fixed_error(self):
         record = self.record()

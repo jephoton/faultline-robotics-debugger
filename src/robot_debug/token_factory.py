@@ -25,7 +25,7 @@ MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 
 _HOST = "api.tokenfactory.nebius.com"
 _BASE_PATH = "/v1/"
-_TIMEOUT_SECONDS = 20
+_TIMEOUT_SECONDS = 90
 _MAX_RESPONSE_BYTES = 262_144
 _MAX_REQUEST_BYTES = 6_000
 _MAX_ENV_BYTES = 65_536
@@ -47,6 +47,7 @@ _SYSTEM_PROMPT = (
 _ERROR_CODES = {
     "missing_api_key", "invalid_api_key", "authentication_failed",
     "catalog_missing", "timeout", "http_error", "invalid_response",
+    "output_limit",
     "request_too_large", "invalid_reservation", "reservation_exists",
     "unsafe_pilot_path",
 }
@@ -388,7 +389,7 @@ def _request_payload(packet: dict) -> dict:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": packet_json},
         ],
-        "max_tokens": 600,
+        "max_tokens": 4096,
         "temperature": 0,
         "stream": False,
         "response_format": {"type": "json_object"},
@@ -413,7 +414,7 @@ def _usage(response: dict) -> tuple[int | None, int | None]:
             raise ValueError
         return None, None
     if (type(prompt) is not int or type(completion) is not int
-            or not 0 <= prompt <= 262_144 or not 0 <= completion <= 600):
+            or not 0 <= prompt <= 262_144 or not 0 <= completion <= 4096):
         raise ValueError
     if "total_tokens" in usage:
         total = usage["total_tokens"]
@@ -479,6 +480,13 @@ def request_interpretation(packet: dict, api_key: str,
         return {"response_json": None,
                 "provenance": _provenance("invalid_response", "invalid_response",
                                            latency)}
+    choices = response.get("choices")
+    if (type(choices) is list and len(choices) == 1
+            and type(choices[0]) is dict
+            and choices[0].get("finish_reason") == "length"):
+        return {"response_json": None,
+                "provenance": _provenance("invalid_response", "output_limit",
+                                           latency, prompt, completion)}
     try:
         content, interpretation = _response_content(response, validated)
         if api_key in content or _contains_secret(interpretation, api_key):

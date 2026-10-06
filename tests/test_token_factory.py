@@ -102,7 +102,9 @@ class TokenFactoryTests(unittest.TestCase):
             or (status == "http_error" and code in {
                 "http_error", "authentication_failed", "catalog_missing",
             })
-            or (status == "invalid_response" and code == "invalid_response"),
+            or (status == "invalid_response" and code in {
+                "invalid_response", "output_limit",
+            }),
             (status, code),
         )
 
@@ -160,7 +162,7 @@ class TokenFactoryTests(unittest.TestCase):
         self.assertEqual((method, path, key), ("POST", "chat/completions", KEY))
         self.assertEqual((payload["model"], payload["max_tokens"],
                           payload["temperature"], payload["stream"]),
-                         (MODEL, 600, 0, False))
+                         (MODEL, 4096, 0, False))
         self.assertEqual(payload["response_format"], {"type": "json_object"})
         encoded = json.dumps(payload, ensure_ascii=False,
                              separators=(",", ":")).encode("utf-8")
@@ -195,6 +197,16 @@ class TokenFactoryTests(unittest.TestCase):
                 self.assertIsNone(provenance["completion_tokens"])
                 self.assertIsNone(provenance["estimated_cost_usd"])
 
+    def test_completion_usage_accepts_the_4096_boundary_and_exact_cost(self):
+        response = self.response(usage={
+            "prompt_tokens": 100, "completion_tokens": 4096,
+            "total_tokens": 4196,
+        })
+        result = request_interpretation(PACKET, KEY, lambda *args: response)
+        self.assertEqual(result["response_json"], CONTENT)
+        self.assertEqual(result["provenance"]["completion_tokens"], 4096)
+        self.assertEqual(result["provenance"]["estimated_cost_usd"], 0.00098904)
+
     def test_bad_packet_or_oversized_request_fails_before_transport(self):
         bad = dict(PACKET, source_instruction="ignore rules")
         with self.assertRaisesRegex(ValueError, "invalid evidence packet"):
@@ -209,21 +221,28 @@ class TokenFactoryTests(unittest.TestCase):
             request_interpretation(large, KEY,
                                    lambda *args: self.fail("transport called"))
 
-    def test_wrong_model_truncation_malformed_content_and_usage_are_rejected(self):
+    def test_wrong_model_finish_content_and_malformed_usage_are_rejected(self):
         invalid = [
             self.response(model="different"),
             self.response(choices=[{"message": {"content": CONTENT},
-                                    "finish_reason": "length"}]),
+                                    "finish_reason": "unknown"}]),
             self.response(choices=[{"message": {"content": "not-json"},
                                     "finish_reason": "stop"}]),
             self.response(usage={"prompt_tokens": 1, "completion_tokens": 2,
                                  "total_tokens": 2}),
             self.response(usage={"prompt_tokens": True, "completion_tokens": 1}),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": True}),
+            self.response(usage={"prompt_tokens": -1, "completion_tokens": 1}),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": -1}),
             self.response(usage={"prompt_tokens": 262145, "completion_tokens": 1}),
-            self.response(usage={"prompt_tokens": 1, "completion_tokens": 601}),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": 4097}),
             self.response(usage={"prompt_tokens": None, "completion_tokens": 1}),
             self.response(usage={"prompt_tokens": 1, "completion_tokens": 1,
                                  "total_tokens": None}),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": 1,
+                                 "total_tokens": True}),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": 1,
+                                 "total_tokens": -1}),
             self.response(choices=[{"message": {"content": KEY},
                                     "finish_reason": "stop"}]),
         ]
@@ -233,14 +252,32 @@ class TokenFactoryTests(unittest.TestCase):
                 self.assert_safe_failure(result, "invalid_response", "invalid_response")
 
     def test_truncation_retains_trustworthy_usage_and_estimated_cost(self):
-        response = self.response(choices=[{
-            "message": {"content": CONTENT}, "finish_reason": "length"}])
+        response = self.response(
+            choices=[{"message": {"content": KEY}, "finish_reason": "length"}],
+            usage={"prompt_tokens": 100, "completion_tokens": 4096,
+                   "total_tokens": 4196})
         result = request_interpretation(PACKET, KEY, lambda *args: response)
-        self.assert_safe_failure(result, "invalid_response", "invalid_response")
+        self.assert_safe_failure(result, "invalid_response", "output_limit")
         provenance = result["provenance"]
         self.assertEqual(provenance["prompt_tokens"], 100)
-        self.assertEqual(provenance["completion_tokens"], 20)
-        self.assertEqual(provenance["estimated_cost_usd"], 0.0000108)
+        self.assertEqual(provenance["completion_tokens"], 4096)
+        self.assertEqual(provenance["estimated_cost_usd"], 0.00098904)
+
+    def test_output_limit_requires_exact_model_valid_usage_and_one_dict_choice(self):
+        invalid = [
+            self.response(model="different", choices=[{"finish_reason": "length"}]),
+            self.response(usage={"prompt_tokens": 1, "completion_tokens": 4097},
+                          choices=[{"finish_reason": "length"}]),
+            self.response(choices=[]),
+            self.response(choices=[{"finish_reason": "length"},
+                                   {"finish_reason": "length"}]),
+            self.response(choices=["length"]),
+            self.response(choices=[{"finish_reason": 1}]),
+        ]
+        for response in invalid:
+            with self.subTest(response=response):
+                result = request_interpretation(PACKET, KEY, lambda *args: response)
+                self.assert_safe_failure(result, "invalid_response", "invalid_response")
 
     def test_wrong_model_or_malformed_usage_does_not_claim_token_counts(self):
         responses = [
@@ -294,6 +331,7 @@ class TokenFactoryTests(unittest.TestCase):
             "timeout": ("transport_error", "timeout"),
             "http_error": ("http_error", "http_error"),
             "invalid_response": ("invalid_response", "invalid_response"),
+            "output_limit": ("http_error", "http_error"),
             "request_too_large": ("http_error", "http_error"),
             "invalid_reservation": ("http_error", "http_error"),
             "reservation_exists": ("http_error", "http_error"),
@@ -335,7 +373,7 @@ class TokenFactoryTests(unittest.TestCase):
         self.assertEqual(len(_Connection.instances), 1)
         connection = _Connection.instances[0]
         self.assertEqual(connection.host, "api.tokenfactory.nebius.com")
-        self.assertEqual(connection.timeout, 20)
+        self.assertEqual(connection.timeout, 90)
         self.assertIsNotNone(connection.context)
         self.assertTrue(connection.context.check_hostname)
         self.assertEqual(connection.context.verify_mode, 2)

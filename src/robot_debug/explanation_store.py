@@ -126,7 +126,7 @@ def _provenance(value: object) -> dict:
     if (prompt is None) != (completion is None):
         _fail()
     if prompt is not None and (not _integer(prompt, 262_144)
-                               or not _integer(completion, 600)):
+                               or not _integer(completion, 4096)):
         _fail()
     if source == "offline":
         if (value["provider"], value["model"], value["endpoint"]) != (None, None, None):
@@ -147,7 +147,8 @@ def _provenance(value: object) -> dict:
             status == "transport_error" and code == "timeout") or (
             status == "http_error" and code in {
                 "http_error", "authentication_failed", "catalog_missing"}) or (
-            status == "invalid_response" and code == "invalid_response")
+            status == "invalid_response" and code in {
+                "invalid_response", "output_limit"})
         if not valid:
             _fail()
         if type(value["reservation_usd"]) not in (int, float) or value["reservation_usd"] != .02:

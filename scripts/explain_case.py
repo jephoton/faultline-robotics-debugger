@@ -28,7 +28,8 @@ from robot_debug.token_factory import (
 )
 
 
-PILOT_ROOT = REPOSITORY_ROOT / "artifacts" / "m5-nemotron-pilot"
+PILOT_ROOT = (
+    REPOSITORY_ROOT / "artifacts" / "m5-nemotron-pilot-repair-20261006")
 
 
 class ExplainCaseError(ValueError):
