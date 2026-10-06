@@ -22,11 +22,11 @@ LIBERO/MuJoCo on Nebius GPU compute.
   no provider client, persistence or truth certification.
 - `src/robot_debug/explanation_store.py`: reviewed immutable case/packet-bound
   sidecars, provenance validation and fresh-source checks. The local store is
-  integrated; the guarded CLI and viewer explanation integration remain active
-  M5C work, not demonstrated inference yet.
+  integrated with the guarded CLI and read-only viewer. The first real request
+  yielded only factual fallback, not useful interpretation; M5C remains open.
 - `src/robot_debug/token_factory.py`: reviewed fixed-model HTTPS transport,
   safe secret loading and exclusive conservative pilot reservation. Integrated
-  through `5787f20`; no generation has been attempted. Only the guarded CLI
+  through `5787f20`; one generation was attempted and rejected. Only the guarded CLI
   may orchestrate paid requests after fresh evidence inspection/reservation.
 - `configs/`: validated experiment configuration.
 - `docs/decisions/`: accepted architecture and experiment decisions.

@@ -14,8 +14,8 @@ Fresh main tests:578OK/four platform skips. New-panel real browser QA is pending
 because browser automation cannot initialise in this session.
 
 See the [current rules and judging review](docs/research/2026-10-06-submission-alignment.md).
-Name brainstorming is now active at the human checkpoint (Faultline / Replay
-Lab / Blackbox; no rename approved). Continue already-approved M5B/C work in
+Faultline is the preferred name, kept in view rather than finalized (no rename
+or branding approved). Continue already-approved M5B/C work in
 parallel. Simulation-only Physical AI is explicitly permitted by current rules.
 Do not assume VM-only runtime eligibility: finish genuine Token Factory
 inference and seek clarification on the track's Serverless Jobs wording before

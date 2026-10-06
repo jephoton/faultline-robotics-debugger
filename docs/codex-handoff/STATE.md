@@ -17,12 +17,13 @@ and live factual fallback) are readable with no warnings. No useful model
 interpretation exists yet, so M5C is not complete. FullUS$0.02 reservation is
 retained; do not retry or remove/refund its marker. The [pilot record](../experiments/m5-nemotron-pilot.md)
 proposes another separately approvedUS$0.02 attempt with4096output tokens and
-90-second socket timeout. User approval and a committed exact implementation
-plan/reviews precede dependent changes or another POST. No GPU start approved.
+90-second socket timeout. Jethro approved that separate attempt on October 6;
+a committed exact implementation plan and independent reviews still precede
+another POST. No GPU start approved.
 
-Linux CI passed the isolated credential-fixture fix at `47ad012`; final
-integration publication/CI is next. Naming choice remains open, with Faultline
-recommended. Repository is still PRIVATE; public audit/approval remains a
+Linux CI passed both the isolated credential-fixture fix at `47ad012` and
+the published final integration at `b1b4a30`. Faultline is Jethro's preferred
+name, kept in view; no final branding/rename approved. Repository is still PRIVATE; public audit/approval remains a
 submission gate. Earlier entries below preserve historical review stages.
 
 Jethro requested naming first, a fresh rules/judging check, then continued M5.

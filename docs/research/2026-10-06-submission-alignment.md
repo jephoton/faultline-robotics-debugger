@@ -30,7 +30,7 @@ usable build. Preserve access through December 15. Deadline: October 30,
 | Area | Verified position | Remaining gate |
 | --- | --- | --- |
 | NVIDIA robotics use | GR00T ran closed-loop simulated manipulation on Nebius GPU compute | Name actual model/checkpoint and distinguish missing historical pins from future verified pins |
-| Nebius inference | Authenticated exact Nemotron catalog entry; no generation yet | Reviewed client/CLI, one approved real request, grounded report shown in viewer |
+| Nebius inference | Reviewed client/CLI/viewer integrated; one real request returned no valid interpretation | Separately approved bounded repair/second attempt; useful grounded report and human review |
 | Working product | M5A inspection/export/import and paired evidence viewer completed | External restored-state policy replay and M5C explanation path remain unfinished |
 | Public build | Authenticated GitHub check confirms repository is PRIVATE and Apache-2.0 is detected; setup instructions and automated tests exist | Clean-room judge smoke test, artifact availability, dependency/asset rights and secret/history audit; explicit approval before making repository public |
 | Feedback | Root FEEDBACK.md captures actual cloud/model friction | Add actual Token Factory generation experience, reconcile costs, get user first-hand feedback |
@@ -72,8 +72,8 @@ stays frozen; M6 broader validation remains pending.
 
 These names have not been checked for trademark, domain, package or product
 availability. Jethro chooses before branding, repository renaming or publication.
-Naming was previously queued and overtaken by M5 work; it is now explicitly
-back at the next human checkpoint, without blocking approved M5 implementation.
+Jethro prefers **Faultline**, kept in view for now. This is not final branding,
+repository renaming or publication approval; naming does not block M5.
 
 The acquired external HDF5's license/attribution discrepancy remains unresolved.
 Do not redistribute it in the public judge package until rights are established;
