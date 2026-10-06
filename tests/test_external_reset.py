@@ -365,6 +365,25 @@ class AssetResolutionTests(unittest.TestCase):
         self.assertEqual(result["source_xml_sha256"], _sha(xml.encode()))
         self.assertEqual(set(result), {"xml", "source_xml_sha256", "resolved_xml_sha256", "assets", "asset_closure_sha256"})
 
+    def test_resolves_prefixed_paths_for_both_source_namespaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            libero_asset = self.write_asset(roots["libero"], "textures/a.png", b"libero")
+            robosuite_asset = self.write_asset(roots["robosuite"], "meshes/b.obj", b"robosuite")
+            xml = (
+                '<mujoco><asset>'
+                '<texture file="/installed/libero/chiliocosm/assets/textures/a.png"/>'
+                '<mesh file="/installed/robosuite/robosuite/models/assets/meshes/b.obj"/>'
+                '</asset></mujoco>'
+            )
+            result = resolve_external_assets(xml, roots)
+        self.assertIn(str(libero_asset.resolve()), result["xml"])
+        self.assertIn(str(robosuite_asset.resolve()), result["xml"])
+        self.assertEqual(
+            [(item["namespace"], item["relative_path"]) for item in result["assets"]],
+            [("libero", "textures/a.png"), ("robosuite", "meshes/b.obj")],
+        )
+
     def test_deduplicates_repeated_full_path_without_changing_source_xml(self):
         with tempfile.TemporaryDirectory() as directory:
             roots = self.make_roots(directory)
@@ -383,6 +402,7 @@ class AssetResolutionTests(unittest.TestCase):
             "/chiliocosm/assets/../escape.obj",
             "/unknown/assets/a.obj",
             "/chiliocosm/assets/a/robosuite/models/assets/b.obj",
+            "/prefix/chiliocosm/assets/a/chiliocosm/assets/b.obj",
             "/chiliocosm/assets/folder\\a.obj",
             "https://example.test/chiliocosm/assets/a.obj",
             "/chiliocosm/assets/",

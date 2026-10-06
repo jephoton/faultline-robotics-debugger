@@ -395,9 +395,8 @@ def _asset_reference(filename: str) -> tuple[str, str]:
     if len(matches) != 1:
         raise ExternalResetError("invalid external asset reference")
     marker, namespace = matches[0]
-    if not filename.startswith(marker):
-        raise ExternalResetError("invalid external asset reference")
-    suffix = filename[len(marker) :]
+    marker_end = filename.index(marker) + len(marker)
+    suffix = filename[marker_end:]
     if not suffix or suffix.startswith("/") or ":" in suffix:
         raise ExternalResetError("invalid external asset reference")
     normalized: list[str] = []
