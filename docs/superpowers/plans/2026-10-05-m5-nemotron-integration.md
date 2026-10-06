@@ -13,6 +13,22 @@ No browser secrets/provider calls, source changes, simulator or M3 changes.
 **Tech stack:** Python 3.11 standard library/unittest, existing vanilla viewer.
 Exact contract: `../specs/2026-10-05-m5-nemotron-sidecars-design.md`.
 
+## Verified execution checkpoint — October 6
+
+This checkpoint supersedes historical unchecked task steps below.
+
+- [x] Tasks1–3: store, client and CLI implemented, separately reviewed and
+  integrated through `bd5abf1`; focused tests and full578-test suite passed.
+- [x] Task4 code, HTTP/Node tests, spec and quality/accessibility review.
+- [ ] Task4 actual375/768/1440px browser QA: automation failed to initialise.
+- [x] Task5 single authorized request, immutable fallback and unchanged116
+  source hashes recorded; main publication `b1b4a30` has successful CI.
+- [ ] Useful real interpretation and human review: first attempt was rejected.
+  Continue only under the separately approved
+  [bounded repair plan](2026-10-06-m5-nemotron-bounded-repair.md).
+
+M5C remains open. Do not delete/refund the original reservation.
+
 ## Ownership and concurrency
 
 ```text

@@ -14,6 +14,22 @@ reviewed and actual runtime wiring receives its next committed plan.
 **Tech stack:** Python3.11 standard library/NumPy, unittest/fake simulator;
 isolated research h5py only for actual-sample read acceptance.
 
+## Verified execution checkpoint — October 6
+
+This checkpoint supersedes historical unchecked implementation steps below.
+
+- [x] Tasks1–3 kernel, adversarial regression tests and restoration-order fixtures.
+- [x] Task4 independent spec/quality reviews and root integration through
+  `8b2dae3`; fresh main suite578OK/four platform skips, node syntax and diff check.
+- [x] Actual HDF5 reader acceptance:110state values, fixed source/state hashes,
+  all81XML asset references normalize. Actual installed assets remain unverified.
+- [x] Handoff/roadmap publication; `b1b4a30` CI successful.
+- [ ] Next evaluator/case-identity wiring plan and actual runtime validation.
+
+Production state validation remains exact; synthetic tests change the expected
+state constant, never mock the public state hashing function. M5B is not complete;
+no paid GPU start or external-reset case-schema change is approved here.
+
 ## Ownership, autonomy and dependency map
 
 Root owns plan/spec/docs, Git integration and read-only actual-sample checks.

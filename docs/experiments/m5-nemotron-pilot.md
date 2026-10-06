@@ -42,7 +42,7 @@ including after reset. HTTP and Node-VM tests passed, but real375/768/1440px
 browser QA for the new panel is pending. Do not reuse old M5A screenshots as
 proof of new M5C UI checks.
 
-## Proposed next decision — not authorized execution
+## Accepted next decision — implementation/review gate remains
 
 Recommend one further **US$0.02 maximum** attempt, with4,096 output tokens
 and a90-second socket timeout on the same model, endpoint, packet and JSON
@@ -52,13 +52,13 @@ plus4,096-output-token calculation is US$0.01671168 before extras. Preserve
 the previous reservation; use a separately approved fixed pilot directory,
 never delete/refund the old marker or add an arbitrary CLI cap/path override.
 
-Before implementation: Jethro approves the changed limit/timeout and additional
-cap, then root commits an exact plan covering client/store usage bounds,
+Jethro approved the changed limit/timeout and additional cap on October6.
+Root committed the [exact repair plan](../superpowers/plans/2026-10-06-m5-nemotron-bounded-repair.md) covering client/store usage bounds,
 backward-compatible old sidecars, safe bounded failure diagnostics (no raw
 text/headers), fresh reservation, tests and independent review. Root alone
 executes the single next attempt after full-suite/preflight acceptance.
-No paid GPU work is included. This is a proposed design, not a ready-to-execute
-implementation plan or permission to retry.
+No paid GPU work is included. Another POST waits for implementation, independent
+reviews and root acceptance; the old reservation remains consumed.
 
 Alternatives: establish a documented hosted non-reasoning mode first (currently
 unverified), or deliberately retain only deterministic reports and reconsider

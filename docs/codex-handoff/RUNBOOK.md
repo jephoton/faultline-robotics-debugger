@@ -13,6 +13,17 @@ export PYTHONPATH=src
 
 ## Viewer
 
+Current Windows main viewer with registered case explanations:
+
+```powershell
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+C:/Windows/py.exe -3.11 -m robot_debug.viewer.server --artifacts artifacts --cases artifacts/cases --host 127.0.0.1 --port 8765
+```
+
+Reports are local immutable sidecars; opening or refreshing the viewer never
+calls the provider. An absent interpretation is an honest factual fallback,
+not a successful model explanation. API checks do not replace visual browser QA.
+
 ```bash
 .venv/bin/python -m robot_debug.viewer.server \
   --artifacts artifacts \
