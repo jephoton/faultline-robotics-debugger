@@ -249,6 +249,17 @@ class CandidateValidationTests(unittest.TestCase):
                 with self.assertRaises(ExternalResetError):
                     self.validate_synthetic(value)
 
+    def test_rejects_del_and_c1_controls_in_xml_asset_paths(self):
+        for codepoint in (0x7F, 0x85):
+            xml = (
+                '<mujoco><asset><mesh file="/chiliocosm/assets/meshes/'
+                f'a&#x{codepoint:x};.obj"/></asset></mujoco>'
+            )
+            value = candidate(model_xml=xml, model_xml_sha256=_sha(xml.encode("utf-8")))
+            with self.subTest(codepoint=codepoint):
+                with self.assertRaisesRegex(ExternalResetError, "invalid external reset candidate"):
+                    self.validate_synthetic(value)
+
 
 class SourceReaderTests(unittest.TestCase):
     def read_fixture(self, handle, *, state_hash=STATE_SHA256):
@@ -445,6 +456,14 @@ class AssetResolutionTests(unittest.TestCase):
                     with self.assertRaisesRegex(ExternalResetError, "invalid external asset reference"):
                         resolve_external_assets(xml, roots)
 
+    def test_rejects_del_and_c1_controls_in_asset_references(self):
+        for control in ("\x7f", "\x85"):
+            with self.subTest(codepoint=ord(control)):
+                with self.assertRaisesRegex(ExternalResetError, "invalid external asset reference"):
+                    external_reset_module._asset_reference(
+                        f"/chiliocosm/assets/meshes/a{control}.obj"
+                    )
+
     def test_rejects_missing_or_extra_roots_and_missing_asset(self):
         with tempfile.TemporaryDirectory() as directory:
             roots = self.make_roots(directory)
@@ -453,6 +472,30 @@ class AssetResolutionTests(unittest.TestCase):
                 with self.subTest(keys=set(bad_roots)):
                     with self.assertRaises(ExternalResetError):
                         resolve_external_assets(xml, bad_roots)
+
+    def test_wraps_root_disappearance_without_leaking_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            with mock.patch.object(Path, "resolve", side_effect=FileNotFoundError("private root path")):
+                with self.assertRaisesRegex(ExternalResetError, "invalid external asset roots") as raised:
+                    resolve_external_assets("<mujoco/>", roots)
+        self.assertNotIn("private root path", str(raised.exception))
+
+    def test_wraps_asset_disappearance_without_leaking_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.make_roots(directory)
+            self.write_asset(roots["libero"], "meshes/a.obj")
+            original_resolve = Path.resolve
+
+            def disappear_asset(path, *args, **kwargs):
+                if path.name == "a.obj":
+                    raise FileNotFoundError("private asset path")
+                return original_resolve(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "resolve", autospec=True, side_effect=disappear_asset):
+                with self.assertRaisesRegex(ExternalResetError, "invalid external asset") as raised:
+                    resolve_external_assets(XML, roots)
+        self.assertNotIn("private asset path", str(raised.exception))
 
     def test_rejects_more_than_128_references(self):
         with tempfile.TemporaryDirectory() as directory:

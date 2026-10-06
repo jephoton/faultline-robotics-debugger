@@ -10,6 +10,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import stat
 import struct
+import unicodedata
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -80,6 +81,10 @@ def _state_sha256(values) -> str:
     return _sha256(payload)
 
 
+def _has_control(value: str) -> bool:
+    return any(unicodedata.category(character) == "Cc" for character in value)
+
+
 def _parse_xml(xml: str) -> ET.Element:
     if type(xml) is not str:
         _fail()
@@ -105,7 +110,7 @@ def _parse_xml(xml: str) -> ET.Element:
             if element.tag not in {"mesh", "texture", "hfield"}:
                 _fail()
             filename = element.attrib["file"]
-            if not filename or any(ord(character) < 32 for character in filename):
+            if not filename or _has_control(filename):
                 _fail()
         if element.tag == "compiler":
             for directory_key in ("meshdir", "texturedir", "assetdir"):
@@ -383,7 +388,7 @@ def _asset_reference(filename: str) -> tuple[str, str]:
         type(filename) is not str
         or not filename
         or "\\" in filename
-        or any(ord(character) < 32 for character in filename)
+        or _has_control(filename)
         or "://" in filename
     ):
         raise ExternalResetError("invalid external asset reference")
@@ -450,7 +455,10 @@ def _asset_target(root: Path, relative_path: str) -> Path:
     except ValueError:
         raise ExternalResetError("invalid external asset reference") from None
     _safe_regular_path(target)
-    return target.resolve(strict=True)
+    try:
+        return target.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise ExternalResetError("invalid external asset") from None
 
 
 def resolve_external_assets(xml: str, roots: dict) -> dict:
@@ -464,7 +472,10 @@ def resolve_external_assets(xml: str, roots: dict) -> dict:
         if not isinstance(value, Path):
             raise ExternalResetError("invalid external asset roots")
         _safe_regular_path(value, directory=True)
-        checked_roots[namespace] = value.resolve(strict=True)
+        try:
+            checked_roots[namespace] = value.resolve(strict=True)
+        except (OSError, RuntimeError):
+            raise ExternalResetError("invalid external asset roots") from None
 
     references = []
     for element in root.iter():
