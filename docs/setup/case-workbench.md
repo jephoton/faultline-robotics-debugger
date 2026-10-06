@@ -109,6 +109,33 @@ badges or recipes on disk. If no case is registered, follow the import command
 shown in the empty state. A broken case entry does not disable the remaining
 episode catalog. Stop the local server with Ctrl+C.
 
+## Evidence-bound explanations
+
+Select a registered case, then open its Nemotron interpretation disclosure.
+Deterministic evidence facts and generated interpretation are separate. The
+model receives only allowlisted text metadata and evidence IDs, not videos;
+citations navigate the original episode rather than certifying the prose.
+Read limitations and compare cited videos/traces before accepting a conclusion.
+Previous immutable reports remain available; changed evidence hides stale ones.
+
+Offline preparation does not need credentials:
+
+```powershell
+python scripts/explain_case.py prepare --workspace artifacts/cases --case-id '<registered-case-id>'
+```
+
+`preflight --env-file .env` checks the fixed authenticated model catalog only.
+The separate `live` command is a paid operation, not a viewer action. It needs
+an approved allowance and fresh local evidence. Its fixed exclusive reservation
+persists after success, failure or interruption; rerunning does not authorize
+a retry. Never delete a reservation to bypass it. Root alone executes the
+currently approved pilot, following its committed plan and independent review.
+Neither browser refresh nor the explanation endpoint calls Token Factory.
+
+An absent/rejected interpretation keeps a factual fallback, not a successful
+AI report. Structurally validated output still requires human review. Token
+costs are estimates and posted billing stays unknown until reconciled.
+
 ## Boundaries
 
 The reduced mask is budget-local, not a proven global minimum. Source-reported
