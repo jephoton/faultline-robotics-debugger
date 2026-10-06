@@ -23,10 +23,13 @@ LIBERO/MuJoCo on Nebius GPU compute.
 - `src/robot_debug/explanation_store.py`: reviewed immutable case/packet-bound
   sidecars, provenance validation and fresh-source checks. The local store is
   integrated with the guarded CLI and read-only viewer. The first real request
-  yielded only factual fallback, not useful interpretation; M5C remains open.
+  yielded only factual fallback; one separately approved longer attempt now
+  supplies a cautious but shallow interpretation, pending human review and
+  actual viewport QA. M5C acceptance remains open.
 - `src/robot_debug/token_factory.py`: reviewed fixed-model HTTPS transport,
   safe secret loading and exclusive conservative pilot reservation. Integrated
-  through `5787f20`; one generation was attempted and rejected. Only the guarded CLI
+  through `8110001`; two generations attempted, second structurally valid.
+  Both fixed reservations remain consumed. Only the guarded CLI
   may orchestrate paid requests after fresh evidence inspection/reservation.
 - `configs/`: validated experiment configuration.
 - `docs/decisions/`: accepted architecture and experiment decisions.

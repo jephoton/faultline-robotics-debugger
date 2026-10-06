@@ -64,3 +64,33 @@ Alternatives: establish a documented hosted non-reasoning mode first (currently
 unverified), or deliberately retain only deterministic reports and reconsider
 the M5C product scope. Do not silently change models or use self-hosted-only
 thinking parameters against the hosted service.
+
+## Second attempt — actual result
+
+Approved repair implemented on main `8110001` after independent spec and
+quality/security review of builderSHA`5a0ced4`; focused56tests and fresh main
+581tests passed (four platform skips). Authenticated exact-model preflight
+passed. Root executed exactly one new `live` invocation, with unchanged
+prompt, packet and model, and no GPU compute.
+
+- Request:`completed`; interpretation:`validated-structure`.
+- Input1096/output2142tokens; latency20.656seconds.
+- EstimatedUS$0.00057984; posted charge unknown. Across both calls estimated
+  tokens costUS$0.00078960, not a reconciled bill.
+- ReportID:`d2b25a47296edc5a5fc9d6aa713d85e5c28fff7c874b520c035a2797157394c1`.
+- Local viewer endpoint returns three immutable reports and no warnings.
+- Both reservations remain consumed; original marker SHA256 is unchanged:
+  `FCCA51708F88775882913C8808E434A7A6B25B04C4935437B943DADCCCBC69CB`.
+- All116source files unchanged before/after. This check normalizes relative
+  paths to forward slashes, sorts FullName, joins `path:length:SHA256` rows by
+  LF, then hashes UTF8 bytes: `8EBFADC0D70FDD3D5B5590A212D161979F5400B182688DE8A36581605640BE5D`.
+  This differs from the first check's path representation, not source changes.
+
+Root reviewed actual prose against packet entries: the success observation
+cites a nominal success and an `other` success, matching its statement.
+The budget-local/non-global-minimum caveat is consistent with packet metadata,
+but its two citations are nominal successes and do not establish that caveat.
+No hypotheses were supplied. The output is cautious but shallow, not a root
+cause diagnosis or proof of semantic grounding. Preserve the original output,
+not a rewritten favourable version. Human usefulness review and actual browser
+viewport QA remain pending. No more calls are approved by these results.

@@ -13,6 +13,18 @@ Add only an allowlisted truncation error code, not raw provider diagnostics.
 
 **Tech stack:** Existing Python 3.11 standard library and unittest.
 
+## Execution checkpoint
+
+- [x] Task1 implementation, red regressions,56focused green tests, exactSHA
+  spec and quality reviews; root integrated as `8110001`.
+- [x] Task2 full581tests, preflight, one paid attempt, unchanged source/old
+  reservation and actual HTTP report checks. Request completed structurally.
+- [x] Actual output depth/citation limitations recorded in pilot/feedback/handoff.
+- [ ] Final publication/CI verification and human report/viewport acceptance.
+
+Both allowances consumed. No automatic follow-up request. Structural success
+does not certify usefulness or factual grounding; M5B is a separate open gate.
+
 ## Accepted boundary and ownership
 
 Jethro approved this repair and one new US$0.02 attempt on October 6. No GPU

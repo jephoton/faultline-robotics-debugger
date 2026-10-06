@@ -2,6 +2,21 @@
 
 ## October 6 continuation and submission review
 
+Newest checkpoint: approved repair integrated as `8110001` after independent
+spec and quality reviews; full581testsOK/fourWindows skips. One new real call
+completed with1096input/2142output tokens in20.656seconds, estimatedUS$0.00057984,
+unknown posted charge. The viewer serves three immutable reports without
+warnings, including the new validated-structure interpretation. All116source
+files and original reservation bytes are unchanged; both allowances consumed.
+No more calls approved. The prose is cautious but shallow: success citations
+match, while its budget-local caveat cites nominal episodes, not supporting
+reduction evidence. Human usefulness/interpretation review and actual viewport
+QA remain open; do not certify factual grounding from schema validation.
+M5B still needs actual simulator/case wiring and fresh policy replay, with
+new design/planning and paid gates. Viewer is running updated main on8765.
+Faultline remains preferred/KIV, not final branding. Earlier checkpoints below
+are historical; use this section for current execution state.
+
 Latest verified checkpoint: reviewed external reset kernel, explanation viewer
 and guarded CLI are integrated through `bd5abf1`. Fresh full suite578OK/four
 platform skips. Root actual HDF5 reader and all81reference normalization passed;

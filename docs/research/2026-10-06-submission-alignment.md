@@ -30,7 +30,7 @@ usable build. Preserve access through December 15. Deadline: October 30,
 | Area | Verified position | Remaining gate |
 | --- | --- | --- |
 | NVIDIA robotics use | GR00T ran closed-loop simulated manipulation on Nebius GPU compute | Name actual model/checkpoint and distinguish missing historical pins from future verified pins |
-| Nebius inference | Reviewed client/CLI/viewer integrated; one real request returned no valid interpretation | Separately approved bounded repair/second attempt; useful grounded report and human review |
+| Nebius inference | Reviewed client/CLI/viewer integrated; second real request produced structured, evidence-linked prose | Human usefulness/citation review and actual browser acceptance; structure alone does not prove grounding |
 | Working product | M5A inspection/export/import and paired evidence viewer completed | External restored-state policy replay and M5C explanation path remain unfinished |
 | Public build | Authenticated GitHub check confirms repository is PRIVATE and Apache-2.0 is detected; setup instructions and automated tests exist | Clean-room judge smoke test, artifact availability, dependency/asset rights and secret/history audit; explicit approval before making repository public |
 | Feedback | Root FEEDBACK.md captures actual cloud/model friction | Add actual Token Factory generation experience, reconcile costs, get user first-hand feedback |

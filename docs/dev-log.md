@@ -382,3 +382,22 @@ The browser automation kernel failed to initialise twice, so new actual
 viewport QA remains pending. This environment failure is not attributed to
 Nebius/NVIDIA or claimed to be a viewer bug. Real inference outcome and its
 unconfirmed truncation hypothesis are in the M5 pilot note and FEEDBACK.md.
+
+## October 6: Bounded Nemotron output repair
+
+The first paid attempt exhausted the configured600-token output allowance
+without a valid interpretation; no finish reason was retained, so truncation
+was a hypothesis. Jethro separately approved one4096-token/90-second attempt
+with a newUS$0.02 allowance. The six-file patch `8110001` extends strict usage
+validation consistently across client/store and fixes the reservation path
+to a new approved directory, preserving the old marker. A safe `output_limit`
+code distinguishes trusted length completion without persisting raw diagnostics.
+Partial/new existing markers still block another POST. Transport exceptions
+cannot forge that classification. Legacy report identities remain unchanged.
+
+Independent spec and quality reviews passed exact builderSHA`5a0ced4`, with
+56focused tests and six additional quality probes. Root full581tests passed.
+The new real request succeeded structurally and is readable from the updated
+viewer, but output depth and caveat-citation quality are limited. This is a
+configuration repair plus a model-output observation, not an API outage claim.
+Both reservations stay consumed; no further request is approved.

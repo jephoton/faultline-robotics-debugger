@@ -8,9 +8,11 @@ M5 continuation: A is complete. B's reviewed local restoration kernel is now
 integrated and reads the real sample, but actual simulator/case wiring and
 fresh policy replay remain. C's client/store/CLI/viewer are integrated; the
 first real Nemotron attempt returned no valid interpretation under600output
-tokens. See the [pilot result and proposed retry decision](docs/experiments/m5-nemotron-pilot.md).
-Do not mark M5 complete, retry the consumed reservation, or start GPU compute.
-Fresh main tests:578OK/four platform skips. New-panel real browser QA is pending
+tokens. The separately approved4096-token attempt now supplies a real report
+in the viewer, but it is shallow and needs human review (one caveat's episode
+citations do not substantiate it). See the [pilot results](docs/experiments/m5-nemotron-pilot.md).
+Do not mark M5 complete, retry either consumed reservation, or start GPU compute.
+Fresh main tests:581OK/four platform skips. New-panel real browser QA is pending
 because browser automation cannot initialise in this session.
 
 See the [current rules and judging review](docs/research/2026-10-06-submission-alignment.md).
