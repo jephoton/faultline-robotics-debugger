@@ -439,7 +439,9 @@ class TokenFactoryTests(unittest.TestCase):
                     load_api_key(link)
 
     def test_load_api_key_sanitizes_malformed_unicode_and_dotdot_paths(self):
-        with patch.dict(os.environ, {"NEBIUS_API_KEY": "bad\ud800key"}, clear=True):
+        # POSIX rejects lone surrogates before our loader can inspect them.
+        # Inject the mapping itself to exercise loader validation on every OS.
+        with patch("robot_debug.token_factory.os.environ", {"NEBIUS_API_KEY": "bad\ud800key"}):
             with self.assertRaisesRegex(TokenFactoryError, "^invalid_api_key$"):
                 load_api_key()
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
