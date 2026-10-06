@@ -69,7 +69,11 @@ and repair details are in dev-log; no real inference was executed.
 
 ## Task 2 — Client and conservative reservation (independent builder)
 
-- [ ] Create `token_factory.py` and `test_token_factory.py`. APIs:
+Implementation and repairs integrated through `5787f20` after exact-commit
+spec and independent quality/security review. Root fresh focused suite:23OK.
+Live request orchestration remains Task3; no inference has occurred.
+
+- [x] Create `token_factory.py` and `test_token_factory.py`. APIs:
   `TokenFactoryError(ValueError)` with fixed safe codes;
   `load_api_key(env_file: Path | None=None) -> str`;
   `preflight(api_key: str, transport=None) -> dict` (fixed model/endpoint only);
@@ -87,7 +91,7 @@ with self.assertRaises(TokenFactoryError):
     reserve_pilot(root, case_id, packet_id)
 ```
 
-- [ ] Implement secret reader, GET catalog exact-ID check, fixed prompt/request,
+- [x] Implement secret reader, GET catalog exact-ID check, fixed prompt/request,
   6,000-byte payload ceiling/600 output tokens, JSON-object mode, response/usage
   parsing and fixed errors. Paid requests require caller to reserve first;
   CLI ordering is separately tested. No source metadata beyond validated packet.
@@ -96,7 +100,7 @@ with self.assertRaises(TokenFactoryError):
   model/different returned model, truncated response, invalid usage and unknown
   billing, secret-containing response rejection, no retries, byte-bound refusal,
   reservation race/corruption/symlink safety and persistent interruption guard.
-- [ ] Run focused test then commit `feat(explanation): add bounded Token Factory client`.
+- [x] Run focused test then commit `feat(explanation): add bounded Token Factory client`.
 
 ## Task 3 — Review and CLI integration
 
