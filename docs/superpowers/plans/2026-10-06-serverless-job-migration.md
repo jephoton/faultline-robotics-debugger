@@ -96,7 +96,7 @@ driver.run_session(upstream_root=simulator_root, project_root=project_root,
 
 ### Task 3: Image and prepare-only Job configuration — green/amber
 
-Files: create `deploy/serverless/Dockerfile`, `deploy/serverless/.dockerignore`,
+Files: create `deploy/serverless/Dockerfile`, `deploy/serverless/Dockerfile.dockerignore`,
 `configs/serverless-job.example.json`, `scripts/prepare_serverless_job.py`,
 `tests/test_serverless_job_config.py`, `docs/setup/serverless-jobs.md`.
 
@@ -107,7 +107,9 @@ Files: create `deploy/serverless/Dockerfile`, `deploy/serverless/.dockerignore`,
   installed packages and test torch/torchcodec compatibility. No new policy.
 - [ ] Copy only `src`, `scripts`, `configs`, required project metadata and license.
   Build context explicitly excludes `.git`, `.env*`, artifacts, keys, model-cache
-  and datasets. Do not install project dependencies into the untouched simulator
+  and datasets. Use the Dockerfile-specific ignore filename so repository-root
+  context builds actually apply it; a nested ordinary `.dockerignore` is ignored.
+  Do not install project dependencies into the untouched simulator
   just to import our adapter; provide source paths explicitly.
 - [ ] Add failing pure preparation tests. `prepare(config)` returns an argv list
   beginning `nebius ai job create`; never invokes subprocess/network. Require
