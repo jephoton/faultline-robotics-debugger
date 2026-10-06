@@ -20,3 +20,7 @@ Implementation contract and plan:
 The accepted ten-call / US$0.02 upper ceiling is conservatively reserved in full
 for the first attempt; no automatic retry/refund or alternate-directory reset.
 No cloud VM start is included.
+
+October6 amendment: [ADR0017](0017-m5-bounded-nemotron-repair.md) specifically
+authorizes one separate longer attempt after the first failed interpretation.
+It does not permit arbitrary allowance resets; preserve the original marker.
