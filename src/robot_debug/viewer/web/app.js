@@ -4,6 +4,7 @@ const state = {
   cases: [], caseId: "all", caseSelected: false, caseError: null,
   recipe: null, recipeCaseId: null, caseSignature: null,
   explanations: null, explanationCaseId: null, explanationReportId: null,
+  explanationNewestReportId: null,
   explanationRequestGeneration: 0,
 };
 
@@ -99,6 +100,7 @@ function beginExplanationRequest(caseId, clearPrevious) {
   if (clearPrevious) {
     state.explanations = null;
     state.explanationReportId = null;
+    state.explanationNewestReportId = null;
   }
   return state.explanationRequestGeneration;
 }
@@ -109,7 +111,13 @@ function commitExplanationResponse(caseId, generation, payload) {
     ? payload : { reports: [], warnings: ["Explanation records are unavailable."] };
   state.explanations = envelope;
   const newest = newestExplanationReport(envelope);
-  state.explanationReportId = newest ? newest.report_id : null;
+  const newestId = newest ? newest.report_id : null;
+  const selectedStillExists = envelope.reports.some(
+    (record) => record.report_id === state.explanationReportId);
+  if (newestId !== state.explanationNewestReportId || !selectedStillExists) {
+    state.explanationReportId = newestId;
+  }
+  state.explanationNewestReportId = newestId;
   return true;
 }
 async function refreshExplanations(caseId) {
@@ -205,6 +213,15 @@ function renderExplanationProvenance(container, provenance) {
   appendText(container, `Recorded at: ${provenance.created_at}`);
 }
 function renderExplanations() {
+  const disclosure = byId("case-explanations");
+  const renderSignature = state.caseId === "all"
+    ? "all"
+    : state.explanationCaseId !== state.caseId || state.explanations === null
+    ? `${state.caseId}:loading`
+    : JSON.stringify([state.caseId, state.explanationReportId,
+      state.explanations.reports.map((record) => record.report_id), state.explanations.warnings]);
+  if (disclosure.dataset.renderSignature === renderSignature) return;
+  disclosure.dataset.renderSignature = renderSignature;
   const status = byId("explanation-status");
   const historyControl = byId("explanation-history-control");
   const history = byId("explanation-history");

@@ -165,8 +165,16 @@ class Element {
   }
   addEventListener(name, listener) { this.listeners[name] = listener; }
   click() { this.listeners.click(); }
+  focus() { context.document.activeElement = this; }
   pause() {} load() {} play() { return Promise.resolve(); }
-  replaceChildren(...children) { this.children = children; if (!children.length) this.textContent = ''; }
+  contains(target) { return this === target || this.children.some((child) => child.contains && child.contains(target)); }
+  replaceChildren(...children) {
+    if (this.children.some((child) => child.contains && child.contains(context.document.activeElement))) {
+      context.document.activeElement = null;
+    }
+    this.children = children; if (!children.length) this.textContent = '';
+    if (this.tagName === 'SELECT') this.options = [...children];
+  }
   append(...children) { this.children.push(...children); if (this.tagName === 'SELECT') this.options.push(...children); }
   setAttribute(name, value) { this[name] = value; }
   removeAttribute(name) { delete this[name]; }
@@ -180,7 +188,7 @@ class Element {
 const elements = new Map();
 const element = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
 const context = {
-  document: { getElementById(id) { return element(id); }, createElement(tagName) { return new Element(tagName.toUpperCase()); } },
+  document: { activeElement: null, getElementById(id) { return element(id); }, createElement(tagName) { return new Element(tagName.toUpperCase()); } },
   window: { setInterval() {}, devicePixelRatio: 1 }, console, fetch() { throw new Error('unexpected fetch'); },
 };
 vm.runInNewContext(source + `\nglobalThis.exposed = { state, newestExplanationReport,
@@ -236,10 +244,14 @@ assert.strictEqual(interpretation.querySelectorAll('span')[0].textContent, MISSI
 buttons[0].click();
 assert.strictEqual(state.primaryId, E);
 assert.strictEqual(context.renderCalls, 1);
+buttons[0].focus();
+renderExplanations();
+assert.strictEqual(context.document.activeElement, buttons[0]);
+assert.strictEqual(interpretation.querySelectorAll('button')[0], buttons[0]);
 
 const absent = JSON.parse(JSON.stringify(baseReport));
 absent.report_id = 'c'.repeat(64); absent.report.interpretation_status = 'absent'; absent.report.interpretation = null;
-absent.provenance = { source: 'offline', provider: null, model: null, created_at: '2026-10-05T14:01:00Z',
+absent.provenance = { source: 'offline', provider: null, model: null, created_at: '2026-10-05T13:30:00Z',
   request_status: 'offline', latency_seconds: null, prompt_tokens: null, completion_tokens: null, estimated_cost_usd: null };
 state.explanations = {reports: [absent], warnings: []}; state.explanationReportId = absent.report_id;
 renderExplanations();
@@ -252,6 +264,20 @@ rejected.report_id = 'd'.repeat(64); rejected.report.interpretation_status = 're
 state.explanations = {reports: [rejected], warnings: []}; state.explanationReportId = rejected.report_id;
 renderExplanations();
 assert.ok(element('explanation-interpretation').children[0].textContent.startsWith('Rejected'));
+
+state.caseId = A; state.explanationCaseId = A;
+const initialHistory = beginExplanationRequest(A, false);
+assert.strictEqual(commitExplanationResponse(A, initialHistory, {reports: [absent, baseReport], warnings: []}), true);
+assert.strictEqual(state.explanationReportId, baseReport.report_id);
+state.explanationReportId = absent.report_id;
+const identicalRefresh = beginExplanationRequest(A, false);
+assert.strictEqual(commitExplanationResponse(A, identicalRefresh, {reports: [absent, baseReport], warnings: []}), true);
+assert.strictEqual(state.explanationReportId, absent.report_id);
+const latest = JSON.parse(JSON.stringify(baseReport));
+latest.report_id = 'f'.repeat(64); latest.provenance.created_at = '2026-10-05T15:00:00Z';
+const changedRefresh = beginExplanationRequest(A, false);
+assert.strictEqual(commitExplanationResponse(A, changedRefresh, {reports: [absent, baseReport, latest], warnings: []}), true);
+assert.strictEqual(state.explanationReportId, latest.report_id);
 
 state.explanations = {reports: [], warnings: ['case evidence is unavailable or changed']};
 renderExplanations();
