@@ -32,7 +32,7 @@ usable build. Preserve access through December 15. Deadline: October 30,
 | NVIDIA robotics use | GR00T ran closed-loop simulated manipulation on Nebius GPU compute | Name actual model/checkpoint and distinguish missing historical pins from future verified pins |
 | Nebius inference | Authenticated exact Nemotron catalog entry; no generation yet | Reviewed client/CLI, one approved real request, grounded report shown in viewer |
 | Working product | M5A inspection/export/import and paired evidence viewer completed | External restored-state policy replay and M5C explanation path remain unfinished |
-| Public build | Apache-2.0 LICENSE exists; setup instructions and automated tests exist | Clean-room judge smoke test, artifact availability, dependency/asset rights and secret/history audit |
+| Public build | Authenticated GitHub check confirms repository is PRIVATE and Apache-2.0 is detected; setup instructions and automated tests exist | Clean-room judge smoke test, artifact availability, dependency/asset rights and secret/history audit; explicit approval before making repository public |
 | Feedback | Root FEEDBACK.md captures actual cloud/model friction | Add actual Token Factory generation experience, reconcile costs, get user first-hand feedback |
 | Video/submission | Roadmap already includes pitch and public-repo audit | Final name, narrated demo, public YouTube upload and Devpost fields |
 
@@ -74,3 +74,8 @@ These names have not been checked for trademark, domain, package or product
 availability. Jethro chooses before branding, repository renaming or publication.
 Naming was previously queued and overtaken by M5 work; it is now explicitly
 back at the next human checkpoint, without blocking approved M5 implementation.
+
+The acquired external HDF5's license/attribution discrepancy remains unresolved.
+Do not redistribute it in the public judge package until rights are established;
+prefer documented authorized acquisition or separately cleared demonstration
+artifacts. A repository code license does not license third-party datasets/models.

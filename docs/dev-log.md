@@ -326,3 +326,25 @@ spec recheck and a different agent's quality/security review, including20
 focused tests and seven additional malformed-JSON probes. Integrated as
 `466b0d7`/`731b82b`; live use still waits for client/CLI integration reviews.
 These are local implementation bugs, not provider faults.
+
+## October 6 M5 adapter and client review
+
+Actual HDF5 reading at external-kernel `35c26c4` matched the accepted source
+and 110-element state hashes. The next actual-sample probe failed: all 81 XML
+asset references have a directory prefix before one recognized namespace
+marker, but `_asset_reference` incorrectly required the marker at character
+zero. The 26 passing fixtures used marker-first paths and missed the real
+input shape. Independent spec review reproduced the failure. Repair must
+extract only the normalized suffix after the unique marker and resolve it
+under installed roots; it must never open the original source prefix.
+This is an adapter bug, not a dataset, simulator or cloud failure. Real
+simulator compatibility is still unverified.
+
+Token Factory client review also caught dotenv normalization hiding forbidden
+Unicode/control separators and accepting unquoted interior quotation marks.
+Repair `31b0cdf` passed those regression checks (22 focused tests). A further
+independent spec recheck found transport exceptions could pass unrelated
+client/reservation codes into live report provenance, outside its exact
+allowlist. That mapping repair and independent re-review remain pending.
+These findings precede any inference request; they do not describe provider
+behaviour. Neither unfinished component is integrated into main yet.
