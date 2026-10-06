@@ -19,6 +19,28 @@ although the actual paths have a prefix. Independent review/fix is pending;
 do not integrate this kernel as replay-ready. No paid inference/GPU start
 occurred in this continuation.
 
+Client exact `2e5302a` passed independent spec recheck and a separate quality/
+security review (no critical/important findings). Root integrated it as
+`4cf2a18`, `0b653b4`, `5787f20` and reran 23 focused tests successfully.
+The CLI builder owns only `scripts/explain_case.py` and its tests on attached
+`codex/m5-explanation-cli`, based on `5787f20`. No actual inference reservation
+or request exists yet. The previous detached reduction-driver checkpoint
+`7522dc2` is preserved on `codex/archive-m4-reduction-driver-7522dc2`.
+
+Viewer implementation `8942bdf` initially failed review because polling reset
+manual history selection and removed focused citation buttons. Repair
+`1b33c71` is awaiting independent spec recheck and quality review; it is not
+on main. Root restarted the existing main viewer on loopback8765; health is
+read-only OK. External-kernel repairs `c9891ff`/`9318015` passed spec recheck
+and actual81-reference normalization, but independent quality review found
+four important issues (repeated hashing, masked negative tests, incomplete
+control rejection, unsafe strict-resolution errors); repair remains isolated.
+
+Authenticated GitHub check confirmed PRIVATE visibility and detected
+Apache-2.0. Do not make it public without the rights/secret audit and explicit
+approval. Documentation through `431a3f0` was pushed with successful exact-SHA
+CI; later client integration is pending publication and full-suite acceptance.
+
 > Generated current-state context. Update after material implementation,
 > architecture, workflow, or risk changes.
 

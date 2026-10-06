@@ -348,3 +348,18 @@ client/reservation codes into live report provenance, outside its exact
 allowlist. That mapping repair and independent re-review remain pending.
 These findings precede any inference request; they do not describe provider
 behaviour. Neither unfinished component is integrated into main yet.
+
+Follow-up: client POST-code repair `2e5302a` passed spec/quality review and
+was integrated through `5787f20`; root reran23focused tests successfully.
+Kernel prefix/malformed-namespace repairs passed spec review and actual
+normalization of all81references/80assets, but remain unintegrated pending
+quality fixes: hash each unique target once, test XML/hash protections from
+a valid synthetic state baseline, reject DEL/C1 path controls, and sanitize
+strict-resolution errors during file disappearance. These are distinct from
+actual simulator compatibility, which has not been tested.
+
+Viewer review at `8942bdf` caught two-second polling overwriting historical
+report selection and replacing focused citation buttons. Repair `1b33c71`
+preserves unchanged selection/DOM; independent re-review is pending. No model
+request, robot evidence rewrite or provider behaviour is involved in these
+UI defects.
