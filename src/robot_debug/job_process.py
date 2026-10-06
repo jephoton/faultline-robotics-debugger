@@ -28,8 +28,12 @@ def direct_command(executable: os.PathLike[str] | str, command: Sequence[str]) -
         raise TypeError("command must be a list or tuple of strings")
     if any(not isinstance(argument, str) for argument in command):
         raise TypeError("command arguments must be strings")
-    if list(command[:3]) != ["vla-eval", "run", "--config"] or len(command) != 4:
-        raise ValueError("only 'vla-eval run --config PATH' is supported")
+    if (
+        len(command) != 4
+        or command[0] not in ("vla-eval", executable_text)
+        or list(command[1:3]) != ["run", "--config"]
+    ):
+        raise ValueError("only the configured evaluator 'run --config PATH' is supported")
     config_path = command[3]
     if not config_path or "\x00" in config_path:
         raise ValueError("config path must be a non-empty string without NUL")
@@ -57,6 +61,10 @@ class DirectEvaluator:
         self._kill_grace_seconds = _nonnegative_finite(
             kill_grace_seconds, "kill_grace_seconds"
         )
+        if self._term_grace_seconds > 5.0:
+            raise ValueError("term_grace_seconds cannot exceed 5 seconds")
+        if self._kill_grace_seconds > 2.0:
+            raise ValueError("kill_grace_seconds cannot exceed 2 seconds")
         if not isinstance(env, Mapping):
             raise TypeError("env must be a mapping of strings")
         if any(not isinstance(key, str) or not isinstance(value, str) for key, value in env.items()):

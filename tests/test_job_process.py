@@ -8,10 +8,12 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from unittest import mock
 
 from robot_debug.job_process import DirectEvaluator, InfrastructureError, direct_command
+from scripts import run_failure_search
 
 
 class DirectCommandTests(unittest.TestCase):
@@ -29,6 +31,21 @@ class DirectCommandTests(unittest.TestCase):
                 "--no-docker",
             ],
         )
+
+    def test_accepts_only_configured_absolute_evaluator_command(self) -> None:
+        executable = "/opt/conda/envs/libero/bin/vla-eval"
+        self.assertEqual(
+            direct_command(
+                executable,
+                [executable, "run", "--config", "episode.yaml"],
+            ),
+            [executable, "run", "--config", "episode.yaml", "--no-docker"],
+        )
+        with self.assertRaises(ValueError):
+            direct_command(
+                executable,
+                ["/other/bin/vla-eval", "run", "--config", "episode.yaml"],
+            )
 
     def test_rejects_unsupported_command_shapes(self) -> None:
         unsupported = (
@@ -79,6 +96,19 @@ class DirectEvaluatorValidationTests(unittest.TestCase):
                 log_root="logs",
             )
 
+    def test_cleanup_grace_overrides_can_only_shorten_fixed_budgets(self) -> None:
+        for term_grace, kill_grace in ((5.01, 2), (5, 2.01)):
+            with self.subTest(term_grace=term_grace, kill_grace=kill_grace):
+                with self.assertRaises(ValueError):
+                    DirectEvaluator(
+                        executable="/usr/bin/vla-eval",
+                        timeout_seconds=1,
+                        env={},
+                        log_root="logs",
+                        term_grace_seconds=term_grace,
+                        kill_grace_seconds=kill_grace,
+                    )
+
     @unittest.skipIf(os.name == "posix", "Windows-only fail-closed check")
     def test_fails_closed_on_non_posix(self) -> None:
         evaluator = DirectEvaluator(
@@ -119,12 +149,36 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
         self._owned_groups: set[int] = set()
 
     def tearDown(self) -> None:
+        # A lifecycle assertion may fail before the test records the group.
+        # Recover IDs written by real fixtures so teardown still owns cleanup.
+        for group_file in self.root.rglob("*group*.txt"):
+            try:
+                self._owned_groups.add(int(group_file.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                pass
+        leaked_groups = []
         for process_group in self._owned_groups:
             try:
                 os.killpg(process_group, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                try:
+                    while os.waitpid(-process_group, os.WNOHANG)[0] != 0:
+                        pass
+                except ChildProcessError:
+                    pass
+                try:
+                    os.killpg(process_group, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.01)
+            else:
+                leaked_groups.append(process_group)
         self._temporary.cleanup()
+        if leaked_groups:
+            self.fail("test-owned process groups survived teardown: {}".format(leaked_groups))
 
     def _config(self, source: str) -> Path:
         path = self.root / "scenario.py"
@@ -180,6 +234,31 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
         self.assertEqual(len(stdout_logs), 1)
         self.assertEqual(len(stderr_logs), 1)
         self.assertIn("fixture output", stdout_logs[0].read_text(encoding="utf-8"))
+
+    def test_accepts_command_from_real_installed_evaluator_resolver(self) -> None:
+        bin_dir = self.root / "venv" / "bin"
+        bin_dir.mkdir(parents=True)
+        fake_python = bin_dir / "python"
+        fake_python.touch()
+        installed_evaluator = bin_dir / "vla-eval"
+        installed_evaluator.write_bytes(self.executable.read_bytes())
+        installed_evaluator.chmod(0o755)
+        resolved = run_failure_search._resolve_evaluator_command(fake_python)
+        config = self._config("pass")
+
+        result = DirectEvaluator(
+            executable=str(installed_evaluator),
+            timeout_seconds=2,
+            env=dict(os.environ),
+            log_root=self.logs,
+        )(
+            [resolved, "run", "--config", str(config)],
+            cwd=self.root,
+            check=False,
+        )
+
+        self.assertEqual(resolved, str(installed_evaluator))
+        self.assertEqual(result.returncode, 0)
 
     def test_nonzero_return_retains_code_after_group_is_absent(self) -> None:
         group_file = self.root / "group.txt"
