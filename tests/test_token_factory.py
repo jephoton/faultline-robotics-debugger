@@ -94,6 +94,18 @@ class TokenFactoryTests(unittest.TestCase):
         self.assertEqual(result["provenance"]["error_code"], code)
         self.assertNotIn(KEY, json.dumps(result))
 
+    def assert_store_compatible_provenance(self, provenance):
+        status = provenance["request_status"]
+        code = provenance["error_code"]
+        self.assertTrue(
+            (status == "transport_error" and code == "timeout")
+            or (status == "http_error" and code in {
+                "http_error", "authentication_failed", "catalog_missing",
+            })
+            or (status == "invalid_response" and code == "invalid_response"),
+            (status, code),
+        )
+
     def test_preflight_requires_exact_model_and_never_posts(self):
         calls = []
 
@@ -272,6 +284,29 @@ class TokenFactoryTests(unittest.TestCase):
             PACKET, KEY,
             lambda *args: (_ for _ in ()).throw(TokenFactoryError("invalid_response")))
         self.assert_safe_failure(result, "invalid_response", "invalid_response")
+
+    def test_post_maps_every_fixed_client_error_to_store_compatible_provenance(self):
+        expected = {
+            "missing_api_key": ("http_error", "http_error"),
+            "invalid_api_key": ("http_error", "http_error"),
+            "authentication_failed": ("http_error", "authentication_failed"),
+            "catalog_missing": ("http_error", "catalog_missing"),
+            "timeout": ("transport_error", "timeout"),
+            "http_error": ("http_error", "http_error"),
+            "invalid_response": ("invalid_response", "invalid_response"),
+            "request_too_large": ("http_error", "http_error"),
+            "invalid_reservation": ("http_error", "http_error"),
+            "reservation_exists": ("http_error", "http_error"),
+            "unsafe_pilot_path": ("http_error", "http_error"),
+        }
+        for raised_code, (status, stored_code) in expected.items():
+            with self.subTest(raised_code=raised_code):
+                result = request_interpretation(
+                    PACKET, KEY,
+                    lambda *args, code=raised_code: (_ for _ in ()).throw(
+                        TokenFactoryError(code)))
+                self.assert_safe_failure(result, status, stored_code)
+                self.assert_store_compatible_provenance(result["provenance"])
 
     def test_valid_structured_response_containing_secret_is_rejected(self):
         secret_content = json.dumps({

@@ -238,6 +238,15 @@ def _http_code(error: BaseException) -> str:
     return "http_error"
 
 
+def _post_error_code(error: BaseException) -> str:
+    code = _http_code(error)
+    if code not in {
+            "authentication_failed", "catalog_missing", "timeout",
+            "http_error", "invalid_response"}:
+        return "http_error"
+    return code
+
+
 def preflight(api_key: str, transport: Transport | None = None) -> dict:
     """Confirm that the authenticated fixed catalog contains the exact model."""
     if not _valid_key(api_key):
@@ -452,7 +461,7 @@ def request_interpretation(packet: dict, api_key: str,
         response = call("POST", "chat/completions", payload, api_key)
     except (Exception, KeyboardInterrupt) as exc:
         latency = time.monotonic() - started
-        code = _http_code(exc)
+        code = _post_error_code(exc)
         if code == "timeout":
             status = "transport_error"
         elif code == "invalid_response":
