@@ -546,7 +546,8 @@ def _validated_resolved(candidate: dict, resolved: dict) -> dict:
         relative_path = item.get("relative_path")
         digest = item.get("sha256")
         if (
-            namespace not in {"libero", "robosuite"}
+            type(namespace) is not str
+            or namespace not in {"libero", "robosuite"}
             or type(relative_path) is not str
             or type(digest) is not str
             or len(digest) != 64

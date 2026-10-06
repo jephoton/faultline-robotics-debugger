@@ -593,5 +593,19 @@ class RestorationTests(unittest.TestCase):
                 self.restore(env, value, resolved, state)
         self.assertEqual(env.calls, [])
 
+    def test_malformed_asset_namespace_is_rejected_before_environment_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state, value, resolved, _asset = self.fixture(directory)
+            for namespace in ([], {}):
+                malformed = {
+                    **resolved,
+                    "assets": [{**resolved["assets"][0], "namespace": namespace}],
+                }
+                env = FakeEnvironment(state)
+                with self.subTest(namespace=namespace):
+                    with self.assertRaisesRegex(ExternalResetError, "invalid resolved external assets"):
+                        self.restore(env, value, malformed, state)
+                    self.assertEqual(env.calls, [])
+
 if __name__ == "__main__":
     unittest.main()
