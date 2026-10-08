@@ -241,12 +241,50 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | --- | --- | --- |
 | M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
 | M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
-| M3 base: useful parallelism — complete | Retain project-owned equal-work replay scheduling and measured 1/2/4-worker throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput; no adaptive diagnosis/cost claim |
-| M3 expanded: portfolio HPC — optional stretch, frozen | Finish/review the persistent launcher and validate multiple task-level diagnosis jobs only if explicitly resumed | Fresh execution/spending approval and budget-matched live sequential/adaptive evidence |
+| M3 base: useful parallelism — complete | Retain the equal-work 1/2/4-worker replay scheduler and measured throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput at four workers; no end-to-end diagnosis/cost claim |
+| M3 expanded: portfolio HPC — optional stretch, frozen | If Jethro resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
+| M3 alternative: batched inference — proposed optional stretch | Reuse the upstream batch dispatcher and assess a GR00T/LeRobot batch adapter instead of building another inference engine | Matched unbatched/batched workload; session isolation, outcome agreement, throughput, latency, memory and cost measurements |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
-| M5: diagnostic report | Show case, measured violation, original/reduced videos, replay recipe | Another session reproduces the report's case from saved artifacts |
-| M6: stronger experiments | Add a second perturbation family and two related tasks | Held-out evaluation, budget-matched baselines, uncertainty reported |
+| M5: diagnostic report and viewer | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
+| M5D: Tavily research context — proposed optional extension | Retrieve relevant public research/docs for a verified case and display source-linked context alongside the Nemotron interpretation | Meaningful runtime Tavily call; useful references, evidence/context separation, privacy and request-budget checks |
+| M6: stronger experiments | Assess LIBERO-Plus reuse for additional perturbation families; add related tasks and explore other LIBERO suites after within-suite validation | Pinned compatibility, parameterised replay/reduction for the selected family, held-out/cross-suite evaluation, budget-matched baselines and uncertainty |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
+
+### Roadmap additions — October 8: reuse before rebuilding
+
+Jethro requested these roadmap entries. Their placement is accepted; exact
+implementation designs, new experiments and spending remain separate gates.
+They do not reopen expanded M3 or displace the approved Serverless migration
+and remaining core M5 acceptance work.
+
+- **M3 batched-inference alternative:** investigate the existing harness batch
+  dispatcher first. Our pinned LeRobot/GR00T adapter implements `predict()` but
+  not `predict_batch()`; raising `max_batch_size` alone is not sufficient.
+  If resumed, design a narrow adapter rather than a replacement batching
+  service, preserve per-episode action buffers/reset semantics, and compare
+  matched cases with fixed simulator stepping. Keep the existing 3.715x
+  worker-throughput result separate from any new batching result. See the
+  [pinned batch contract](https://github.com/allenai/vla-evaluation-harness/blob/35f1200eb15608aa898f727a3722f7eef889c6cd/src/vla_eval/model_servers/predict.py)
+  and [LeRobot adapter](https://github.com/allenai/vla-evaluation-harness/blob/35f1200eb15608aa898f727a3722f7eef889c6cd/src/vla_eval/model_servers/lerobot.py).
+- **M6 LIBERO-Plus reuse:** the current stack is original LIBERO Object, not
+  LIBERO-Plus. Inspect and reuse the [existing perturbation implementations](https://github.com/sylvestf/LIBERO-plus)
+  before writing camera, lighting, background, layout or other families from
+  scratch. Select one family with Jethro; pin assets/dependencies and verify
+  nominal compatibility. Distinguish evaluating predefined variants from
+  exposing replayable parameters that our reducer can shrink. Broader task
+  and suite coverage remains M6, not an automatic model/simulator change.
+- **M5D Tavily context:** after core M5 acceptance, consider an optional
+  case-specific public-research lookup using [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search),
+  followed by a source-linked Nemotron summary. Keep measured robot evidence
+  separate from literature and hypotheses; retrieved sources are not a
+  failure oracle or causal proof. Use allowlisted public case descriptors,
+  not private videos, credentials or raw logs; preserve the viewer's local,
+  read-only/no-provider-call-on-refresh boundary. Decide the request trigger,
+  caching/provenance and provider budgets before implementation. The
+  [Tavily bonus rules](https://nebiusglobalaihackathon.devpost.com/rules)
+  require functional runtime API use as part of the solution; development-only
+  searches do not qualify. Pursue this only if it adds real debugging value,
+  not as a mandatory core milestone or a dummy prize-eligibility call.
 
 ### Current roadmap position — September 16
 

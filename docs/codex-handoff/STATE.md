@@ -1,5 +1,18 @@
 # Current project state
 
+## October 8 roadmap additions
+
+Jethro requested three future roadmap entries: optional M3 batched inference
+using the upstream dispatcher plus a narrow GR00T adapter; M6 LIBERO-Plus reuse
+for additional perturbation families; and optional M5D Tavily public-research
+context alongside source-linked Nemotron interpretations. See the matching
+milestone tables and "Roadmap additions" sections in repository-root
+`PROJECT_PLAN.md` and the detailed startup plan. Placement is accepted, not
+implementation, provider calls or spending. Expanded M3 remains frozen; the
+approved Serverless migration and core M5 acceptance remain the execution
+priority. The current runtime still uses original LIBERO and unbatched GR00T;
+none of these additions is implemented or validated.
+
 ## October 6 continuation and submission review
 
 **Newest execution priority:** approved single-GPU Serverless Job migration for
