@@ -10,6 +10,15 @@ decision and compatibility boundary. Local folder/GitHub repository names,
 `robot_debug` imports, artifact identities and cloud resources stay unchanged.
 Older provisional-name/brainstorming entries below are superseded by this decision.
 
+Branding is integrated as `f92ba4b` after independent spec/quality reviews:
+viewer title/heading/banner and distribution metadata use Faultline; the
+new `faultline-viewer` command retains `robot-debug-viewer` as an alias.
+Full main Windows Python 3.11 suite passed 585 tests/four platform skips;
+focused branding/viewer tests passed 21. Live loopback8765 HTTP checks serve
+Faultline and read-only health. The new CLI requires an updated package install;
+module commands still work. No folder/repository rename, publication or new
+provider call occurred; the changes are locally committed, not pushed.
+
 ## October 8 roadmap additions
 
 Jethro requested three future roadmap entries: optional M3 batched inference

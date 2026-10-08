@@ -29,38 +29,50 @@ Dependency map: root docs || isolated builder -> spec review -> quality review
 
 ## Task 1 — viewer and package branding (green)
 
-- [ ] Run existing viewer tests before editing.
-- [ ] Add a failing HTTP test requiring `<title>Faultline</title>` and
+- [x] Run existing viewer tests before editing.
+- [x] Add a failing HTTP test requiring `<title>Faultline</title>` and
   `<h1>Faultline</h1>` in the homepage; assert old `Robot Debug Console` is absent.
-- [ ] Add metadata tests requiring `name = "faultline"`,
+- [x] Add metadata tests requiring `name = "faultline"`,
   `faultline-viewer = "robot_debug.viewer.server:main"`, and the preserved
   `robot-debug-viewer` alias. Read pyproject.toml directly; no package publishing.
-- [ ] Run the new tests and observe branding failures before implementation.
-- [ ] Replace title/h1 and startup banner (`Faultline Viewer: http://...`),
+- [x] Run the new tests and observe branding failures before implementation.
+- [x] Replace title/h1 and startup banner (`Faultline Viewer: http://...`),
   update viewer module descriptions, distribution name and new console alias.
   Preserve all APIs, DOM IDs, layouts, import names and artifact contracts.
-- [ ] Run `C:/Windows/py.exe -3.11 -m unittest tests.test_faultline_branding
+- [x] Run `C:/Windows/py.exe -3.11 -m unittest tests.test_faultline_branding
   tests.test_viewer_server -q` with PYTHONPATH=src, then `git diff --check`.
-- [ ] Commit only owned files as `chore(branding): name viewer and package Faultline`.
+- [x] Commit only owned files as `feat(viewer): adopt Faultline branding`.
 
 ## Task 2 — docs and scope (green; naming already decided)
 
-- [ ] Update current product titles/branding and provisional-name statements.
-- [ ] Mark all additional HPC work as optional stretch; preserve measured M3
+- [x] Update current product titles/branding and provisional-name statements.
+- [x] Mark all additional HPC work as optional stretch; preserve measured M3
   evidence and explicitly record the preference for a separate HPC project.
-- [ ] Synchronize root/detailed milestone sections and persistent handoff.
-- [ ] Scan tracked references; keep actual folder/repository names, historical
+- [x] Synchronize root/detailed milestone sections and persistent handoff.
+- [x] Scan tracked references; keep actual folder/repository names, historical
   VM names, import paths and compatibility command examples intact. Mark old
   pending-name statements as superseded by ADR 0019.
-- [ ] Commit explicit documentation paths with a Conventional Commit.
+- [x] Commit explicit documentation paths with a Conventional Commit.
 
 ## Task 3 — review and integration (root)
 
-- [ ] Independent spec review: exact new branding, compatibility alias,
+- [x] Independent spec review: exact new branding, compatibility alias,
   unchanged behavior and no out-of-scope rename/provider operation.
-- [ ] Independent quality review after spec approval: regression tests and
+- [x] Independent quality review after spec approval: regression tests and
   packaging compatibility; root alone integrates reviewed code.
-- [ ] Run focused tests and full suite as proportionate regression checks;
+- [x] Run focused tests and full suite as proportionate regression checks;
   verify homepage branding and `/api/health` against the local viewer.
-- [ ] Report committed versus pushed accurately. Advise on GitHub/local-folder
+- [x] Report committed versus pushed accurately. Advise on GitHub/local-folder
   renames without performing either. No new spending or publication approved.
+
+## Verified outcome
+
+Builder `1ef2b45` passed independent spec and quality reviews and was integrated
+as `f92ba4b`. Full Windows Python 3.11 discovery on main passed 585 tests with
+four platform skips; 21 focused branding/viewer tests also passed. Root parsed
+the TOML and verified both console aliases retain the same import target.
+HTTP checks on loopback8765 serve the Faultline title/heading and healthy
+read-only API; no visual-layout changes, install/wheel build or provider calls
+were made. Documentation/roadmap sections match; diff and stale-brand scans
+passed except deliberate negative-test wording and compatibility identifiers.
+Changes are committed locally; no push, folder/repository rename or publication.

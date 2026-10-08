@@ -432,3 +432,12 @@ are renamed, while `robot_debug` imports, compatibility CLI alias, artifact IDs,
 historical run provenance, local folder, GitHub repository and cloud resources
 stay unchanged. This is project branding/scope work, not a provider bug or paid
 experiment. Public naming availability/trademark clearance is not established.
+
+The isolated branding change passed independent spec and quality reviews and
+was integrated as `f92ba4b`. Root full suite passed 585 tests (four platform
+skips), with 21 focused branding/viewer tests passing separately. TOML parsing
+verified the distribution and two equivalent console entry points. The live
+homepage serves Faultline and the health API remains read-only. No package
+publication, installation/wheel verification, folder/repository move or cloud
+operation was performed. Remaining legacy names denote compatibility paths,
+commands and preserved historical infrastructure, not active product branding.

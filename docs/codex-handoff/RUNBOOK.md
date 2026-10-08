@@ -1,4 +1,4 @@
-# Verified project runbook
+# Faultline verified project runbook
 
 > Generated operational context. Commands are relative to the repository root.
 
@@ -12,6 +12,11 @@ export PYTHONPATH=src
 ```
 
 ## Viewer
+
+Faultline is the official name. Updated package installs expose
+`faultline-viewer`; the existing `robot-debug-viewer` command is retained as
+a compatibility alias. Direct `robot_debug.viewer.server` module commands
+below remain valid. The local directory/repository has not been renamed.
 
 Current Windows main viewer with registered case explanations:
 
