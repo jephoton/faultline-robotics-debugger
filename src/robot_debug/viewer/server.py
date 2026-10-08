@@ -1,4 +1,4 @@
-"""Read-only HTTP server for locally collected robot-debug evidence."""
+"""Read-only HTTP server for locally collected Faultline evidence."""
 
 from __future__ import annotations
 
@@ -256,7 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     server = create_server(Path(args.artifacts), args.host, args.port, Path(args.cases) if args.cases else None)
-    print("Robot Debug Viewer: http://{}:{}".format(*server.server_address))
+    print("Faultline Viewer: http://{}:{}".format(*server.server_address))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
