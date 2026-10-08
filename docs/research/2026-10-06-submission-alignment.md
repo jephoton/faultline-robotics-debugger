@@ -62,7 +62,7 @@ The measured base M3 throughput result is supporting evidence, not the core
 pitch or proof of end-to-end diagnostic speedup/cost savings. Expanded M3
 stays frozen; M6 broader validation remains pending.
 
-## Proposed name discussion (not a rename)
+## Historical name discussion — Faultline selected October 8
 
 - **Faultline** — memorable; captures the boundary where robot behaviour fails.
   Suggested descriptor: “Turn robot failures into replayable tests.” Recommended.
@@ -71,9 +71,9 @@ stays frozen; M6 broader validation remains pending.
   transparency than our evidence-first interface.
 
 These names have not been checked for trademark, domain, package or product
-availability. Jethro chooses before branding, repository renaming or publication.
-Jethro prefers **Faultline**, kept in view for now. This is not final branding,
-repository renaming or publication approval; naming does not block M5.
+availability. Jethro selected **Faultline** as the official product name on
+October 8 (ADR 0019), superseding its earlier provisional/KIV status. Product
+branding is approved; folder/repository renaming and publication remain separate.
 
 The acquired external HDF5's license/attribution discrepancy remains unresolved.
 Do not redistribute it in the public judge package until rights are established;

@@ -335,7 +335,7 @@ logs. Invite interpretation of live results before turning them into claims.
 - [ ] Demonstrate actual Nemotron use and honest deterministic fallback.
 - [x] Document a fresh-operator walkthrough in `docs/setup/case-workbench.md`
   and known limitations; no universal video-to-regression promise.
-- [ ] Keep project naming brainstorming queued for Jethro's decision. M6 adds
+- [x] Jethro selected Faultline on October 8 (ADR 0019), completing naming. M6 adds
   broader validation under separate scope; M7 handles final video pitch,
   feedback reconciliation, licensing/data rights and judge-run public-repo audit.
 

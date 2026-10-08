@@ -1,6 +1,6 @@
-# Contributing
+# Contributing to Faultline
 
-This project is a reproducible robotics-debugging prototype. Keep a change
+Faultline is a reproducible robotics-debugging prototype. Keep a change
 small, explain its evidence, and preserve prior experiment results.
 
 ## Before committing

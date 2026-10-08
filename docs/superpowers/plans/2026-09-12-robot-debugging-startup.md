@@ -1,4 +1,10 @@
-# Robot Debugging System Startup Plan
+# Faultline Startup Plan
+
+**Naming/scope update — October 8:** Faultline is the official product name.
+All further M3/HPC work is optional stretch; deeper HPC exploration may move
+to a separate project. Preserve the measured base M3 result without making
+batching, portfolio scheduling or scale-out a core release gate. See
+[ADR 0019](../../decisions/0019-faultline-name-and-hpc-scope.md).
 
 **Current scope override (October 2):** Expanded M3 portfolio diagnosis and its
 unfinished host launcher are frozen optional stretch goals under
@@ -257,6 +263,13 @@ implementation designs, new experiments and spending remain separate gates.
 They do not reopen expanded M3 or displace the approved Serverless migration
 and remaining core M5 acceptance work.
 
+Jethro reaffirmed that all additional M3/HPC work is optional stretch and may
+be better explored in a separate project. Retain the completed replay result;
+neither batching nor expanded portfolio diagnosis is required to finish
+Faultline. The proposed batching experiment combines concurrent simulator
+episodes with grouped GPU requests, rather than choosing batching instead of
+episode parallelism; compare the same workers with batching disabled/enabled.
+
 - **M3 batched-inference alternative:** investigate the existing harness batch
   dispatcher first. Our pinned LeRobot/GR00T adapter implements `predict()` but
   not `predict_batch()`; raising `max_batch_size` alone is not sufficient.
@@ -401,7 +414,8 @@ These are target weeks; access delays consume the buffer. If no real policy epis
 - [ ] Complete the required tool feedback using [FEEDBACK.md](../../../FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether Jethro would build with it again. Do not imply Token Factory was used unless its pilot runs.
 - [ ] Recheck official Physical AI requirements before finalizing the submission.
 - [ ] Prepare a public judge-runnable repository: visible Apache-2.0 license, attribution/third-party rights, pinned setup and sample-artifact access, one verified smoke-test path, and a tracked-file/history secret scan before visibility changes.
-- [ ] Pick a human project name and draft a sub-three-minute pitch, not a tutorial: problem and user, nominal robot, reproducible failure, reduction, M3 cost/performance evidence, and honest limits.
+- [x] Select the product name: **Faultline**, accepted October 8; no folder/repository rename implied.
+- [ ] Draft a sub-three-minute Faultline pitch, not a tutorial: problem and user, nominal robot, reproducible failure, reduction, replay and honest limits. Existing M3 throughput evidence is optional supporting material, not the core pitch.
 - [ ] Record at least one minute of operating simulator and key viewer modules (the official no-physical-hardware alternative); narrate Nebius AI Cloud and NVIDIA GR00T explicitly and list them under Built With.
 - [ ] Upload a public YouTube demo only after checking media rights and that the video matches the runnable build.
 - [ ] Explain limitations: simulation only, selected task/policy coverage, empirical evidence rather than safety certification.

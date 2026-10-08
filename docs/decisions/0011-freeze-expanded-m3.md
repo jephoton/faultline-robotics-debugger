@@ -2,6 +2,11 @@
 
 **Status:** Accepted by Jethro on 2026-10-02.
 
+**October 8 reaffirmation:** under ADR 0019, Faultline keeps all further HPC
+work (including batched inference) as optional stretch. Jethro may pursue deeper
+HPC learning in another project. Retain this decision and existing evidence;
+no M3 restart is implied by adding alternatives to the roadmap.
+
 ## Context
 
 M3's fixed-work comparison completed 48 valid episodes without outcome drift.

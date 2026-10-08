@@ -37,7 +37,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "robot-debug"
+name = "faultline"
 version = "0.1.0"
 requires-python = ">=3.8"
 dependencies = ["numpy>=1.24,<1.25"]

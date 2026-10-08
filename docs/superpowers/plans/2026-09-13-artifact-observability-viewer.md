@@ -567,7 +567,7 @@ loopback host, print exactly one launch URL, and serve until Ctrl+C:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     server = create_server(Path(args.artifacts), args.host, args.port)
-    print("Robot Debug Viewer: http://{}:{}".format(*server.server_address))
+    print("Faultline Viewer: http://{}:{}".format(*server.server_address))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -633,7 +633,7 @@ Use this hierarchy and preserve these IDs for `app.js`:
 <body>
   <a class="skip-link" href="#evidence">Skip to evidence</a>
   <header class="masthead">
-    <div><p class="eyebrow">PHYSICAL AI / FAILURE FORENSICS</p><h1>Robot Debug Console</h1></div>
+    <div><p class="eyebrow">PHYSICAL AI / FAILURE FORENSICS</p><h1>Faultline</h1></div>
     <div id="connection-status" role="status" aria-live="polite">INDEXING</div>
   </header>
   <div class="workspace">

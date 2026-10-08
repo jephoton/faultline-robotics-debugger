@@ -167,5 +167,6 @@ new resource/deletion authority, and publication without user approval.
 No cloud execution is authorized by approval of this design or its future
 implementation plan. The exhausted October 1 allocation is not reusable spend
 authority. Fresh balance/billing, pricing, capacity and numeric-cap approval
-remain a separate live-run gate. Project-name brainstorming remains the next
-product-facing local task; this launcher is the immediate execution blocker.
+remain a separate live-run gate. The historical naming task is complete:
+Faultline was selected October 8 (ADR 0019). This launcher is now frozen
+optional stretch, not a blocker to the core product.

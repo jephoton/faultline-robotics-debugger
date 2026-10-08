@@ -1,4 +1,14 @@
-# Current project state
+# Faultline current project state
+
+## October 8 official name and scope
+
+Jethro selected **Faultline** as the official name and requested branding updates.
+All further M3/HPC work is optional stretch; he may pursue focused HPC learning
+in another project. Preserve the existing result and do not restart batching,
+portfolio scheduling or scale-out automatically. ADR 0019 records the accepted
+decision and compatibility boundary. Local folder/GitHub repository names,
+`robot_debug` imports, artifact identities and cloud resources stay unchanged.
+Older provisional-name/brainstorming entries below are superseded by this decision.
 
 ## October 8 roadmap additions
 
@@ -52,7 +62,7 @@ reduction evidence. Human usefulness/interpretation review and actual viewport
 QA remain open; do not certify factual grounding from schema validation.
 M5B still needs actual simulator/case wiring and fresh policy replay, with
 new design/planning and paid gates. Viewer is running updated main on8765.
-Faultline remains preferred/KIV, not final branding. Earlier checkpoints below
+Faultline's then-provisional status was superseded by ADR 0019 on October 8. Earlier checkpoints below
 are historical; use this section for current execution state.
 
 Latest verified checkpoint: reviewed external reset kernel, explanation viewer
@@ -75,14 +85,14 @@ a committed exact implementation plan and independent reviews still precede
 another POST. No GPU start approved.
 
 Linux CI passed both the isolated credential-fixture fix at `47ad012` and
-the published final integration at `b1b4a30`. Faultline is Jethro's preferred
-name, kept in view; no final branding/rename approved. Repository is still PRIVATE; public audit/approval remains a
+the published final integration at `b1b4a30`. The then-provisional name is now
+final under ADR 0019; folder/repository renames are not approved. Repository is still PRIVATE; public audit/approval remains a
 submission gate. Earlier entries below preserve historical review stages.
 
 Jethro requested naming first, a fresh rules/judging check, then continued M5.
 The [alignment review](../research/2026-10-06-submission-alignment.md) records
-the submission gaps and provisional name options; no final name/rename is
-approved. M5A remains complete; M5B/C are not complete. Main is clean at
+the submission gaps and historical provisional name options; Faultline was
+later finalized under ADR 0019. M5A remains complete; M5B/C are not complete. Main is clean at
 `eb2eb14` before this documentation update; last published checkpoint was
 `8912763`. Earlier agents hit usage limits, leaving client repair committed
 in its worktree and viewer work uncommitted. New isolated reviewers/builders
@@ -131,7 +141,7 @@ preflight and approval. Preserve completed fixed-replay HPC evidence, integrated
 scheduler/guest code and unfinished host work. No deletion or formal-methods
 architecture has been approved. The core product prioritizes the robotics
 failure-to-regression workflow; planning its next bounded step is next, with
-project-name brainstorming still queued. This overrides older execution
+project-name brainstorming now completed by ADR 0019. This overrides older execution
 instructions below. The portfolio overview is optional, not a core M5 gate.
 
 ## M5A complete; next gates are M5B/C — October 4
@@ -477,8 +487,8 @@ authorized. Its intended boundary is surviving chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
 execution blocker only if the optional stretch is resumed; preserve experiment settings.
 
-**Next product-facing local task: cool project name brainstorming**, requested by Jethro.
-Final naming remains his decision and requires no paid compute. The
+**Historical naming task — completed October 8:** Jethro chose Faultline;
+ADR 0019 supersedes the earlier queued brainstorming. The
 [commit audit](../milestone-commit-audit.md) records M1/M2/M3/M4 as
 13/38/132/17 at frozen checkpoint `7d08e01`; these are scope-attributed
 non-merge commits, not hours worked.

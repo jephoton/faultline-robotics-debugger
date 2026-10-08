@@ -1,15 +1,21 @@
-# Project handoff context
+# Faultline handoff context
 
 > Generated project context. Keep credentials and large experiment artifacts out
 > of this directory.
 
 ## Product
 
-This repository builds a compute-budgeted debugging loop for robot policies:
+Faultline builds a compute-budgeted debugging loop for robot policies:
 find a failure, verify that it repeats, reduce the triggering condition, and
 save replayable regression evidence. The current validated stack is GR00T N1.7
 with the LIBERO Object checkpoint, the AllenAI VLA evaluation harness, and
 LIBERO/MuJoCo on Nebius GPU compute.
+
+The name is final as of October 8 under ADR 0019. Further M3/HPC work is
+optional stretch, not the core product; deeper HPC learning may move to another
+project. Keep the measured fixed-replay throughput result. `robot_debug` imports,
+artifact/schema identities, current folder and GitHub repository names remain
+unchanged; `faultline-viewer` is the new branded command with the old alias retained.
 
 ## Approved future deployment
 

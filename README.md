@@ -1,4 +1,8 @@
-# Robot policy debugging — Nebius × NVIDIA hackathon
+# Faultline — turn robot failures into replayable tests
+
+Built for the Nebius × NVIDIA hackathon. Faultline is the official product
+name; the existing checkout/repository name and `robot_debug` Python imports
+remain unchanged for compatibility.
 
 Current direction: discover failures in simulated robot manipulation policies
 and reduce them into reproducible regression cases. Measured parallel replay
@@ -8,6 +12,9 @@ Expanded multi-task HPC (M3) is frozen as an optional stretch goal, not a
 prerequisite for the core failure-to-regression product. The completed
 fixed-replay throughput result is retained; the unfinished host launcher is
 not ready for paid use. See [the scope decision](docs/decisions/0011-freeze-expanded-m3.md).
+Further HPC exploration, including batching and adaptive portfolio scheduling,
+is optional stretch work. Jethro may pursue deeper HPC learning in a separate
+project; Faultline's core is robotics failure diagnosis and regression evidence.
 
 ## License
 
@@ -46,8 +53,8 @@ Most robustness benchmarks answer: **how often does a policy fail under a
 predefined set of conditions?** This project aims to turn that measurement into
 an actionable debugging workflow:
 
-> Find a robot-policy failure within a fixed compute budget, prove that it
-> repeats, minimize the condition that triggers it, and save it as a regression
+> Find a robot-policy failure within a fixed compute budget, check that it
+> repeats, reduce the condition that triggers it, and save it as a regression
 > test for future policy versions.
 
 The project builds on existing VLA evaluation, perturbation testing, and
@@ -80,6 +87,10 @@ This runs the complete local suite; the current verified Python 3.11 run passes
 126 tests. It does not repeat the paid cloud experiment.
 
 ## Viewer
+
+After installing the package, `faultline-viewer` starts the viewer;
+`robot-debug-viewer` remains a compatibility alias. Direct module commands
+below continue to work without changing imports.
 
 The read-only viewer turns copied experiment artifacts into a paired demo of a
 nominal robot-policy episode and a fault-injected episode. It never changes an

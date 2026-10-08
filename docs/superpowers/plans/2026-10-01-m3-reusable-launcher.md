@@ -227,7 +227,7 @@ assert not any(c in recovery_calls for c in ("start_once", "prepare_guest", "lau
 ## Task 6 — Root integration and learning checkpoint (green)
 
 - [ ] Obtain final independent spec review, then code-quality/security review of complete branch. No unresolved important findings before integration. Root verifies test counts, diff, no IDs/secrets/private logs and unchanged policy/config/report semantics.
-- [ ] Update main plan, handoff and dev-log with implemented versus actually scheduled-tested status; record any discovered project bug, not fake provider feedback. Name brainstorming stays next product-facing task. Live comparison remains pending.
+- [ ] Update main plan, handoff and dev-log with implemented versus actually scheduled-tested status; record any discovered project bug, not fake provider feedback. Naming is complete: Faultline (ADR 0019). Live comparison remains pending optional stretch.
 - [ ] Integrate reviewed commits without overwriting user work. Run fresh full tests plus `git diff --check`; commit explicit docs. Push only under existing user publication authority; verify remote SHA. Preserve worktree until no needed ignored fixture/evidence remains, then archive through native tool.
 - [ ] Return what now survives interruption, demonstrated failure limits and commands; before paid execution refresh billing/capacity/prices/auth and request a new numeric cap. Do not reuse exhausted one-start authority.
 

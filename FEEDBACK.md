@@ -1,4 +1,4 @@
-# Hackathon tool feedback log
+# Faultline — hackathon tool feedback log
 
 Working notes for the required submission feedback. Distinguish observed tool
 behavior from our own configuration mistakes; verify current product details

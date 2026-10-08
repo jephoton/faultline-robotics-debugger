@@ -421,3 +421,14 @@ The new real request succeeded structurally and is readable from the updated
 viewer, but output depth and caveat-citation quality are limited. This is a
 configuration repair plus a model-output observation, not an API outage claim.
 Both reservations stay consumed; no further request is approved.
+
+## October 8 — Faultline name and HPC scope
+
+Jethro finalized **Faultline** and reaffirmed that further HPC work is optional
+stretch, potentially better suited to a separate project. ADR 0019 records the
+decision; the roadmap retains the actual M3 result without making batching or
+portfolio diagnosis a core gate. Product docs and viewer/package presentation
+are renamed, while `robot_debug` imports, compatibility CLI alias, artifact IDs,
+historical run provenance, local folder, GitHub repository and cloud resources
+stay unchanged. This is project branding/scope work, not a provider bug or paid
+experiment. Public naming availability/trademark clearance is not established.

@@ -1,5 +1,9 @@
 # Two robot projects: what you would learn and build
 
+**October 8 update:** the selected failure-diagnosis project is now named
+**Faultline**. This guide preserves the original two-option discussion below;
+additional HPC work is optional stretch and may move to another project.
+
 Written September 12, 2026. This is a beginner-oriented decision guide, not a finalized architecture.
 
 The two options are:

@@ -72,4 +72,5 @@ workflow: the cloud lifecycle should not depend on an active assistant turn
 after the VM has become billable. Reusing the model/simulator configuration
 does not solve that orchestration gap. Prepare/review any such controller
 locally before spending; keep it separate from policy and scheduler behavior.
-Project-name brainstorming is the next local task and needs no paid compute.
+The then-next project-name brainstorming task was completed October 8:
+Jethro chose Faultline (ADR 0019). No paid compute was needed for naming.

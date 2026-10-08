@@ -1,5 +1,19 @@
 # Project collaboration instructions
 
+## Product name and core scope (October 8, 2026)
+
+- The official product name is **Faultline**, not a provisional/KIV name.
+- Preserve `robot_debug` imports, schema/case IDs, environment variables,
+  historical resource identities and artifact paths when updating branding.
+  Folder and GitHub repository renames require separate user direction.
+- Further M3/HPC work, including batched inference, portfolio scheduling and
+  scale-out, is optional stretch work. Jethro may pursue deeper HPC exploration
+  in another project. Retain the measured replay-throughput result, but do not
+  make new HPC implementation or claims a core Faultline/submission gate.
+- The core remains robotics failure discovery, confirmation, reduction,
+  inspection and replay; this does not approve a formal-verification feature.
+  See `docs/decisions/0019-faultline-name-and-hpc-scope.md`.
+
 These preferences were explicitly provided by Jethro on September 12, 2026. Apply them throughout this project.
 
 ## Resources and credentials
