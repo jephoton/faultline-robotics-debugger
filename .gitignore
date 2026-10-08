@@ -9,6 +9,10 @@ __pycache__/
 .env.*
 !.env.example
 
+# Private Serverless resource selectors and prepared argument previews
+configs/serverless-job.local.json
+/serverless-job.argv.json
+
 # Large, reproducible-but-untracked experiment outputs
 artifacts/
 results/
