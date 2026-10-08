@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).parents[1]
@@ -194,6 +195,42 @@ class ServerlessJobConfigTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(self.module.ConfigError):
                     self.module.prepare(self.valid_config(workload_file=value))
+
+    def test_rejects_double_slash_network_path_before_filesystem_inspection(self) -> None:
+        with (
+            mock.patch.object(
+                self.module.Path,
+                "is_file",
+                side_effect=AssertionError("filesystem inspection was attempted"),
+            ),
+            mock.patch.object(
+                self.module.Path,
+                "stat",
+                side_effect=AssertionError("filesystem inspection was attempted"),
+            ),
+        ):
+            with self.assertRaises(self.module.ConfigError):
+                self.module.prepare(
+                    self.valid_config(workload_file="//server/share/workload.json")
+                )
+
+    def test_accepts_single_leading_slash_posix_workload_path(self) -> None:
+        with (
+            mock.patch.object(self.module.Path, "is_file", return_value=True),
+            mock.patch.object(
+                self.module.Path,
+                "stat",
+                return_value=mock.Mock(st_size=2),
+            ),
+        ):
+            argv = self.module.prepare(
+                self.valid_config(workload_file="/workload.json")
+            )
+        inject_index = argv.index("--inject-file")
+        self.assertEqual(
+            argv[inject_index + 1],
+            "/workload.json:/etc/faultline/workload.json",
+        )
 
     def test_rejects_non_object_config(self) -> None:
         for config in (None, [], "config", True):

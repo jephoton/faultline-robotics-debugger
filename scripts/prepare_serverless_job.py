@@ -152,6 +152,8 @@ def _validate_registry(value: str) -> None:
 def _validate_workload_file(value: str) -> None:
     if not value or value.startswith("-"):
         raise ConfigError("workload_file must be a local file path")
+    if value.startswith("//"):
+        raise ConfigError("workload_file must not use a network path")
     if ":" in value or "\\" in value or any(ord(character) < 32 or ord(character) == 127 for character in value):
         raise ConfigError("workload_file must use safe POSIX path syntax without the CLI colon delimiter")
     if ".." in Path(value).parts:
