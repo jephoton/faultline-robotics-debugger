@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import threading
 import time
 from typing import Mapping, Sequence
 import uuid
@@ -143,6 +144,30 @@ class DirectEvaluator:
         )
 
     def _terminate_and_confirm(
+        self, process: subprocess.Popen[bytes], process_group: int
+    ) -> None:
+        previous_sigint = None
+        deferred_sigint_frame = []
+        if threading.current_thread() is threading.main_thread():
+            previous_sigint = signal.getsignal(signal.SIGINT)
+            if previous_sigint != signal.SIG_IGN:
+                signal.signal(
+                    signal.SIGINT,
+                    lambda _signum, frame: deferred_sigint_frame.append(frame),
+                )
+        try:
+            self._terminate_and_confirm_without_interrupt(process, process_group)
+        finally:
+            if previous_sigint is not None and previous_sigint != signal.SIG_IGN:
+                signal.signal(signal.SIGINT, previous_sigint)
+
+        if deferred_sigint_frame:
+            if previous_sigint == signal.SIG_DFL:
+                signal.raise_signal(signal.SIGINT)
+            elif callable(previous_sigint):
+                previous_sigint(signal.SIGINT, deferred_sigint_frame[-1])
+
+    def _terminate_and_confirm_without_interrupt(
         self, process: subprocess.Popen[bytes], process_group: int
     ) -> None:
         if not _process_group_exists(process_group):

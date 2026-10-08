@@ -307,6 +307,64 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(child_pid, 0)
 
+    def test_interrupt_during_success_cleanup_is_deferred_until_group_is_absent(self) -> None:
+        if sys.platform != "linux":
+            self.skipTest("Linux subreaper acceptance")
+        child_file = self.root / "child.txt"
+        group_file = self.root / "group.txt"
+        ready_file = self.root / "ready.txt"
+        libc = ctypes.CDLL(None, use_errno=True)
+        previous = ctypes.c_int()
+        self.assertEqual(libc.prctl(37, ctypes.byref(previous), 0, 0, 0), 0)
+        self.assertEqual(libc.prctl(36, 1, 0, 0, 0), 0)
+        try:
+            config = self._config(
+                """
+                import os
+                import pathlib
+                import subprocess
+                import sys
+                child_source = '''
+                import os
+                import pathlib
+                import signal
+                import time
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                pathlib.Path({ready_file!r}).write_text("ready", encoding="utf-8")
+                time.sleep(0.1)
+                os.kill({runner_pid}, signal.SIGINT)
+                time.sleep(0.1)
+                os.kill({runner_pid}, signal.SIGINT)
+                time.sleep(60)
+                '''
+                child = subprocess.Popen([sys.executable, "-c", child_source])
+                pathlib.Path({child_file!r}).write_text(str(child.pid), encoding="utf-8")
+                pathlib.Path({group_file!r}).write_text(str(os.getpgrp()), encoding="utf-8")
+                ready = pathlib.Path({ready_file!r})
+                while not ready.exists():
+                    time.sleep(0.01)
+                """.format(
+                    child_file=str(child_file),
+                    group_file=str(group_file),
+                    ready_file=str(ready_file),
+                    runner_pid=os.getpid(),
+                )
+            )
+
+            with self.assertRaises(KeyboardInterrupt):
+                self._evaluator(term_grace_seconds=0.4, kill_grace_seconds=1.0)(
+                    ["vla-eval", "run", "--config", str(config)],
+                    cwd=self.root,
+                    check=False,
+                )
+            process_group = self._remember_group(group_file)
+            self.assertGroupAbsent(process_group)
+            child_pid = int(child_file.read_text(encoding="utf-8"))
+            with self.assertRaises(ProcessLookupError):
+                os.kill(child_pid, 0)
+        finally:
+            self.assertEqual(libc.prctl(36, previous.value, 0, 0, 0), 0)
+
     def test_timeout_cleans_group_then_raises_timeout_expired(self) -> None:
         group_file = self.root / "group.txt"
         config = self._config(
