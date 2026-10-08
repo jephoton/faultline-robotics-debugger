@@ -313,6 +313,7 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
         child_file = self.root / "child.txt"
         group_file = self.root / "group.txt"
         ready_file = self.root / "ready.txt"
+        leader_complete_file = self.root / "leader-complete.txt"
         libc = ctypes.CDLL(None, use_errno=True)
         previous = ctypes.c_int()
         self.assertEqual(libc.prctl(37, ctypes.byref(previous), 0, 0, 0), 0)
@@ -324,6 +325,7 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
                 import pathlib
                 import subprocess
                 import sys
+                import time
                 child_source = '''
                 import os
                 import pathlib
@@ -343,10 +345,12 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
                 ready = pathlib.Path({ready_file!r})
                 while not ready.exists():
                     time.sleep(0.01)
+                pathlib.Path({leader_complete_file!r}).write_text("complete", encoding="utf-8")
                 """.format(
                     child_file=str(child_file),
                     group_file=str(group_file),
                     ready_file=str(ready_file),
+                    leader_complete_file=str(leader_complete_file),
                     runner_pid=os.getpid(),
                 )
             )
@@ -359,6 +363,10 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
                 )
             process_group = self._remember_group(group_file)
             self.assertGroupAbsent(process_group)
+            self.assertEqual(leader_complete_file.read_text(encoding="utf-8"), "complete")
+            stderr_logs = list(self.logs.glob("*.stderr.log"))
+            self.assertEqual(len(stderr_logs), 1)
+            self.assertEqual(stderr_logs[0].read_text(encoding="utf-8"), "")
             child_pid = int(child_file.read_text(encoding="utf-8"))
             with self.assertRaises(ProcessLookupError):
                 os.kill(child_pid, 0)
