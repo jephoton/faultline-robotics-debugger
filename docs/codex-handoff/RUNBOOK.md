@@ -16,7 +16,15 @@ export PYTHONPATH=src
 Faultline is the official name. Updated package installs expose
 `faultline-viewer`; the existing `robot-debug-viewer` command is retained as
 a compatibility alias. Direct `robot_debug.viewer.server` module commands
-below remain valid. The local directory/repository has not been renamed.
+below remain valid. The GitHub repository is now
+`https://github.com/jephoton/faultline-robotics-debugger`; the local directory
+remains `nebius-nvidia-hackathon`.
+
+Confirm the configured remote without changing it:
+
+```powershell
+git remote get-url origin
+```
 
 Current Windows main viewer with registered case explanations:
 

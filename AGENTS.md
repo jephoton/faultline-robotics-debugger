@@ -3,9 +3,12 @@
 ## Product name and core scope (October 8, 2026)
 
 - The official product name is **Faultline**, not a provisional/KIV name.
+- The canonical GitHub repository slug is `jephoton/faultline-robotics-debugger`.
+  Jethro authorized that repository rename on October 8, 2026. This does not
+  authorize renaming the local checkout folder or changing repository visibility.
 - Preserve `robot_debug` imports, schema/case IDs, environment variables,
   historical resource identities and artifact paths when updating branding.
-  Folder and GitHub repository renames require separate user direction.
+  Any future folder rename requires separate user direction.
 - Further M3/HPC work, including batched inference, portfolio scheduling and
   scale-out, is optional stretch work. Jethro may pursue deeper HPC exploration
   in another project. Retain the measured replay-throughput result, but do not

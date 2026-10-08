@@ -1,8 +1,10 @@
 # Faultline — turn robot failures into replayable tests
 
 Built for the Nebius × NVIDIA hackathon. Faultline is the official product
-name; the existing checkout/repository name and `robot_debug` Python imports
-remain unchanged for compatibility.
+name, and its canonical GitHub repository is
+[`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).
+The existing local checkout folder and `robot_debug` Python imports remain
+unchanged for compatibility.
 
 Current direction: discover failures in simulated robot manipulation policies
 and reduce them into reproducible regression cases. Measured parallel replay

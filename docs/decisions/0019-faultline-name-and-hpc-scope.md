@@ -29,3 +29,12 @@ paths or links to pretend the directory/repository has already moved. Repository
 visibility, cloud resource names, third-party licenses and paid-run authority
 are unchanged. Preserve historical decisions as history, marking superseded
 naming statements explicitly rather than rewriting experiment evidence.
+
+## October 8, 2026 repository-name amendment
+
+Jethro subsequently authorized renaming the GitHub repository to
+`jephoton/faultline-robotics-debugger`. This amendment supersedes the earlier
+repository-name restriction above, while preserving it as historical context.
+It does not authorize renaming the local `nebius-nvidia-hackathon` checkout
+folder, rewriting `robot_debug` imports or historical identities, changing
+repository visibility, publishing artifacts, or spending cloud credits.

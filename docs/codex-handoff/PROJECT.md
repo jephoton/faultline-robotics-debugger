@@ -14,8 +14,10 @@ LIBERO/MuJoCo on Nebius GPU compute.
 The name is final as of October 8 under ADR 0019. Further M3/HPC work is
 optional stretch, not the core product; deeper HPC learning may move to another
 project. Keep the measured fixed-replay throughput result. `robot_debug` imports,
-artifact/schema identities, current folder and GitHub repository names remain
-unchanged; `faultline-viewer` is the new branded command with the old alias retained.
+artifact/schema identities and the local checkout folder remain unchanged. The
+canonical GitHub repository is
+[`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger);
+`faultline-viewer` is the new branded command with the old alias retained.
 
 ## Approved future deployment
 

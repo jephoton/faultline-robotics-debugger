@@ -6,8 +6,11 @@ Jethro selected **Faultline** as the official name and requested branding update
 All further M3/HPC work is optional stretch; he may pursue focused HPC learning
 in another project. Preserve the existing result and do not restart batching,
 portfolio scheduling or scale-out automatically. ADR 0019 records the accepted
-decision and compatibility boundary. Local folder/GitHub repository names,
-`robot_debug` imports, artifact identities and cloud resources stay unchanged.
+decision and compatibility boundary. Jethro subsequently authorized the GitHub
+repository rename to `jephoton/faultline-robotics-debugger`; the repository
+remains private and the documentation commit/push is pending the integration
+owner. The local checkout folder, `robot_debug` imports, artifact identities and
+cloud resources stay unchanged.
 Older provisional-name/brainstorming entries below are superseded by this decision.
 
 Branding is integrated as `f92ba4b` after independent spec/quality reviews:
@@ -16,8 +19,10 @@ new `faultline-viewer` command retains `robot-debug-viewer` as an alias.
 Full main Windows Python 3.11 suite passed 585 tests/four platform skips;
 focused branding/viewer tests passed 21. Live loopback8765 HTTP checks serve
 Faultline and read-only health. The new CLI requires an updated package install;
-module commands still work. No folder/repository rename, publication or new
-provider call occurred; the changes are locally committed, not pushed.
+module commands still work. That branding checkpoint did not rename the folder
+or repository, publish the repository, or make a new provider call. The later
+repository-slug authorization and rename supersede only that repository status;
+the local folder is still `nebius-nvidia-hackathon`.
 
 ## October 8 roadmap additions
 
@@ -95,7 +100,10 @@ another POST. No GPU start approved.
 
 Linux CI passed both the isolated credential-fixture fix at `47ad012` and
 the published final integration at `b1b4a30`. The then-provisional name is now
-final under ADR 0019; folder/repository renames are not approved. Repository is still PRIVATE; public audit/approval remains a
+final under ADR 0019. At this historical checkpoint, folder/repository renames
+were not approved; the October 8 repository-slug authorization supersedes that
+restriction for the GitHub repository only. The local folder remains unchanged.
+Repository visibility is still PRIVATE; public audit/approval remains a
 submission gate. Earlier entries below preserve historical review stages.
 
 Jethro requested naming first, a fresh rules/judging check, then continued M5.
