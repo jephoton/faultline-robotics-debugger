@@ -1,0 +1,12 @@
+{
+  "run_id": "replace-with-safe-run-id",
+  "project_id": "REPLACE_WITH_PROJECT_ID",
+  "image": "REPLACE_WITH_IMMUTABLE_IMAGE_DIGEST",
+  "platform": "gpu-l40s-a",
+  "preset": "1gpu-16vcpu-64gb",
+  "subnet_id": "REPLACE_WITH_SUBNET_ID",
+  "bucket_id": "REPLACE_WITH_BUCKET_ID",
+  "hf_secret": "REPLACE_WITH_SECRET_STASH_SELECTOR",
+  "workload_file": "REPLACE_WITH_WSL_PATH_TO_pilot_search_grid_or_reduce_workload.json",
+  "registry_secret": "REPLACE_WITH_OPTIONAL_REGISTRY_SECRET_STASH_SELECTOR"
+}
