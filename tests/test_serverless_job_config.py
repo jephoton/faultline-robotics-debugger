@@ -141,6 +141,29 @@ class ServerlessJobConfigTests(unittest.TestCase):
                 with self.assertRaises(self.module.ConfigError):
                     self.module.prepare(self.valid_config(image=image))
 
+    def test_rejects_malformed_registry_and_repository_image_components(self) -> None:
+        digest = "@sha256:" + "a" * 64
+        for image in (
+            "https://registry.example/image" + digest,
+            "registry.example///image" + digest,
+            "image/" + digest,
+            "registry.example:badport/image" + digest,
+        ):
+            with self.subTest(image=image):
+                with self.assertRaises(self.module.ConfigError):
+                    self.module.prepare(self.valid_config(image=image))
+
+    def test_accepts_valid_registry_repository_components_and_numeric_port(self) -> None:
+        digest = "@sha256:" + "a" * 64
+        for image in (
+            "cr.eu-north1.nebius.cloud/project/image" + digest,
+            "ghcr.io/owner/faultline-image" + digest,
+            "registry.example:5000/team/image_name" + digest,
+        ):
+            with self.subTest(image=image):
+                argv = self.module.prepare(self.valid_config(image=image))
+                self.assertEqual(argv[argv.index("--image") + 1], image)
+
     def test_rejects_non_one_gpu_platform_or_preset(self) -> None:
         for overrides in (
             {"platform": "gpu-h100-sxm"},
@@ -206,6 +229,25 @@ class ServerlessJobConfigTests(unittest.TestCase):
             result = self.module.main(["--config", str(config_path)])
         self.assertEqual(result, 2)
         self.assertIn("duplicate", stderr.getvalue().lower())
+
+    def test_error_messages_do_not_echo_unknown_or_duplicate_key_text(self) -> None:
+        sentinel = "credential-value-mistaken-for-a-key"
+        with self.assertRaises(self.module.ConfigError) as raised:
+            self.module.prepare(self.valid_config(**{sentinel: "ignored"}))
+        self.assertNotIn(sentinel, str(raised.exception))
+
+        config_path = Path("duplicate-secret-key.json")
+        config_path.write_text(
+            json.dumps(self.valid_config())[:-1]
+            + ',"' + sentinel + '":"one","' + sentinel + '":"two"}',
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = self.module.main(["--config", str(config_path)])
+        self.assertEqual(result, 2)
+        self.assertIn("duplicate", stderr.getvalue().lower())
+        self.assertNotIn(sentinel, stderr.getvalue())
 
     def test_illustrative_example_is_safe_and_rejected_until_configured(self) -> None:
         example_path = ROOT / "configs" / "serverless-job.example.json"

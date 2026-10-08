@@ -23,7 +23,11 @@ _REQUIRED_FIELDS = frozenset({
 })
 _OPTIONAL_FIELDS = frozenset({"registry_secret"})
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
-_IMAGE = re.compile(r"[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}\Z")
+_IMAGE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_REGISTRY_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+_REPOSITORY_COMPONENT = re.compile(
+    r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*\Z"
+)
 _SECRET_SELECTOR = re.compile(
     r"mbsec-[a-z0-9]+(?:@mbsecver-[a-z0-9]+)?\Z"
 )
@@ -79,7 +83,7 @@ def _validate(config: object) -> dict[str, str]:
     unknown = keys - _REQUIRED_FIELDS - _OPTIONAL_FIELDS
     missing = _REQUIRED_FIELDS - keys
     if unknown:
-        raise ConfigError("unknown configuration field(s): " + ", ".join(sorted(map(str, unknown))))
+        raise ConfigError("configuration contains unknown field(s)")
     if missing:
         raise ConfigError("missing configuration field(s): " + ", ".join(sorted(missing)))
     values: dict[str, str] = {}
@@ -99,8 +103,7 @@ def _validate(config: object) -> dict[str, str]:
     for field, pattern in _ID_PATTERNS.items():
         if pattern.fullmatch(values[field]) is None:
             raise ConfigError(field + " has the wrong Nebius resource ID kind or syntax")
-    if _IMAGE.fullmatch(values["image"]) is None:
-        raise ConfigError("image must be an explicit immutable @sha256 digest")
+    _validate_image(values["image"])
     if values["platform"] != "gpu-l40s-a":
         raise ConfigError("platform must be the approved single-GPU gpu-l40s-a platform")
     if values["preset"] != "1gpu-16vcpu-64gb":
@@ -111,6 +114,39 @@ def _validate(config: object) -> dict[str, str]:
             raise ConfigError(field + " must be a Secret Stash selector, not a secret value")
     _validate_workload_file(values["workload_file"])
     return values
+
+
+def _validate_image(value: str) -> None:
+    if value.count("@") != 1:
+        raise ConfigError("image must be an explicit immutable @sha256 digest")
+    name, digest = value.rsplit("@", 1)
+    if _IMAGE_DIGEST.fullmatch(digest) is None or "://" in name:
+        raise ConfigError("image must be an explicit immutable @sha256 digest")
+
+    components = name.split("/")
+    if len(components) < 2 or any(not component for component in components):
+        raise ConfigError("image must contain a valid registry and repository path")
+    _validate_registry(components[0])
+    repository = components[1:]
+    if len("/".join(repository)) > 255 or any(
+        _REPOSITORY_COMPONENT.fullmatch(component) is None for component in repository
+    ):
+        raise ConfigError("image contains an invalid repository path")
+
+
+def _validate_registry(value: str) -> None:
+    if value.count(":") > 1:
+        raise ConfigError("image contains an invalid registry host or port")
+    if ":" in value:
+        host, port = value.rsplit(":", 1)
+        if re.fullmatch(r"[0-9]{1,5}", port) is None or not 1 <= int(port) <= 65535:
+            raise ConfigError("image contains an invalid registry host or port")
+    else:
+        host = value
+    if len(host) > 253 or any(
+        _REGISTRY_LABEL.fullmatch(label) is None for label in host.split(".")
+    ):
+        raise ConfigError("image contains an invalid registry host or port")
 
 
 def _validate_workload_file(value: str) -> None:
@@ -136,7 +172,7 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise ConfigError("duplicate JSON key: " + key)
+            raise ConfigError("configuration contains a duplicate JSON key")
         result[key] = value
     return result
 
