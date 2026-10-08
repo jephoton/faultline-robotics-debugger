@@ -25,46 +25,46 @@ or saved evidence. No package publication, paid work or experiment is included.
 
 ## Task 1 — root remote migration (approved amber)
 
-- [ ] Verify `gh repo view jephoton/nebius-nvidia-hackathon --json
+- [x] Verify `gh repo view jephoton/nebius-nvidia-hackathon --json
   nameWithOwner,id,isPrivate,viewerPermission`: expected ADMIN/private and ID
   `R_kgDOUXkIhg`; check destination does not already exist.
-- [ ] Run `gh repo rename faultline-robotics-debugger --repo
+- [x] Run `gh repo rename faultline-robotics-debugger --repo
   jephoton/nebius-nvidia-hackathon --yes` once; if interrupted, inspect both names
   and the immutable ID before retrying.
-- [ ] Verify the new name retains the same ID and private visibility.
-- [ ] Run `git remote set-url origin
+- [x] Verify the new name retains the same ID and private visibility.
+- [x] Run `git remote set-url origin
   https://github.com/jephoton/faultline-robotics-debugger.git`.
   Inspect each registered worktree's effective fetch/push URLs; update only
   matching old-repository URL overrides, if any. Do not change other remotes.
-- [ ] Run `git ls-remote origin refs/heads/main`; fetch/push configuration
+- [x] Run `git ls-remote origin refs/heads/main`; fetch/push configuration
   must resolve to the renamed repository without relying on the old redirect.
 
 ## Task 2 — smaller-model handoff docs (green)
 
-- [ ] In README.md name/link the new repository; explicitly distinguish the
+- [x] In README.md name/link the new repository; explicitly distinguish the
   unchanged local folder and `robot_debug` namespace.
-- [ ] In AGENTS.md record the accepted repository slug and unchanged folder.
-- [ ] Update current statements in PROJECT.md, STATE.md and RUNBOOK.md so
+- [x] In AGENTS.md record the accepted repository slug and unchanged folder.
+- [x] Update current statements in PROJECT.md, STATE.md and RUNBOOK.md so
   they no longer say GitHub rename is unapproved or has not happened. Keep
   historical experiment paths and original branding-plan outcomes intact.
-- [ ] Mark ADR 0019's repository-name boundary superseded by this approved
+- [x] Mark ADR 0019's repository-name boundary superseded by this approved
   rename, preserving its original historical decision and all other boundaries.
-- [ ] Documentation worker runs `git diff --check` and reports owned files;
+- [x] Documentation worker runs `git diff --check` and reports owned files;
   root alone stages, commits and pushes.
 
 ## Task 3 — review and delivery (root)
 
-- [ ] Independent spec review checks exact name, private visibility, unchanged
+- [x] Independent spec review checks exact name, private visibility, unchanged
   local folder/import/artifact identities and truthful current handoff state.
-- [ ] Independent quality review checks links, compatibility and history.
-- [ ] Run `git diff --check`, audit remaining old-name references (only real
+- [x] Independent quality review checks links, compatibility and history.
+- [x] Run `git diff --check`, audit remaining old-name references (only real
   local/historical paths are expected), and run the focused viewer/branding suite:
   `$env:PYTHONPATH='src'; C:/Windows/py.exe -3.11 -B -m unittest
   tests.test_faultline_branding tests.test_viewer_server -q`.
-- [ ] Commit explicit documentation paths as
+- [x] Commit explicit documentation paths as
   `docs: record Faultline GitHub repository rename`, then push reviewed main
   commits with `git push origin main`. No force push or visibility change.
-- [ ] Verify GitHub main SHA equals local HEAD, all effective remotes use the
+- [x] Verify GitHub main SHA equals local HEAD, all effective remotes use the
   new URL, and the local viewer's `/api/health` and Faultline homepage still work.
 
 ## Commit boundaries
@@ -72,3 +72,19 @@ or saved evidence. No package publication, paid work or experiment is included.
 1. `docs: plan approved Faultline repository rename` (this plan only).
 2. `docs: record Faultline GitHub repository rename` (reviewed documentation and
    completed plan). Remote configuration is local, not a tracked-file commit.
+
+## Verified outcome
+
+GitHub reports `jephoton/faultline-robotics-debugger`, original repository ID
+`R_kgDOUXkIhg`, PRIVATE visibility and unchanged owner/default branch. The shared
+origin update resolved both fetch and push for all 12 registered worktrees;
+there were no per-worktree remote overrides to migrate. Independent spec and
+quality reviews approved the six-file documentation change. The 21 focused
+viewer/branding tests passed, and live loopback8765 returned HTTP200, Faultline
+title/heading and healthy read-only status. No runtime file or evidence changed.
+
+Root pushed all pending reviewed main commits through `92faa19`; `git ls-remote`
+confirmed remote main exactly matched that local SHA. This completion note and
+STATE delivery update form a final `docs: record verified repository rename
+delivery` commit, followed by another push/SHA check. The local directory and
+worktree paths remain unchanged; no visibility change or paid work occurred.

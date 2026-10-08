@@ -8,9 +8,11 @@ in another project. Preserve the existing result and do not restart batching,
 portfolio scheduling or scale-out automatically. ADR 0019 records the accepted
 decision and compatibility boundary. Jethro subsequently authorized the GitHub
 repository rename to `jephoton/faultline-robotics-debugger`; the repository
-remains private and the documentation commit/push is pending the integration
-owner. The local checkout folder, `robot_debug` imports, artifact identities and
-cloud resources stay unchanged.
+remains private, retains its original GitHub identity, and all 12 registered
+worktrees use the new origin URL for fetch and push. Branding, roadmap and rename
+documentation were pushed through `92faa19`; local/remote main SHAs matched.
+The local checkout folder, `robot_debug` imports, artifact identities and cloud
+resources stay unchanged. The rename plan records the verification outcome.
 Older provisional-name/brainstorming entries below are superseded by this decision.
 
 Branding is integrated as `f92ba4b` after independent spec/quality reviews:
