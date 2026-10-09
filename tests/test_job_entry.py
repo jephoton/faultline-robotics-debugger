@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -27,7 +28,7 @@ from robot_debug.job_entry import (
     prefetch_models,
 )
 from robot_debug.job_model import ModelProcess
-from robot_debug.job_process import InfrastructureError
+from robot_debug.job_process import InfrastructureError, close_owned_process_group
 from robot_debug.job_runtime import JobRuntimeError
 from scripts import serverless_prefetch
 
@@ -91,6 +92,9 @@ class EnvironmentTests(unittest.TestCase):
         "AWS_SECRET_ACCESS_KEY": "x",
         "API_KEY": "x",
         "DB_PASSWORD": "x",
+        "OPENAI_APIKEY": "x",
+        "HUGGING_FACE_HUB_TOKEN": "x",
+        "GIT_AUTH": "x",
         "TOKENIZERS_PARALLELISM": "false",
         "MUJOCO_GL": "egl",
         "PYTHONPATH": "/somewhere",
@@ -98,7 +102,8 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_child_environment_drops_secret_like_names_only(self) -> None:
         env = child_environment(self.BASE, EXTRA="1")
-        for name in ("HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "API_KEY", "DB_PASSWORD"):
+        for name in ("HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "API_KEY", "DB_PASSWORD",
+                     "OPENAI_APIKEY", "HUGGING_FACE_HUB_TOKEN", "GIT_AUTH"):
             self.assertNotIn(name, env)
         self.assertEqual(env["TOKENIZERS_PARALLELISM"], "false")
         self.assertEqual(env["MUJOCO_GL"], "egl")
@@ -187,6 +192,31 @@ class PrefetchScriptTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 serverless_prefetch.main(["--output", str(output)], hub=hub)
 
+    def test_real_hub_resolves_pinned_main_offline(self) -> None:
+        try:
+            import huggingface_hub
+        except ImportError:
+            self.skipTest("huggingface_hub is not installed")
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp) / "hub"
+            fake = _FakeHub(cache, {"nvidia/Cosmos-Reason2-2B": "c" * 40})
+            real = huggingface_hub.snapshot_download
+            simulated = fake.snapshot_download
+
+            def download(*, repo_id, revision=None, local_files_only=False):
+                if local_files_only:
+                    return real(repo_id=repo_id, local_files_only=True, cache_dir=str(cache))
+                path = Path(simulated(repo_id=repo_id, revision=revision))
+                (path / "config.json").write_text("{}", encoding="utf-8")
+                return str(path)
+
+            fake.snapshot_download = download
+            resolution = serverless_prefetch.fetch(fake, cache)
+            for repo, revision in serverless_prefetch.PINNED_REVISIONS.items():
+                self.assertEqual(resolution[repo]["revision"], revision)
+                resolved = real(repo_id=repo, local_files_only=True, cache_dir=str(cache))
+                self.assertEqual(Path(resolved).name, revision)
+
     def test_mismatched_pinned_snapshot_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             hub = _FakeHub(Path(temp) / "hub", {})
@@ -204,7 +234,10 @@ mode = os.environ.get("FAKE_PREFETCH_MODE", "ok")
 if mode == "fail":
     sys.exit(3)
 if mode == "hang":
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    pid_file = os.environ["FAKE_PREFETCH_PID_FILE"]
+    subprocess.Popen([sys.executable, "-c",
+        "import os, sys, time; open(sys.argv[1] + '.tmp', 'w').write(str(os.getpid())); "
+        "os.replace(sys.argv[1] + '.tmp', sys.argv[1]); time.sleep(60)", pid_file])
     time.sleep(60)
 with open(args.output, "x") as out:
     json.dump({"schema_version": 1, "token_seen": os.environ.get("HF_TOKEN") == "hf_value",
@@ -229,7 +262,51 @@ class PrefetchProcessTests(unittest.TestCase):
         self.temp.cleanup()
 
     def _env(self, mode: str) -> dict:
-        return dict(os.environ, HF_TOKEN="hf_value", FAKE_PREFETCH_MODE=mode)
+        return dict(
+            os.environ,
+            HF_TOKEN="hf_value",
+            HF_HUB_OFFLINE="1",
+            FAKE_PREFETCH_MODE=mode,
+            FAKE_PREFETCH_PID_FILE=str(self.root / "grandchild.pid"),
+        )
+
+    def _grandchild_pid(self) -> int:
+        pid_file = self.root / "grandchild.pid"
+        deadline = time.monotonic() + 20
+        while not pid_file.exists():
+            if time.monotonic() > deadline:
+                self.fail("hanging prefetch grandchild never started")
+            time.sleep(0.05)
+        return int(pid_file.read_text())
+
+    def _assert_gone(self, pid: int) -> None:
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            if time.monotonic() > deadline:
+                self.fail("prefetch grandchild survived cleanup")
+            time.sleep(0.05)
+
+    def _interrupt_once_started(self, signum: int) -> threading.Thread:
+        def send() -> None:
+            self._grandchild_pid()
+            os.kill(os.getpid(), signum)
+
+        thread = threading.Thread(target=send, daemon=True)
+        thread.start()
+        return thread
+
+    def _prefetch(self, mode: str, timeout_seconds: float) -> None:
+        prefetch_models(
+            self.layout,
+            base_env=self._env(mode),
+            output=self.run_root / "model-resolution.json",
+            log_root=self.run_root / "logs",
+            timeout_seconds=timeout_seconds,
+        )
 
     def test_factory_prefetches_records_provenance_and_does_not_start_model(self) -> None:
         clock = time.monotonic
@@ -263,17 +340,38 @@ class PrefetchProcessTests(unittest.TestCase):
     def test_hanging_prefetch_times_out_and_its_group_is_gone(self) -> None:
         started = time.monotonic()
         with self.assertRaises(subprocess.TimeoutExpired):
-            prefetch_models(
-                self.layout,
-                base_env=self._env("hang"),
-                output=self.run_root / "model-resolution.json",
-                log_root=self.run_root / "logs",
-                timeout_seconds=1.0,
-            )
-        self.assertLess(time.monotonic() - started, 10.0)
-        result = subprocess.run(["pgrep", "-f", "time.sleep\\(60\\)"], stdout=subprocess.PIPE)
-        survivors = [pid for pid in result.stdout.split() if int(pid) != os.getpid()]
-        self.assertEqual(survivors, [])
+            self._prefetch("hang", 3.0)
+        self.assertLess(time.monotonic() - started, 15.0)
+        self._assert_gone(self._grandchild_pid())
+
+    def test_interrupt_during_prefetch_cleans_group_and_propagates(self) -> None:
+        thread = self._interrupt_once_started(signal.SIGINT)
+        with self.assertRaises(KeyboardInterrupt):
+            self._prefetch("hang", 30.0)
+        thread.join(5)
+        self._assert_gone(self._grandchild_pid())
+
+    def test_sigterm_during_cleanup_is_deferred_until_group_is_gone(self) -> None:
+        stubborn = subprocess.Popen(
+            [sys.executable, "-c",
+             "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"],
+            start_new_session=True,
+        )
+        time.sleep(0.3)
+        latch = job_entry._TerminationLatch()
+        previous = signal.signal(signal.SIGTERM, latch)
+        timer = threading.Timer(0.5, os.kill, (os.getpid(), signal.SIGTERM))
+        try:
+            timer.start()
+            with self.assertRaises(KeyboardInterrupt):
+                close_owned_process_group(stubborn, stubborn.pid, term_grace_seconds=2.0)
+        finally:
+            timer.cancel()
+            signal.signal(signal.SIGTERM, previous)
+        self.assertTrue(latch.received)
+        self.assertIsNotNone(stubborn.poll())
+        with self.assertRaises(ProcessLookupError):
+            os.killpg(stubborn.pid, 0)
 
     def test_exhausted_budget_refuses_prefetch(self) -> None:
         factory = ProductionModelFactory(
@@ -338,6 +436,18 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(json.loads(output)["status"], "rejected")
         self.assertEqual(self.calls, [])
+
+    def test_runner_contract_errors_are_reported_not_raised(self) -> None:
+        def rejected(config, **kwargs):
+            raise JobRuntimeError("workload run and export destinations must be new")
+
+        code, output = self._main(rejected)
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output)["status"], "rejected")
+
+    def test_alias_token_is_also_scanned(self) -> None:
+        self._main(self._runner("complete"), environ={"HUGGING_FACE_HUB_TOKEN": "alias"})
+        self.assertEqual(self.calls[0][1]["exporter"].keywords["secret_values"], ("alias",))
 
     def test_keyboard_interrupt_maps_to_sigint_code(self) -> None:
         def interrupted(config, **kwargs):

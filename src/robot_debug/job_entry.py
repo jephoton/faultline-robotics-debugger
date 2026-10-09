@@ -26,8 +26,20 @@ POST_PREFETCH_RESERVE_SECONDS = 600.0
 MODEL_PORT = 8000
 UPSTREAM_REVISION = "35f1200eb15608aa898f727a3722f7eef889c6cd"
 TOKEN_VARIABLE = "HF_TOKEN"
+TOKEN_ALIASES = ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")
 _SECRET_NAME = re.compile(
-    r"(?:^|_)(?:TOKEN|SECRET|PASSWORD|CREDENTIALS?|KEY)(?:_|$)", re.IGNORECASE
+    r"(?:^|_)(?:TOKEN|SECRETS?|PASSWORD|PASSWD|PASSPHRASE|CREDENTIALS?|KEY|APIKEY|AUTH(?:ORIZATION)?)(?:_|$)",
+    re.IGNORECASE,
+)
+# Inherited overrides that could redirect, disable or bypass the private cache.
+_HF_OVERRIDES = (
+    "HF_HUB_OFFLINE",
+    "TRANSFORMERS_OFFLINE",
+    "HF_ENDPOINT",
+    "HF_HUB_CACHE",
+    "HUGGINGFACE_HUB_CACHE",
+    "TRANSFORMERS_CACHE",
+    "HF_HOME",
 )
 
 EXIT_COMPLETE = 0
@@ -93,14 +105,25 @@ def model_server_argv(layout: ImageLayout, port: int = MODEL_PORT) -> List[str]:
     ]
 
 
-def _hf_environment(layout: ImageLayout) -> Dict[str, str]:
-    return {"HF_HOME": str(layout.hf_home), "HF_HUB_CACHE": str(layout.hf_home / "hub")}
+def _model_base_environment(layout: ImageLayout, base: Mapping[str, str]) -> Dict[str, str]:
+    env = child_environment(base)
+    for name in _HF_OVERRIDES + ("PYTHONPATH",):
+        env.pop(name, None)
+    env.update({"HF_HOME": str(layout.hf_home), "HF_HUB_CACHE": str(layout.hf_home / "hub")})
+    return env
+
+
+def hf_token(base: Mapping[str, str]) -> Optional[str]:
+    for name in TOKEN_ALIASES:
+        value = base.get(name)
+        if value:
+            return value
+    return None
 
 
 def model_environment(layout: ImageLayout, base: Mapping[str, str]) -> Dict[str, str]:
-    env = child_environment(base, **_hf_environment(layout))
+    env = _model_base_environment(layout, base)
     env.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
-    env.pop("PYTHONPATH", None)
     return env
 
 
@@ -123,9 +146,8 @@ def prefetch_models(
         raise InfrastructureError("model prefetch requires POSIX process groups")
     if not timeout_seconds > 0:
         raise InfrastructureError("no time remains for model prefetch")
-    env = child_environment(base_env, **_hf_environment(layout))
-    env.pop("PYTHONPATH", None)
-    token = base_env.get(TOKEN_VARIABLE)
+    env = _model_base_environment(layout, base_env)
+    token = hf_token(base_env)
     if token:
         env[TOKEN_VARIABLE] = token
     argv = [
@@ -287,13 +309,15 @@ def main(
         print(json.dumps({"status": "rejected", "error": str(error)}), file=stdout)
         return EXIT_CONFIG
     deadline = started + float(config["deadline_seconds"])
-    for root in (layout.work_root, layout.export_root):
-        root.mkdir(parents=True, exist_ok=True)
+    try:
+        for root in (layout.work_root, layout.export_root):
+            root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        print(json.dumps({"status": "rejected", "error": "work or export root unavailable"}), file=stdout)
+        return EXIT_CONFIG
 
-    token = environ.get(TOKEN_VARIABLE)
-    exporter = functools.partial(
-        export_closed_evidence, secret_values=(token,) if token else ()
-    )
+    secrets = tuple(sorted({environ[name] for name in TOKEN_ALIASES if environ.get(name)}))
+    exporter = functools.partial(export_closed_evidence, secret_values=secrets)
     latch = _TerminationLatch()
     previous = signal.signal(signal.SIGTERM, latch)
     try:
@@ -315,6 +339,9 @@ def main(
     except KeyboardInterrupt:
         print(json.dumps({"status": "interrupted", "run_id": config["run_id"]}), file=stdout)
         return EXIT_SIGTERM if latch.received else EXIT_SIGINT
+    except JobRuntimeError as error:
+        print(json.dumps({"status": "rejected", "error": str(error)}), file=stdout)
+        return EXIT_CONFIG
     finally:
         signal.signal(signal.SIGTERM, previous)
     print(json.dumps(summary, sort_keys=True), file=stdout)
