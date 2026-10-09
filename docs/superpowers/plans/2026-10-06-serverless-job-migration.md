@@ -32,10 +32,12 @@ No agent edits historical artifacts, M3 launchers, or external replay.
 Task 1 is integrated after independent reviews and real POSIX regressions;
 fresh Windows focused suite: 15 tests/eight skips, WSL: 15/one skip. Task 3's
 prepare-only configuration subset is integrated after independent reviews and
-23 focused tests. Full integrated Windows suite: 623 tests/twelve platform
-skips, OK. Task 2 config/export foundation remains under isolated review;
-model/workload lifecycle and CLI are not implemented yet. Task 3 final image
-is not built; Task 4 has not started. The pinned simulator base alone passed
+23 focused tests. Full Windows suite before new image tests: 661 tests/thirteen
+platform skips, OK. Task 2 config/export foundation is reviewed and integrated;
+injectable dispatch is under review, while real model lifecycle and CLI remain
+unimplemented. Task 3 static image packaging is integrated and actual Docker
+`build --check` passes; the local image build is in progress, not validated.
+Task 4 has not started. The pinned simulator base alone passed
 local CPU environment/import/direct-CLI probes. These are partial completions,
 not M5 or migration acceptance. See the experiment record and handoff.
 

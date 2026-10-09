@@ -37,9 +37,23 @@ documented private local config/argument-preview filenames are ignored. Final
 
 Export-foundation review reproduced stale manifest entries when an earlier file
 was mutated during a later copy, plus huge integer deadlines raising an
-unexpected OverflowError. Repairs/regressions and re-review are pending; that
-foundation is not integrated yet. These are local project defects, not cloud or
-robot-policy failures. CPU image probes do not establish GPU replay acceptance.
+unexpected OverflowError. A final source/destination identity-and-hash sweep
+and bounded numeric validation fixed these. Further regressions cover a leaked
+source descriptor on staging-open failure and removal of only the newly owned
+manifest after failed publication. Independent re-reviews passed before
+integration; the exporter preserves copied evidence and fails closed.
+
+Serial-workload spec review reproduced two additional defects: matching media
+and aggregates could describe episode 1 despite a request for episode 0, and
+the final model-liveness check could consume the launch deadline before an
+evaluator started. Regression fixes are pending. These are injected local
+fixtures, not failures observed in Nebius or in the robot policy.
+
+Actual Docker `build --check` found a redundant initial ENTRYPOINT alongside
+the final one. Removing the redundant instruction and requiring the final
+interpreter's `-B` option fixed the check; it now passes without warnings.
+Static contracts and metadata-only dependency resolution do not prove native
+model imports, GPU inference, or live deployment acceptance.
 
 ## Serverless migration preparation — October 6
 

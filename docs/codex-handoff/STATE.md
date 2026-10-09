@@ -34,15 +34,23 @@ network-disabled CPU probes confirmed Python 3.8.20, vla-eval 0.5.0,
 NumPy 1.24.4, MuJoCo 3.2.3 and robosuite 1.4.0; project containment imports
 and installed `vla-eval run --help` support `--no-docker`. This is a base-image
 probe, not validation of the final model image, renderer or robot inference.
-The local C drive has roughly 9.4 GiB free after the pull; do not begin a large
-model-environment build without checking required/free space.
+Disk space must be checked before and during model-environment builds; the
+October 9 build started with roughly 18.8 GiB free on the backing C drive.
 
-Configuration/closed-evidence export foundation is committed in an isolated
-worktree and undergoing review, not integrated yet. Remaining migration work:
-model lifecycle/handshake/deadline and sequential mode dispatch, final image
-packaging/probes, private publication and the one live pilot with artifact
-recovery. No cloud Job, new provider inference call or billable resource was
-started at this checkpoint. US$3/one-hour/24-hour retention approval persists;
+Configuration/closed-evidence export foundation is independently reviewed and
+integrated, including source revalidation and publication-failure regressions.
+Fresh Windows suite passed 661 tests with 13 platform skips before the new
+image tests; focused image/dependency contracts passed seven tests. GitHub CI
+passed the pushed `fa9bc67` checkpoint. PyYAML is an optional `serverless`
+development extra, installed by CI without changing default viewer dependencies.
+Static pinned image packaging is integrated; actual Docker `build --check`
+passes without warnings. A local image build has started, not yet passed.
+The injected serial workload remains under review; that review reproduced
+wrong-requested-episode acceptance and a liveness-check/cutoff race, both pending
+regression fixes. Real model lifecycle/handshake/deadlines, final CLI, native
+image probes, private publication and the one live pilot remain outstanding.
+No cloud Job, new provider inference call or billable resource was started at
+this checkpoint. US$3/one-hour/24-hour retention approval persists;
 fresh cloud account/quota/capacity/price checks still precede paid actions.
 External replay remains deferred; M5C semantic usefulness/human review is open.
 M5 is not complete.

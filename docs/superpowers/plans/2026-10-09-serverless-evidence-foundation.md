@@ -13,6 +13,16 @@ complete or partial evidence. No subprocess, model download or cloud call.
 
 **Tech Stack:** Python standard library, unittest, SHA256, JSON, local fixtures.
 
+## Verified completion
+
+The configuration/export foundation and review-driven repairs are integrated
+and pushed through `fa9bc67`. Independent spec and quality reviews approved
+the final isolated revision `a5660b8`; root ran the combined 74-test WSL suite
+(one platform skip) and the full Windows suite before the next increment.
+Final foundation-focused suite: 36 tests on each platform, with the FIFO test
+skipped on Windows only. The checklists below describe completed foundation
+work; the broader Task 2 and M5 boundaries at the end remain open.
+
 ## Ownership, scope and concurrency
 
 This implements green/amber details of the already approved October 6 migration,
@@ -51,9 +61,9 @@ fields and malformed values with generic diagnostics, not raw input echo.
 
 ## Task 1 — configuration and export (green)
 
-- [ ] Write failing tests for all four modes; missing/extra keys, string
+- [x] Write failing tests for all four modes; missing/extra keys, string
   subclasses, bool schema/deadline, NaN/infinity, unsafe run IDs and >3000 bounds.
-- [ ] Write export fixtures before implementation. A minimal successful fixture:
+- [x] Write export fixtures before implementation. A minimal successful fixture:
 
 ```python
 with tempfile.TemporaryDirectory() as temporary:
@@ -67,40 +77,40 @@ with tempfile.TemporaryDirectory() as temporary:
     assert json.loads((root / "output" / "manifest.json").read_text()) == report
 ```
 
-- [ ] Reject false/unknown cleanup, invalid status, symlinked source/destination
+- [x] Reject false/unknown cleanup, invalid status, symlinked source/destination
   ancestors or children, source/destination overlap, existing destination,
   special files, control characters/unsafe relative paths, and existing source
   completion-manifest names. Reject credential files (`.env*`, key/pem/token
   names), unsupported extensions and SQLite `-wal`/`-shm` companions.
   Allow ordinary `.json`, `.jsonl`, `.mp4`, `.sqlite`, `.yaml`, `.yml`, `.txt`
   and `.log` evidence files, not weights, executable code or archives.
-- [ ] Enforce <=1 GiB total source bytes before creating the destination.
+- [x] Enforce <=1 GiB total source bytes before creating the destination.
   Scan for explicitly supplied nonempty ordinary-string secret values in file
   bytes; reject matches without echoing the value. This detects supplied secrets,
   not all unknown or transformed credentials. Do not read environment secrets.
-- [ ] Copy into exclusive unique per-file staging paths and replace only
+- [x] Copy into exclusive unique per-file staging paths and replace only
   those newly created destination paths. Hash copied bytes, compare with source,
   and confirm source size/hash stayed stable. Sort manifest paths deterministically.
   Publish `manifest.json` exclusively only after every file is verified.
-- [ ] Inject a copy failure via a patched private copy seam: confirm the
+- [x] Inject a copy failure via a patched private copy seam: confirm the
   exception propagates and no final manifest exists. Keep explicitly partial
   copied files for recovery; never remove or overwrite prior evidence.
-- [ ] Test partial-status manifest, byte tampering, secret matching, source
+- [x] Test partial-status manifest, byte tampering, secret matching, source
   mutation during copy, existing destinations, SQLite companions and POSIX
   symlink cases. No subprocess or network call in these tests.
-- [ ] Run red then green with `PYTHONPATH=src` and
+- [x] Run red then green with `PYTHONPATH=src` and
   `C:/Windows/py.exe -3.11 -B -m unittest tests.test_job_runtime -v`.
   Run the same suite under WSL for symlink fixtures. Run `git diff --check`.
-- [ ] Commit only owned files as
+- [x] Commit only owned files as
   `feat(jobs): validate workloads and export closed evidence`.
 
 ## Review and completion
 
-- [ ] Independent spec reviewer verifies exact contracts/guard ordering and
+- [x] Independent spec reviewer verifies exact contracts/guard ordering and
   failure-without-manifest behavior; no orchestration-ready claim.
-- [ ] Independent quality/security reviewer checks containment, TOCTOU checks,
+- [x] Independent quality/security reviewer checks containment, TOCTOU checks,
   bounded memory use, secret handling, failure recovery and actual fixture tests.
-- [ ] Root reruns focused and complete tests, cherry-picks reviewed commits,
+- [x] Root reruns focused and complete tests, cherry-picks reviewed commits,
   updates migration progress and handoff, then pushes only verified integration.
 
 This foundation does not complete Task 2 or M5. Model-group startup/handshake,
