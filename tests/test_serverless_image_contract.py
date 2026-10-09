@@ -181,6 +181,15 @@ class ServerlessImageContractTests(unittest.TestCase):
         self.assertNotRegex(self.dockerfile, r"(?m)^COPY\s+.*(?:weights|cache|\.env)")
         self.assertIn("apt-get install -y --no-install-recommends ffmpeg", self.dockerfile)
 
+    def test_application_edits_do_not_invalidate_heavy_model_install_layer(self) -> None:
+        dependency_input = self.dockerfile.index("COPY deploy/serverless/requirements-model.txt")
+        installation = self.dockerfile.index("RUN export UV_PYTHON_INSTALL_DIR=")
+        application_inputs = [self.dockerfile.index("COPY " + path + " ")
+                              for path in ("src", "scripts", "configs", "pyproject.toml", "LICENSE")]
+        self.assertLess(dependency_input, installation)
+        for application_input in application_inputs:
+            self.assertGreater(application_input, installation)
+
 
 if __name__ == "__main__":
     unittest.main()

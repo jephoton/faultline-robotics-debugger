@@ -14,11 +14,6 @@ RUN git clone --no-checkout https://github.com/allenai/vla-evaluation-harness.gi
     && test "$(git -C /opt/upstream rev-parse HEAD)" = "35f1200eb15608aa898f727a3722f7eef889c6cd"
 
 WORKDIR /opt/robot-debug
-COPY src /opt/robot-debug/src
-COPY scripts /opt/robot-debug/scripts
-COPY configs /opt/robot-debug/configs
-COPY pyproject.toml /opt/robot-debug/pyproject.toml
-COPY LICENSE /opt/robot-debug/LICENSE
 COPY deploy/serverless/requirements-model.txt /opt/robot-debug/requirements-model.txt
 
 # Keep the model interpreter and package cache under the build layer; delete cache afterward.
@@ -35,6 +30,13 @@ RUN export UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_CACHE_DIR=/tmp/uv-cache \
         --exclude-newer 2026-07-04T00:00:00Z \
         -r /opt/robot-debug/requirements-model.txt \
     && rm -rf /tmp/uv-cache
+
+# Application edits must not invalidate the large, pinned model dependency layer.
+COPY src /opt/robot-debug/src
+COPY scripts /opt/robot-debug/scripts
+COPY configs /opt/robot-debug/configs
+COPY pyproject.toml /opt/robot-debug/pyproject.toml
+COPY LICENSE /opt/robot-debug/LICENSE
 
 # Import checks load modules and the policy class only; they never create a policy or fetch weights.
 RUN /opt/model-env/bin/python -c "import torch; import torchcodec; from lerobot.policies.groot.modeling_groot import GrootPolicy; import vla_eval.model_servers.lerobot" \
