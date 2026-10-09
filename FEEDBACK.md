@@ -11,7 +11,7 @@ identifiers, tokens, private addresses, or payment details here.
 | NVIDIA GR00T N1.7 and LIBERO checkpoint | Produced robot actions from agent-view and wrist images plus state. | The pinned policy completed 20/20 nominal baseline episodes. It also supplied repeatable, recorded behavior for the controlled failure and reduction experiments. | The first pilot hit a 403 on the transitive gated Cosmos dependency until account-holder access was granted. Model startup took time even with cached weights. These are model/dependency onboarding observations, not Nebius faults. | Provisionally yes for this manipulation-policy test; document task and simulator limits. |
 | AllenAI VLA evaluation harness and LIBERO image | Hosted the evaluator, simulator, recordings, and model-server adapter. | Structured aggregates, traces, SQLite recordings, and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user. Generic schema warnings appeared even on successful episodes. M3 local review also found that the pinned CLI can leave its Docker client child alive after the evaluator exits; this is an upstream process-lifecycle integration risk, not evidence of a Nebius or NVIDIA fault. | Yes for the pinned benchmark, with explicit version, compatibility, and process-cleanup checks. |
 | Nebius Token Factory / Nemotron | Authenticated catalog and two real text-only M5C generation attempts. | The separately approved4096-token attempt returned valid JSON and exact episode IDs, readable in the viewer; usage and latency support auditing. | Our600-token limit was inadequate for the first attempt. The successful prose is shallow; its mask caveat cites nominal episodes rather than supporting reduction evidence. Posted billing remains unknown. | Provisionally for human-reviewed summaries, not autonomous diagnosis; final choice needs Jethro's review. |
-| Nebius Serverless Jobs | Read-only CLI discovery and a configuration dry-run for a future single-GPU robot evaluation. Actual Job execution remains untested. | Existing CLI0.12.275 exposes deterministic create, dry-run, logs and cancel. The explicit dry-run succeeded and reported no resource created; live pricing/capacity advice was available. | One GPU calculator lookup reached a connection deadline; a later bounded lookup succeeded. Local Docker startup is separately blocked by a Windows runtime-socket error, not a Nebius fault. | Undecided until an actual Job returns robot evidence; do not describe configuration validation as a completed migration. |
+| Nebius Serverless Jobs | Read-only CLI discovery and a configuration dry-run for a future single-GPU robot evaluation. Actual Job execution remains untested. | Existing CLI0.12.275 exposes deterministic create, dry-run, logs and cancel. The explicit dry-run succeeded and reported no resource created; live pricing/capacity advice was available. | One GPU calculator lookup reached a connection deadline; a later bounded lookup succeeded. Local Docker startup required a recoverable Windows runtime-folder repair and a later normal restart; permanent reliability is unverified. This is workstation friction, not a Nebius fault. | Undecided until an actual Job returns robot evidence; do not describe configuration validation as a completed migration. |
 
 ## October 3 M5 documentation-only preparation
 
@@ -242,3 +242,13 @@ is attributed to Nebius or NVIDIA. See the
 [migration record](docs/experiments/serverless-job-pilot.md) and
 [development log](docs/dev-log.md). Reuse judgments and posted billing still
 require actual service evidence and Jethro's first-hand submission review.
+
+Further local packaging checks resolved model dependencies from pinned public
+sources and passed Dockerfile validation. An actual CPU image build exposed our
+overly strict comparison of `uv --version`: the pinned binary also prints its
+platform. Correcting the expected output let the build reach package downloads.
+This is our packaging defect, not a provider outage or model failure. Workload
+review likewise caught requested-episode identity and dispatch-cutoff/liveness
+defects using synthetic fixtures, before any paid Job. No new Token Factory or
+NVIDIA inference call was made by these checks; image and live acceptance remain
+open.
