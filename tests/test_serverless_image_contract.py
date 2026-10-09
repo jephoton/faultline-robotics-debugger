@@ -85,7 +85,9 @@ class ServerlessImageContractTests(unittest.TestCase):
         self.assertIn("/opt/conda/envs/libero/bin/python", self.dockerfile)
         self.assertIn("/opt/robot-debug/scripts/run_serverless_workload.py", self.dockerfile)
         self.assertIn("/etc/faultline/workload.json", self.dockerfile)
-        self.assertIn("ENTRYPOINT []", self.dockerfile)
+        entrypoints = [line for line in self.dockerfile.splitlines() if line.startswith("ENTRYPOINT ")]
+        self.assertEqual(len(entrypoints), 1)
+        self.assertIn('"/opt/conda/envs/libero/bin/python", "-B"', entrypoints[0])
         self.assertIn('SHELL ["/bin/sh", "-c"]', self.dockerfile)
         self.assertNotRegex(self.dockerfile, r"(?m)^ENV\s+PYTHONPATH=")
         self.assertNotRegex(self.dockerfile, r"(?m)^ARG\s+[^=]*(?:TOKEN|KEY|SECRET)")

@@ -1,7 +1,6 @@
 FROM ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0
 
-# Drop inherited image startup behavior and make all later RUN commands use sh.
-ENTRYPOINT []
+# The final ENTRYPOINT replaces inherited startup behavior; use sh for RUN commands.
 SHELL ["/bin/sh", "-c"]
 
 ENV FAULTLINE_MODEL_PYTHON=/opt/model-env/bin/python
@@ -42,4 +41,4 @@ RUN /opt/model-env/bin/python -c "import torch; import torchcodec; from lerobot.
     && /opt/conda/envs/libero/bin/python -c "import importlib.metadata as m, json, sys; names=['numpy','torch','robosuite','mujoco','libero']; versions={name:(m.version(name) if name in {d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')} else None) for name in names}; json.dump({'simulator':{'python':sys.version.split()[0],'packages':versions}},open('/opt/robot-debug/simulator-packages.json','w'),sort_keys=True,indent=2)" \
     && /opt/model-env/bin/python -c "import importlib.metadata as m, json, sys; names=['torch','torchvision','torchcodec','lerobot','vla-eval']; versions={name:(m.version(name) if name in {d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')} else None) for name in names}; json.dump({'model':{'python':sys.version.split()[0],'packages':versions}},open('/opt/robot-debug/model-packages.json','w'),sort_keys=True,indent=2)"
 
-ENTRYPOINT ["/opt/conda/envs/libero/bin/python", "/opt/robot-debug/scripts/run_serverless_workload.py", "--config", "/etc/faultline/workload.json"]
+ENTRYPOINT ["/opt/conda/envs/libero/bin/python", "-B", "/opt/robot-debug/scripts/run_serverless_workload.py", "--config", "/etc/faultline/workload.json"]
