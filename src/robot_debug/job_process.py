@@ -176,28 +176,36 @@ def close_owned_process_group(
     if kill_grace_seconds > 2.0:
         raise ValueError("kill_grace_seconds cannot exceed 2 seconds")
 
-    previous_sigint = None
-    deferred_sigint_frame = []
+    # Interrupts that arrive mid-cleanup are deferred until absence is
+    # confirmed, so a Job's SIGTERM cannot abandon a half-finished teardown.
+    previous_handlers = {}
+    deferred_frames = {}
     if threading.current_thread() is threading.main_thread():
-        previous_sigint = signal.getsignal(signal.SIGINT)
-        if previous_sigint != signal.SIG_IGN:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous = signal.getsignal(signum)
+            if previous == signal.SIG_IGN or previous is None:
+                continue
+            previous_handlers[signum] = previous
             signal.signal(
-                signal.SIGINT,
-                lambda _signum, frame: deferred_sigint_frame.append(frame),
+                signum,
+                lambda received, frame: deferred_frames.setdefault(received, frame),
             )
     try:
         _terminate_and_confirm_without_interrupt(
             process, process_group, term_grace_seconds, kill_grace_seconds
         )
     finally:
-        if previous_sigint is not None and previous_sigint != signal.SIG_IGN:
-            signal.signal(signal.SIGINT, previous_sigint)
+        for signum, previous in previous_handlers.items():
+            signal.signal(signum, previous)
 
-    if deferred_sigint_frame:
-        if previous_sigint == signal.SIG_DFL:
-            signal.raise_signal(signal.SIGINT)
-        elif callable(previous_sigint):
-            previous_sigint(signal.SIGINT, deferred_sigint_frame[-1])
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        if signum not in deferred_frames:
+            continue
+        previous = previous_handlers[signum]
+        if previous == signal.SIG_DFL:
+            signal.raise_signal(signum)
+        elif callable(previous):
+            previous(signum, deferred_frames[signum])
 
 
 def _terminate_and_confirm_without_interrupt(
