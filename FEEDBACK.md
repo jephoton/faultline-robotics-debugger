@@ -252,3 +252,20 @@ review likewise caught requested-episode identity and dispatch-cutoff/liveness
 defects using synthetic fixtures, before any paid Job. No new Token Factory or
 NVIDIA inference call was made by these checks; image and live acceptance remain
 open.
+
+### October 9: Container Registry and CPU-builder quota
+
+A private Container Registry was created with one CLI command; the service is
+documented as free of charge. A planned short CPU builder VM (`cpu-d3`,
+8 vCPU) was rejected at creation with `ResourceExhausted`: this tenant's
+`compute.instance.non-gpu.vcpu` quota in eu-north1 is **0**, while GPU quotas
+(L40S/H100/H200) are 32 each. Nothing was provisioned and no charge resulted;
+the temporary SSH rule created for the builder was removed. The quota list
+command made the cause clear, but the zero CPU quota was surprising for a
+new-account onboarding path, since a CPU VM is the obvious cheap build host.
+The image is therefore built locally and pushed from the workstation.
+
+The October billing check also showed that a stopped VM's 200 GiB boot disk
+costs about US$0.47/day, and that the hackathon US$25 promo applies to Token
+Factory rather than AI Cloud. Both were our planning assumptions, not provider
+defects; the console usage breakdown made them easy to see.
