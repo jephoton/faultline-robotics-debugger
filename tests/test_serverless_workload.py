@@ -399,6 +399,39 @@ class ServerlessWorkloadTests(unittest.TestCase):
         self.assertEqual(2, len(timeouts))
         self.assertLess(timeouts[0], 43)
 
+    def test_model_death_during_evaluator_factory_prevents_dispatch(self) -> None:
+        events: list[object] = []
+        model = FakeModel(events)
+        runner = FixtureRunner(events)
+
+        def evaluator_factory(**kwargs):
+            model.failure = "dead"
+            return runner
+
+        result, _, _, exports = self.invoke(
+            model=model, runner=runner, evaluator_factory=evaluator_factory
+        )
+        self.assertEqual("model_died", result["stop_reason"])
+        self.assertEqual([], runner.configs)
+        self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_factory_construction_that_exhausts_deadline_prevents_dispatch(self) -> None:
+        clock = FakeClock(100, 100, 101, 102, 103, 104, 105, 106)
+        events: list[object] = []
+        model = FakeModel(events)
+        runner = FixtureRunner(events)
+
+        def evaluator_factory(**kwargs):
+            clock.advance_to(200)
+            return runner
+
+        result, _, _, exports = self.invoke(
+            model=model, runner=runner, evaluator_factory=evaluator_factory, clock=clock
+        )
+        self.assertEqual("deadline_exhausted", result["stop_reason"])
+        self.assertEqual([], runner.configs)
+        self.assertEqual("partial", exports[0][2]["status"])
+
     def test_model_death_after_evaluator_prevents_next_pilot_launch(self) -> None:
         events: list[object] = []
         model = FakeModel(events, die_after_run=True)

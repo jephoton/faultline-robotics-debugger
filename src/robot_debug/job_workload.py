@@ -271,6 +271,11 @@ def run_workload(
                 except Exception as error:
                     latch_failure("evaluator_failed")
                     raise InfrastructureError("evaluator setup failed") from error
+                try:
+                    model.check_alive()
+                except Exception as error:
+                    latch_failure("model_died")
+                    raise InfrastructureError("model died before evaluation") from error
                 if remaining() <= 0:
                     latch_failure("deadline_exhausted")
                     raise InfrastructureError("launch deadline exhausted")
