@@ -146,40 +146,74 @@ class DirectEvaluator:
     def _terminate_and_confirm(
         self, process: subprocess.Popen[bytes], process_group: int
     ) -> None:
-        previous_sigint = None
-        deferred_sigint_frame = []
-        if threading.current_thread() is threading.main_thread():
-            previous_sigint = signal.getsignal(signal.SIGINT)
-            if previous_sigint != signal.SIG_IGN:
-                signal.signal(
-                    signal.SIGINT,
-                    lambda _signum, frame: deferred_sigint_frame.append(frame),
-                )
-        try:
-            self._terminate_and_confirm_without_interrupt(process, process_group)
-        finally:
-            if previous_sigint is not None and previous_sigint != signal.SIG_IGN:
-                signal.signal(signal.SIGINT, previous_sigint)
+        close_owned_process_group(
+            process,
+            process_group,
+            term_grace_seconds=self._term_grace_seconds,
+            kill_grace_seconds=self._kill_grace_seconds,
+        )
 
-        if deferred_sigint_frame:
-            if previous_sigint == signal.SIG_DFL:
-                signal.raise_signal(signal.SIGINT)
-            elif callable(previous_sigint):
-                previous_sigint(signal.SIGINT, deferred_sigint_frame[-1])
 
-    def _terminate_and_confirm_without_interrupt(
-        self, process: subprocess.Popen[bytes], process_group: int
-    ) -> None:
-        if not _process_group_exists(process_group):
-            process.poll()
-            return
-        _signal_process_group(process_group, signal.SIGTERM)
-        if _await_group_absence(process, process_group, self._term_grace_seconds):
-            return
-        _signal_process_group(process_group, signal.SIGKILL)
-        if _await_group_absence(process, process_group, self._kill_grace_seconds):
-            return
-        raise InfrastructureError("evaluator process group cleanup could not be confirmed")
+def close_owned_process_group(
+    process: subprocess.Popen[bytes],
+    process_group: int,
+    *,
+    term_grace_seconds: float = 5.0,
+    kill_grace_seconds: float = 2.0,
+) -> None:
+    """Terminate and prove absence of one owned POSIX process group."""
+
+    if os.name != "posix":
+        raise InfrastructureError("owned process cleanup requires POSIX process groups")
+    if isinstance(process_group, bool) or not isinstance(process_group, int) or process_group <= 0:
+        raise ValueError("process_group must be a positive integer PID")
+    term_grace_seconds = _nonnegative_finite(term_grace_seconds, "term_grace_seconds")
+    kill_grace_seconds = _nonnegative_finite(kill_grace_seconds, "kill_grace_seconds")
+    if term_grace_seconds > 5.0:
+        raise ValueError("term_grace_seconds cannot exceed 5 seconds")
+    if kill_grace_seconds > 2.0:
+        raise ValueError("kill_grace_seconds cannot exceed 2 seconds")
+
+    previous_sigint = None
+    deferred_sigint_frame = []
+    if threading.current_thread() is threading.main_thread():
+        previous_sigint = signal.getsignal(signal.SIGINT)
+        if previous_sigint != signal.SIG_IGN:
+            signal.signal(
+                signal.SIGINT,
+                lambda _signum, frame: deferred_sigint_frame.append(frame),
+            )
+    try:
+        _terminate_and_confirm_without_interrupt(
+            process, process_group, term_grace_seconds, kill_grace_seconds
+        )
+    finally:
+        if previous_sigint is not None and previous_sigint != signal.SIG_IGN:
+            signal.signal(signal.SIGINT, previous_sigint)
+
+    if deferred_sigint_frame:
+        if previous_sigint == signal.SIG_DFL:
+            signal.raise_signal(signal.SIGINT)
+        elif callable(previous_sigint):
+            previous_sigint(signal.SIGINT, deferred_sigint_frame[-1])
+
+
+def _terminate_and_confirm_without_interrupt(
+    process: subprocess.Popen[bytes],
+    process_group: int,
+    term_grace_seconds: float,
+    kill_grace_seconds: float,
+) -> None:
+    if not _process_group_exists(process_group):
+        process.poll()
+        return
+    _signal_process_group(process_group, signal.SIGTERM)
+    if _await_group_absence(process, process_group, term_grace_seconds):
+        return
+    _signal_process_group(process_group, signal.SIGKILL)
+    if _await_group_absence(process, process_group, kill_grace_seconds):
+        return
+    raise InfrastructureError("evaluator process group cleanup could not be confirmed")
 
 
 def _path_text(value: os.PathLike[str] | str, name: str) -> str:

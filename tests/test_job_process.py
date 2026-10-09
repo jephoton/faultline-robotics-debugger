@@ -12,7 +12,12 @@ import time
 import unittest
 from unittest import mock
 
-from robot_debug.job_process import DirectEvaluator, InfrastructureError, direct_command
+from robot_debug.job_process import (
+    DirectEvaluator,
+    InfrastructureError,
+    close_owned_process_group,
+    direct_command,
+)
 from scripts import run_failure_search
 
 
@@ -430,6 +435,24 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
                     cwd=self.root,
                     check=False,
                 )
+
+    def test_shared_cleanup_closes_an_owned_process_group(self) -> None:
+        process = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        process_group = process.pid
+        self._owned_groups.add(process_group)
+
+        close_owned_process_group(
+            process, process_group, term_grace_seconds=0.2, kill_grace_seconds=0.5
+        )
+
+        self.assertIsNotNone(process.poll())
+        self.assertGroupAbsent(process_group)
 
 
 if __name__ == "__main__":
