@@ -4,6 +4,43 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## Serverless local recovery and review — October 9
+
+The approved recoverable Docker repair moved only the stopped runtime `run`
+folder into a sibling backup, then restarted Desktop. The Linux engine now
+responds and the pinned LIBERO base image pulled successfully. No images,
+volumes, settings or unrelated files were deleted. The backup remains available;
+the exact Windows/kernel cause is not established. This supersedes the earlier
+startup blocker without attributing it to Nebius.
+The same socket error reappeared after the engine exited. A subsequent normal
+hidden restart recovered it; the guarded second-folder-move attempt refused
+because Docker processes were running, so nothing else was moved. Do not
+describe this workaround as a permanent repair or reset Docker storage.
+
+The installed-absolute-evaluator-path mismatch below was fixed and independently
+reviewed. A further quality probe caught interruption during orphan cleanup:
+after a successful leader exit, a child could send SIGINT during the TERM wait,
+causing cleanup to escape while the child remained alive. Cleanup now defers
+SIGINT within its existing fixed TERM/KILL window, confirms group absence,
+restores the caller's handler, then propagates interruption. Uncertain cleanup
+still wins as an infrastructure error. The regression also needed an `import
+time` and success-marker assertions to prove the leader really exited normally,
+not from a fixture exception. Independent reviews and real WSL signal fixtures
+passed before integration (15 tests, one Windows-only skip).
+
+Prepare-only review caught malformed image references, arbitrary JSON-key
+echoing and Windows UNC paths reaching filesystem inspection. Explicit image
+syntax validation, generic diagnostics and double-leading-slash rejection now
+cover those cases. The UNC test uses mocks; no SMB connection was made. Both
+documented private local config/argument-preview filenames are ignored. Final
+23-test suite and independent spec/quality reviews passed before integration.
+
+Export-foundation review reproduced stale manifest entries when an earlier file
+was mutated during a later copy, plus huge integer deadlines raising an
+unexpected OverflowError. Repairs/regressions and re-review are pending; that
+foundation is not integrated yet. These are local project defects, not cloud or
+robot-policy failures. CPU image probes do not establish GPU replay acceptance.
+
 ## Serverless migration preparation — October 6
 
 The user approved future single-GPU Jobs, preserving all historical VM results,

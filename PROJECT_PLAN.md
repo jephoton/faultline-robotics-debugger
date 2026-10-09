@@ -10,6 +10,12 @@ batching, portfolio scheduling or scale-out a core release gate. See
 
 ## Latest submission alignment — October 6
 
+**October 9 execution update:** reviewed direct-evaluator containment and
+prepare-only Job configuration are integrated; Docker recovered and the pinned
+simulator base image passed local CPU checks. Final model/runtime packaging and
+live pilot remain; M5 is not complete. See the
+[current handoff](docs/codex-handoff/STATE.md) for evidence and remaining gates.
+
 **Newest priority:** Jethro approved moving future evaluations to a single-GPU
 Serverless Job and private Object Storage export; preserve historical VM results
 without rerunning them. See [ADR 0018](docs/decisions/0018-serverless-jobs-for-future-runs.md)

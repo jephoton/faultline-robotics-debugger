@@ -27,11 +27,23 @@ Dependency map: `runtime kernel → entrypoint → image probe → Job configura
 No overlapping builder file ownership. Root cherry-picks only reviewed commits.
 No agent edits historical artifacts, M3 launchers, or external replay.
 
+## October 9 verified execution progress
+
+Task 1 is integrated after independent reviews and real POSIX regressions;
+fresh Windows focused suite: 15 tests/eight skips, WSL: 15/one skip. Task 3's
+prepare-only configuration subset is integrated after independent reviews and
+23 focused tests. Full integrated Windows suite: 623 tests/twelve platform
+skips, OK. Task 2 config/export foundation remains under isolated review;
+model/workload lifecycle and CLI are not implemented yet. Task 3 final image
+is not built; Task 4 has not started. The pinned simulator base alone passed
+local CPU environment/import/direct-CLI probes. These are partial completions,
+not M5 or migration acceptance. See the experiment record and handoff.
+
 ### Task 1: Direct evaluator containment kernel — green
 
 Files: create `src/robot_debug/job_process.py`, `tests/test_job_process.py`.
 
-- [ ] Write failing unittest fixtures for an argv builder and real POSIX process
+- [x] Write failing unittest fixtures for an argv builder and real POSIX process
   lifecycle. Define the callable contract below; driver callback compatibility
   is `runner(command, cwd=path, check=False)` returning a CompletedProcess.
 
@@ -43,20 +55,20 @@ DirectEvaluator(executable=path, timeout_seconds=5, env=process_env,
                 log_root=fresh_logs)(command, cwd=upstream, check=False)
 ```
 
-- [ ] Reject unexpected commands, invalid finite deadlines, duplicate/direct
+- [x] Reject unexpected commands, invalid finite deadlines, duplicate/direct
   flag misuse and non-POSIX production execution; never use a shell.
-- [ ] Test successful return, nonzero return, timeout, interrupt and an evaluator
+- [x] Test successful return, nonzero return, timeout, interrupt and an evaluator
   whose leader exits while a child remains. Use `sys.executable` fixture programs
   and actual process-group inspection, not mock-only lifecycle claims. Clean
   every test-owned group in fixture teardown. Launch no Docker/cloud command.
-- [ ] Implement `start_new_session=True`, file-backed logs and bounded TERM/KILL
+- [x] Implement `start_new_session=True`, file-backed logs and bounded TERM/KILL
   cleanup/reaping/group-absence confirmation on success and failure. If cleanup
   is uncertain raise an infrastructure exception; do not return a valid outcome.
   Do not copy the M3 Docker-name observer into this direct runtime.
-- [ ] Run red then green: `C:/Windows/py.exe -3.11 -m unittest tests.test_job_process -v`
+- [x] Run red then green: `C:/Windows/py.exe -3.11 -m unittest tests.test_job_process -v`
   with source path set. Run POSIX cases under WSL; Windows skips are not acceptance.
-- [ ] Commit explicit files: `feat(jobs): contain direct evaluator process groups`.
-- [ ] Independent spec then quality review; fix and recheck before integration.
+- [x] Commit explicit files: `feat(jobs): contain direct evaluator process groups`.
+- [x] Independent spec then quality review; fix and recheck before integration.
 
 ### Task 2: Sequential Job entrypoint and closed-file export — green/amber
 

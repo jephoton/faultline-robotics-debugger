@@ -225,3 +225,20 @@ validation is useful, yet insufficient for semantic grounding. Human review
 remains essential; we would consider reuse for constrained summaries, not
 as a stand-alone root-cause authority. One successful request does not establish
 reliability, and future prompt quality work needs its own scope/allowance.
+
+### October 9: Local Serverless packaging checks only
+
+No new Nebius service execution or NVIDIA model inference occurred. The pinned
+upstream LIBERO image successfully supports direct evaluator execution inside
+a container, avoiding nested Docker in the approved Job design. Actual installed
+versions and CLI behavior were checked locally, not inferred from a different
+upstream source revision. GR00T packaging/rendering and the live Job remain
+unvalidated, so this adds no provider-reliability or model-quality claim.
+
+Docker Desktop's inaccessible local runtime socket was resolved by a separately
+approved, recoverable runtime-folder move and restart. Interrupt cleanup and
+configuration validation defects were project bugs caught by review; neither
+is attributed to Nebius or NVIDIA. See the
+[migration record](docs/experiments/serverless-job-pilot.md) and
+[development log](docs/dev-log.md). Reuse judgments and posted billing still
+require actual service evidence and Jethro's first-hand submission review.

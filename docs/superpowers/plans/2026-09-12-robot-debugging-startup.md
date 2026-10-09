@@ -1,5 +1,11 @@
 # Faultline Startup Plan
 
+**October 9 execution update:** reviewed direct-evaluator containment and
+prepare-only Job configuration are integrated; Docker recovered and the pinned
+simulator base image passed local CPU checks. Final model/runtime packaging and
+live pilot remain; M5 is not complete. See the
+[current handoff](../../codex-handoff/STATE.md) for evidence and remaining gates.
+
 **Naming/scope update — October 8:** Faultline is the official product name.
 All further M3/HPC work is optional stretch; deeper HPC exploration may move
 to a separate project. Preserve the measured base M3 result without making

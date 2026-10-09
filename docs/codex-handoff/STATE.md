@@ -1,5 +1,43 @@
 # Faultline current project state
 
+## October 9 Serverless local execution checkpoint
+
+Generated continuation context: the approved recoverable Docker runtime-folder
+repair succeeded. Docker's Linux engine responds again, and the original `run`
+folder is preserved in the sibling `run.faultline-backup-20261009-9cb87fb7`.
+No images, volumes or settings were deleted. This supersedes the October 6
+awaiting-approval Docker blocker below, not its historical preflight observations.
+After an engine exit, the same socket startup error recurred. A subsequent
+normal hidden restart recovered the engine without a second folder move;
+Engine 28.3.2 responded again. Treat the recovery as a workaround, not a
+permanent Windows/Docker fix. The viewer was also restarted; its loopback
+health endpoint reports read-only/OK.
+
+Direct evaluator containment is integrated after independent spec/quality
+reviews, including interrupt-during-cleanup and successful-leader/orphan-child
+regressions. Fresh focused checks: Windows 15 tests, eight POSIX skips; WSL
+15 tests, one Windows-only skip. Prepare-only Job configuration is independently
+reviewed and integrated; its 23 focused tests pass. The config builder never
+submits a Job and only emits a provider dry-run argument vector.
+
+The exact pinned LIBERO image was pulled successfully. Actual read-only,
+network-disabled CPU probes confirmed Python 3.8.20, vla-eval 0.5.0,
+NumPy 1.24.4, MuJoCo 3.2.3 and robosuite 1.4.0; project containment imports
+and installed `vla-eval run --help` support `--no-docker`. This is a base-image
+probe, not validation of the final model image, renderer or robot inference.
+The local C drive has roughly 9.4 GiB free after the pull; do not begin a large
+model-environment build without checking required/free space.
+
+Configuration/closed-evidence export foundation is committed in an isolated
+worktree and undergoing review, not integrated yet. Remaining migration work:
+model lifecycle/handshake/deadline and sequential mode dispatch, final image
+packaging/probes, private publication and the one live pilot with artifact
+recovery. No cloud Job, new provider inference call or billable resource was
+started at this checkpoint. US$3/one-hour/24-hour retention approval persists;
+fresh cloud account/quota/capacity/price checks still precede paid actions.
+External replay remains deferred; M5C semantic usefulness/human review is open.
+M5 is not complete.
+
 ## October 8 official name and scope
 
 Jethro selected **Faultline** as the official name and requested branding updates.

@@ -7,10 +7,12 @@ argument vector for review. The preparation path is deliberately local and
 side-effect free: it does not authenticate, contact Nebius, run subprocesses,
 create a Job, or provide an `--execute` option.
 
-The container image and `scripts/run_serverless_workload.py` runtime referenced
-by the rendered command are not part of this prepare-only change and are not yet
-ready. No image, GPU, renderer, inference, private Object Storage mount, or live
-Job has been validated. Do not submit the example configuration.
+The final container image and `scripts/run_serverless_workload.py` runtime
+referenced by the rendered command are not yet ready. The pinned simulator
+base image passed local CPU import and direct-command checks on October 9;
+the separate GR00T environment, GPU renderer, inference, private Object Storage
+mount and live Job remain unvalidated. Do not submit the example configuration.
+See the [probe record](../experiments/serverless-job-pilot.md).
 
 The future live pilot remains subject to the project cloud gates: verify the
 active account and project, credit balance and expiry, quota, capacity, live

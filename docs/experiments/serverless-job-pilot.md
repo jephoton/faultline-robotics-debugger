@@ -50,6 +50,32 @@ this corroborates the failure class, not proof of its exact kernel cause here.
 
 ## Live evidence status
 
+### October 9 local recovery and pinned-image probe
+
+The user approved moving only Docker's stopped runtime `run` directory to a
+recoverable sibling backup. The move and hidden restart succeeded; the engine
+is healthy. Backup: `run.faultline-backup-20261009-9cb87fb7` beside the recreated
+runtime directory. No images, volumes, settings or unrelated files were removed.
+This fixes the observed startup symptom without establishing the Windows
+kernel cause. It is workstation friction, not a Nebius service failure.
+The same socket error recurred after an engine exit; a subsequent normal
+hidden restart recovered Engine 28.3.2 without another folder move. Long-term
+startup reliability is not established, and no broad repair is authorized.
+
+The immutable LIBERO image was pulled successfully. Read-only CPU containers
+with networking disabled verified Python 3.8.20, vla-eval 0.5.0, NumPy 1.24.4,
+MuJoCo 3.2.3 and robosuite 1.4.0. Faultline's process adapter imports with only
+project source mounted read-only, and actual CLI help exposes `--no-docker`.
+The installed image versions, not a different upstream Dockerfile, are the
+provenance facts for this pin. No policy dependency or simulator pin changed.
+The final GR00T environment, EGL rendering and inference are still untested.
+After the pull, local free disk space was about 9.4 GiB, making the larger
+model-environment build a space-risk gate rather than permission to delete data.
+
+Reviewed local containment and prepare-only configuration are integrated.
+No Job submission, private registry publication or bucket provisioning occurred.
+Historical October 6 prices/capacity above are not fresh October 9 quotes.
+
 Not started. No real Serverless GR00T action, EGL render, video/trace recovery,
 Job terminal-state proof, incurred charge or useful outcome comparison exists
 yet. Local process/config kernels and actual image validation precede the pilot.
