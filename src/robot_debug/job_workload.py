@@ -1,0 +1,393 @@
+"""Injectable orchestration for one finite, closed-evidence workload."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import stat
+import time
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
+
+import yaml
+
+from robot_debug.job_process import InfrastructureError
+from robot_debug.job_runtime import JobRuntimeError, export_closed_evidence, validate_workload_config
+from robot_debug.viewer.catalog import ArtifactCatalog
+from scripts import run_failure_reduction, run_failure_search, run_position_grid_search
+
+
+_CLEANUP_RESERVE_SECONDS = 14.0
+
+
+@dataclass(frozen=True)
+class WorkloadPaths:
+    project_root: Path
+    upstream_root: Path
+    work_root: Path
+    export_root: Path
+
+
+def _fail(message: str) -> None:
+    raise JobRuntimeError(message)
+
+
+def _ordinary_root(value: object, label: str) -> Path:
+    if isinstance(value, bytes):
+        _fail("{} must be a filesystem path".format(label))
+    try:
+        path = Path(os.fspath(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError) as error:
+        raise JobRuntimeError("{} must be a filesystem path".format(label)) from error
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    current = path
+    chain = []
+    while True:
+        if current.exists() or current.is_symlink():
+            chain.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    for component in reversed(chain):
+        try:
+            info = component.lstat()
+        except OSError as error:
+            raise JobRuntimeError("{} could not be inspected".format(label)) from error
+        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & reparse):
+            _fail("{} must not contain links or reparse points".format(label))
+    if not path.is_dir():
+        _fail("{} must be an existing directory".format(label))
+    try:
+        return path.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise JobRuntimeError("{} could not be resolved".format(label)) from error
+
+
+def _validated_paths(paths: object) -> WorkloadPaths:
+    if not isinstance(paths, WorkloadPaths):
+        _fail("paths must be a WorkloadPaths value")
+    validated = WorkloadPaths(
+        _ordinary_root(paths.project_root, "project_root"),
+        _ordinary_root(paths.upstream_root, "upstream_root"),
+        _ordinary_root(paths.work_root, "work_root"),
+        _ordinary_root(paths.export_root, "export_root"),
+    )
+    if (
+        validated.work_root == validated.export_root
+        or validated.work_root in validated.export_root.parents
+        or validated.export_root in validated.work_root.parents
+    ):
+        _fail("work and export roots must not overlap")
+    return validated
+
+
+def _write_summary(run_root: Path, summary: Mapping[str, Any]) -> None:
+    target = run_root / "workload_summary.json"
+    temporary = run_root / ".workload_summary.json.tmp"
+    payload = json.dumps(summary, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n"
+    temporary.write_text(payload, encoding="utf-8")
+    os.replace(temporary, target)
+
+
+def _episode_key(episode: Any) -> Tuple[int, int]:
+    return int(episode.task_id), int(episode.episode_index)
+
+
+def _validate_generated_evidence(config_path: Path, run_root: Path) -> Sequence[Any]:
+    try:
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, Mapping):
+            raise ValueError("configuration is not a mapping")
+        output_value = loaded["output_dir"]
+        if not isinstance(output_value, str):
+            raise ValueError("output_dir is not a string")
+        output_dir = Path(output_value).resolve(strict=True)
+        output_dir.relative_to(run_root)
+        benchmarks = loaded["benchmarks"]
+        expected_count = benchmarks[0]["episodes_per_task"]
+        if type(expected_count) is not int or expected_count <= 0:
+            raise ValueError("episode count is invalid")
+        results = run_failure_search._load_stage_results(
+            output_dir, expected_count=expected_count
+        )
+        aggregate_paths = sorted(output_dir.rglob("*_aggregate.json"))
+        aggregate = json.loads(aggregate_paths[0].read_text(encoding="utf-8"))
+        raw_episodes = aggregate["tasks"][0]["episodes"]
+        expected_keys = {
+            (int(item["task_id"]), int(item.get("episode_idx", item.get("episode_id"))))
+            for item in raw_episodes
+        }
+        if len(expected_keys) != expected_count:
+            raise ValueError("episode identities are not unique")
+        snapshot = ArtifactCatalog(output_dir).snapshot()
+        if snapshot.warnings:
+            raise ValueError("artifact catalog reported warnings")
+        catalog = {_episode_key(item): item for item in snapshot.episodes}
+        if set(catalog) != expected_keys:
+            raise ValueError("catalog episodes do not match aggregate")
+        for key in expected_keys:
+            item = catalog[key]
+            if item.video_path is None or item.trace_path is None:
+                raise ValueError("episode media is incomplete")
+            for relative in (item.video_path, item.trace_path):
+                media = (output_dir / relative).resolve(strict=True)
+                media.relative_to(output_dir)
+                if not media.is_file() or media.stat().st_size <= 0:
+                    raise ValueError("episode media is empty")
+        return results
+    except (OSError, RuntimeError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise InfrastructureError("generated evidence is invalid") from error
+
+
+def _driver_reason(summary: object) -> Optional[str]:
+    if not isinstance(summary, Mapping):
+        return "workload_failed"
+    serialized = json.dumps(summary, sort_keys=True, default=str).lower()
+    if "invalid_evidence" in serialized:
+        return "invalid_evidence"
+    if "infrastructure_error" in serialized:
+        return "evaluator_failed"
+    if summary.get("stop_reason") == "launch_cutoff_reached":
+        return "deadline_exhausted"
+    return None
+
+
+def run_workload(
+    config: object,
+    *,
+    paths: WorkloadPaths,
+    model_factory: Callable[..., Any],
+    evaluator_factory: Callable[..., Callable[..., Any]],
+    exporter: Callable[..., Dict[str, Any]] = export_closed_evidence,
+    clock: Callable[[], float] = time.monotonic,
+) -> Dict[str, Any]:
+    """Run one workload while keeping process and cloud mechanics injectable."""
+
+    accepted = validate_workload_config(config)
+    roots = _validated_paths(paths)
+    run_id = accepted["run_id"]
+    run_root = roots.work_root / run_id
+    destination = roots.export_root / run_id
+    if run_root.exists() or run_root.is_symlink() or destination.exists() or destination.is_symlink():
+        _fail("workload run and export destinations must be new")
+    try:
+        run_root.mkdir(mode=0o700)
+    except FileExistsError as error:
+        raise JobRuntimeError("workload run destination must be new") from error
+
+    started = clock()
+    launch_deadline = started + float(accepted["deadline_seconds"]) - _CLEANUP_RESERVE_SECONDS
+    reason = "completed"
+    status = "complete"
+    pilot_outcomes = []
+    model = None
+    interrupted = False
+    cleanup_confirmed = True
+    latch: Dict[str, Optional[str]] = {"reason": None}
+
+    def remaining() -> float:
+        return launch_deadline - clock()
+
+    def latch_failure(code: str) -> None:
+        if latch["reason"] is None:
+            latch["reason"] = code
+
+    try:
+        if remaining() <= 0:
+            reason, status = "deadline_exhausted", "partial"
+        else:
+            try:
+                model = model_factory(log_root=run_root / "logs")
+            except Exception:
+                reason, status = "model_start_failed", "partial"
+            if reason == "completed":
+                if remaining() <= 0:
+                    reason, status = "deadline_exhausted", "partial"
+                else:
+                    try:
+                        model.start()
+                    except Exception:
+                        reason, status = "model_start_failed", "partial"
+            if reason == "completed":
+                try:
+                    model.wait_ready(deadline=launch_deadline)
+                except Exception:
+                    reason, status = "readiness_failed", "partial"
+            if reason == "completed":
+                if remaining() <= 0:
+                    reason, status = "deadline_exhausted", "partial"
+                else:
+                    try:
+                        model.check_alive()
+                    except Exception:
+                        reason, status = "model_died", "partial"
+            def bounded_runner(command: Sequence[str], *, cwd: object, check: bool = False) -> Any:
+                if latch["reason"] is not None:
+                    raise InfrastructureError("workload infrastructure failure is latched")
+                if remaining() <= 0:
+                    latch_failure("deadline_exhausted")
+                    raise InfrastructureError("launch deadline exhausted")
+                try:
+                    model.check_alive()
+                except Exception as error:
+                    latch_failure("model_died")
+                    raise InfrastructureError("model is not alive") from error
+                remaining_at_factory = remaining()
+                if remaining_at_factory <= 0:
+                    latch_failure("deadline_exhausted")
+                    raise InfrastructureError("launch deadline exhausted")
+                try:
+                    command_runner = evaluator_factory(
+                        timeout_seconds=remaining_at_factory,
+                        log_root=run_root / "logs",
+                    )
+                except KeyboardInterrupt:
+                    raise
+                except Exception as error:
+                    latch_failure("evaluator_failed")
+                    raise InfrastructureError("evaluator setup failed") from error
+                if remaining() <= 0:
+                    latch_failure("deadline_exhausted")
+                    raise InfrastructureError("launch deadline exhausted")
+                try:
+                    model.check_alive()
+                except Exception as error:
+                    latch_failure("model_died")
+                    raise InfrastructureError("model died before evaluation") from error
+                try:
+                    completed = command_runner(command, cwd=roots.upstream_root, check=False)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as error:
+                    latch_failure("evaluator_failed")
+                    raise InfrastructureError("evaluator failed") from error
+                try:
+                    model.check_alive()
+                except Exception as error:
+                    latch_failure("model_died")
+                    raise InfrastructureError("model died during evaluation") from error
+                if remaining() <= 0:
+                    latch_failure("deadline_exhausted")
+                    raise InfrastructureError("launch deadline exhausted")
+                if getattr(completed, "returncode", 0) not in (0, None):
+                    latch_failure("evaluator_failed")
+                    raise InfrastructureError("evaluator returned nonzero")
+                try:
+                    config_path = Path(command[-1])
+                    results = _validate_generated_evidence(config_path, run_root)
+                except Exception as error:
+                    latch_failure("invalid_evidence")
+                    raise InfrastructureError("evidence validation failed") from error
+                if any(item.outcome == "infrastructure_error" for item in results):
+                    latch_failure("evaluator_failed")
+                    raise InfrastructureError("aggregate reports infrastructure failure")
+                return completed
+
+            if reason == "completed":
+                mode = accepted["mode"]
+                if mode == "pilot":
+                    configs = run_root / "pilot" / "configs"
+                    configs.mkdir(parents=True)
+                    specifications = (
+                        ("nominal", {}),
+                        ("masked", {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.375}),
+                    )
+                    for stage, geometry in specifications:
+                        if latch["reason"] is not None:
+                            break
+                        output = run_root / "pilot" / "runs" / stage
+                        config_path = configs / (stage + ".yaml")
+                        run_failure_search._write_config(
+                            config_path=config_path,
+                            output_dir=output,
+                            project_root=roots.project_root,
+                            stage_name=stage,
+                            episode_indices=(0,),
+                            task_id=0,
+                            seed=7,
+                            **geometry
+                        )
+                        try:
+                            bounded_runner(
+                                ["vla-eval", "run", "--config", str(config_path)],
+                                cwd=roots.upstream_root,
+                                check=False,
+                            )
+                        except InfrastructureError:
+                            break
+                        result = run_failure_search._load_stage_results(output, expected_count=1)[0]
+                        pilot_outcomes.append(
+                            {
+                                "stage": stage,
+                                "success": result.success,
+                                "steps": result.steps,
+                                "elapsed_seconds": result.elapsed_seconds,
+                                "episode_index": result.episode_index,
+                                "outcome": result.outcome,
+                            }
+                        )
+                else:
+                    drivers = {
+                        "search": run_failure_search.run_session,
+                        "grid": run_position_grid_search.run_session,
+                        "reduce": run_failure_reduction.run_session,
+                    }
+                    driver_summary = drivers[mode](
+                        upstream_root=roots.upstream_root,
+                        project_root=roots.project_root,
+                        results_root=run_root,
+                        launch_cutoff_seconds=max(0.0, remaining()),
+                        command_runner=bounded_runner,
+                        monotonic_clock=clock,
+                    )
+                    driver_failure = _driver_reason(driver_summary)
+                    if driver_failure is not None:
+                        latch_failure(driver_failure)
+            if latch["reason"] is not None:
+                reason, status = str(latch["reason"]), "partial"
+    except KeyboardInterrupt:
+        interrupted = True
+        reason, status = "interrupted", "partial"
+    except Exception:
+        reason, status = "workload_failed", "partial"
+    finally:
+        if model is not None:
+            try:
+                model.close()
+            except KeyboardInterrupt:
+                interrupted = True
+                cleanup_confirmed = False
+            except BaseException:
+                cleanup_confirmed = False
+
+    if not cleanup_confirmed:
+        reason, status = "cleanup_unconfirmed", "partial"
+    elapsed = max(0.0, clock() - started)
+    summary: Dict[str, Any] = {
+        "schema_version": 1,
+        "backend": "nebius-serverless",
+        "mode": accepted["mode"],
+        "run_id": run_id,
+        "status": status,
+        "stop_reason": reason,
+        "elapsed_seconds": elapsed,
+    }
+    if pilot_outcomes:
+        summary["pilot_outcomes"] = pilot_outcomes
+    _write_summary(run_root, summary)
+    if cleanup_confirmed:
+        exporter(
+            run_root,
+            destination,
+            status=status,
+            cleanup_confirmed=True,
+        )
+    if interrupted:
+        raise KeyboardInterrupt
+    return summary
+
+
+__all__ = ["WorkloadPaths", "run_workload"]
