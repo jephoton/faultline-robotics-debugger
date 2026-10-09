@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -12,7 +13,7 @@ import yaml
 
 from robot_debug.job_process import InfrastructureError
 from robot_debug.job_runtime import JobRuntimeError
-from robot_debug.job_workload import WorkloadPaths, run_workload
+from robot_debug.job_workload import WorkloadPaths, _driver_reason, run_workload
 from scripts import run_failure_search
 
 
@@ -116,6 +117,10 @@ class FixtureRunner:
             raise RuntimeError("hidden")
         if self.bad == "timeout":
             raise TimeoutError("hidden")
+        if self.bad == "raise_infra":
+            raise InfrastructureError("hidden")
+        if self.bad == "subprocess_timeout":
+            raise subprocess.TimeoutExpired(command, timeout=1)
         output = Path(config["output_dir"])
         output.mkdir(parents=True)
         payload = aggregate(success=self.outcomes.pop(0), infrastructure=self.bad == "infra")
@@ -149,6 +154,96 @@ class FixtureRunner:
         if self.bad == "multiple_aggregates":
             (output / "other_aggregate.json").write_text(json.dumps(payload), encoding="utf-8")
         return FakeCompleted(3 if self.bad == "nonzero" else 0)
+
+
+class ValidEvaluatorRunner:
+    """Write valid synthetic aggregate and media evidence for actual driver tests."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, command, *, cwd, check=False):
+        config = yaml.safe_load(Path(command[-1]).read_text(encoding="utf-8"))
+        output = Path(config["output_dir"])
+        output.mkdir(parents=True)
+        benchmark = config["benchmarks"][0]
+        count = benchmark["episodes_per_task"]
+        params = benchmark["params"]
+        task_id = params.get("task_id", 0)
+        episodes = [
+            {
+                "task_id": task_id,
+                "episode_idx": index,
+                "name": "task zero",
+                "steps": 8,
+                "elapsed_sec": 0.5,
+                "metrics": {"success": True},
+                "failure_reason": None,
+            }
+            for index in range(count)
+        ]
+        payload = {
+            "benchmark": "pilot",
+            "created_at": "2026-10-09T00:00:00Z",
+            "eval_id": "eval-{}".format(output.name),
+            "config": {
+                "benchmark": "robot_debug.libero:DiagnosticLIBEROBenchmark",
+                "params": {"task_id": task_id, "seed": 7, "env_seed": 7},
+            },
+            "tasks": [{"task": "task zero", "episodes": episodes}],
+        }
+        (output / "pilot_aggregate.json").write_text(json.dumps(payload), encoding="utf-8")
+        media = output / "episodes" / "pilot"
+        media.mkdir(parents=True)
+        for episode in episodes:
+            index = episode["episode_idx"]
+            prefix = "task{:04d}_ep{:04d}".format(task_id, index)
+            (media / (prefix + "_fixture.mp4")).write_bytes(b"fake-mp4")
+            (media / (prefix + "_fixture.jsonl")).write_text('{"step":0}\n', encoding="utf-8")
+        self.calls += 1
+        return FakeCompleted()
+
+
+def valid_driver_summary(mode: str) -> dict[str, object]:
+    stage = {
+        "stage": "fixture",
+        "status": "completed",
+        "infrastructure_error": None,
+        "invalid_evidence": None,
+        "returncode": 0,
+    }
+    if mode == "search":
+        return {
+            "planned": {},
+            "completed": {"stages": [stage], "nominal_successes": 20, "replay_outcomes": []},
+            "outcomes": [],
+            "elapsed_seconds": 1.0,
+            "stop_reason": "no_policy_failure_in_sweep",
+            "reproducible": False,
+        }
+    if mode == "grid":
+        return {
+            "planned": {},
+            "completed": {
+                "stages": [stage], "sentinel_outcome": "success", "positions_attempted": [],
+                "replay_outcomes": [], "control_outcomes": [],
+            },
+            "outcomes": [],
+            "first_apparent_failure": None,
+            "reproducible": None,
+            "nominal_controls_passed": None,
+            "elapsed_seconds": 1.0,
+            "stop_reason": "no_policy_failure_in_grid",
+        }
+    return {
+        "schema_version": 1,
+        "planned": {},
+        "completed": {"stages": [stage], "decisions": [], "sentinel_outcome": "success", "control_outcomes": []},
+        "outcomes": [],
+        "lineage": [],
+        "elapsed_seconds": 1.0,
+        "stop_reason": "parent_not_reproducible",
+    }
 
 
 class ServerlessWorkloadTests(unittest.TestCase):
@@ -337,8 +432,7 @@ class ServerlessWorkloadTests(unittest.TestCase):
         self.assertNotIn("export", events)
 
     def test_evaluator_failures_latch_and_export_partial(self) -> None:
-        for bad, reason in (("raise", "evaluator_failed"), ("timeout", "evaluator_failed"),
-                            ("nonzero", "evaluator_failed"), ("infra", "evaluator_failed"),
+        for bad, reason in (("nonzero", "evaluator_failed"), ("infra", "evaluator_failed"),
                             ("missing", "invalid_evidence"), ("empty", "invalid_evidence"),
                             ("empty_trace", "invalid_evidence"),
                             ("malformed_aggregate", "invalid_evidence"),
@@ -352,6 +446,38 @@ class ServerlessWorkloadTests(unittest.TestCase):
                 self.assertEqual(reason, result["stop_reason"])
                 self.assertEqual(1, len(runner.configs))
                 self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_unknown_physical_runner_failures_leave_cleanup_unconfirmed(self) -> None:
+        for bad in ("raise", "timeout", "raise_infra"):
+            with self.subTest(bad=bad):
+                self.config = dict(self.config, run_id="uncertain-" + bad.replace("_", "-"))
+                events: list[object] = []
+                runner = FixtureRunner(events, bad=bad)
+                result, _, _, exports = self.invoke(runner=runner)
+                self.assertEqual("cleanup_unconfirmed", result["stop_reason"])
+                self.assertEqual("partial", result["status"])
+                self.assertEqual([], exports)
+                self.assertNotIn("export", events)
+
+    def test_confirmed_subprocess_timeout_exports_partial_evidence(self) -> None:
+        self.config = dict(self.config, run_id="confirmed-timeout")
+        events: list[object] = []
+        runner = FixtureRunner(events, bad="subprocess_timeout")
+        result, _, _, exports = self.invoke(runner=runner)
+        self.assertEqual("evaluator_failed", result["stop_reason"])
+        self.assertEqual("partial", result["status"])
+        self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_evaluator_factory_failure_before_dispatch_keeps_cleanup_confirmed(self) -> None:
+        self.config = dict(self.config, run_id="factory-failure")
+
+        def fail_factory(**kwargs):
+            raise RuntimeError("no evaluator process was started")
+
+        result, _, _, exports = self.invoke(evaluator_factory=fail_factory)
+        self.assertEqual("evaluator_failed", result["stop_reason"])
+        self.assertEqual("partial", result["status"])
+        self.assertEqual("partial", exports[0][2]["status"])
 
     def test_pilot_summary_omits_untrusted_failure_text(self) -> None:
         self.config = dict(self.config, run_id="safe-pilot")
@@ -503,7 +629,7 @@ class ServerlessWorkloadTests(unittest.TestCase):
                 seen = {}
                 def driver(**kwargs):
                     seen.update(kwargs)
-                    return {"stop_reason": "done", "outcomes": []}
+                    return valid_driver_summary(mode)
                 with mock.patch(target, side_effect=driver) as patched:
                     clock = FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107)
                     result, _, _, _ = self.invoke(clock=clock)
@@ -515,6 +641,49 @@ class ServerlessWorkloadTests(unittest.TestCase):
                 self.assertTrue(callable(seen["command_runner"]))
                 self.assertGreater(seen["launch_cutoff_seconds"], 0)
                 self.assertEqual("complete", result["status"])
+
+    def test_actual_drivers_treat_null_error_fields_as_valid_policy_outcomes(self) -> None:
+        expected = {"search": (7, "no_policy_failure_in_sweep"),
+                    "grid": (9, "no_policy_failure_in_grid"),
+                    "reduce": (3, "parent_not_reproducible")}
+        for mode, (expected_calls, expected_stop) in expected.items():
+            with self.subTest(mode=mode):
+                config = dict(self.config, mode=mode, run_id="actual-" + mode)
+                events: list[object] = []
+                model = FakeModel(events)
+                evaluator = ValidEvaluatorRunner()
+                result = run_workload(
+                    config,
+                    paths=self.paths,
+                    model_factory=lambda **kwargs: model,
+                    evaluator_factory=lambda **kwargs: evaluator,
+                    exporter=lambda *args, **kwargs: {"ok": True},
+                    clock=FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109),
+                )
+                self.assertEqual("complete", result["status"])
+                self.assertEqual("completed", result["stop_reason"])
+                self.assertEqual(expected_calls, evaluator.calls)
+                driver_summary = json.loads(
+                    (self.work / config["run_id"] / ("first-failure-search" if mode == "search" else "position-grid-search" if mode == "grid" else "failure-reduction") / "session_summary.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(expected_stop, driver_summary["stop_reason"])
+
+    def test_driver_error_classification_uses_statuses_and_nonnull_error_values(self) -> None:
+        valid = valid_driver_summary("search")
+        valid["completed"]["stages"][0]["note"] = "ordinary text mentions infrastructure_error and invalid_evidence"
+        self.assertIsNone(_driver_reason(valid))
+
+        invalid = valid_driver_summary("grid")
+        invalid["completed"]["stages"][0]["invalid_evidence"] = "aggregate did not match requested episode"
+        self.assertEqual("invalid_evidence", _driver_reason(invalid))
+
+        infrastructure = valid_driver_summary("reduce")
+        infrastructure["completed"]["stages"][0]["infrastructure_error"] = "runner timed out"
+        self.assertEqual("evaluator_failed", _driver_reason(infrastructure))
+
+        outcome_error = valid_driver_summary("search")
+        outcome_error["outcomes"] = [{"outcome": "infrastructure_error"}]
+        self.assertEqual("evaluator_failed", _driver_reason(outcome_error))
 
     def test_driver_cannot_launch_again_after_swallowing_infrastructure_error(self) -> None:
         self.config = dict(self.config, mode="search", run_id="latched-search")

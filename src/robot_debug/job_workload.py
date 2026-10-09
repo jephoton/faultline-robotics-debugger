@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import time
 from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -163,13 +164,44 @@ def _validate_generated_evidence(config_path: Path, run_root: Path) -> Sequence[
 def _driver_reason(summary: object) -> Optional[str]:
     if not isinstance(summary, Mapping):
         return "workload_failed"
-    serialized = json.dumps(summary, sort_keys=True, default=str).lower()
-    if "invalid_evidence" in serialized:
+    invalid_stops = {
+        "invalid_evidence",
+        "nominal_invalid_evidence",
+        "sweep_invalid_evidence",
+        "replay_invalid_evidence",
+        "grid_invalid_evidence",
+        "control_invalid_evidence",
+    }
+    infrastructure_stops = {
+        "infrastructure_error",
+        "nominal_infrastructure_error",
+        "sweep_infrastructure_error",
+        "replay_infrastructure_error",
+        "grid_infrastructure_error",
+        "control_infrastructure_error",
+    }
+    stop_reason = summary.get("stop_reason")
+    if isinstance(stop_reason, str) and stop_reason in invalid_stops:
         return "invalid_evidence"
-    if "infrastructure_error" in serialized:
+    if isinstance(stop_reason, str) and stop_reason in infrastructure_stops:
         return "evaluator_failed"
-    if summary.get("stop_reason") == "launch_cutoff_reached":
+    if stop_reason == "launch_cutoff_reached":
         return "deadline_exhausted"
+    completed = summary.get("completed")
+    stages = completed.get("stages", ()) if isinstance(completed, Mapping) else ()
+    if isinstance(stages, Sequence) and not isinstance(stages, (str, bytes)):
+        for stage in stages:
+            if not isinstance(stage, Mapping):
+                continue
+            if stage.get("status") == "invalid_evidence" or stage.get("invalid_evidence") is not None:
+                return "invalid_evidence"
+            if stage.get("status") == "infrastructure_error" or stage.get("infrastructure_error") is not None:
+                return "evaluator_failed"
+    outcomes = summary.get("outcomes", ())
+    if isinstance(outcomes, Sequence) and not isinstance(outcomes, (str, bytes)):
+        for outcome in outcomes:
+            if isinstance(outcome, Mapping) and outcome.get("outcome") == "infrastructure_error":
+                return "evaluator_failed"
     return None
 
 
@@ -243,6 +275,7 @@ def run_workload(
                     except Exception:
                         reason, status = "model_died", "partial"
             def bounded_runner(command: Sequence[str], *, cwd: object, check: bool = False) -> Any:
+                nonlocal cleanup_confirmed
                 if latch["reason"] is not None:
                     raise InfrastructureError("workload infrastructure failure is latched")
                 if remaining() <= 0:
@@ -283,9 +316,17 @@ def run_workload(
                     completed = command_runner(command, cwd=roots.upstream_root, check=False)
                 except KeyboardInterrupt:
                     raise
-                except Exception as error:
+                except subprocess.TimeoutExpired as error:
                     latch_failure("evaluator_failed")
-                    raise InfrastructureError("evaluator failed") from error
+                    raise InfrastructureError("evaluator timed out") from error
+                except InfrastructureError as error:
+                    cleanup_confirmed = False
+                    latch_failure("cleanup_unconfirmed")
+                    raise InfrastructureError("evaluator cleanup is unconfirmed") from error
+                except BaseException as error:
+                    cleanup_confirmed = False
+                    latch_failure("cleanup_unconfirmed")
+                    raise InfrastructureError("evaluator cleanup is unconfirmed") from error
                 try:
                     model.check_alive()
                 except Exception as error:
