@@ -1,5 +1,23 @@
 # Faultline current project state
 
+## October 9 model-process checkpoint (Claude Code continuation)
+
+The serverless model-process plan
+(`docs/superpowers/plans/2026-10-09-serverless-model-process.md`) is
+integrated on main through `4fa6784`: shared bounded owned-process cleanup
+(`close_owned_process_group`), `ModelProcess` lifetime ownership and
+RFC 6455 WebSocket-upgrade readiness with an absolute deadline. Review found
+one wording issue (shared cleanup error said "evaluator"); fixed. Focused
+suites: WSL 36 tests/one Windows-only skip with real processes and sockets;
+Windows 36 tests/26 POSIX skips. Full Windows suite 718 OK/31 skips. Python
+3.8 grammar check passed. The Dockerfile now copies application code after
+the heavy pinned model install (`71e3188`) so code edits keep that layer cached.
+
+Next per the migration plan: pinned Hugging Face snapshot acquisition,
+production model argv wiring, final CLI and whole-workload SIGTERM/export
+deadline, native image probes, then the single approved paid pilot. No cloud,
+Docker build, GPU or provider call was made at this checkpoint; nothing pushed.
+
 ## October 9 license override
 
 Jethro explicitly selected MIT for original Faultline code. Root LICENSE and

@@ -97,7 +97,7 @@ owns subsequent close. Never rewrite the workload's absolute deadline.
 
 ## TDD tasks and atomic commits
 
-- [ ] Add a failing import plus real POSIX lifetime fixture before extraction.
+- [x] Add a failing import plus real POSIX lifetime fixture before extraction.
   Use the existing tests/test_job_process.py subreaper/owned-group teardown
   pattern; every fixture must clean only its own groups even on assertion failure.
 
@@ -111,15 +111,15 @@ model.close()
 self.assertIsNotNone(model_process_exit_marker.read_text())
 ```
 
-- [ ] Run focused suite and observe missing-module failure, then extract the
+- [x] Run focused suite and observe missing-module failure, then extract the
   existing cleanup primitive and implement lifetime ownership. Test real normal
   leader, early exit zero/nonzero, startup exception, refused repeated start,
   orphan child, TERM-ignoring child requiring KILL, cleanup uncertainty and SIGINT
   during cleanup. Do not certify process absence through mocks alone.
-- [ ] Run existing process suite plus new lifetime cases before
+- [x] Run existing process suite plus new lifetime cases before
   `refactor(jobs): share bounded owned-process cleanup`. Stage only the shared
   helper change and its related tests; do not commit a half-working model module.
-- [ ] Add actual loopback HTTP fixtures for valid WebSocket upgrade, HTTP200,
+- [x] Add actual loopback HTTP fixtures for valid WebSocket upgrade, HTTP200,
   wrong/missing/duplicate accept, comma/case header handling, truncated/oversize
   headers, refused port, delayed and slow-drip responses, dead child during wait
   and deadline already passed. Socket server fixture threads have bounded joins
@@ -132,7 +132,7 @@ model.check_alive()
 # within the absolute bound plus a small scheduling allowance, then close.
 ```
 
-- [ ] Run new and existing suites on Windows (explicit POSIX skips, constructor
+- [x] Run new and existing suites on Windows (explicit POSIX skips, constructor
   guards still tested) and WSL (real process/socket cases required):
 
 ```powershell
@@ -144,9 +144,9 @@ $env:PYTHONPATH='src'
 PYTHONPATH=src python3 -B -m unittest tests.test_job_model tests.test_job_process -v
 ```
 
-- [ ] Check Python3.8 grammar compatibility and `git diff --check`, then commit
+- [x] Check Python3.8 grammar compatibility and `git diff --check`, then commit
   only owned files as `feat(jobs): bound model startup readiness and shutdown`.
-- [ ] Independent spec review then quality review, including true deadline and
+- [x] Independent spec review then quality review, including true deadline and
   process-absence evidence. Fix reproduced gaps and re-review exact SHA before
   root integration and handoff updates.
 
