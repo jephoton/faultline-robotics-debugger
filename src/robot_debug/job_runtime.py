@@ -48,7 +48,7 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         _fail("workload mode is unsupported")
     if type(run_id) is not str or not (1 <= len(run_id) <= 63) or _RUN_ID.fullmatch(run_id) is None:
         _fail("workload run identifier is invalid")
-    if type(deadline) not in (int, float) or not math.isfinite(deadline) or not (0 < deadline <= 3000):
+    if type(deadline) not in (int, float) or not (0 < deadline <= 3000) or not math.isfinite(deadline):
         _fail("workload deadline is invalid")
     return {
         "schema_version": schema_version,
@@ -335,6 +335,28 @@ def _make_destination_directories(destination: Path, paths: Sequence[str]) -> No
                 created.add(current)
 
 
+def _verify_final_evidence(
+    collected: Sequence[Tuple[str, Path, int, str, os.stat_result]],
+    destination: Path,
+    secrets: Sequence[bytes],
+) -> None:
+    """Recheck every source and copy immediately before manifest publication."""
+
+    for portable, source_path, expected_size, expected_digest, expected_info in collected:
+        destination_path = destination.joinpath(*portable.split("/"))
+        _reject_link_chain(source_path)
+        _reject_link_chain(destination_path)
+        source_size, source_digest, _ = _hash_source(source_path, secrets, expected_info)
+        destination_size, destination_digest, _ = _hash_source(destination_path, (), None)
+        if (
+            source_size != expected_size
+            or destination_size != expected_size
+            or source_digest != expected_digest
+            or destination_digest != expected_digest
+        ):
+            _fail("evidence changed before manifest publication")
+
+
 def export_closed_evidence(
     source_root: object,
     destination_root: object,
@@ -343,7 +365,12 @@ def export_closed_evidence(
     cleanup_confirmed: object,
     secret_values: object = (),
 ) -> Dict[str, Any]:
-    """Export allowlisted evidence after the caller confirms external cleanup."""
+    """Export allowlisted evidence after the caller confirms external cleanup.
+
+    This guards a closed, non-hostile workspace against accidental mutation. The
+    repeated checks are not an arbitrary-race security boundary for hostile local
+    processes with concurrent filesystem access.
+    """
 
     if type(status) is not str or status not in {"complete", "partial"}:
         _fail("evidence status must be complete or partial")
@@ -377,6 +404,7 @@ def export_closed_evidence(
             _fail("copied evidence did not match the stable source")
         files.append({"path": portable, "size_bytes": expected_size, "sha256": expected_digest})
 
+    _verify_final_evidence(collected, destination, secrets)
     manifest = {"schema_version": 1, "status": status, "files": files}
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
     manifest_path = destination / "manifest.json"

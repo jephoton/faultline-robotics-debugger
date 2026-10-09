@@ -101,7 +101,7 @@ class WorkloadConfigTests(unittest.TestCase):
                 config = self.valid()
                 config["deadline_seconds"] = value
                 self.assertEqual(validate_workload_config(config)["deadline_seconds"], value)
-        for value in (True, False, 0, -1, 3000.0001, math.nan, math.inf, -math.inf, "60"):
+        for value in (True, False, 0, -1, 3000.0001, 10**1000, math.nan, math.inf, -math.inf, "60"):
             with self.subTest(value=value):
                 config = self.valid()
                 config["deadline_seconds"] = value
@@ -345,6 +345,86 @@ class EvidenceExportTests(unittest.TestCase):
             return result
 
         with patch.object(job_runtime, "_copy_file", side_effect=mutate_source):
+            with self.assertRaises(ValueError):
+                self.export()
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_final_sweep_detects_earlier_source_mutation(self):
+        earlier = self.source / "a.json"
+        earlier.write_bytes(b"a")
+        (self.source / "b.json").write_bytes(b"b")
+        from robot_debug import job_runtime
+        original = job_runtime._copy_file
+
+        def mutate_earlier_source(source, destination, secrets):
+            result = original(source, destination, secrets)
+            if source.name == "b.json":
+                earlier.write_bytes(b"changed after its immediate check")
+            return result
+
+        with patch.object(job_runtime, "_copy_file", side_effect=mutate_earlier_source):
+            with self.assertRaises(ValueError):
+                self.export()
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_final_sweep_detects_earlier_destination_mutation(self):
+        (self.source / "a.json").write_bytes(b"a")
+        (self.source / "b.json").write_bytes(b"b")
+        from robot_debug import job_runtime
+        original = job_runtime._copy_file
+
+        def mutate_earlier_destination(source, destination, secrets):
+            result = original(source, destination, secrets)
+            if source.name == "b.json":
+                (destination.parent / "a.json").write_bytes(b"changed after its immediate check")
+            return result
+
+        with patch.object(job_runtime, "_copy_file", side_effect=mutate_earlier_destination):
+            with self.assertRaises(ValueError):
+                self.export()
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_final_sweep_rejects_replaced_source_ancestor(self):
+        nested = self.source / "nested"
+        nested.mkdir()
+        (nested / "a.json").write_bytes(b"a")
+        (self.source / "z.json").write_bytes(b"z")
+        moved = self.source / "nested-real"
+        from robot_debug import job_runtime
+        original = job_runtime._copy_file
+
+        def replace_source_ancestor(source, destination, secrets):
+            result = original(source, destination, secrets)
+            if source.name == "z.json":
+                nested.rename(moved)
+                nested.symlink_to(moved, target_is_directory=True)
+            return result
+
+        with patch.object(job_runtime, "_copy_file", side_effect=replace_source_ancestor):
+            with self.assertRaises(ValueError):
+                self.export()
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unavailable")
+    def test_final_sweep_rejects_replaced_destination_ancestor(self):
+        nested = self.source / "nested"
+        nested.mkdir()
+        (nested / "a.json").write_bytes(b"a")
+        (self.source / "z.json").write_bytes(b"z")
+        from robot_debug import job_runtime
+        original = job_runtime._copy_file
+
+        def replace_destination_ancestor(source, destination, secrets):
+            result = original(source, destination, secrets)
+            if source.name == "z.json":
+                copied_parent = destination.parent / "nested"
+                moved = destination.parent / "nested-real"
+                copied_parent.rename(moved)
+                copied_parent.symlink_to(moved, target_is_directory=True)
+            return result
+
+        with patch.object(job_runtime, "_copy_file", side_effect=replace_destination_ancestor):
             with self.assertRaises(ValueError):
                 self.export()
         self.assertFalse((self.destination / "manifest.json").exists())
