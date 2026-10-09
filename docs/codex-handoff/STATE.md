@@ -1,5 +1,32 @@
 # Faultline current project state
 
+## October 9 entrypoint, billing check and builder proposal (Claude Code)
+
+Serverless entrypoint is integrated: `scripts/run_serverless_workload.py`,
+`src/robot_debug/job_entry.py` and `scripts/serverless_prefetch.py`
+(`214f344`, review fixes `288ebc2`, `2aaede9`; plan
+`docs/superpowers/plans/2026-10-09-serverless-entrypoint.md`). Prefetch pins
+the checkpoint and base model by commit in a private `HF_HOME`, records the
+unpinned Cosmos commit, then the model server runs offline without the token.
+SIGTERM is deferred during owned-group cleanup. Independent review approved
+with fixes, all applied. Full Windows suite 740 OK/36 skips; WSL job suites OK.
+
+Local image build is not done: workstation disk was full. Jethro chose to
+build in Nebius (option A: private registry + short cpu-d3 builder VM,
+proposed cap US$1.50, separate from the US$3 L40S Job). Nothing created yet.
+
+Read-only billing check (Oct 9): October consumption US$12.86 incl. tax =
+H100 clone test Oct 1 (1.72 GPU-h, US$7.73) + the stopped `robot-debug-pilot`
+200 GiB boot disk (about US$0.47/day, US$4.05 so far) + snapshot US$0.02.
+Balance went from US$9.69 to −US$3.17. Only the stopped VM, its boot disk,
+default network and an IP allocation exist; no snapshots, buckets, registries,
+Jobs or endpoints. **Correction from Jethro:** the US$25 hackathon promo credit
+is for Token Factory, not AI Cloud; AI Cloud needs a top-up, which Jethro plans.
+Proposed: keep the stopped VM/disk as a known-good fallback until the
+Serverless pilot returns valid evidence or Oct 16, whichever is first, then
+delete with explicit approval. Awaiting top-up, that confirmation and the
+builder cap approval before any billable action.
+
 ## October 9 model-process checkpoint (Claude Code continuation)
 
 The serverless model-process plan
