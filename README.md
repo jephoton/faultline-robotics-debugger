@@ -20,7 +20,7 @@ project; Faultline's core is robotics failure diagnosis and regression evidence.
 
 ## License
 
-Original project code is licensed under the [Apache License 2.0](LICENSE).
+Original project code is licensed under the [MIT License](LICENSE).
 External models, datasets, and other third-party assets retain their own terms;
 this repository does not relicense model weights or assets.
 

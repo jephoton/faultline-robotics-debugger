@@ -1,6 +1,7 @@
 # Code license: Apache-2.0
 
-Status: accepted through Jethro's explicit delegation of the Apache-2.0 versus MIT choice on September 15, 2026.
+Status: superseded on October 9, 2026 by Jethro's explicit MIT selection;
+see [ADR 0020](0020-mit-code-license.md). The original decision below is historical.
 
 Decision: use the unmodified Apache-2.0 license for original project code.
 Its explicit contributor patent grant favors reuse of robotics infrastructure;

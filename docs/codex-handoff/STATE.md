@@ -1,5 +1,14 @@
 # Faultline current project state
 
+## October 9 license override
+
+Jethro explicitly selected MIT for original Faultline code. Root LICENSE and
+the active README statement now use MIT, copyright 2026 Jethro Tan; existing
+package metadata points to that file. ADR 0020 supersedes the September 15
+Apache decision. Older Apache references below are historical, not the current
+license. Third-party licenses/notices, model and dataset rights, and private
+repository visibility are unchanged.
+
 ## October 9 Serverless local execution checkpoint
 
 Generated continuation context: the approved recoverable Docker runtime-folder
