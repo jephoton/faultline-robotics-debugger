@@ -167,6 +167,8 @@ def close_owned_process_group(
         raise InfrastructureError("owned process cleanup requires POSIX process groups")
     if isinstance(process_group, bool) or not isinstance(process_group, int) or process_group <= 0:
         raise ValueError("process_group must be a positive integer PID")
+    if process.pid != process_group:
+        raise ValueError("process_group must match the owned process PID")
     term_grace_seconds = _nonnegative_finite(term_grace_seconds, "term_grace_seconds")
     kill_grace_seconds = _nonnegative_finite(kill_grace_seconds, "kill_grace_seconds")
     if term_grace_seconds > 5.0:

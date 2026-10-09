@@ -454,6 +454,29 @@ class DirectEvaluatorPosixTests(unittest.TestCase):
         self.assertIsNotNone(process.poll())
         self.assertGroupAbsent(process_group)
 
+    def test_shared_cleanup_rejects_unowned_group_and_unbounded_graces(self) -> None:
+        process = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        process_group = process.pid
+        self._owned_groups.add(process_group)
+        try:
+            with self.assertRaises(ValueError):
+                close_owned_process_group(process, process_group + 1)
+            with self.assertRaises(ValueError):
+                close_owned_process_group(
+                    process, process_group, term_grace_seconds=5.01
+                )
+        finally:
+            close_owned_process_group(
+                process, process_group, term_grace_seconds=0.2, kill_grace_seconds=0.5
+            )
+        self.assertGroupAbsent(process_group)
+
 
 if __name__ == "__main__":
     unittest.main()
