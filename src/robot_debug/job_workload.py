@@ -110,25 +110,43 @@ def _validate_generated_evidence(config_path: Path, run_root: Path) -> Sequence[
         expected_count = benchmarks[0]["episodes_per_task"]
         if type(expected_count) is not int or expected_count <= 0:
             raise ValueError("episode count is invalid")
+        params = benchmarks[0].get("params", {})
+        if not isinstance(params, Mapping):
+            raise ValueError("benchmark params are invalid")
+        requested_task_id = params.get("task_id", 0)
+        if type(requested_task_id) is not int or requested_task_id < 0:
+            raise ValueError("requested task identity is invalid")
+        requested_keys = {
+            (requested_task_id, episode_index)
+            for episode_index in range(expected_count)
+        }
         results = run_failure_search._load_stage_results(
             output_dir, expected_count=expected_count
         )
         aggregate_paths = sorted(output_dir.rglob("*_aggregate.json"))
         aggregate = json.loads(aggregate_paths[0].read_text(encoding="utf-8"))
         raw_episodes = aggregate["tasks"][0]["episodes"]
-        expected_keys = {
-            (int(item["task_id"]), int(item.get("episode_idx", item.get("episode_id"))))
-            for item in raw_episodes
-        }
-        if len(expected_keys) != expected_count:
-            raise ValueError("episode identities are not unique")
+        aggregate_keys = []
+        for item in raw_episodes:
+            task_id = item["task_id"]
+            episode_index = item.get("episode_idx", item.get("episode_id"))
+            if (
+                type(task_id) is not int
+                or type(episode_index) is not int
+                or task_id < 0
+                or episode_index < 0
+            ):
+                raise ValueError("aggregate episode identity is invalid")
+            aggregate_keys.append((task_id, episode_index))
+        if len(set(aggregate_keys)) != expected_count or set(aggregate_keys) != requested_keys:
+            raise ValueError("aggregate identities do not match the requested episodes")
         snapshot = ArtifactCatalog(output_dir).snapshot()
         if snapshot.warnings:
             raise ValueError("artifact catalog reported warnings")
         catalog = {_episode_key(item): item for item in snapshot.episodes}
-        if set(catalog) != expected_keys:
-            raise ValueError("catalog episodes do not match aggregate")
-        for key in expected_keys:
+        if set(catalog) != requested_keys:
+            raise ValueError("catalog episodes do not match the requested episodes")
+        for key in requested_keys:
             item = catalog[key]
             if item.video_path is None or item.trace_path is None:
                 raise ValueError("episode media is incomplete")
@@ -235,6 +253,10 @@ def run_workload(
                 except Exception as error:
                     latch_failure("model_died")
                     raise InfrastructureError("model is not alive") from error
+                remaining_after_liveness = remaining()
+                if remaining_after_liveness <= 0:
+                    latch_failure("deadline_exhausted")
+                    raise InfrastructureError("launch deadline exhausted")
                 remaining_at_factory = remaining()
                 if remaining_at_factory <= 0:
                     latch_failure("deadline_exhausted")
@@ -252,11 +274,6 @@ def run_workload(
                 if remaining() <= 0:
                     latch_failure("deadline_exhausted")
                     raise InfrastructureError("launch deadline exhausted")
-                try:
-                    model.check_alive()
-                except Exception as error:
-                    latch_failure("model_died")
-                    raise InfrastructureError("model died before evaluation") from error
                 try:
                     completed = command_runner(command, cwd=roots.upstream_root, check=False)
                 except KeyboardInterrupt:

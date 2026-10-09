@@ -23,8 +23,11 @@ class FakeClock:
 
     def __call__(self) -> float:
         if self.values:
-            self.last = self.values.pop(0)
+            self.last = max(self.last, self.values.pop(0))
         return self.last
+
+    def advance_to(self, value: float) -> None:
+        self.last = max(self.last, value)
 
 
 class FakeCompleted:
@@ -59,6 +62,21 @@ class FakeModel:
             raise KeyboardInterrupt
         if self.failure == "close":
             raise InfrastructureError("hidden")
+
+
+class ClockAdvancingModel(FakeModel):
+    def __init__(self, events: list[object], clock: FakeClock, *, advance_on_check: int, to: float) -> None:
+        super().__init__(events)
+        self.clock = clock
+        self.advance_on_check = advance_on_check
+        self.to = to
+        self.check_count = 0
+
+    def check_alive(self) -> None:
+        self.check_count += 1
+        super().check_alive()
+        if self.check_count == self.advance_on_check:
+            self.clock.advance_to(self.to)
 
 
 def aggregate(*, success: bool, infrastructure: bool = False) -> dict[str, object]:
@@ -101,6 +119,10 @@ class FixtureRunner:
         output = Path(config["output_dir"])
         output.mkdir(parents=True)
         payload = aggregate(success=self.outcomes.pop(0), infrastructure=self.bad == "infra")
+        if self.bad == "rewritten_episode_identity":
+            payload["tasks"][0]["episodes"][0]["episode_idx"] = 1
+        if self.bad == "rewritten_task_identity":
+            payload["tasks"][0]["episodes"][0]["task_id"] = 1
         if self.bad == "sensitive_detail":
             payload["tasks"][0]["episodes"][0]["failure_detail"] = "secret-in-error-message"
         if self.bad == "malformed_aggregate":
@@ -109,8 +131,10 @@ class FixtureRunner:
         (output / "pilot_aggregate.json").write_text(json.dumps(payload), encoding="utf-8")
         media = output / "episodes" / "pilot"
         media.mkdir(parents=True)
-        (media / "task0000_ep0000_fixture.mp4").write_bytes(b"mp4")
-        (media / "task0000_ep0000_fixture.jsonl").write_text('{"step":0}\n', encoding="utf-8")
+        task_prefix = "task0001" if self.bad == "rewritten_task_identity" else "task0000"
+        episode_suffix = "0001" if self.bad == "rewritten_episode_identity" else "0000"
+        (media / (task_prefix + "_ep" + episode_suffix + "_fixture.mp4")).write_bytes(b"mp4")
+        (media / (task_prefix + "_ep" + episode_suffix + "_fixture.jsonl")).write_text('{"step":0}\n', encoding="utf-8")
         if self.bad == "missing":
             (media / "task0000_ep0000_fixture.mp4").unlink()
         if self.bad == "wrong_episode_media":
@@ -334,6 +358,46 @@ class ServerlessWorkloadTests(unittest.TestCase):
         result, _, _, _ = self.invoke(runner=FixtureRunner([], outcomes=(False, True), bad="sensitive_detail"))
         self.assertEqual("policy_failure", result["pilot_outcomes"][0]["outcome"])
         self.assertNotIn("secret-in-error-message", json.dumps(result))
+
+    def test_aggregate_and_media_cannot_rewrite_requested_episode_identity(self) -> None:
+        for bad, run_id in (("rewritten_episode_identity", "rewritten-episode"),
+                            ("rewritten_task_identity", "rewritten-task")):
+            with self.subTest(bad=bad):
+                self.config = dict(self.config, run_id=run_id)
+                result, _, runner, exports = self.invoke(
+                    runner=FixtureRunner([], outcomes=(True, True), bad=bad)
+                )
+                self.assertEqual("invalid_evidence", result["stop_reason"])
+                self.assertEqual(1, len(runner.configs))
+                self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_liveness_check_that_exhausts_deadline_prevents_dispatch(self) -> None:
+        clock = FakeClock(100, 100, 101, 102, 103, 104, 105, 106)
+        events: list[object] = []
+        model = ClockAdvancingModel(events, clock, advance_on_check=2, to=200)
+        runner = FixtureRunner(events)
+        result, _, _, exports = self.invoke(model=model, runner=runner, clock=clock)
+        self.assertEqual("deadline_exhausted", result["stop_reason"])
+        self.assertEqual([], runner.configs)
+        self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_evaluator_timeout_uses_budget_after_liveness_check(self) -> None:
+        clock = FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107, 108)
+        events: list[object] = []
+        model = ClockAdvancingModel(events, clock, advance_on_check=2, to=108)
+        runner = FixtureRunner(events)
+        timeouts = []
+
+        def evaluator_factory(**kwargs):
+            timeouts.append(kwargs["timeout_seconds"])
+            return runner
+
+        result, _, _, _ = self.invoke(
+            model=model, runner=runner, clock=clock, evaluator_factory=evaluator_factory
+        )
+        self.assertEqual("complete", result["status"])
+        self.assertEqual(2, len(timeouts))
+        self.assertLess(timeouts[0], 43)
 
     def test_model_death_after_evaluator_prevents_next_pilot_launch(self) -> None:
         events: list[object] = []
