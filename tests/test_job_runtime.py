@@ -1,3 +1,4 @@
+import errno
 import ast
 import hashlib
 import json
@@ -315,6 +316,123 @@ class EvidenceExportTests(unittest.TestCase):
         self.assertTrue(self.destination.is_dir())
         self.assertEqual((self.destination / "a.json").read_bytes(), b"a")
         self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_staging_open_failure_closes_source_descriptor(self):
+        source = self.source / "evidence.json"
+        source.write_bytes(b"source")
+        self.destination.mkdir()
+        destination = self.destination / "evidence.json"
+        from robot_debug import job_runtime
+        original = job_runtime.os.open
+        captured = []
+
+        def fail_staging(path, flags, *args):
+            if Path(path) == source:
+                descriptor = original(path, flags, *args)
+                captured.append(descriptor)
+                return descriptor
+            if str(path).endswith(".part"):
+                raise OSError("injected staging open failure")
+            return original(path, flags, *args)
+
+        with patch.object(job_runtime.os, "open", side_effect=fail_staging):
+            with self.assertRaises(OSError):
+                job_runtime._copy_file(source, destination, ())
+        self.assertEqual(len(captured), 1)
+        try:
+            with self.assertRaises(OSError) as raised:
+                os.fstat(captured[0])
+            self.assertEqual(raised.exception.errno, errno.EBADF)
+        finally:
+            try:
+                os.close(captured[0])
+            except OSError:
+                pass
+
+    def _assert_manifest_stream_failure(self, operation):
+        (self.source / "evidence.json").write_bytes(b"source")
+        from robot_debug import job_runtime
+        original = job_runtime.os.fdopen
+        binary_writers = []
+
+        class FaultyStream:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def write(self, payload):
+                if operation == "write":
+                    raise OSError("injected manifest write failure")
+                return self.stream.write(payload)
+
+            def flush(self):
+                if operation == "flush":
+                    raise OSError("injected manifest flush failure")
+                return self.stream.flush()
+
+            def fileno(self):
+                return self.stream.fileno()
+
+        def wrap_manifest(descriptor, mode, *args, **kwargs):
+            stream = original(descriptor, mode, *args, **kwargs)
+            if mode == "wb":
+                binary_writers.append(descriptor)
+                if len(binary_writers) == 2:
+                    return FaultyStream(stream)
+            return stream
+
+        with patch.object(job_runtime.os, "fdopen", side_effect=wrap_manifest):
+            with self.assertRaises(OSError):
+                self.export()
+        self.assertEqual((self.destination / "evidence.json").read_bytes(), b"source")
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_manifest_write_failure_removes_only_new_marker(self):
+        self._assert_manifest_stream_failure("write")
+
+    def test_manifest_flush_failure_removes_only_new_marker(self):
+        self._assert_manifest_stream_failure("flush")
+
+    def test_manifest_fsync_failure_removes_only_new_marker(self):
+        (self.source / "evidence.json").write_bytes(b"source")
+        from robot_debug import job_runtime
+        original = job_runtime.os.fsync
+        calls = []
+
+        def fail_manifest_fsync(descriptor):
+            calls.append(descriptor)
+            if len(calls) == 2:
+                raise OSError("injected manifest fsync failure")
+            return original(descriptor)
+
+        with patch.object(job_runtime.os, "fsync", side_effect=fail_manifest_fsync):
+            with self.assertRaises(OSError):
+                self.export()
+        self.assertEqual((self.destination / "evidence.json").read_bytes(), b"source")
+        self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_preexisting_manifest_marker_is_never_removed(self):
+        (self.source / "evidence.json").write_bytes(b"source")
+        from robot_debug import job_runtime
+        original = job_runtime._verify_final_evidence
+        marker = self.destination / "manifest.json"
+
+        def introduce_marker(*args, **kwargs):
+            result = original(*args, **kwargs)
+            marker.write_bytes(b"preexisting marker")
+            return result
+
+        with patch.object(job_runtime, "_verify_final_evidence", side_effect=introduce_marker):
+            with self.assertRaises(OSError):
+                self.export()
+        self.assertEqual(marker.read_bytes(), b"preexisting marker")
+        self.assertEqual((self.destination / "evidence.json").read_bytes(), b"source")
 
     def test_copy_refuses_a_target_introduced_before_publication(self):
         (self.source / "evidence.json").write_bytes(b"source")

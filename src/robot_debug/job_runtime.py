@@ -235,7 +235,11 @@ def _copy_file(source: Path, destination: Path, secrets: Sequence[bytes]) -> Tup
     source_fd, opened = _open_source(source)
     staging = destination.with_name("." + destination.name + "." + uuid.uuid4().hex + ".part")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    destination_fd = os.open(staging, flags, 0o600)
+    try:
+        destination_fd = os.open(staging, flags, 0o600)
+    except BaseException:
+        os.close(source_fd)
+        raise
     digest = hashlib.sha256()
     scanner = _SecretScanner(secrets)
     size = 0
@@ -357,6 +361,37 @@ def _verify_final_evidence(
             _fail("evidence changed before manifest publication")
 
 
+def _publish_manifest(manifest_path: Path, payload: bytes) -> None:
+    """Publish one exclusive marker and remove only that marker on failure."""
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(manifest_path, flags, 0o600)
+    created_info = os.fstat(descriptor)
+    try:
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = None
+        with stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException as publication_error:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        try:
+            current = manifest_path.lstat()
+            if _is_link_or_reparse(manifest_path) or not stat.S_ISREG(current.st_mode) or not os.path.samestat(created_info, current):
+                raise JobRuntimeError("manifest marker identity changed during failed publication")
+            manifest_path.unlink()
+            if manifest_path.exists() or manifest_path.is_symlink():
+                raise JobRuntimeError("manifest marker removal could not be confirmed")
+        except BaseException:
+            raise JobRuntimeError("manifest publication failed and marker cleanup could not be confirmed") from publication_error
+        raise
+
+
 def export_closed_evidence(
     source_root: object,
     destination_root: object,
@@ -408,12 +443,7 @@ def export_closed_evidence(
     manifest = {"schema_version": 1, "status": status, "files": files}
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
     manifest_path = destination / "manifest.json"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(manifest_path, flags, 0o600)
-    with os.fdopen(descriptor, "wb") as stream:
-        stream.write(payload)
-        stream.flush()
-        os.fsync(stream.fileno())
+    _publish_manifest(manifest_path, payload)
     return manifest
 
 
