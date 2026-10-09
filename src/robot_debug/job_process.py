@@ -215,7 +215,7 @@ def _terminate_and_confirm_without_interrupt(
     _signal_process_group(process_group, signal.SIGKILL)
     if _await_group_absence(process, process_group, kill_grace_seconds):
         return
-    raise InfrastructureError("evaluator process group cleanup could not be confirmed")
+    raise InfrastructureError("owned process group cleanup could not be confirmed")
 
 
 def _path_text(value: os.PathLike[str] | str, name: str) -> str:
