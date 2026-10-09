@@ -14,6 +14,17 @@ the separate GR00T environment, GPU renderer, inference, private Object Storage
 mount and live Job remain unvalidated. Do not submit the example configuration.
 See the [probe record](../experiments/serverless-job-pilot.md).
 
+Local development/tests for the workload adapter require the optional YAML
+parser, also installed by CI:
+
+```console
+python -m pip install ".[serverless]"
+```
+
+The default viewer installation remains lightweight. This command is for a
+development environment, not permission to alter the pinned simulator/model
+environments; the image uses source paths and separate dependency environments.
+
 The future live pilot remains subject to the project cloud gates: verify the
 active account and project, credit balance and expiry, quota, capacity, live
 prices, storage charges, and the approved run cap immediately before any paid
