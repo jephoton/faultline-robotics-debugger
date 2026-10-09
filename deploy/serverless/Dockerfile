@@ -23,7 +23,7 @@ COPY deploy/serverless/requirements-model.txt /opt/robot-debug/requirements-mode
 
 # Keep the model interpreter and package cache under the build layer; delete cache afterward.
 RUN export UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_CACHE_DIR=/tmp/uv-cache \
-    && test "$(/usr/local/bin/uv --version)" = "uv 0.11.25" \
+    && test "$(/usr/local/bin/uv --version)" = "uv 0.11.25 (x86_64-unknown-linux-musl)" \
     && /usr/local/bin/uv python install 3.12.13 \
     && /usr/local/bin/uv venv --python 3.12.13 /opt/model-env \
     && /usr/local/bin/uv pip install --python /opt/model-env/bin/python --no-deps \

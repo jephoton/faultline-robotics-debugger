@@ -80,7 +80,11 @@ class ServerlessImageContractTests(unittest.TestCase):
 
     def test_model_environment_isolated_and_simulator_entrypoint_fixed(self) -> None:
         self.assertIn("/opt/model-env", self.dockerfile)
-        self.assertIn('test "$(/usr/local/bin/uv --version)" = "uv 0.11.25"', self.dockerfile)
+        self.assertIn(
+            'test "$(/usr/local/bin/uv --version)" = '
+            '"uv 0.11.25 (x86_64-unknown-linux-musl)"',
+            self.dockerfile,
+        )
         self.assertEqual(self.dockerfile.count("uv pip install --python /opt/model-env/bin/python"), 2)
         self.assertIn("/opt/conda/envs/libero/bin/python", self.dockerfile)
         self.assertIn("/opt/robot-debug/scripts/run_serverless_workload.py", self.dockerfile)
