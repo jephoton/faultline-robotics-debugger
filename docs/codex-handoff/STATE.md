@@ -11,7 +11,7 @@ unpinned Cosmos commit, then the model server runs offline without the token.
 SIGTERM is deferred during owned-group cleanup. Independent review approved
 with fixes, all applied. Full Windows suite 740 OK/36 skips; WSL job suites OK.
 
-Local image build is not done: workstation disk was full. Jethro chose to
+Image built locally and pushed to private registry `faultline-serverless`: digest `sha256:34b5d399f82c95e94116e0c539ee90e9fd4e8ed266fffe8ba3a2fae9b3ae9825`; GPU-free probes passed (see `docs/experiments/serverless-job-pilot.md`). Earlier blocker: workstation disk was full. Jethro chose to
 build in Nebius (option A: private registry + short cpu-d3 builder VM,
 proposed cap US$1.50, separate from the US$3 L40S Job). Nothing created yet.
 

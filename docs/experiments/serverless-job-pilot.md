@@ -79,3 +79,33 @@ Historical October 6 prices/capacity above are not fresh October 9 quotes.
 Not started. No real Serverless GR00T action, EGL render, video/trace recovery,
 Job terminal-state proof, incurred charge or useful outcome comparison exists
 yet. Local process/config kernels and actual image validation precede the pilot.
+
+### October 9–10 full image build, probes and private push
+
+The complete Serverless image (`deploy/serverless/Dockerfile`, application
+code at `23d07cd`) was built locally after workstation disk cleanup. A planned
+Nebius CPU builder VM was refused because the tenant's non-GPU vCPU quota is 0;
+nothing was provisioned. Two local build failures were workstation/network
+issues, not packaging defects: AVG antivirus HTTPS scanning replaced GitHub's
+certificate (diagnosed with `openssl s_client`; Jethro disabled scanning during
+the build), then one transient `pypi.org` connect timeout; a plain retry passed.
+
+Local image ID and pushed digest:
+`sha256:34b5d399f82c95e94116e0c539ee90e9fd4e8ed266fffe8ba3a2fae9b3ae9825`
+(21.7 GB uncompressed; push took 21 minutes) in the private registry
+`faultline-serverless` (eu-north1, same project; the service is free).
+
+Network-disabled CPU probes inside the image passed:
+
+| Check | Result |
+| --- | --- |
+| Model env imports (torch, torchcodec, LeRobot GrootPolicy, model bridge) | Python 3.12.13, torch 2.11.0+cu128, lerobot 0.6.0, huggingface_hub 1.22.0 |
+| Simulator env imports `robot_debug.job_entry` / `job_workload` | Python 3.8.20 |
+| `vla-eval run --help` lists `--no-docker` | yes |
+| Model bridge checkout | pinned `35f1200…` |
+| Baked Hugging Face cache or secret-like env | none |
+| Entrypoint with missing workload file | JSON `rejected`, exit 2 |
+| Prefetch pinning tests with the image's real `huggingface_hub` | 3/3 pass |
+
+GPU, EGL rendering, model download/inference, bucket export and the Job
+lifecycle remain unverified until the paid pilot.
