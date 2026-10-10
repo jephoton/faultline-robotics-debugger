@@ -695,6 +695,50 @@ class ExportPreflightProcessTests(unittest.TestCase):
             self._cleanup_owned_process_group(process.pid)
             process.poll()
 
+    def test_cleanup_uncertainty_wins_interrupt_during_handler_restoration(self) -> None:
+        config = self.root / "restore-workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+        tracked_popen = job_entry.subprocess.Popen
+        real_signal = signal.signal
+        owned = []
+        deferred_installed = [False]
+
+        def signal_after_spawn(*args, **kwargs):
+            process = tracked_popen(*args, **kwargs)
+            owned.append(process)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return process
+
+        def signal_during_restore(signum, handler):
+            result = real_signal(signum, handler)
+            if signum == signal.SIGINT and handler is not previous[signal.SIGINT]:
+                deferred_installed[0] = True
+            elif signum == signal.SIGINT and deferred_installed[0] and handler is previous[signal.SIGINT]:
+                os.kill(os.getpid(), signal.SIGINT)
+                deferred_installed[0] = False
+            return result
+
+        try:
+            with mock.patch.object(job_entry, "_preflight_child_argv", return_value=[
+                sys.executable, "-B", "-c", "import time; time.sleep(60)"
+            ]), mock.patch.object(job_entry.subprocess, "Popen", side_effect=signal_after_spawn), \
+                 mock.patch.object(job_entry, "close_owned_process_group", side_effect=InfrastructureError("uncertain")), \
+                 mock.patch.object(job_entry.signal, "signal", side_effect=signal_during_restore):
+                code = main(
+                    ["--config", str(config)], layout=self.layout, environ={},
+                    runner=lambda *_args, **_kwargs: self.fail("runner started after signal"),
+                    stdout=io.StringIO(),
+                )
+        finally:
+            for process in owned:
+                self._cleanup_owned_process_group(process.pid)
+                process.poll()
+        self.assertEqual(3, code)
+        self.assertEqual(1, len(owned))
+        for signum, handler in previous.items():
+            self.assertIs(signal.getsignal(signum), handler)
+
     def test_launch_error_restores_handlers_and_reports_fixed_error(self) -> None:
         previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
         with mock.patch.object(job_entry.subprocess, "Popen", side_effect=OSError("private argv")):

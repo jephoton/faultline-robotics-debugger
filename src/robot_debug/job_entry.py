@@ -433,6 +433,7 @@ def _run_preflight_process(
     process = None
     deferred_signal = None
     previous_handlers = {}
+    cleanup_uncertain = None
 
     def defer_launch_signal(signum: int, _frame: object) -> None:
         nonlocal deferred_signal
@@ -440,7 +441,7 @@ def _run_preflight_process(
             deferred_signal = signum
 
     def close_probe() -> None:
-        nonlocal process
+        nonlocal process, cleanup_uncertain
         owned = process
         process = None
         try:
@@ -448,7 +449,8 @@ def _run_preflight_process(
         except KeyboardInterrupt:
             raise
         except BaseException as cleanup_error:
-            raise InfrastructureError("export preflight cleanup could not be confirmed") from cleanup_error
+            cleanup_uncertain = InfrastructureError("export preflight cleanup could not be confirmed")
+            raise cleanup_uncertain from cleanup_error
 
     try:
         with os.fdopen(stdout_fd, "wb") as stdout, os.fdopen(stderr_fd, "wb") as stderr:
@@ -479,9 +481,16 @@ def _run_preflight_process(
                     try:
                         if signal.SIGINT in previous_handlers:
                             signal.signal(signal.SIGINT, previous_handlers[signal.SIGINT])
+                    except BaseException:
+                        if cleanup_uncertain is None:
+                            raise
                     finally:
                         if signal.SIGTERM in previous_handlers:
-                            signal.signal(signal.SIGTERM, previous_handlers[signal.SIGTERM])
+                            try:
+                                signal.signal(signal.SIGTERM, previous_handlers[signal.SIGTERM])
+                            except BaseException:
+                                if cleanup_uncertain is None:
+                                    raise
                 if deferred_signal is not None:
                     if process is not None:
                         close_probe()
