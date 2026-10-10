@@ -1,5 +1,19 @@
 # Faultline current project state
 
+## October 10 retry readiness (Claude Code)
+
+Codex's preflight deadline repair (`codex/serverless-preflight-deadline`) was
+reviewed by Claude as an independent agent and integrated as `dadd25f`..`b12047e`:
+one absolute deadline spans preflight and workload; the export probe runs in an
+owned, 30 s-capped child with an empty environment. Full Windows suite 773 OK/50
+skips; WSL job suites 155 OK. Inside the rebuilt image (Python 3.8.20, real POSIX)
+the bounded preflight ran end to end and the job/workload tests passed.
+
+Pushed v4 image: tag `b12047e3f7d8` → `sha256:01439a7e7fa118bcc0b041c51e80aada150a333cd2c3bdc6c7010f63fe13fa15`
+(registry lookup confirms). Retry `faultline-pilot-20261010b` is prepared and its
+provider dry-run passed, reusing the private bucket (1-day object expiry) and the
+read-only download key. **Not submitted:** a retry needs Jethro's explicit cap.
+
 ## October 10 Serverless recovery checkpoint (Codex)
 
 This supersedes the older "not submitted" / "nothing created" status below.
