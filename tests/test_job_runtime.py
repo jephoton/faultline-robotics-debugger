@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -317,7 +318,7 @@ class EvidenceExportTests(unittest.TestCase):
         self.assertEqual((self.destination / "a.json").read_bytes(), b"a")
         self.assertFalse((self.destination / "manifest.json").exists())
 
-    def test_staging_open_failure_closes_source_descriptor(self):
+    def test_destination_open_failure_closes_source_descriptor(self):
         source = self.source / "evidence.json"
         source.write_bytes(b"source")
         self.destination.mkdir()
@@ -326,16 +327,16 @@ class EvidenceExportTests(unittest.TestCase):
         original = job_runtime.os.open
         captured = []
 
-        def fail_staging(path, flags, *args):
+        def fail_destination(path, flags, *args):
             if Path(path) == source:
                 descriptor = original(path, flags, *args)
                 captured.append(descriptor)
                 return descriptor
-            if str(path).endswith(".part"):
-                raise OSError("injected staging open failure")
+            if Path(path) == destination:
+                raise OSError("injected destination open failure")
             return original(path, flags, *args)
 
-        with patch.object(job_runtime.os, "open", side_effect=fail_staging):
+        with patch.object(job_runtime.os, "open", side_effect=fail_destination):
             with self.assertRaises(OSError):
                 job_runtime._copy_file(source, destination, ())
         self.assertEqual(len(captured), 1)
@@ -561,6 +562,45 @@ class EvidenceExportTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.export()
         self.assertFalse((self.destination / "manifest.json").exists())
+
+    def test_object_storage_destination_without_stable_inodes_or_rename(self):
+        """Regression for the October 10 pilot: a bucket mount changes inode
+        identity between opens and implements rename as a non-atomic copy."""
+        (self.source / "logs").mkdir()
+        (self.source / "logs" / "model.stderr.log").write_bytes(b"model log")
+        (self.source / "workload_summary.json").write_bytes(b"{}")
+        from robot_debug import job_runtime
+        real_fstat = os.fstat
+        destination_root = self.destination
+
+        def unstable_fstat(descriptor):
+            info = real_fstat(descriptor)
+            if destination_root.exists():
+                for path in destination_root.rglob("*"):
+                    try:
+                        current = os.lstat(path)
+                    except OSError:
+                        continue
+                    if (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
+                        fields = list(info)
+                        fields[stat.ST_INO] = info.st_ino + 1_000_003
+                        return os.stat_result(fields)
+            return info
+
+        def no_rename(*_args, **_kwargs):
+            raise AssertionError("export must not rename on object storage")
+
+        with patch.object(job_runtime.os, "fstat", side_effect=unstable_fstat), \
+                patch.object(job_runtime.os, "replace", side_effect=no_rename), \
+                patch.object(job_runtime.os, "rename", side_effect=no_rename):
+            report = self.export()
+        self.assertEqual(
+            [row["path"] for row in report["files"]],
+            ["logs/model.stderr.log", "workload_summary.json"],
+        )
+        self.assertEqual((self.destination / "logs" / "model.stderr.log").read_bytes(), b"model log")
+        self.assertTrue((self.destination / "manifest.json").is_file())
+        self.assertEqual([p.name for p in self.destination.rglob("*.part")], [])
 
     def test_nested_files_are_sorted_by_portable_relative_path(self):
         (self.source / "z").mkdir()

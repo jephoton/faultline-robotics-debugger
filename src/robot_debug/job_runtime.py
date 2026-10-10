@@ -8,7 +8,6 @@ import math
 import os
 import re
 import stat
-import uuid
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
@@ -229,14 +228,48 @@ def _hash_source(path: Path, secrets: Sequence[bytes], expected: os.stat_result 
     return size, digest.hexdigest(), opened
 
 
+def _hash_destination(path: Path) -> Tuple[int, str]:
+    """Hash an exported copy by content.
+
+    Object-storage mounts do not keep stable inode identity across opens or
+    support atomic rename, so destination copies are verified by their bytes;
+    the strict identity checks apply to the local source tree only.
+    """
+
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise JobRuntimeError("could not inspect an exported evidence copy") from exc
+    if _is_link_or_reparse(path) or not stat.S_ISREG(info.st_mode):
+        _fail("exported evidence copies must be ordinary files")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with os.fdopen(os.open(path, flags), "rb") as stream:
+            while True:
+                chunk = stream.read(_COPY_CHUNK_SIZE)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                size += len(chunk)
+    except OSError as exc:
+        raise JobRuntimeError("could not read an exported evidence copy") from exc
+    return size, digest.hexdigest()
+
+
 def _copy_file(source: Path, destination: Path, secrets: Sequence[bytes]) -> Tuple[int, str]:
-    """Copy one source through an exclusive staging path; retained for fault injection."""
+    """Copy one source straight to its exclusive final path; retained for fault injection.
+
+    There is no staging rename: object-storage mounts implement rename as a
+    non-atomic copy. A failed copy leaves a partial file, and the manifest,
+    published last, remains the only completion marker.
+    """
 
     source_fd, opened = _open_source(source)
-    staging = destination.with_name("." + destination.name + "." + uuid.uuid4().hex + ".part")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
-        destination_fd = os.open(staging, flags, 0o600)
+        destination_fd = os.open(destination, flags, 0o600)
     except BaseException:
         os.close(source_fd)
         raise
@@ -258,12 +291,8 @@ def _copy_file(source: Path, destination: Path, secrets: Sequence[bytes]) -> Tup
         after = source.lstat()
         if _file_identity(after) != _file_identity(opened) or size != opened.st_size:
             _fail("source evidence changed while it was copied")
-        reserve_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        reserve_fd = os.open(destination, reserve_flags, 0o600)
-        os.close(reserve_fd)
-        os.replace(staging, destination)
     except Exception:
-        # Partial staging data is deliberately retained for recovery.
+        # Partial destination data is deliberately retained for recovery.
         raise
     return size, digest.hexdigest()
 
@@ -351,7 +380,7 @@ def _verify_final_evidence(
         _reject_link_chain(source_path)
         _reject_link_chain(destination_path)
         source_size, source_digest, _ = _hash_source(source_path, secrets, expected_info)
-        destination_size, destination_digest, _ = _hash_source(destination_path, (), None)
+        destination_size, destination_digest = _hash_destination(destination_path)
         if (
             source_size != expected_size
             or destination_size != expected_size
@@ -366,7 +395,6 @@ def _publish_manifest(manifest_path: Path, payload: bytes) -> None:
 
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(manifest_path, flags, 0o600)
-    created_info = os.fstat(descriptor)
     try:
         stream = os.fdopen(descriptor, "wb")
         descriptor = None
@@ -382,8 +410,10 @@ def _publish_manifest(manifest_path: Path, payload: bytes) -> None:
                 pass
         try:
             current = manifest_path.lstat()
-            if _is_link_or_reparse(manifest_path) or not stat.S_ISREG(current.st_mode) or not os.path.samestat(created_info, current):
-                raise JobRuntimeError("manifest marker identity changed during failed publication")
+            # The marker was created exclusively above; inode identity is not
+            # stable on object-storage mounts, so only its kind is rechecked.
+            if _is_link_or_reparse(manifest_path) or not stat.S_ISREG(current.st_mode):
+                raise JobRuntimeError("manifest marker changed during failed publication")
             manifest_path.unlink()
             if manifest_path.exists() or manifest_path.is_symlink():
                 raise JobRuntimeError("manifest marker removal could not be confirmed")
@@ -427,7 +457,7 @@ def export_closed_evidence(
             _fail("source evidence changed before copy")
         copied_size, copied_digest = _copy_file(source_path, destination_path, secrets)
         source_size, source_digest, _ = _hash_source(source_path, secrets, expected_info)
-        destination_size, destination_digest, _ = _hash_source(destination_path, (), None)
+        destination_size, destination_digest = _hash_destination(destination_path)
         if (
             copied_size != expected_size
             or source_size != expected_size
