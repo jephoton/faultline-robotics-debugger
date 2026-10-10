@@ -650,6 +650,7 @@ class ExportPreflightProcessTests(unittest.TestCase):
                 def signal_inside_constructor(*args):
                     pid = real_fork_exec(*args)
                     owned.append(pid)
+                    self.addCleanup(self._cleanup_owned_process_group, pid)
                     os.kill(os.getpid(), signum)
                     return pid
 
