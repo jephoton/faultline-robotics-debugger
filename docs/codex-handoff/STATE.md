@@ -1,5 +1,28 @@
 # Faultline current project state
 
+## October 10 Serverless pilot validated (Claude Code)
+
+Jethro approved one retry within the original US$3 cap (AI Cloud balance
+US$5.99 at the time). `faultline-pilot-20261010b` (v5 image `b233199`) COMPLETED
+in about 13 minutes: export preflight OK, pinned prefetch 369 s, nominal
+**success** (138 steps), reduced mask x=.5,y=0,w=h=.375 **policy_failure**
+(280 steps), 21 files exported. Recovered to ignored
+`artifacts/serverless-pilot-20261010b/recovered/`; all manifest hashes/sizes
+match, traces parse, both MP4s decode. Cosmos resolved to `9ce19a19…`.
+Details: `docs/experiments/serverless-job-pilot.md`. The migration plan's only
+open item is showing the new recordings in the viewer.
+
+This validates deployment, not a new research claim (one episode per condition).
+Estimated spend for both Jobs ≈ US$0.75 pre-tax plus small storage; reconcile
+with posted billing.
+
+Pending teardown, each needing Jethro's explicit OK: delete the private bucket
+(24 h retention from ~04:00 UTC Oct 10) and revoke the read-only access key,
+service account and `faultline-pilot-readers` group; delete the stopped
+`robot-debug-pilot` VM and 200 GiB disk (its keep-until condition — a valid
+Serverless pilot — is now met); keep or prune registry images; remove the local
+21.7 GB image and compact Docker's disk.
+
 ## October 10 launch-guard integration and v5 image (Claude Code)
 
 Claude reviewed Codex's `codex/serverless-preflight-launch-guard` as the

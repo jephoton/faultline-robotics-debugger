@@ -283,3 +283,23 @@ The October billing check also showed that a stopped VM's 200 GiB boot disk
 costs about US$0.47/day, and that the hackathon US$25 promo applies to Token
 Factory rather than AI Cloud. Both were our planning assumptions, not provider
 defects; the console usage breakdown made them easy to see.
+
+### October 10: First real Serverless Jobs
+
+Two single-L40S Jobs ran from a private registry image with a Secret Stash token
+and a mounted private bucket. Strengths: same-project registry pulls needed no
+credentials; the dry-run caught a real request problem before spend; exact-ID
+`get`, `logs --timestamps` and `get-by-name` recovery worked; image pull took
+about three minutes for a 7 GB compressed image; GR00T ran on the L40S and both
+episodes completed in about 30 seconds each. Bucket policy rules plus a
+lifecycle expiry made a narrow read-only download key and automatic retention
+easy to set up.
+
+Friction: Job creation rejected an `@sha256` image reference because an
+internal label exceeded 64 characters, while a tag reference validated — we
+pin the tag to the digest ourselves. `--format json` on create did not return
+JSON, so the Job ID came from `get-by-name`. A completed Job's status still
+showed its compute instance as `RUNNING`. The bucket mount does not preserve
+inode identity or atomic rename; that broke our first export, which was our
+exporter's POSIX assumption, not a provider defect, though documenting mount
+semantics would help. Verdict: yes for bounded single-GPU evaluation runs.

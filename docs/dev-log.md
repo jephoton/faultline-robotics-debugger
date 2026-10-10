@@ -527,3 +527,14 @@ homepage serves Faultline and the health API remains read-only. No package
 publication, installation/wheel verification, folder/repository move or cloud
 operation was performed. Remaining legacy names denote compatibility paths,
 commands and preserved historical infrastructure, not active product branding.
+
+## October 10 — Serverless pilot validated
+
+The first paid Job failed at evidence export because the exporter assumed
+local-disk semantics on the bucket mount; the fix writes final paths directly
+and verifies by content. Codex then found and fixed a preflight deadline reset
+and a launch-signal race; Claude reviewed and integrated both. The approved
+retry completed in about 13 minutes: nominal success (138 steps), reduced-mask
+policy failure (280 steps), 21 evidence files recovered and verified against
+the manifest. This validates the Serverless deployment path; it is not a new
+research claim.

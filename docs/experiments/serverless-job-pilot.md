@@ -135,3 +135,44 @@ Network-disabled CPU probes inside the image passed:
 
 GPU, EGL rendering, model download/inference, bucket export and the Job
 lifecycle remain unverified until the paid pilot.
+
+### October 10 live pilots: one failed export, one complete validation
+
+**Attempt 1 — `faultline-pilot-20261010` (image `23d07cd`, FAILED).** The Job
+provisioned, pulled the image, and the model log shows GR00T loading and serving
+two episodes, but evidence export aborted (`source evidence changed during
+open`): the bucket mount does not keep inode identity across opens and renames
+by non-atomic copy. Only a staging log and an empty final object reached the
+bucket; no manifest. Root cause reproduced locally by simulating unstable
+destination inodes; fixed in `e7d6604` (exclusive final paths, content-hash
+verification, no rename). No outcome claim is made from attempt 1.
+
+**Attempt 2 — `faultline-pilot-20261010b` (image `b233199`, digest
+`sha256:decd037a…cbca3c`, COMPLETED).** Separately approved by Jethro within the
+original US$3 cap. Timeline (UTC): submitted 12:29, container start 12:34:14,
+export preflight OK 12:34:15, pinned prefetch done 12:40:24 (369 s), nominal
+12:40:39–12:41:10, masked 12:41:10–12:41:41, export of 21 files done 12:41:43.
+Wall time about 13 minutes from submission.
+
+| Stage | Outcome | Steps | Episode time | Video |
+| --- | --- | --- | --- | --- |
+| Nominal (task 0, init 0, seed 7) | success | 138 | 26.95 s | h264 256×256, 139 frames |
+| Masked `x=.5,y=0,w=h=.375` (14.0625 %) | policy_failure | 280 (max) | 28.58 s | h264 256×256, 281 frames |
+
+Resolved model inputs: checkpoint `1499db35…` and base `2fc962b9…` (pinned);
+Cosmos-Reason2-2B resolved to `9ce19a195e423419c349abfc86fd07178b230561`
+(unpinned historically; now recorded). Simulator Python 3.8.20, harness 0.5.0.
+
+Recovery: the read-only S3 key downloaded the export to the ignored
+`artifacts/serverless-pilot-20261010b/recovered/`. All 21 manifest entries match
+size and SHA-256; no unlisted files; both JSONL traces parse (138/280 rows) and
+both MP4s decode with ffprobe. The Job reached terminal `COMPLETED`.
+
+Interpretation: this validates the deployment path — a finite Serverless Job
+produced fresh GR00T episodes with complete, checksummed, recoverable evidence.
+The outcomes agree with the historical VM result (nominal success; reduced
+mask fails), but one episode per condition is a consistency check, not a new
+repeatability or reduction claim. Estimated cost: two Jobs of about 12–13
+minutes each at US$1.7468/h ≈ US$0.75 pre-tax plus small disk/bucket charges;
+posted billing still to be reconciled. Jethro reported an AI Cloud balance of
+US$5.99 at retry time.
