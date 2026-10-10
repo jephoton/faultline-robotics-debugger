@@ -624,6 +624,11 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
         self.assertEqual(body["totals"]["nominal_unmasked"]["episodes"], 6)
         self.assertEqual(body["totals"]["all"]["episodes"], 12)
         self.assertEqual(body["totals"]["distinct_masks_tested"], 2)
+        self.assertEqual(body["totals"]["masks_with_successes"],
+                         [{"height": 0.5, "width": 0.25, "x": 0.75, "y": 0.0}])
+        self.assertEqual(body["totals"]["masks_with_only_failures"],
+                         [packet["reduced_mask"]["rectangle"]])
+        self.assertIn("never write that all masked episodes failed", system)
         for phrase in ("never add up or recount", "must differ from every mask", "one seed"):
             self.assertIn(phrase, system)
         self.assertEqual(body["packet"]["schema_version"], 2)

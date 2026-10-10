@@ -147,7 +147,10 @@ def interpretation_context(packet: dict) -> dict:
     totals = {"all": tally(groups),
               "nominal_unmasked": tally([g for g in groups if g["mask"] is None]),
               "masked": tally(masked),
-              "distinct_masks_tested": len({json.dumps(g["mask"], sort_keys=True) for g in masked})}
+              "distinct_masks_tested": len({json.dumps(g["mask"], sort_keys=True) for g in masked}),
+              "masks_with_successes": [g["mask"] for g in masked if g["successes"] > 0],
+              "masks_with_only_failures": [g["mask"] for g in masked
+                                           if g["successes"] == 0 and g["policy_failures"] > 0]}
     return {"counts_by_role": deterministic_summary(validated)["counts_by_role"],
             "totals": totals,
             "mask_groups": groups,
