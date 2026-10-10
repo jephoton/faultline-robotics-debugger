@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+from contextlib import nullcontext
 from pathlib import Path
 import re
 import shlex
@@ -14,6 +15,7 @@ import threading
 import time
 import types
 import unittest
+from unittest import mock
 
 from robot_debug import job_entry
 from robot_debug.job_entry import (
@@ -382,6 +384,232 @@ class PrefetchProcessTests(unittest.TestCase):
             factory(log_root=self.run_root / "logs")
 
 
+@unittest.skipUnless(POSIX, "export preflight owns POSIX process groups")
+class ExportPreflightProcessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.layout = _layout(self.root)
+
+    def _wait_for_file(self, path: Path, timeout: float = 5.0) -> None:
+        limit = time.monotonic() + timeout
+        while not path.exists():
+            if time.monotonic() >= limit:
+                self.fail("preflight fixture did not reach its marker")
+            time.sleep(0.02)
+
+    def _assert_gone(self, pid: int) -> None:
+        limit = time.monotonic() + 3.0
+        while True:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            if time.monotonic() >= limit:
+                self.fail("preflight process group member survived cleanup")
+            time.sleep(0.03)
+
+    def _run_fixture(self, argv, *, deadline=None, clock=time.monotonic) -> None:
+        job_entry._run_preflight_process(
+            argv,
+            cwd=self.root,
+            log_root=self.root / "logs",
+            deadline=deadline if deadline is not None else clock() + 60,
+            clock=clock,
+        )
+
+    def test_probe_exports_to_unique_paths_and_keeps_logs_private(self) -> None:
+        job_entry.bounded_export_preflight(
+            self.layout, "pilot-1", deadline=time.monotonic() + 60
+        )
+        job_entry.bounded_export_preflight(
+            self.layout, "pilot-1", deadline=time.monotonic() + 60
+        )
+        probes = list(self.layout.export_root.glob(".preflight-pilot-1-*"))
+        self.assertEqual(2, len(probes))
+        self.assertTrue(all((probe / "manifest.json").is_file() for probe in probes))
+        logs = sorted((self.layout.work_root / "preflight-logs").glob("*.log"))
+        self.assertEqual(4, len(logs))
+        self.assertTrue(all(path.stat().st_mode & 0o077 == 0 for path in logs))
+        self.assertFalse(any(b"HF_TOKEN" in path.read_bytes() for path in logs))
+
+    def test_child_argv_is_fixed_and_contains_only_trusted_payload(self) -> None:
+        argv = job_entry._preflight_child_argv(self.layout, "pilot-1")
+        self.assertEqual(sys.executable, argv[0])
+        self.assertEqual(["-I", "-B", "-c"], argv[1:4])
+        self.assertEqual(str(Path(job_entry.__file__).resolve().parents[1]), argv[5])
+        self.assertEqual(
+            {"work_root": str(self.layout.work_root),
+             "export_root": str(self.layout.export_root), "run_id": "pilot-1"},
+            json.loads(argv[6]),
+        )
+        with self.assertRaises(JobRuntimeError):
+            job_entry._preflight_child_argv(self.layout, "../private")
+
+    def test_wait_timeout_uses_thirty_second_cap_and_original_remaining_budget(self) -> None:
+        class Finished:
+            pid = 900001
+
+            def wait(self, *, timeout):
+                self.timeout = timeout
+                return 0
+
+        for deadline, expected in ((1000.0, 30.0), (115.5, 1.5)):
+            with self.subTest(deadline=deadline):
+                process = Finished()
+                with mock.patch.object(job_entry.subprocess, "Popen", return_value=process), \
+                     mock.patch.object(job_entry, "close_owned_process_group") as close_group:
+                    self._run_fixture(
+                        [sys.executable, "-B", "-c", "pass"],
+                        deadline=deadline,
+                        clock=lambda: 100.0,
+                    )
+                self.assertEqual(expected, process.timeout)
+                close_group.assert_called_once_with(process, process.pid)
+
+    def test_child_environment_is_empty_and_output_stays_in_local_logs(self) -> None:
+        code = "import os; print(os.environ.get('HF_TOKEN', 'unset')); print('fixture-secret')"
+        with mock.patch.dict(os.environ, {"HF_TOKEN": "parent-secret"}):
+            self._run_fixture([sys.executable, "-B", "-c", code])
+        (stdout_path,) = (self.root / "logs").glob("*.stdout.log")
+        output = stdout_path.read_text(encoding="utf-8")
+        self.assertEqual("unset\nfixture-secret\n", output)
+
+    def test_nonzero_child_exit_is_a_fixed_runtime_error(self) -> None:
+        with self.assertRaisesRegex(InfrastructureError, "export preflight process failed"):
+            self._run_fixture([sys.executable, "-B", "-c", "raise SystemExit(7)"])
+
+    def test_expired_probe_budget_does_not_spawn(self) -> None:
+        with mock.patch.object(job_entry.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(InfrastructureError, "no time remains"):
+                self._run_fixture(
+                    [sys.executable, "-B", "-c", "raise SystemExit(0)"],
+                    deadline=114.0,
+                    clock=lambda: 100.0,
+                )
+        popen.assert_not_called()
+
+    def test_timeout_closes_grandchild_process_group(self) -> None:
+        marker = self.root / "grandchild.pid"
+        child_code = (
+            "import pathlib,subprocess,sys,time; "
+            "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(60)']); "
+            "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
+        )
+        argv = [sys.executable, "-B", "-c", child_code, str(marker)]
+        started = time.monotonic()
+        with self.assertRaisesRegex(InfrastructureError, "export preflight did not complete"):
+            self._run_fixture(argv, deadline=started + 14.5)
+        self._wait_for_file(marker)
+        self._assert_gone(int(marker.read_text(encoding="utf-8")))
+        self.assertLess(time.monotonic() - started, 12.0)
+
+    def test_success_closes_orphaned_grandchild_process_group(self) -> None:
+        marker = self.root / "success-grandchild.pid"
+        child_code = (
+            "import pathlib,subprocess,sys; "
+            "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(60)']); "
+            "pathlib.Path(sys.argv[1]).write_text(str(child.pid))"
+        )
+        self._run_fixture([sys.executable, "-B", "-c", child_code, str(marker)])
+        self._assert_gone(int(marker.read_text(encoding="utf-8")))
+
+    def test_sigterm_during_probe_cleans_group_before_exit_143(self) -> None:
+        config = self.root / "workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        marker = self.root / "sigterm-grandchild.pid"
+        child_code = (
+            "import pathlib,subprocess,sys,time; "
+            "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(60)']); "
+            "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
+        )
+        argv_builder = lambda *_args: [sys.executable, "-B", "-c", child_code, str(marker)]
+
+        def sender() -> None:
+            self._wait_for_file(marker)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        thread = threading.Thread(target=sender, daemon=True)
+        thread.start()
+        output = io.StringIO()
+        with mock.patch.object(job_entry, "_preflight_child_argv", side_effect=argv_builder):
+            code = main(
+                ["--config", str(config)],
+                layout=self.layout,
+                environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started after SIGTERM"),
+                stdout=output,
+            )
+        thread.join(3)
+        self.assertEqual(143, code)
+        self._assert_gone(int(marker.read_text(encoding="utf-8")))
+
+    def test_sigint_during_probe_cleans_group_before_exit_130(self) -> None:
+        config = self.root / "sigint-workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        marker = self.root / "sigint-grandchild.pid"
+        child_code = (
+            "import pathlib,subprocess,sys,time; "
+            "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(60)']); "
+            "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
+        )
+        argv_builder = lambda *_args: [sys.executable, "-B", "-c", child_code, str(marker)]
+
+        def sender() -> None:
+            self._wait_for_file(marker)
+            os.kill(os.getpid(), signal.SIGINT)
+
+        thread = threading.Thread(target=sender, daemon=True)
+        thread.start()
+        output = io.StringIO()
+        with mock.patch.object(job_entry, "_preflight_child_argv", side_effect=argv_builder):
+            code = main(
+                ["--config", str(config)],
+                layout=self.layout,
+                environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started after SIGINT"),
+                stdout=output,
+            )
+        thread.join(3)
+        self.assertEqual(130, code)
+        self._assert_gone(int(marker.read_text(encoding="utf-8")))
+
+    def test_nonzero_child_is_runtime_exit_three_and_never_calls_runner(self) -> None:
+        config = self.root / "workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        output = io.StringIO()
+        with mock.patch.object(
+            job_entry, "_preflight_child_argv",
+            return_value=[sys.executable, "-B", "-c", "raise SystemExit(9)"],
+        ):
+            code = main(
+                ["--config", str(config)],
+                layout=self.layout,
+                environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started after failed probe"),
+                stdout=output,
+            )
+        self.assertEqual(3, code)
+        self.assertEqual("error", json.loads(output.getvalue().splitlines()[-1])["status"])
+
+    def test_expired_main_deadline_never_spawns_probe_or_runner(self) -> None:
+        config = self.root / "short-workload.json"
+        config.write_text(json.dumps(dict(VALID, deadline_seconds=14)), encoding="utf-8")
+        output = io.StringIO()
+        with mock.patch.object(job_entry.subprocess, "Popen") as popen:
+            code = main(
+                ["--config", str(config)],
+                layout=self.layout,
+                environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started without probe budget"),
+                clock=lambda: 100.0,
+                stdout=output,
+            )
+        self.assertEqual(3, code)
+        popen.assert_not_called()
+
+
 class MainTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -403,14 +631,24 @@ class MainTests(unittest.TestCase):
 
     def _main(self, runner, environ=None, clock=None) -> tuple:
         output = io.StringIO()
-        code = main(
-            ["--config", str(self.config)],
-            layout=self.layout,
-            environ={"HF_TOKEN": "hf_value"} if environ is None else environ,
-            runner=runner,
-            clock=clock or time.monotonic,
-            stdout=output,
+        def direct_test_process(argv, **_kwargs):
+            payload = json.loads(argv[-1])
+            return job_entry.export_preflight(self.layout, payload["run_id"])
+
+        context = (
+            mock.patch.object(job_entry, "_run_preflight_process", side_effect=direct_test_process)
+            if not POSIX
+            else nullcontext()
         )
+        with context:
+            code = main(
+                ["--config", str(self.config)],
+                layout=self.layout,
+                environ={"HF_TOKEN": "hf_value"} if environ is None else environ,
+                runner=runner,
+                clock=clock or time.monotonic,
+                stdout=output,
+            )
         return code, output.getvalue()
 
     def test_complete_and_partial_exit_codes(self) -> None:
@@ -441,7 +679,7 @@ class MainTests(unittest.TestCase):
         evaluator = kwargs["evaluator_factory"](timeout_seconds=5, log_root=self.root / "logs")
         self.assertNotIn("HF_TOKEN", evaluator.evaluator._env)
 
-    def test_runner_receives_original_absolute_deadline(self) -> None:
+    def test_preflight_time_consumes_original_deadline_before_readiness(self) -> None:
         now = [100.0]
         readiness_deadlines = []
 
@@ -474,15 +712,11 @@ class MainTests(unittest.TestCase):
                 absolute_deadline=kwargs["absolute_deadline"],
             )
 
-        original_preflight = job_entry.export_preflight
-
-        def elapsed_preflight(layout, run_id):
-            original_preflight(layout, run_id)
+        def elapsed_preflight(layout, run_id, **_kwargs):
+            job_entry.export_preflight(layout, run_id)
             now[0] = 500.0
 
-        from unittest import mock
-
-        with mock.patch.object(job_entry, "export_preflight", side_effect=elapsed_preflight):
+        with mock.patch.object(job_entry, "bounded_export_preflight", side_effect=elapsed_preflight):
             code, _ = self._main(actual_runner, clock=lambda: 100.0)
         self.assertEqual(1, code)
         self.assertEqual([2486.0], readiness_deadlines)
@@ -544,11 +778,57 @@ class MainTests(unittest.TestCase):
         self.assertEqual((probe / "probe.txt").read_text(encoding="utf-8"), "faultline export preflight\n")
         self.assertEqual(len(self.calls), 1)
 
+    def test_parent_does_not_touch_remote_export_root_before_bounded_probe(self) -> None:
+        events = []
+
+        class RemoteRoot:
+            def _unexpected_parent_io(self, *_args, **_kwargs):
+                events.append("parent-remote-io")
+                raise AssertionError("parent touched remote export root")
+
+            mkdir = stat = lstat = exists = is_dir = _unexpected_parent_io
+
+            def __str__(self):
+                return str(self.layout.export_root)
+
+            def __fspath__(self):
+                return str(self.layout.export_root)
+
+        remote = RemoteRoot()
+        remote.layout = self.layout
+        layout = ImageLayout(
+            project_root=self.layout.project_root,
+            upstream_root=self.layout.upstream_root,
+            simulator_source=self.layout.simulator_source,
+            model_python=self.layout.model_python,
+            evaluator=self.layout.evaluator,
+            work_root=self.layout.work_root,
+            hf_home=self.layout.hf_home,
+            export_root=remote,
+        )
+
+        def probe(*_args, **_kwargs):
+            events.append("probe")
+
+        def runner(*_args, **_kwargs):
+            events.append("runner")
+            return {"status": "complete", "run_id": "pilot-1"}
+
+        with mock.patch.object(job_entry, "bounded_export_preflight", side_effect=probe):
+            main(
+                ["--config", str(self.config)],
+                layout=layout,
+                environ={},
+                runner=runner,
+                stdout=io.StringIO(),
+            )
+        self.assertEqual(["probe", "runner"], events)
+
     def test_failed_export_preflight_stops_before_runner(self) -> None:
         from unittest import mock
 
-        with mock.patch.object(job_entry, "export_closed_evidence",
-                               side_effect=JobRuntimeError("source evidence changed during open")):
+        with mock.patch.object(job_entry, "bounded_export_preflight",
+                               side_effect=JobRuntimeError("export preflight failed")):
             code, output = self._main(self._runner("complete"))
         self.assertEqual(code, 3)
         lines = [json.loads(line) for line in output.splitlines()]

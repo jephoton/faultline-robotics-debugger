@@ -411,6 +411,18 @@ class ServerlessWorkloadTests(unittest.TestCase):
         self.assertEqual(2486.0, readiness[1])
         self.assertEqual("complete", result["status"])
 
+    def test_absolute_deadline_cannot_extend_configured_duration(self) -> None:
+        events: list[object] = []
+        result, _, _, _ = self.invoke(
+            model=FakeModel(events),
+            clock=FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107),
+            config=dict(self.config, deadline_seconds=60),
+            absolute_deadline=10000,
+        )
+        readiness = next(item for item in events if isinstance(item, tuple) and item[0] == "ready")
+        self.assertEqual(146.0, readiness[1])
+        self.assertEqual("complete", result["status"])
+
     def test_absolute_deadline_inside_cleanup_reserve_skips_model_factory(self) -> None:
         factories = []
         result, _, _, exports = self.invoke(

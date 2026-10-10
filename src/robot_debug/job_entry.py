@@ -24,6 +24,8 @@ from .job_runtime import JobRuntimeError, export_closed_evidence, validate_workl
 MAX_WORKLOAD_BYTES = 64 * 1024
 PREFETCH_CAP_SECONDS = 1200.0
 POST_PREFETCH_RESERVE_SECONDS = 600.0
+EXPORT_PREFLIGHT_CAP_SECONDS = 30.0
+PREFLIGHT_CLEANUP_RESERVE_SECONDS = 14.0
 MODEL_PORT = 8000
 UPSTREAM_REVISION = "35f1200eb15608aa898f727a3722f7eef889c6cd"
 TOKEN_VARIABLE = "HF_TOKEN"
@@ -350,6 +352,7 @@ def export_preflight(layout: ImageLayout, run_id: str) -> None:
     manifest, which is the authoritative check.
     """
 
+    layout.export_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=str(layout.work_root)) as probe:
         Path(probe, "probe.txt").write_text("faultline export preflight\n", encoding="utf-8")
         export_closed_evidence(
@@ -358,6 +361,144 @@ def export_preflight(layout: ImageLayout, run_id: str) -> None:
             status="complete",
             cleanup_confirmed=True,
         )
+
+
+_EXPORT_PREFLIGHT_PROGRAM = (
+    "import json,sys\n"
+    "from pathlib import Path\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "from robot_debug.job_entry import ImageLayout, export_preflight\n"
+    "data=json.loads(sys.argv[2])\n"
+    "layout=ImageLayout(work_root=Path(data['work_root']), export_root=Path(data['export_root']))\n"
+    "export_preflight(layout, data['run_id'])\n"
+)
+
+
+def _preflight_child_argv(layout: ImageLayout, run_id: str) -> List[str]:
+    """Build the fixed child operation; tests may replace this low-level seam."""
+
+    validated = validate_workload_config(
+        {"schema_version": 1, "mode": "pilot", "run_id": run_id, "deadline_seconds": 1}
+    )
+    payload = {
+        "work_root": str(layout.work_root),
+        "export_root": str(layout.export_root),
+        "run_id": validated["run_id"],
+    }
+    return [
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
+        _EXPORT_PREFLIGHT_PROGRAM,
+        str(Path(__file__).resolve().parents[1]),
+        json.dumps(payload, sort_keys=True),
+    ]
+
+
+def _run_preflight_process(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    log_root: Path,
+    deadline: float,
+    clock: Callable[[], float],
+) -> None:
+    """Run one owned probe child, retaining private local logs and proving teardown."""
+
+    if os.name != "posix":
+        raise InfrastructureError("export preflight requires POSIX process groups")
+
+    def wait_budget() -> float:
+        return min(
+            EXPORT_PREFLIGHT_CAP_SECONDS,
+            deadline - clock() - PREFLIGHT_CLEANUP_RESERVE_SECONDS,
+        )
+
+    timeout = wait_budget()
+    if timeout <= 0:
+        raise InfrastructureError("no time remains for export preflight")
+    log_root.mkdir(parents=True, exist_ok=True)
+    ident = "export-preflight-" + uuid.uuid4().hex
+    stdout_path = log_root / (ident + ".stdout.log")
+    stderr_path = log_root / (ident + ".stderr.log")
+    stdout_fd = os.open(str(stdout_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        stderr_fd = os.open(str(stderr_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except BaseException:
+        os.close(stdout_fd)
+        raise
+
+    process = None
+    try:
+        with os.fdopen(stdout_fd, "wb") as stdout, os.fdopen(stderr_fd, "wb") as stderr:
+            timeout = wait_budget()
+            if timeout <= 0:
+                raise InfrastructureError("no time remains for export preflight")
+            process = subprocess.Popen(
+                list(argv),
+                cwd=str(cwd),
+                env={},
+                shell=False,
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            try:
+                timeout = wait_budget()
+                if timeout <= 0:
+                    raise subprocess.TimeoutExpired(list(argv), 0)
+                return_code = process.wait(timeout=timeout)
+            except KeyboardInterrupt:
+                try:
+                    close_owned_process_group(process, process.pid)
+                except KeyboardInterrupt:
+                    raise
+                except BaseException as cleanup_error:
+                    raise InfrastructureError(
+                        "export preflight cleanup could not be confirmed"
+                    ) from cleanup_error
+                raise
+            except BaseException as error:
+                try:
+                    close_owned_process_group(process, process.pid)
+                except KeyboardInterrupt:
+                    raise
+                except BaseException as cleanup_error:
+                    raise InfrastructureError("export preflight cleanup could not be confirmed") from cleanup_error
+                raise InfrastructureError("export preflight did not complete") from error
+            try:
+                close_owned_process_group(process, process.pid)
+            except KeyboardInterrupt:
+                raise
+            except BaseException as error:
+                raise InfrastructureError("export preflight cleanup could not be confirmed") from error
+    except InfrastructureError:
+        raise
+    except OSError as error:
+        raise InfrastructureError("export preflight process could not be started") from error
+    if return_code != 0:
+        raise InfrastructureError("export preflight process failed")
+
+
+def bounded_export_preflight(
+    layout: ImageLayout,
+    run_id: str,
+    *,
+    deadline: float,
+    clock: Callable[[], float] = time.monotonic,
+) -> None:
+    """Run the fixed export probe with the original Job deadline and cleanup reserve."""
+
+    argv = _preflight_child_argv(layout, run_id)
+    _run_preflight_process(
+        argv,
+        cwd=layout.project_root,
+        log_root=layout.work_root / "preflight-logs",
+        deadline=deadline,
+        clock=clock,
+    )
 
 
 def exit_code(summary: Mapping[str, Any]) -> int:
@@ -405,10 +546,9 @@ def main(
         return EXIT_CONFIG
     deadline = started + float(config["deadline_seconds"])
     try:
-        for root in (layout.work_root, layout.export_root):
-            root.mkdir(parents=True, exist_ok=True)
+        layout.work_root.mkdir(parents=True, exist_ok=True)
     except OSError:
-        print(json.dumps({"status": "rejected", "error": "work or export root unavailable"}), file=stdout)
+        print(json.dumps({"status": "rejected", "error": "work root unavailable"}), file=stdout)
         return EXIT_CONFIG
 
     secrets = tuple(sorted({environ[name] for name in TOKEN_ALIASES if environ.get(name)}))
@@ -422,9 +562,11 @@ def main(
     previous = signal.signal(signal.SIGTERM, latch)
     try:
         try:
-            export_preflight(layout, config["run_id"])
-        except (JobRuntimeError, OSError) as error:
-            progress("export_preflight_failed", error=type(error).__name__, message=str(error)[:200])
+            bounded_export_preflight(
+                layout, config["run_id"], deadline=deadline, clock=clock
+            )
+        except (InfrastructureError, JobRuntimeError, OSError, subprocess.SubprocessError) as error:
+            progress("export_preflight_failed", error=type(error).__name__)
             print(json.dumps({"status": "error", "error": "export preflight failed"}), file=stdout)
             return EXIT_RUNTIME
         progress("export_preflight_ok")
