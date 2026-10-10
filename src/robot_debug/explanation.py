@@ -137,8 +137,20 @@ def mask_groups(packet: dict) -> list:
 def interpretation_context(packet: dict) -> dict:
     """Everything sent to the model for a v2 packet, derived only from the packet."""
     validated = validate_evidence_packet(packet)
+    groups = mask_groups(validated)
+
+    def tally(selected: list) -> dict:
+        return {key: sum(group[key] for group in selected)
+                for key in ("episodes", "successes", "policy_failures", "infrastructure_errors")}
+
+    masked = [group for group in groups if group["mask"] is not None]
+    totals = {"all": tally(groups),
+              "nominal_unmasked": tally([g for g in groups if g["mask"] is None]),
+              "masked": tally(masked),
+              "distinct_masks_tested": len({json.dumps(g["mask"], sort_keys=True) for g in masked})}
     return {"counts_by_role": deterministic_summary(validated)["counts_by_role"],
-            "mask_groups": mask_groups(validated),
+            "totals": totals,
+            "mask_groups": groups,
             "packet": validated}
 
 

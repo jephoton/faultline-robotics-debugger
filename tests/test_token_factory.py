@@ -617,7 +617,15 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
                        "not a global minimum", "no causal proof", "human review"):
             self.assertIn(phrase, system)
         body = json.loads(payload["messages"][1]["content"])
-        self.assertEqual(set(body), {"counts_by_role", "mask_groups", "packet"})
+        self.assertEqual(set(body), {"counts_by_role", "totals", "mask_groups", "packet"})
+        self.assertEqual(body["totals"]["masked"],
+                         {"episodes": 6, "successes": 2, "policy_failures": 4,
+                          "infrastructure_errors": 0})
+        self.assertEqual(body["totals"]["nominal_unmasked"]["episodes"], 6)
+        self.assertEqual(body["totals"]["all"]["episodes"], 12)
+        self.assertEqual(body["totals"]["distinct_masks_tested"], 2)
+        for phrase in ("never add up or recount", "must differ from every mask", "one seed"):
+            self.assertIn(phrase, system)
         self.assertEqual(body["packet"]["schema_version"], 2)
         self.assertEqual(body["counts_by_role"]["nominal"]["gate_outcomes"]["success"], 6)
         groups = {(g["role"], json.dumps(g["mask"], sort_keys=True)): g for g in body["mask_groups"]}

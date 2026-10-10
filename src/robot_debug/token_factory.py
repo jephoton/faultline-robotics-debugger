@@ -48,8 +48,9 @@ _SYSTEM_PROMPT = (
 # Version 2 prompt: the user message carries deterministic counts, mask groups
 # and the packet. Asks for contrasts and testable hypotheses, not conclusions.
 _SYSTEM_PROMPT_V2 = (
-    "You help a robotics engineer review a simulated robot-policy failure. The "
-    "user message is JSON with counts_by_role (deterministic outcome counts), "
+    "You help a robotics engineer review a simulated robot-policy failure on one "
+    "task from the libero-object suite with one seed. The user message is JSON "
+    "with counts_by_role and totals (deterministic outcome counts), "
     "mask_groups (each distinct black occlusion rectangle on the policy's "
     "agent-view camera image, with episode, success and policy_failure counts "
     "and evidence_ids; x, y, width and height are fractions of the image with "
@@ -67,6 +68,10 @@ _SYSTEM_PROMPT_V2 = (
     "covering sample size, the single task and seed, that the reduced mask is "
     "budget-local and not a global minimum, that there is no causal proof, and "
     "that human review is required. Copy evidence_ids exactly from the input. "
+    "Use only numbers that appear in counts_by_role, totals or mask_groups; never "
+    "add up or recount episodes yourself. Every rectangle a hypothesis proposes "
+    "must differ from every mask in mask_groups, because those were already "
+    "tested. Compare masks that differ in only one dimension when possible. "
     "Keep each text under 400 characters."
 )
 _ERROR_CODES = {
