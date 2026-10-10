@@ -573,3 +573,67 @@ class TokenFactoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _v2_packet():
+    rect = {"x": 0.625, "y": 0.0, "width": 0.375, "height": 0.375}
+    wide = {"x": 0.75, "y": 0.0, "width": 0.25, "height": 0.5}
+    episodes = []
+    for index in range(6):
+        episodes.append({"evidence_id": f"a{index:015x}", "role": "nominal",
+                         "raw_outcome": "success", "gate_outcome": "success", "mask": None})
+    for index in range(4):
+        episodes.append({"evidence_id": f"b{index:015x}", "role": "reduced",
+                         "raw_outcome": "task_failure", "gate_outcome": "policy_failure",
+                         "mask": dict(rect)})
+    for index in range(2):
+        episodes.append({"evidence_id": f"c{index:015x}", "role": "other",
+                         "raw_outcome": "success", "gate_outcome": "success",
+                         "mask": dict(wide)})
+    return {"schema_version": 2,
+            "task": {"suite": "libero-object", "task_id": 0, "reset_index": 0},
+            "reduced_mask": {"family": "agentview-opaque-rectangle",
+                             "rectangle": dict(rect), "fill_value": [0, 0, 0]},
+            "episodes": episodes}
+
+
+class TokenFactoryV2RequestTests(unittest.TestCase):
+    def test_v2_sends_counts_mask_groups_and_packet_with_v2_prompt(self):
+        sent = []
+
+        def transport(method, path, payload, api_key):
+            sent.append(payload)
+            return {"model": MODEL, "choices": [{"message": {"content": CONTENT.replace(
+                "0123456789abcdef", "b000000000000000")}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}
+
+        packet = _v2_packet()
+        result = request_interpretation(packet, KEY, transport)
+        self.assertEqual(result["provenance"]["request_status"], "completed")
+        payload = sent[0]
+        system = payload["messages"][0]["content"]
+        self.assertNotIn('"hypotheses":[]', system)
+        for phrase in ("mask_groups", "testable", "next bounded experiment",
+                       "not a global minimum", "no causal proof", "human review"):
+            self.assertIn(phrase, system)
+        body = json.loads(payload["messages"][1]["content"])
+        self.assertEqual(set(body), {"counts_by_role", "mask_groups", "packet"})
+        self.assertEqual(body["packet"]["schema_version"], 2)
+        self.assertEqual(body["counts_by_role"]["nominal"]["gate_outcomes"]["success"], 6)
+        groups = {(g["role"], json.dumps(g["mask"], sort_keys=True)): g for g in body["mask_groups"]}
+        reduced = groups[("reduced", json.dumps(packet["reduced_mask"]["rectangle"], sort_keys=True))]
+        self.assertEqual((reduced["episodes"], reduced["policy_failures"], reduced["successes"]), (4, 4, 0))
+        self.assertAlmostEqual(reduced["area_fraction"], 0.140625)
+        self.assertEqual(reduced["evidence_ids"], sorted(reduced["evidence_ids"]))
+        nominal = groups[("nominal", "null")]
+        self.assertIsNone(nominal["area_fraction"])
+        encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+        self.assertLessEqual(len(encoded), 16_000)
+
+    def test_v1_request_is_unchanged(self):
+        sent = []
+        request_interpretation(PACKET, KEY, lambda m, p, payload, k: sent.append(payload) or {
+            "model": MODEL, "choices": [{"message": {"content": CONTENT}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+        self.assertEqual(json.loads(sent[0]["messages"][1]["content"]), PACKET)
+        self.assertIn("1 or 2 brief", sent[0]["messages"][0]["content"])

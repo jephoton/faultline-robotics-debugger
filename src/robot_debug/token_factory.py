@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from .evidence_packet import validate_evidence_packet
-from .explanation import validate_explanation
+from .explanation import interpretation_context, validate_explanation
 
 
 ENDPOINT = "https://api.tokenfactory.nebius.com/v1/"
@@ -28,6 +28,7 @@ _BASE_PATH = "/v1/"
 _TIMEOUT_SECONDS = 90
 _MAX_RESPONSE_BYTES = 262_144
 _MAX_REQUEST_BYTES = 6_000
+_MAX_REQUEST_BYTES_V2 = 16_000
 _MAX_ENV_BYTES = 65_536
 _RESERVATION_USD = Decimal("0.02")
 _INPUT_USD_PER_TOKEN = Decimal("0.06") / Decimal(1_000_000)
@@ -43,6 +44,30 @@ _SYSTEM_PROMPT = (
     '{"schema_version":1,"observations":[{"text":"brief observation",'
     '"evidence_ids":["evidence_id from packet"]}],"hypotheses":[],'
     '"limitations":["brief limitation"]}'
+)
+# Version 2 prompt: the user message carries deterministic counts, mask groups
+# and the packet. Asks for contrasts and testable hypotheses, not conclusions.
+_SYSTEM_PROMPT_V2 = (
+    "You help a robotics engineer review a simulated robot-policy failure. The "
+    "user message is JSON with counts_by_role (deterministic outcome counts), "
+    "mask_groups (each distinct black occlusion rectangle on the policy's "
+    "agent-view camera image, with episode, success and policy_failure counts "
+    "and evidence_ids; x, y, width and height are fractions of the image with "
+    "the origin at the top-left; nominal has no mask) and packet (the episodes). "
+    "Return exactly one JSON object with keys schema_version (the integer 1), "
+    "observations, hypotheses and limitations. observations: 2 to 4 objects "
+    "with keys text and evidence_ids, each a factual statement a reviewer can "
+    "verify from the counts, especially contrasts: nominal versus masked groups, "
+    "and masks that fail versus masks that succeed. Cite evidence_ids from every "
+    "group a statement compares, never from groups it does not describe. "
+    "hypotheses: 1 to 3 objects with keys text and evidence_ids, each a testable "
+    "hypothesis about which image region the policy depends on, naming the next "
+    "bounded experiment (a specific rectangle to test) and citing the episodes "
+    "that motivate it; these are not conclusions. limitations: 1 to 3 strings "
+    "covering sample size, the single task and seed, that the reduced mask is "
+    "budget-local and not a global minimum, that there is no causal proof, and "
+    "that human review is required. Copy evidence_ids exactly from the input. "
+    "Keep each text under 400 characters."
 )
 _ERROR_CODES = {
     "missing_api_key", "invalid_api_key", "authentication_failed",
@@ -381,12 +406,14 @@ def _provenance(status: str, error_code: str | None, latency: float,
 
 
 def _request_payload(packet: dict) -> dict:
-    packet_json = json.dumps(packet, ensure_ascii=False, separators=(",", ":"),
+    version_2 = packet["schema_version"] == 2
+    user = interpretation_context(packet) if version_2 else packet
+    packet_json = json.dumps(user, ensure_ascii=False, separators=(",", ":"),
                              allow_nan=False)
     payload = {
         "model": MODEL,
         "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": _SYSTEM_PROMPT_V2 if version_2 else _SYSTEM_PROMPT},
             {"role": "user", "content": packet_json},
         ],
         "max_tokens": 4096,
@@ -396,7 +423,7 @@ def _request_payload(packet: dict) -> dict:
     }
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
                          allow_nan=False).encode("utf-8")
-    if len(encoded) > _MAX_REQUEST_BYTES:
+    if len(encoded) > (_MAX_REQUEST_BYTES_V2 if version_2 else _MAX_REQUEST_BYTES):
         raise TokenFactoryError("request_too_large")
     return payload
 

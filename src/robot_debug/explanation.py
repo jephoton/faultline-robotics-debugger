@@ -106,6 +106,42 @@ def deterministic_summary(packet: dict) -> dict:
             "reduced_mask_area_fraction": rectangle["width"] * rectangle["height"]}
 
 
+def mask_groups(packet: dict) -> list:
+    """Group v2 episodes by role and exact mask; a pure function of the packet."""
+    validated = validate_evidence_packet(packet)
+    if validated["schema_version"] != 2:
+        raise ValueError("mask groups require a version 2 packet")
+    groups: dict = {}
+    for episode in validated["episodes"]:
+        mask = episode["mask"]
+        key = (episode["role"], json.dumps(mask, sort_keys=True))
+        group = groups.setdefault(key, {
+            "role": episode["role"], "mask": mask,
+            "area_fraction": None if mask is None else mask["width"] * mask["height"],
+            "episodes": 0, "successes": 0, "policy_failures": 0,
+            "infrastructure_errors": 0, "evidence_ids": [],
+        })
+        group["episodes"] += 1
+        group[{"success": "successes", "policy_failure": "policy_failures",
+               "infrastructure_error": "infrastructure_errors"}[episode["gate_outcome"]]] += 1
+        group["evidence_ids"].append(episode["evidence_id"])
+    order = {"nominal": 0, "parent": 1, "reduced": 2, "other": 3}
+    result = []
+    for key in sorted(groups, key=lambda item: (order[item[0]], item[1])):
+        group = groups[key]
+        group["evidence_ids"].sort()
+        result.append(group)
+    return result
+
+
+def interpretation_context(packet: dict) -> dict:
+    """Everything sent to the model for a v2 packet, derived only from the packet."""
+    validated = validate_evidence_packet(packet)
+    return {"counts_by_role": deterministic_summary(validated)["counts_by_role"],
+            "mask_groups": mask_groups(validated),
+            "packet": validated}
+
+
 def build_offline_report(packet: dict, response_json: str | None = None) -> dict:
     """Keep packet facts even when optional supplied interpretation is invalid."""
     validated = validate_evidence_packet(packet)
