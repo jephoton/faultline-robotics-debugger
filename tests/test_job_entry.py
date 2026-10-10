@@ -414,10 +414,10 @@ class ExportPreflightProcessTests(unittest.TestCase):
     def _restore_subreaper(self, previous: int) -> None:
         self.assertEqual(self._libc.prctl(36, previous, 0, 0, 0), 0)
 
-    def _reap_adopted_children(self) -> None:
+    def _reap_adopted_children(self, process_group: int) -> None:
         while True:
             try:
-                pid, _status = os.waitpid(-1, os.WNOHANG)
+                pid, _status = os.waitpid(-process_group, os.WNOHANG)
             except ChildProcessError:
                 return
             if pid == 0:
@@ -430,7 +430,7 @@ class ExportPreflightProcessTests(unittest.TestCase):
             return
         deadline = time.monotonic() + 2.0
         while True:
-            self._reap_adopted_children()
+            self._reap_adopted_children(process_group)
             try:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
@@ -441,7 +441,7 @@ class ExportPreflightProcessTests(unittest.TestCase):
             time.sleep(0.03)
         deadline = time.monotonic() + 2.0
         while True:
-            self._reap_adopted_children()
+            self._reap_adopted_children(process_group)
             try:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
