@@ -50,6 +50,32 @@ this corroborates the failure class, not proof of its exact kernel cause here.
 
 ## Live evidence status
 
+### October 10 first Job: inference observed, export failed
+
+This supersedes older "not started" statements below. Claude submitted the
+single approved L40S pilot on image23d07cd. Fresh exact-ID lookup confirms
+FAILED / ContainerFailed, running from 03:56:37 to 04:03:38 UTC. The final
+container diagnostic was "source evidence changed during open" (incorrectly
+classified rejected by the old entrypoint).
+
+Read-only recovery from the existing private bucket downloaded two objects,
+3,133 bytes total: a staging model stderr log and a zero-byte final log. Their
+local recovery index records hashes but is **not** a valid export manifest.
+The log establishes successful GR00T loading, WebSocket serving, and two
+episode start/end pairs. It does not establish the episodes' success/failure,
+EGL correctness, or available videos/traces. No robot outcome is accepted.
+
+Claude's destination-mount repair avoids rename and inode identity assumptions,
+retains stable source/content checks, and publishes a manifest only after
+copy verification. Imagec91383c was pushed successfully; the current registry
+tag resolves to
+`sha256:19c9bacae24f74e71ae5df048df37da3b40180b4f2070a1fa5e3824f5fd1aa0b`.
+Independent review then found the preflight/deadline regressions described in
+the [repair plan](../superpowers/plans/2026-10-10-serverless-preflight-deadline-repair.md).
+The image must be rebuilt after that repair; c91383c is not the final retry
+candidate. No additional Job was submitted during Codex recovery. A new paid
+attempt needs a new explicit allowance and live resource/balance checks.
+
 ### October 9 local recovery and pinned-image probe
 
 The user approved moving only Docker's stopped runtime `run` directory to a

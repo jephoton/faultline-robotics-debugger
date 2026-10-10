@@ -44,7 +44,11 @@ The validator requires:
 - a unique lowercase `run_id` of at most 63 characters;
 - explicit `project-*`, `vpcsubnet-*`, and `storagebucket-*` resource IDs;
 - an immutable image reference ending in `@sha256:` plus 64 lowercase
-  hexadecimal characters;
+  hexadecimal characters, or a tag in a private Nebius registry accompanied by
+  an `image_digest` field with that expected sha256 digest. The submit owner
+  must verify tag-to-digest agreement immediately before submission: the script
+  validates syntax, not the registry mapping. The first provider dry-run rejected
+  @sha256 references because an internal label exceeded 64 characters;
 - exactly platform `gpu-l40s-a` and preset `1gpu-16vcpu-64gb`;
 - a Secret Stash selector (`mbsec-*`, optionally pinned to `@mbsecver-*`) for
   `hf_secret` and, when needed, `registry_secret`—never a credential value;
@@ -58,7 +62,7 @@ the container and limited to 64 KiB. The private bucket is mounted at
 `/persistent` and the command contains only Secret Stash selectors, not secret
 values.
 
-Unknown fields, wrong JSON types, mutable images, wrong resource-ID kinds,
+Unknown fields, wrong JSON types, unpinned mutable images, wrong resource-ID kinds,
 unsafe names or paths, and raw secret-looking values in selector fields are
 rejected.
 
@@ -130,9 +134,13 @@ satisfy the image, account, pricing, and spending gates above.
    readable media/JSONL before treating recovery as successful. The installed
    `nebius ai job` command has no `download` subcommand, and the generic
    `nebius storage` help does not expose object copy/download. Therefore this
-   repository does not guess a download command: the exact authenticated Object
-   Storage client and command must be selected and verified during the live-pilot
-   gate before submission.
+   first pilot selected a standard S3 client with an existing bucket-scoped
+   `storage.viewer` service-account key. Read-only listing and partial diagnostic
+   download worked. Keep credentials in local secret storage (never in chat,
+   source, or logs), use bounded timeouts and a fresh ignored download directory,
+   enforce the approved byte cap, and rehash every manifest entry after download.
+   A staging file or empty final object without a manifest is incomplete evidence,
+   not a successfully recovered run. Do not overwrite unrelated AWS profiles.
 
 The provider timeout and container deadline are backups, not reasons to abandon
 the workstation-side exact-ID cancel-and-poll guard. Never automatically restart,

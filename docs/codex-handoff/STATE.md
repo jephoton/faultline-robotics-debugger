@@ -1,5 +1,32 @@
 # Faultline current project state
 
+## October 10 Serverless recovery checkpoint (Codex)
+
+This supersedes the older "not submitted" / "nothing created" status below.
+Claude submitted one private L40S Job; fresh exact-ID lookup confirms FAILED
+with ContainerFailed after approximately seven running minutes. Read-only S3
+recovery preserved two objects (3,133 bytes total) in ignored local artifacts:
+one model stderr staging file and an empty final file, with no export manifest.
+The log shows GR00T loaded, served two EPISODE_START/EPISODE_END pairs and
+exchanged requests. It does **not** establish nominal/masked success, recoverable
+video/trace evidence, or the final incurred charge.
+
+Claude repaired the exporter to use exclusive final filenames and byte/hash
+checks rather than bucket-mount rename/inode assumptions, added unique export
+probes and runtime exit3 reporting (`e7d6604` through `c91383c`). The c91383c image
+push completed; a fresh Nebius registry lookup confirms tag/digest agreement.
+No new Job or paid compute was started during Codex recovery.
+
+Independent review then reproduced a preflight deadline reset: 300 seconds in
+preflight extended the workload's launch budget by 300 seconds. The probe also
+ran synchronous unbounded mount I/O. Narrow local repair is in progress under
+[`2026-10-10-serverless-preflight-deadline-repair.md`](../superpowers/plans/2026-10-10-serverless-preflight-deadline-repair.md).
+Next: repair, independent review, actual POSIX lifecycle tests, cached image
+rebuild/probes, then **explicit approval for a new paid attempt** with fresh
+account/price checks. The original single-Job approval is not a retry allowance.
+Original VM/disk and historical evidence remain untouched. External M5B replay
+remains deferred; M5 is not complete.
+
 ## October 9 entrypoint, billing check and builder proposal (Claude Code)
 
 Serverless entrypoint is integrated: `scripts/run_serverless_workload.py`,

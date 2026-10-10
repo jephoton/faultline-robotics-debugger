@@ -4,6 +4,31 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## Serverless export failure and deadline review — October 10
+
+The first Job reached GR00T model readiness and served two episodes, but exited
+with "source evidence changed during open" while exporting. Bucket inspection
+found a 3,133-byte staging log and an empty final object. Claude identified a
+destination-side assumption that a bucket-mount rename preserves local inode
+identity. Object Storage is not a local POSIX disk; renames may involve copying
+and inode values are not a reliable content identity. The repair writes
+exclusive final files, checks bytes/hashes, and publishes the manifest last.
+Mount rereads may still be cached: downloading and rehashing is the authoritative
+acceptance step. Runtime/export failures now report error/exit3, not input
+rejection/exit2. These are our filesystem-adapter defects, not robot failures.
+
+Read-only recovery saved the two partial objects separately; no manifest,
+videos, traces or outcomes were recovered. Two EPISODE_END messages are not
+success assertions. Do not reconstruct results from a model log.
+
+Independent review of c91383c caught two further local safety regressions before
+a retry: export preflight could stall indefinitely, and run_workload computed
+a fresh relative deadline after preflight. Clock100 + duration2400 followed by
+a clock400 workload produced launch deadline2786 instead of2486. The repair
+plan forwards the original absolute deadline and contains the probe in an owned
+CPU subprocess with a 30-second cap and the existing cleanup reserve. These
+are reproduced review fixtures, not additional failures observed in a Job.
+
 ## Serverless local recovery and review — October 9
 
 The approved recoverable Docker repair moved only the stopped runtime `run`

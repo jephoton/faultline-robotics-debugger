@@ -11,7 +11,21 @@ identifiers, tokens, private addresses, or payment details here.
 | NVIDIA GR00T N1.7 and LIBERO checkpoint | Produced robot actions from agent-view and wrist images plus state. | The pinned policy completed 20/20 nominal baseline episodes. It also supplied repeatable, recorded behavior for the controlled failure and reduction experiments. | The first pilot hit a 403 on the transitive gated Cosmos dependency until account-holder access was granted. Model startup took time even with cached weights. These are model/dependency onboarding observations, not Nebius faults. | Provisionally yes for this manipulation-policy test; document task and simulator limits. |
 | AllenAI VLA evaluation harness and LIBERO image | Hosted the evaluator, simulator, recordings, and model-server adapter. | Structured aggregates, traces, SQLite recordings, and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user. Generic schema warnings appeared even on successful episodes. M3 local review also found that the pinned CLI can leave its Docker client child alive after the evaluator exits; this is an upstream process-lifecycle integration risk, not evidence of a Nebius or NVIDIA fault. | Yes for the pinned benchmark, with explicit version, compatibility, and process-cleanup checks. |
 | Nebius Token Factory / Nemotron | Authenticated catalog and two real text-only M5C generation attempts. | The separately approved4096-token attempt returned valid JSON and exact episode IDs, readable in the viewer; usage and latency support auditing. | Our600-token limit was inadequate for the first attempt. The successful prose is shallow; its mask caveat cites nominal episodes rather than supporting reduction evidence. Posted billing remains unknown. | Provisionally for human-reviewed summaries, not autonomous diagnosis; final choice needs Jethro's review. |
-| Nebius Serverless Jobs | Read-only CLI discovery and a configuration dry-run for a future single-GPU robot evaluation. Actual Job execution remains untested. | Existing CLI0.12.275 exposes deterministic create, dry-run, logs and cancel. The explicit dry-run succeeded and reported no resource created; live pricing/capacity advice was available. | One GPU calculator lookup reached a connection deadline; a later bounded lookup succeeded. Local Docker startup required a recoverable Windows runtime-folder repair and a later normal restart; permanent reliability is unverified. This is workstation friction, not a Nebius fault. | Undecided until an actual Job returns robot evidence; do not describe configuration validation as a completed migration. |
+| Nebius Serverless Jobs | One single-L40S Job launched pinned GR00T and two simulator episodes. | Private image pull, model loading and request serving worked; exact-ID status/logs identified terminal failure. Existing bucket-scoped read-only S3 credentials recovered the partial log. | The first Job failed in our exporter, which assumed local inode/rename semantics on a bucket mount. No valid videos/traces/manifest were recovered. A dry-run rejected an @sha256 image reference because an internal label exceeded its limit; a private tag with an independently verified expected digest worked. Local Docker startup/TLS issues are workstation friction, not Nebius faults. | Provisionally useful for finite evaluations; end-to-end migration remains unproven until closed evidence is downloaded and verified. |
+
+## October 10 first Serverless Job and evidence recovery
+
+The Job ran for about seven minutes after provisioning. The downloaded partial
+model log confirms policy loading and two episode start/end pairs, but contains
+no success classification. Export failed because our destination identity
+checks assumed a local filesystem; Claude repaired that adapter. No provider
+outage or NVIDIA model-quality conclusion follows from this failure. A fresh
+registry lookup verified the repaired image tag/digest. Subsequent local review
+caught a deadline-reset bug and an unbounded preflight probe before a retry;
+see [`docs/dev-log.md`](docs/dev-log.md) and
+[`docs/experiments/serverless-job-pilot.md`](docs/experiments/serverless-job-pilot.md).
+Posted charges still need reconciliation. Reuse remains provisional until the
+complete evidence path passes. No new paid Job was started during recovery.
 
 ## October 3 M5 documentation-only preparation
 
