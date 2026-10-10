@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import re
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -414,13 +413,20 @@ class MainTests(unittest.TestCase):
 
     def test_complete_and_partial_exit_codes(self) -> None:
         self.assertEqual(self._main(self._runner("complete"))[0], 0)
-        shutil.rmtree(self.layout.export_root / ".preflight-pilot-1")
         self.assertEqual(self._main(self._runner("partial"))[0], 1)
 
-    def test_reused_run_id_fails_export_preflight(self) -> None:
+    def test_repeated_preflights_use_unique_directories(self) -> None:
         self._main(self._runner("complete"))
-        self.assertEqual(self._main(self._runner("complete"))[0], 3)
-        self.assertEqual(len(self.calls), 1)
+        self._main(self._runner("complete"))
+        self.assertEqual(len(list(self.layout.export_root.glob(".preflight-pilot-1-*"))), 2)
+
+    def test_raw_io_errors_from_the_runner_are_runtime_errors(self) -> None:
+        def broken(config, **kwargs):
+            raise OSError(5, "Input/output error")
+
+        code, output = self._main(broken)
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(output.splitlines()[-1]), {"status": "error", "error": "OSError"})
 
     def test_runner_receives_production_wiring_and_token_scanning_exporter(self) -> None:
         self._main(self._runner("complete"))
@@ -457,7 +463,8 @@ class MainTests(unittest.TestCase):
     def test_reporting_exporter_logs_summary_and_outcome(self) -> None:
         run_root = self.root / "run"
         run_root.mkdir()
-        (run_root / "workload_summary.json").write_text('{"status": "complete"}', encoding="utf-8")
+        (run_root / "workload_summary.json").write_text(
+            '{"status": "complete", "stop_reason": "completed", "unexpected": "hf_secretish"}', encoding="utf-8")
         events = []
 
         def record(event, **fields):
@@ -466,7 +473,10 @@ class MainTests(unittest.TestCase):
         ok = job_entry.reporting_exporter(lambda *a, **k: {"files": [1, 2], "status": "complete"}, record)
         ok(run_root, self.root / "out", status="complete", cleanup_confirmed=True)
         self.assertEqual([e for e, _ in events], ["workload_finished", "export_start", "export_done"])
-        self.assertEqual(events[0][1]["summary"], {"status": "complete"})
+        logged = events[0][1]["summary"]
+        self.assertEqual(logged["status"], "complete")
+        self.assertEqual(logged["stop_reason"], "completed")
+        self.assertNotIn("unexpected", logged)
         self.assertEqual(events[-1][1]["files"], 2)
 
         events.clear()
@@ -481,7 +491,7 @@ class MainTests(unittest.TestCase):
 
     def test_export_preflight_publishes_probe_before_running(self) -> None:
         self._main(self._runner("complete"))
-        probe = self.layout.export_root / ".preflight-pilot-1"
+        (probe,) = self.layout.export_root.glob(".preflight-pilot-1-*")
         self.assertTrue((probe / "manifest.json").is_file())
         self.assertEqual((probe / "probe.txt").read_text(encoding="utf-8"), "faultline export preflight\n")
         self.assertEqual(len(self.calls), 1)

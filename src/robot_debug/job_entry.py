@@ -50,6 +50,9 @@ EXIT_RUNTIME = 3
 EXIT_SIGINT = 130
 EXIT_SIGTERM = 143
 
+# Workload summary fields safe to echo into Job logs before the export secret scan.
+_SUMMARY_LOG_FIELDS = ("status", "stop_reason", "mode", "run_id", "elapsed_seconds", "pilot_outcomes")
+
 
 @dataclass(frozen=True)
 class ImageLayout:
@@ -318,7 +321,8 @@ def reporting_exporter(exporter: Callable[..., Dict[str, Any]], progress: Progre
 
     def export(source_root: Any, destination_root: Any, **kwargs: Any) -> Dict[str, Any]:
         try:
-            summary = json.loads((Path(source_root) / "workload_summary.json").read_text(encoding="utf-8"))
+            loaded = json.loads((Path(source_root) / "workload_summary.json").read_text(encoding="utf-8"))
+            summary = {key: loaded.get(key) for key in _SUMMARY_LOG_FIELDS} if isinstance(loaded, dict) else None
         except (OSError, ValueError):
             summary = None
         progress("workload_finished", summary=summary)
@@ -338,16 +342,19 @@ def reporting_exporter(exporter: Callable[..., Dict[str, Any]], progress: Progre
 def export_preflight(layout: ImageLayout, run_id: str) -> None:
     """Prove the export destination works before spending time on the model.
 
-    Exports one small file through the real exporter to a sibling
-    ``.preflight-<run_id>`` directory, so a broken bucket mount fails within
-    the first minute instead of after the whole workload.
+    Exports one small file through the real exporter to a unique sibling
+    ``.preflight-<run_id>-<random>`` directory, so a broken bucket mount fails
+    within the first minute instead of after the whole workload, and a failed
+    probe never blocks a retry. The in-container re-read may be served from a
+    mount cache; the workstation downloader re-hashes every object against the
+    manifest, which is the authoritative check.
     """
 
     with tempfile.TemporaryDirectory(dir=str(layout.work_root)) as probe:
         Path(probe, "probe.txt").write_text("faultline export preflight\n", encoding="utf-8")
         export_closed_evidence(
             probe,
-            layout.export_root / (".preflight-" + run_id),
+            layout.export_root / ".preflight-{}-{}".format(run_id, uuid.uuid4().hex[:8]),
             status="complete",
             cleanup_confirmed=True,
         )
@@ -408,19 +415,19 @@ def main(
     progress = progress_printer(stdout)
     progress("workload_start", run_id=config["run_id"], mode=config["mode"],
              deadline_seconds=config["deadline_seconds"])
-    try:
-        export_preflight(layout, config["run_id"])
-    except (JobRuntimeError, OSError) as error:
-        progress("export_preflight_failed", error=type(error).__name__, message=str(error)[:200])
-        print(json.dumps({"status": "error", "error": "export preflight failed"}), file=stdout)
-        return EXIT_RUNTIME
-    progress("export_preflight_ok")
     exporter = reporting_exporter(
         functools.partial(export_closed_evidence, secret_values=secrets), progress
     )
     latch = _TerminationLatch()
     previous = signal.signal(signal.SIGTERM, latch)
     try:
+        try:
+            export_preflight(layout, config["run_id"])
+        except (JobRuntimeError, OSError) as error:
+            progress("export_preflight_failed", error=type(error).__name__, message=str(error)[:200])
+            print(json.dumps({"status": "error", "error": "export preflight failed"}), file=stdout)
+            return EXIT_RUNTIME
+        progress("export_preflight_ok")
         summary = runner(
             config,
             paths=WorkloadPaths(
@@ -443,6 +450,11 @@ def main(
         # Runtime contract failures (existing destinations, export checks) are
         # not configuration rejections; report them distinctly.
         print(json.dumps({"status": "error", "error": str(error)}), file=stdout)
+        return EXIT_RUNTIME
+    except OSError as error:
+        # Raw I/O failures (for example on the bucket mount) must not exit 1,
+        # which would read as a partial workload result.
+        print(json.dumps({"status": "error", "error": type(error).__name__}), file=stdout)
         return EXIT_RUNTIME
     finally:
         signal.signal(signal.SIGTERM, previous)
