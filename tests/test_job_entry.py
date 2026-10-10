@@ -641,7 +641,9 @@ class ExportPreflightProcessTests(unittest.TestCase):
     def test_signal_inside_real_popen_constructor_closes_group_before_exit(self) -> None:
         config = self.root / "constructor-workload.json"
         config.write_text(json.dumps(VALID), encoding="utf-8")
-        real_fork_exec = subprocess._fork_exec
+        fork_owner = subprocess if hasattr(subprocess, "_fork_exec") else subprocess._posixsubprocess
+        fork_name = "_fork_exec" if fork_owner is subprocess else "fork_exec"
+        real_fork_exec = getattr(fork_owner, fork_name)
         for signum, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
             with self.subTest(signum=signum):
                 previous = signal.getsignal(signum)
@@ -656,7 +658,7 @@ class ExportPreflightProcessTests(unittest.TestCase):
 
                 with mock.patch.object(job_entry, "_preflight_child_argv", return_value=[
                     sys.executable, "-B", "-c", "import time; time.sleep(60)"
-                ]), mock.patch.object(subprocess, "_fork_exec", side_effect=signal_inside_constructor):
+                ]), mock.patch.object(fork_owner, fork_name, side_effect=signal_inside_constructor):
                     code = main(
                         ["--config", str(config)], layout=self.layout, environ={},
                         runner=lambda *_args, **_kwargs: self.fail("runner started after signal"),
