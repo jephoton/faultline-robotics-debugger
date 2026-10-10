@@ -303,3 +303,15 @@ showed its compute instance as `RUNNING`. The bucket mount does not preserve
 inode identity or atomic rename; that broke our first export, which was our
 exporter's POSIX assumption, not a provider defect, though documenting mount
 semantics would help. Verdict: yes for bounded single-GPU evaluation runs.
+
+### October 10: Token Factory / Nemotron v2 iteration
+
+Four more text-only calls to `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (about
+US$0.0024 total, estimated). Strength: fast (7–35 s), cheap, and the
+OpenAI-compatible `chat_template_kwargs: {"enable_thinking": false}` was
+honoured, which cut output from 4096 tokens (all reasoning, no answer) to
+about 950. With thinking off the model follows structure and citations well
+but miscounts unless every number is precomputed, and once violated our
+evidence contract. Lesson for reuse: give the model computed facts and ask it
+to interpret, not to count. Verdict unchanged: useful for human-reviewed
+summaries, not autonomous diagnosis.

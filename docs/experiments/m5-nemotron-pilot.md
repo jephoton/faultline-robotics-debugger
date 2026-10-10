@@ -118,3 +118,32 @@ facts. Test those semantics offline before seeking another inference allowance.
 Do not force a hypothesis, add video reasoning, change model/prompt, relabel
 the current report or make another call under the consumed allowances.
 This is a review recommendation, not an implementation approval.
+
+## October 10: v2 geometry-aware iteration
+
+Jethro approved continuing with prompt/input improvements under a US$0.10 cap
+(at most five labelled attempts, `v2-01`..`v2-05`, each with its own exclusive
+reservation under ignored `artifacts/m5-nemotron-attempts/`). Plan:
+`docs/superpowers/plans/2026-10-10-m5c-nemotron-v2.md`. Changes: packet v2 with
+per-episode mask rectangles; the request carries deterministic `counts_by_role`,
+`totals` and `mask_groups`; a v2 prompt asking for contrasts, testable
+hypotheses naming untested rectangles, and limitations; thinking disabled.
+
+| Attempt | Change | Result | Tokens in/out | Est. cost |
+| --- | --- | --- | --- | --- |
+| v2-01 | v2 packet + prompt | `output_limit`: all 4096 output tokens spent reasoning | 2704/4096 | US$0.00115 |
+| v2-02 | thinking off | valid; good contrasts, but miscounted masked episodes, re-proposed a tested mask, wrong limitations | 2704/956 | US$0.00039 |
+| v2-03 | precomputed totals, untested-rectangle and no-recount rules | valid; best so far (below) | 2869/951 | US$0.00040 |
+| v2-04 | names success-bearing masks, forbids "all masked failed" | rejected by our validator (`invalid_response`); raw output not retained by design | 3055/1047 | US$0.00043 |
+
+Total estimated: US$0.00237 of the US$0.10 cap; `v2-05` unused.
+
+**v2-03 assessment (report `8f469903…`).** Correct: limitations (22 episodes,
+single task and seed, budget-local, no causal proof, human review);
+parent 4/4 and reduced 4/4 failures; the x=0.75, 0.25×0.375 mask succeeding;
+hypothesis 1 proposes the untested `(0.625, 0, 0.25, 0.375)`, which isolates the
+strip separating failing x=0.625 masks from succeeding x=0.75 masks.
+Incorrect: observation 1 says all masked groups had zero successes (4 masked
+episodes succeeded) and cites only nominal episodes; hypothesis 3 is muddled.
+Interpretation remains subordinate to the deterministic facts, which are
+always correct. Acceptance is Jethro's decision.
