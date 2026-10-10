@@ -1,5 +1,20 @@
 # Faultline current project state
 
+## October 10 launch-guard integration and v5 image (Claude Code)
+
+Claude reviewed Codex's `codex/serverless-preflight-launch-guard` as the
+read-only race reviewer: its two launch-race tests fail against the previous
+`job_entry.py` (probe group survives) and pass with the fix. Integrated as
+`1f3a4a6`..`b233199`. Full Windows suite OK (58 platform skips); WSL five Job
+suites OK; inside the rebuilt image (Python 3.8.20) the job and workload tests
+pass. Minor non-blocking note: a signal coinciding with an OSError from the
+probe launch exits 3 rather than 143; nothing is leaked.
+
+Pushed v5: tag `b233199a9abc` → `sha256:decd037a74cddc0857b22e10fcb742641bfebe1bfa74b520945e3ba696cbca3c`.
+Retry `faultline-pilot-20261010b` re-prepared against v5; registry tag check and
+provider dry-run pass. This supersedes the v4 retry readiness below. **Not
+submitted:** the paid retry still needs Jethro's explicit approval.
+
 ## October 10 resumed quality-review gate (Codex)
 
 Claude integrated and built the deadline repair as described below, but the
