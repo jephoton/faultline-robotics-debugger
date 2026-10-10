@@ -152,3 +152,18 @@ class ExplanationTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class RegionLabelTests(unittest.TestCase):
+    def test_region_labels_use_top_left_origin(self):
+        from robot_debug.explanation import _region_label
+        cases = {
+            (0.625, 0.0, 0.375, 0.375): "top-right, x 0.625-1, y 0-0.375",
+            (0.0, 0.7, 0.2, 0.3): "bottom-left, x 0-0.2, y 0.7-1",
+            (0.4, 0.4, 0.2, 0.2): "centre, x 0.4-0.6, y 0.4-0.6",
+            (0.4, 0.0, 0.2, 0.2): "top-centre, x 0.4-0.6, y 0-0.2",
+            (0.0, 0.4, 0.2, 0.2): "left, x 0-0.2, y 0.4-0.6",
+        }
+        for (x, y, w, h), expected in cases.items():
+            self.assertEqual(_region_label({"x": x, "y": y, "width": w, "height": h}), expected)
+        self.assertIsNone(_region_label(None))

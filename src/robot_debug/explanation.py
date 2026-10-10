@@ -149,6 +149,22 @@ def deterministic_summary(packet: dict) -> dict:
             "reduced_mask_area_fraction": rectangle["width"] * rectangle["height"]}
 
 
+def _region_label(mask: dict | None) -> str | None:
+    """Plain-language placement of a rectangle; origin top-left, y grows downward."""
+    if mask is None:
+        return None
+    centre_x = mask["x"] + mask["width"] / 2
+    centre_y = mask["y"] + mask["height"] / 2
+    vertical = "top" if centre_y < 1 / 3 else "bottom" if centre_y > 2 / 3 else "middle"
+    horizontal = "left" if centre_x < 1 / 3 else "right" if centre_x > 2 / 3 else "centre"
+    if vertical == "middle":
+        place = "centre" if horizontal == "centre" else horizontal
+    else:
+        place = "{}-{}".format(vertical, horizontal)
+    return "{}, x {:g}-{:g}, y {:g}-{:g}".format(
+        place, mask["x"], mask["x"] + mask["width"], mask["y"], mask["y"] + mask["height"])
+
+
 def mask_groups(packet: dict) -> list:
     """Group v2 episodes by role and exact mask; a pure function of the packet."""
     validated = validate_evidence_packet(packet)
@@ -173,6 +189,7 @@ def mask_groups(packet: dict) -> list:
     for key in sorted(groups, key=lambda item: (order[item[0]], item[1])):
         group = groups[key]
         group["evidence_ids"].sort()
+        group["image_region"] = _region_label(group["mask"])
         if group["successes"] == group["episodes"]:
             group["outcome"] = "all_succeeded"
         elif group["policy_failures"] == group["episodes"]:
