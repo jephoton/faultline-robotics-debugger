@@ -1,5 +1,19 @@
 # Faultline current project state
 
+## October 11 M5B result (Claude Code)
+
+Job `faultline-m5b-20261010` COMPLETED (~14 min, ≈US$0.40 est.): certified M4
+rectangle re-run from the benchmark start → **policy_failure** (saved case
+reproduced in a fresh session). External-start reduction: sentinel success;
+parent `(0.5,0,.5,.5)` → success/failure/success → `parent_not_reproducible`, so
+the M4 failure did not transfer to the external demo start. Restore verified in
+all four external episodes (pre-settle = dataset hash; post-settle `935fee19…`
+on Nebius vs `e029f8dc…` on the workstation CPU). 48/48 files verified, all
+MP4s decode. Record: `docs/experiments/m5b-external-replay.md`. Next decision
+(Jethro): run `search` from the external start to find a failing mask, or close
+M5B on this evidence. Bucket `faultline-m5b-20261010` and its read-only key
+remain until that decision.
+
 ## October 10 M5B external-start reduction submitted (Claude Code)
 
 Jethro reframed M5B: the goal is automatic find/confirm/reduce from an external

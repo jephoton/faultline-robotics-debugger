@@ -315,3 +315,13 @@ but miscounts unless every number is precomputed, and once violated our
 evidence contract. Lesson for reuse: give the model computed facts and ask it
 to interpret, not to count. Verdict unchanged: useful for human-reviewed
 summaries, not autonomous diagnosis.
+
+### October 11: Second Serverless workload (M5B)
+
+A 14-minute single-L40S Job ran the certified case re-run and an
+external-start reduction with two injected files (workload JSON and a 7.8 KB
+gzip candidate) and exported 48 files to a fresh private bucket. Image pulls
+reused the cached layers and took about three minutes; model prefetch about
+6.5 minutes dominates short Jobs, so persistent model caching would help repeat
+runs. One status poll returned an unknown state mid-run before recovering.
+Nothing in this run was a provider defect.
