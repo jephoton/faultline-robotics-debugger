@@ -164,3 +164,70 @@ class EvidencePacketTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class EvidencePacketV2Tests(unittest.TestCase):
+    """Geometry-aware packet used by the v2 interpretation prompt."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        fixture(Path(self.tmp.name))
+        self.case = import_m4(Path(self.tmp.name))
+        for episode in self.case["evidence"]["episodes"]:
+            if episode["role"] == "parent":
+                episode["stage"] = episode["stage"].replace(
+                    "parent-", "parent-x0500-y0000-w0500-h0500-")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_v1_remains_the_default_projection(self):
+        packet = make_evidence_packet(self.case)
+        self.assertEqual(packet["schema_version"], 1)
+        self.assertTrue(all("mask" not in e for e in packet["episodes"]))
+
+    def test_v2_adds_parsed_and_fallback_masks(self):
+        packet = make_evidence_packet(self.case, schema_version=2)
+        self.assertEqual(packet["schema_version"], 2)
+        by_role = {}
+        for episode in packet["episodes"]:
+            by_role.setdefault(episode["role"], set()).add(json.dumps(episode["mask"], sort_keys=True))
+        self.assertEqual(by_role["nominal"], {"null"})
+        self.assertEqual(by_role["parent"], {json.dumps(
+            {"height": 0.5, "width": 0.5, "x": 0.5, "y": 0.0}, sort_keys=True)})
+        self.assertEqual(by_role["reduced"], {json.dumps(
+            packet["reduced_mask"]["rectangle"], sort_keys=True)})
+        self.assertEqual(validate_evidence_packet(packet), packet)
+
+    def test_unparseable_other_stage_has_no_mask(self):
+        self.case["evidence"]["episodes"][0]["role"] = "other"
+        self.case["evidence"]["episodes"][0]["stage"] = "other-free-text"
+        packet = make_evidence_packet(self.case, schema_version=2)
+        target = self.case["evidence"]["episodes"][0]["episode_id"]
+        (episode,) = [e for e in packet["episodes"] if e["evidence_id"] == target]
+        self.assertIsNone(episode["mask"])
+
+    def test_versions_have_distinct_identities(self):
+        self.assertNotEqual(packet_identity(make_evidence_packet(self.case)),
+                            packet_identity(make_evidence_packet(self.case, schema_version=2)))
+
+    def test_v2_rejects_invalid_masks_and_v1_rejects_mask_fields(self):
+        packet = make_evidence_packet(self.case, schema_version=2)
+        for mask in ({"x": 0.9, "y": 0.0, "width": 0.5, "height": 0.5},
+                     {"x": 0.1, "y": 0.0, "width": 0.5},
+                     {"x": 0.1, "y": 0.0, "width": 0.0, "height": 0.5},
+                     "x0500"):
+            broken = copy.deepcopy(packet)
+            broken["episodes"][0]["mask"] = mask
+            with self.subTest(mask=mask), self.assertRaises(EvidencePacketError):
+                validate_evidence_packet(broken)
+        missing = copy.deepcopy(packet)
+        del missing["episodes"][0]["mask"]
+        with self.assertRaises(EvidencePacketError):
+            validate_evidence_packet(missing)
+        v1_with_mask = make_evidence_packet(self.case)
+        v1_with_mask["episodes"][0]["mask"] = None
+        with self.assertRaises(EvidencePacketError):
+            validate_evidence_packet(v1_with_mask)
+        with self.assertRaises(EvidencePacketError):
+            make_evidence_packet(self.case, schema_version=3)
