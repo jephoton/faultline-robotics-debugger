@@ -1,5 +1,17 @@
 # Faultline current project state
 
+## October 10 resumed quality-review gate (Codex)
+
+Claude integrated and built the deadline repair as described below, but the
+quality review reproduced one remaining launch-signal ownership gap: SIGTERM
+just after child spawn and before Popen returns bypasses cleanup. A CPU fixture
+observed main exit143 while the probe group remained alive, then independently
+killed/reaped its owned child. This is not a failure observed in a paid Job.
+The v4 image/prepared dry-run are **not yet cleared for a paid retry**.
+The launch-ownership addendum in the existing repair plan governs the narrow
+follow-up. Original VM/disk/results and Claude's commits are preserved. No new
+paid run is authorized by "usage reset"; retry approval is still pending.
+
 ## October 10 retry readiness (Claude Code)
 
 Codex's preflight deadline repair (`codex/serverless-preflight-deadline`) was

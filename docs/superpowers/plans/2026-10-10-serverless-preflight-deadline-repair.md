@@ -73,6 +73,34 @@ integration. Root reruns full tests and updates the handoff/dev log/feedback.
 
 ## Next gate
 
+### Review follow-up: launch ownership (October 10)
+
+The deadline/probe changes were independently spec-reviewed and subsequently
+integrated by Claude, but a quality-review CPU reproduction found a remaining
+launch interruption gap. SIGTERM delivered immediately after the OS spawns the
+probe and before Popen returns makes main exit143 with no cleanup call; the
+probe group survives. The current v4 image is therefore not a paid-retry gate.
+
+Bounded amber correction, same accepted containment design: the builder owns
+only job_entry.py and test_job_entry.py in a clean reused worktree. Defer SIGINT
+and SIGTERM across spawn until the process handle is assigned inside the cleanup
+boundary. Do not block signals in the child or use preexec_fn. Restore prior
+handlers on every path; after a deferred interruption, confirm group absence
+before replaying the prior handler. Uncertain cleanup wins as infrastructure
+error. Keep the existing fixed argv/environment, deadline and cleanup caps.
+Reject non-main-thread execution before spawning if handler ownership is needed.
+No shared model/evaluator kernel changes, new packages, cloud starts or pins.
+
+TDD: a real CPU child plus deterministic signal at Popen return must first show
+the leak with an independent owned-group teardown. Test both SIGINT/SIGTERM,
+no model startup, normal exit codes130/143 only after absence, handler restoration
+and cleanup uncertainty. Root owns docs/integration/build/publication; separate
+read-only review must rerun the race. Recheck WSL five Job suites, Windows full
+suite, Python3.8 grammar and rebuilt image CPU tests. Commit the narrow fix as
+`fix(jobs): retain preflight ownership during launch interruption`. Preserve
+Claude's existing commits and prepared failed/retry configs; use a new image tag
+only after review. Paid retry still needs explicit approval.
+
 The currently pushed repaired image at c91383c still has these deadline bugs.
 After integration root rebuilds cached application layers and checks imports,
 exit codes and preflight fixtures without a GPU. A further paid Job is a new
