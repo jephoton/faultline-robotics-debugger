@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -413,7 +414,13 @@ class MainTests(unittest.TestCase):
 
     def test_complete_and_partial_exit_codes(self) -> None:
         self.assertEqual(self._main(self._runner("complete"))[0], 0)
+        shutil.rmtree(self.layout.export_root / ".preflight-pilot-1")
         self.assertEqual(self._main(self._runner("partial"))[0], 1)
+
+    def test_reused_run_id_fails_export_preflight(self) -> None:
+        self._main(self._runner("complete"))
+        self.assertEqual(self._main(self._runner("complete"))[0], 3)
+        self.assertEqual(len(self.calls), 1)
 
     def test_runner_receives_production_wiring_and_token_scanning_exporter(self) -> None:
         self._main(self._runner("complete"))
@@ -422,13 +429,13 @@ class MainTests(unittest.TestCase):
         self.assertEqual(kwargs["paths"].work_root, self.layout.work_root)
         self.assertEqual(kwargs["paths"].export_root, self.layout.export_root)
         self.assertIsInstance(kwargs["model_factory"], ProductionModelFactory)
-        self.assertEqual(kwargs["exporter"].keywords["secret_values"], ("hf_value",))
+        self.assertEqual(kwargs["exporter"].inner.keywords["secret_values"], ("hf_value",))
         evaluator = kwargs["evaluator_factory"](timeout_seconds=5, log_root=self.root / "logs")
-        self.assertNotIn("HF_TOKEN", evaluator._env)
+        self.assertNotIn("HF_TOKEN", evaluator.evaluator._env)
 
     def test_missing_token_scans_nothing(self) -> None:
         self._main(self._runner("complete"), environ={})
-        self.assertEqual(self.calls[0][1]["exporter"].keywords["secret_values"], ())
+        self.assertEqual(self.calls[0][1]["exporter"].inner.keywords["secret_values"], ())
 
     def test_rejected_configuration_does_not_run(self) -> None:
         self.config.write_text("{}", encoding="utf-8")
@@ -442,12 +449,79 @@ class MainTests(unittest.TestCase):
             raise JobRuntimeError("workload run and export destinations must be new")
 
         code, output = self._main(rejected)
-        self.assertEqual(code, 2)
-        self.assertEqual(json.loads(output)["status"], "rejected")
+        self.assertEqual(code, 3)
+        lines = [json.loads(line) for line in output.splitlines()]
+        self.assertEqual(lines[0]["event"], "workload_start")
+        self.assertEqual(lines[-1]["status"], "error")
+
+    def test_reporting_exporter_logs_summary_and_outcome(self) -> None:
+        run_root = self.root / "run"
+        run_root.mkdir()
+        (run_root / "workload_summary.json").write_text('{"status": "complete"}', encoding="utf-8")
+        events = []
+
+        def record(event, **fields):
+            events.append((event, fields))
+
+        ok = job_entry.reporting_exporter(lambda *a, **k: {"files": [1, 2], "status": "complete"}, record)
+        ok(run_root, self.root / "out", status="complete", cleanup_confirmed=True)
+        self.assertEqual([e for e, _ in events], ["workload_finished", "export_start", "export_done"])
+        self.assertEqual(events[0][1]["summary"], {"status": "complete"})
+        self.assertEqual(events[-1][1]["files"], 2)
+
+        events.clear()
+
+        def failing(*_args, **_kwargs):
+            raise JobRuntimeError("source evidence changed during open")
+
+        with self.assertRaises(JobRuntimeError):
+            job_entry.reporting_exporter(failing, record)(run_root, self.root / "out", status="partial")
+        self.assertEqual(events[-1][0], "export_failed")
+        self.assertIn("changed during open", events[-1][1]["message"])
+
+    def test_export_preflight_publishes_probe_before_running(self) -> None:
+        self._main(self._runner("complete"))
+        probe = self.layout.export_root / ".preflight-pilot-1"
+        self.assertTrue((probe / "manifest.json").is_file())
+        self.assertEqual((probe / "probe.txt").read_text(encoding="utf-8"), "faultline export preflight\n")
+        self.assertEqual(len(self.calls), 1)
+
+    def test_failed_export_preflight_stops_before_runner(self) -> None:
+        from unittest import mock
+
+        with mock.patch.object(job_entry, "export_closed_evidence",
+                               side_effect=JobRuntimeError("source evidence changed during open")):
+            code, output = self._main(self._runner("complete"))
+        self.assertEqual(code, 3)
+        lines = [json.loads(line) for line in output.splitlines()]
+        self.assertEqual(lines[-2]["event"], "export_preflight_failed")
+        self.assertEqual(lines[-1]["status"], "error")
+        self.assertEqual(self.calls, [])
+
+    def test_evaluator_wrapper_reports_start_and_failure(self) -> None:
+        events = []
+
+        def record(event, **fields):
+            events.append((event, fields))
+
+        build = job_entry.evaluator_factory(self.layout, {}, record)
+        run = build(timeout_seconds=5, log_root=self.root / "logs")
+        with self.assertRaises(Exception):
+            run(["vla-eval", "run", "--config", str(self.root / "stage.yaml")], cwd=self.root)
+        self.assertEqual([e for e, _ in events], ["evaluator_start", "evaluator_failed"])
+        self.assertEqual(events[0][1]["config"], "stage.yaml")
+
+    def test_progress_printer_emits_one_json_line_per_event(self) -> None:
+        output = io.StringIO()
+        job_entry.progress_printer(output)("prefetch_done", elapsed_seconds=1.5)
+        record = json.loads(output.getvalue())
+        self.assertEqual(record["event"], "prefetch_done")
+        self.assertEqual(record["elapsed_seconds"], 1.5)
+        self.assertIn("time", record)
 
     def test_alias_token_is_also_scanned(self) -> None:
         self._main(self._runner("complete"), environ={"HUGGING_FACE_HUB_TOKEN": "alias"})
-        self.assertEqual(self.calls[0][1]["exporter"].keywords["secret_values"], ("alias",))
+        self.assertEqual(self.calls[0][1]["exporter"].inner.keywords["secret_values"], ("alias",))
 
     def test_keyboard_interrupt_maps_to_sigint_code(self) -> None:
         def interrupted(config, **kwargs):

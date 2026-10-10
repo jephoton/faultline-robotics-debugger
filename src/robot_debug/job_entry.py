@@ -11,6 +11,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import uuid
@@ -45,6 +46,7 @@ _HF_OVERRIDES = (
 EXIT_COMPLETE = 0
 EXIT_PARTIAL = 1
 EXIT_CONFIG = 2
+EXIT_RUNTIME = 3
 EXIT_SIGINT = 130
 EXIT_SIGTERM = 143
 
@@ -212,6 +214,24 @@ def write_provenance(run_root: Path, layout: ImageLayout, resolution: Mapping[st
         handle.write("\n")
 
 
+Progress = Callable[..., None]
+
+
+def _no_progress(_event: str, **_fields: Any) -> None:
+    return None
+
+
+def progress_printer(stdout: Any) -> Progress:
+    """One JSON line per lifecycle event, so Job logs show how far a run got."""
+
+    def emit(event: str, **fields: Any) -> None:
+        record = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "event": event}
+        record.update(fields)
+        print(json.dumps(record, sort_keys=True, default=str), file=stdout, flush=True)
+
+    return emit
+
+
 class ProductionModelFactory:
     """Prefetch pinned inputs within the deadline, then describe the server."""
 
@@ -222,23 +242,34 @@ class ProductionModelFactory:
         base_env: Mapping[str, str],
         deadline: float,
         clock: Callable[[], float] = time.monotonic,
+        progress: Progress = _no_progress,
     ) -> None:
         self._layout = layout
         self._base_env = dict(base_env)
         self._deadline = deadline
         self._clock = clock
+        self._progress = progress
 
     def __call__(self, *, log_root: Path) -> ModelProcess:
         log_root = Path(log_root)
         run_root = log_root.parent
         budget = self._deadline - self._clock() - POST_PREFETCH_RESERVE_SECONDS
-        resolution = prefetch_models(
-            self._layout,
-            base_env=self._base_env,
-            output=run_root / "model-resolution.json",
-            log_root=log_root,
-            timeout_seconds=min(PREFETCH_CAP_SECONDS, budget),
-        )
+        self._progress("prefetch_start", timeout_seconds=round(min(PREFETCH_CAP_SECONDS, budget), 1))
+        started = self._clock()
+        try:
+            resolution = prefetch_models(
+                self._layout,
+                base_env=self._base_env,
+                output=run_root / "model-resolution.json",
+                log_root=log_root,
+                timeout_seconds=min(PREFETCH_CAP_SECONDS, budget),
+            )
+        except BaseException as error:
+            self._progress("prefetch_failed", error=type(error).__name__,
+                           elapsed_seconds=round(self._clock() - started, 1))
+            raise
+        self._progress("prefetch_done", elapsed_seconds=round(self._clock() - started, 1),
+                       repositories=resolution.get("repositories"))
         write_provenance(run_root, self._layout, resolution)
         return ModelProcess(
             argv=model_server_argv(self._layout),
@@ -250,19 +281,76 @@ class ProductionModelFactory:
 
 
 def evaluator_factory(
-    layout: ImageLayout, base_env: Mapping[str, str]
-) -> Callable[..., DirectEvaluator]:
+    layout: ImageLayout, base_env: Mapping[str, str], progress: Progress = _no_progress
+) -> Callable[..., Any]:
     env = evaluator_environment(layout, base_env)
 
-    def build(*, timeout_seconds: float, log_root: Path) -> DirectEvaluator:
-        return DirectEvaluator(
+    def build(*, timeout_seconds: float, log_root: Path) -> Any:
+        evaluator = DirectEvaluator(
             executable=layout.evaluator,
             timeout_seconds=timeout_seconds,
             env=env,
             log_root=log_root,
         )
 
+        def run(command: Sequence[str], **kwargs: Any) -> Any:
+            config = Path(command[-1]).name if command else ""
+            progress("evaluator_start", config=config, timeout_seconds=round(timeout_seconds, 1))
+            started = time.monotonic()
+            try:
+                result = evaluator(command, **kwargs)
+            except BaseException as error:
+                progress("evaluator_failed", config=config, error=type(error).__name__,
+                         elapsed_seconds=round(time.monotonic() - started, 1))
+                raise
+            progress("evaluator_done", config=config, returncode=getattr(result, "returncode", None),
+                     elapsed_seconds=round(time.monotonic() - started, 1))
+            return result
+
+        run.evaluator = evaluator  # type: ignore[attr-defined]
+        return run
+
     return build
+
+
+def reporting_exporter(exporter: Callable[..., Dict[str, Any]], progress: Progress) -> Callable[..., Dict[str, Any]]:
+    """Log the workload summary before export and the export outcome after."""
+
+    def export(source_root: Any, destination_root: Any, **kwargs: Any) -> Dict[str, Any]:
+        try:
+            summary = json.loads((Path(source_root) / "workload_summary.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            summary = None
+        progress("workload_finished", summary=summary)
+        progress("export_start", status=kwargs.get("status"))
+        try:
+            manifest = exporter(source_root, destination_root, **kwargs)
+        except BaseException as error:
+            progress("export_failed", error=type(error).__name__, message=str(error)[:200])
+            raise
+        progress("export_done", files=len(manifest.get("files", ())), status=manifest.get("status"))
+        return manifest
+
+    export.inner = exporter  # type: ignore[attr-defined]
+    return export
+
+
+def export_preflight(layout: ImageLayout, run_id: str) -> None:
+    """Prove the export destination works before spending time on the model.
+
+    Exports one small file through the real exporter to a sibling
+    ``.preflight-<run_id>`` directory, so a broken bucket mount fails within
+    the first minute instead of after the whole workload.
+    """
+
+    with tempfile.TemporaryDirectory(dir=str(layout.work_root)) as probe:
+        Path(probe, "probe.txt").write_text("faultline export preflight\n", encoding="utf-8")
+        export_closed_evidence(
+            probe,
+            layout.export_root / (".preflight-" + run_id),
+            status="complete",
+            cleanup_confirmed=True,
+        )
 
 
 def exit_code(summary: Mapping[str, Any]) -> int:
@@ -317,7 +405,19 @@ def main(
         return EXIT_CONFIG
 
     secrets = tuple(sorted({environ[name] for name in TOKEN_ALIASES if environ.get(name)}))
-    exporter = functools.partial(export_closed_evidence, secret_values=secrets)
+    progress = progress_printer(stdout)
+    progress("workload_start", run_id=config["run_id"], mode=config["mode"],
+             deadline_seconds=config["deadline_seconds"])
+    try:
+        export_preflight(layout, config["run_id"])
+    except (JobRuntimeError, OSError) as error:
+        progress("export_preflight_failed", error=type(error).__name__, message=str(error)[:200])
+        print(json.dumps({"status": "error", "error": "export preflight failed"}), file=stdout)
+        return EXIT_RUNTIME
+    progress("export_preflight_ok")
+    exporter = reporting_exporter(
+        functools.partial(export_closed_evidence, secret_values=secrets), progress
+    )
     latch = _TerminationLatch()
     previous = signal.signal(signal.SIGTERM, latch)
     try:
@@ -330,9 +430,9 @@ def main(
                 export_root=layout.export_root,
             ),
             model_factory=ProductionModelFactory(
-                layout, base_env=environ, deadline=deadline, clock=clock
+                layout, base_env=environ, deadline=deadline, clock=clock, progress=progress
             ),
-            evaluator_factory=evaluator_factory(layout, environ),
+            evaluator_factory=evaluator_factory(layout, environ, progress),
             exporter=exporter,
             clock=clock,
         )
@@ -340,8 +440,10 @@ def main(
         print(json.dumps({"status": "interrupted", "run_id": config["run_id"]}), file=stdout)
         return EXIT_SIGTERM if latch.received else EXIT_SIGINT
     except JobRuntimeError as error:
-        print(json.dumps({"status": "rejected", "error": str(error)}), file=stdout)
-        return EXIT_CONFIG
+        # Runtime contract failures (existing destinations, export checks) are
+        # not configuration rejections; report them distinctly.
+        print(json.dumps({"status": "error", "error": str(error)}), file=stdout)
+        return EXIT_RUNTIME
     finally:
         signal.signal(signal.SIGTERM, previous)
     print(json.dumps(summary, sort_keys=True), file=stdout)
