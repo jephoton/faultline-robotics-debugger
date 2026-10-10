@@ -536,5 +536,7 @@ and verifies by content. Codex then found and fixed a preflight deadline reset
 and a launch-signal race; Claude reviewed and integrated both. The approved
 retry completed in about 13 minutes: nominal success (138 steps), reduced-mask
 policy failure (280 steps), 21 evidence files recovered and verified against
-the manifest. This validates the Serverless deployment path; it is not a new
+the manifest. The pilot mask `(0.5, 0, 0.375, 0.375)` came from the migration
+design, not M4's certified `(0.625, 0, 0.375, 0.375)`: same 14.0625 % area,
+different position, so it is not a reproduction of the certified case. This validates the Serverless deployment path; it is not a new
 research claim.

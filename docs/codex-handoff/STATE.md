@@ -13,6 +13,9 @@ Details: `docs/experiments/serverless-job-pilot.md`. The migration plan's only
 open item is showing the new recordings in the viewer.
 
 This validates deployment, not a new research claim (one episode per condition).
+**Correction:** the pilot mask `(0.5,0,.375,.375)` came from the migration
+design and is not M4's certified reduced rectangle `(0.625,0,.375,.375)`; same
+area, different position. It is not a reproduction of the certified case.
 Estimated spend for both Jobs ≈ US$0.75 pre-tax plus small storage; reconcile
 with posted billing.
 

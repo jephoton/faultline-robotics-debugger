@@ -170,9 +170,14 @@ both MP4s decode with ffprobe. The Job reached terminal `COMPLETED`.
 
 Interpretation: this validates the deployment path — a finite Serverless Job
 produced fresh GR00T episodes with complete, checksummed, recoverable evidence.
-The outcomes agree with the historical VM result (nominal success; reduced
-mask fails), but one episode per condition is a consistency check, not a new
-repeatability or reduction claim. Estimated cost: two Jobs of about 12–13
+**Correction (Oct 10):** the masked stage used the migration design's
+rectangle `(0.5, 0, 0.375, 0.375)`, not M4's certified reduced rectangle
+`(0.625, 0, 0.375, 0.375)`. Both cover 14.0625 % and both lie inside the 25 %
+parent mask, but they are different positions. The pilot therefore did **not**
+re-run the certified reduced case; it observed one failure for a neighbouring
+14.0625 % rectangle. One episode per condition is a consistency check, not a new
+repeatability or reduction claim. Use `(0.625, 0, 0.375, 0.375)` for any
+reproduction of the M4 case. Estimated cost: two Jobs of about 12–13
 minutes each at US$1.7468/h ≈ US$0.75 pre-tax plus small disk/bucket charges;
 posted billing still to be reconciled. Jethro reported an AI Cloud balance of
 US$5.99 at retry time.
