@@ -1,5 +1,31 @@
 # Faultline current project state
 
+## October 10 M5B external-start reduction submitted (Claude Code)
+
+Jethro reframed M5B: the goal is automatic find/confirm/reduce from an external
+file, not a standalone restore check. Approved: one Job (`m5b` mode) running the
+certified M4 rectangle `(0.625,0,.375,.375)` once from the benchmark start, then
+the existing reducer entirely from the external demo_0 state; **US$2 cap**, no
+automatic retry. Plan: `docs/superpowers/plans/2026-10-10-m5b-external-replay.md`
+(superseded episode table: reduction replaces the three-episode check).
+
+Free CPU probes inside the image first showed the external restore works in the
+real simulator: pre-settle state hash equals the dataset (`5d4cd690…`), and
+post-settle `e029f8dc…` is identical across EGL/OSMesa and through the real
+`DiagnosticLIBEROBenchmark.reset()`, with the mask applied to policy and
+recorded frames. Wiring `06c1b2e`..`cc23a89`: benchmark hook with per-episode
+restore sidecar, `external_reset_candidate` threaded through stage configs and
+the reducer (manifest records `start_state`), `m5b` workload mode that verifies
+the injected 7.8 KB gzip candidate before starting the model, prepare-script
+second inject file. Tests pass on Windows and inside the image (Python 3.8);
+`tests/test_external_reset.py`'s mocks fail only under Python 3.8 (pass on 3.11).
+WSL lacks numpy for the new imports, as before.
+
+Image v6 `cc23a893ea25` → `sha256:2c7245ff…`. New private bucket
+`faultline-m5b-20261010` with its own read-only key (old pilot bucket still
+awaiting object expiry). Job `faultline-m5b-20261010` submitted once, watchdog
+armed. Candidate stays in ignored `artifacts/serverless-m5b-20261010/`.
+
 ## October 10 M5C Nemotron v2 and M5B scope (Claude Code)
 
 Jethro asked to keep improving Nemotron (Token Factory) and to include M5B in
