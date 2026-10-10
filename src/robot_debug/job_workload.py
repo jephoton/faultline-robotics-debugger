@@ -21,6 +21,35 @@ from scripts import run_failure_reduction, run_failure_search, run_position_grid
 
 
 _CLEANUP_RESERVE_SECONDS = 14.0
+# M4's certified reduced rectangle; the m5b mode re-runs it from the benchmark start.
+CERTIFIED_M4_RECTANGLE = {"x": 0.625, "y": 0.0, "width": 0.375, "height": 0.375}
+_MAX_EXTERNAL_RESET_BYTES = 512 * 1024
+
+
+def _load_external_reset(source: object, destination: Path) -> Path:
+    """Decode the injected gzip candidate, verify its pinned hashes and store it privately."""
+    import gzip
+
+    from robot_debug.external_reset import validate_external_reset
+
+    if not isinstance(source, Path) or not source.is_file() or source.is_symlink():
+        _fail("external reset candidate is missing")
+    try:
+        with gzip.open(str(source), "rb") as stream:
+            data = stream.read(_MAX_EXTERNAL_RESET_BYTES + 1)
+    except OSError as error:
+        raise JobRuntimeError("external reset candidate is not gzip data") from error
+    if len(data) > _MAX_EXTERNAL_RESET_BYTES:
+        _fail("external reset candidate is too large")
+    try:
+        candidate = validate_external_reset(json.loads(data.decode("utf-8")))
+    except (ValueError, UnicodeError) as error:
+        raise JobRuntimeError("external reset candidate failed validation") from error
+    destination.mkdir(mode=0o700)
+    path = destination / "candidate.json"
+    with path.open("x", encoding="utf-8") as handle:
+        json.dump(candidate, handle, sort_keys=True)
+    return path
 
 
 @dataclass(frozen=True)
@@ -215,6 +244,7 @@ def run_workload(
     exporter: Callable[..., Dict[str, Any]] = export_closed_evidence,
     clock: Callable[[], float] = time.monotonic,
     absolute_deadline: Optional[float] = None,
+    external_reset_source: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Run one workload while keeping process and cloud mechanics injectable."""
 
@@ -258,8 +288,18 @@ def run_workload(
         if latch["reason"] is None:
             latch["reason"] = code
 
+    external_candidate = None
+    reduction_stop_reason = None
     try:
-        if remaining() <= 0:
+        if accepted["mode"] == "m5b":
+            try:
+                external_candidate = _load_external_reset(
+                    external_reset_source, run_root / "external-reset")
+            except JobRuntimeError:
+                reason, status = "external_reset_invalid", "partial"
+        if reason != "completed":
+            pass
+        elif remaining() <= 0:
             reason, status = "deadline_exhausted", "partial"
         else:
             try:
@@ -364,17 +404,20 @@ def run_workload(
 
             if reason == "completed":
                 mode = accepted["mode"]
-                if mode == "pilot":
-                    configs = run_root / "pilot" / "configs"
+                if mode in ("pilot", "m5b"):
+                    configs = run_root / mode / "configs"
                     configs.mkdir(parents=True)
-                    specifications = (
-                        ("nominal", {}),
-                        ("masked", {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.375}),
-                    )
+                    if mode == "pilot":
+                        specifications = (
+                            ("nominal", {}),
+                            ("masked", {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.375}),
+                        )
+                    else:
+                        specifications = (("certified-m4", dict(CERTIFIED_M4_RECTANGLE)),)
                     for stage, geometry in specifications:
                         if latch["reason"] is not None:
                             break
-                        output = run_root / "pilot" / "runs" / stage
+                        output = run_root / mode / "runs" / stage
                         config_path = configs / (stage + ".yaml")
                         run_failure_search._write_config(
                             config_path=config_path,
@@ -405,6 +448,20 @@ def run_workload(
                                 "outcome": result.outcome,
                             }
                         )
+                    if mode == "m5b" and latch["reason"] is None:
+                        driver_summary = run_failure_reduction.run_session(
+                            upstream_root=roots.upstream_root,
+                            project_root=roots.project_root,
+                            results_root=run_root / "m5b" / "external",
+                            launch_cutoff_seconds=max(0.0, remaining()),
+                            command_runner=bounded_runner,
+                            monotonic_clock=clock,
+                            external_reset_candidate=external_candidate,
+                        )
+                        reduction_stop_reason = driver_summary.get("stop_reason")
+                        driver_failure = _driver_reason(driver_summary)
+                        if driver_failure is not None:
+                            latch_failure(driver_failure)
                 else:
                     drivers = {
                         "search": run_failure_search.run_session,
@@ -453,6 +510,8 @@ def run_workload(
     }
     if pilot_outcomes:
         summary["pilot_outcomes"] = pilot_outcomes
+    if accepted["mode"] == "m5b":
+        summary["reduction_stop_reason"] = reduction_stop_reason
     _write_summary(run_root, summary)
     if cleanup_confirmed:
         exporter(

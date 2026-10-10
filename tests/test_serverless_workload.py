@@ -266,7 +266,8 @@ class ServerlessWorkloadTests(unittest.TestCase):
         }
 
     def invoke(self, *, model_failure=None, model=None, runner=None, exporter=None, clock=None,
-               config=None, evaluator_factory=None, model_factory=None, absolute_deadline=None):
+               config=None, evaluator_factory=None, model_factory=None, absolute_deadline=None,
+               external_reset_source=None):
         events: list[object] = []
         model = model or FakeModel(events, failure=model_failure)
         runner = runner or FixtureRunner(events)
@@ -291,8 +292,56 @@ class ServerlessWorkloadTests(unittest.TestCase):
             exporter=recording_exporter,
             clock=clock or FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107),
             absolute_deadline=absolute_deadline,
+            **({} if external_reset_source is None else {"external_reset_source": external_reset_source}),
         )
         return result, events, runner, exports
+
+    def _m5b_source(self, value) -> Path:
+        import gzip
+        source = self.work.parent / "external-reset.json.gz"
+        source.write_bytes(gzip.compress(json.dumps(value).encode("utf-8")))
+        return source
+
+    def test_m5b_rejects_a_bad_external_reset_before_starting_the_model(self) -> None:
+        from tests.test_external_reset import candidate
+        for source in (None, self._m5b_source(candidate(task_id=1)),
+                       self.work.parent / "missing.json.gz"):
+            with self.subTest(source=source):
+                run_id = "m5b-bad-{}".format(len(list(self.work.iterdir())))
+                config = dict(self.config, mode="m5b", run_id=run_id)
+                result, events, _runner, exports = self.invoke(
+                    config=config, external_reset_source=source,
+                    model_factory=lambda **kwargs: self.fail("model started"))
+                self.assertEqual(("partial", "external_reset_invalid"),
+                                 (result["status"], result["stop_reason"]))
+                self.assertNotIn("run", events)
+                self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_m5b_runs_certified_replay_then_external_reduction(self) -> None:
+        from tests.test_external_reset import SYNTHETIC_STATE_SHA256, candidate
+        source = self._m5b_source(candidate())
+        captured = {}
+
+        def fake_reduction(**kwargs):
+            captured.update(kwargs)
+            stored = json.loads(Path(kwargs["external_reset_candidate"]).read_text(encoding="utf-8"))
+            captured["stored_task"] = stored["task_id"]
+            return valid_driver_summary("reduce")
+
+        config = dict(self.config, mode="m5b", run_id="m5b-001")
+        with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256),                 mock.patch("scripts.run_failure_reduction.run_session", side_effect=fake_reduction):
+            result, _events, runner, _exports = self.invoke(
+                config=config, external_reset_source=source,
+                runner=FixtureRunner([], outcomes=(False,)))
+        self.assertEqual("complete", result["status"])
+        self.assertEqual(["policy_failure"], [item["outcome"] for item in result["pilot_outcomes"]])
+        self.assertEqual("certified-m4", result["pilot_outcomes"][0]["stage"])
+        occlusion = runner.configs[0]["benchmarks"][0]["params"]["agentview_occlusion"]
+        self.assertEqual((occlusion["x"], occlusion["width"], occlusion["height"]), (0.625, 0.375, 0.375))
+        self.assertNotIn("external_reset", runner.configs[0]["benchmarks"][0]["params"])
+        self.assertEqual(captured["stored_task"], 0)
+        self.assertEqual(captured["results_root"], self.work / "m5b-001" / "m5b" / "external")
+        self.assertEqual("parent_not_reproducible", result["reduction_stop_reason"])
 
     def test_pilot_runs_serial_nominal_then_masked_and_exports_after_close(self) -> None:
         result, events, runner, exports = self.invoke()
