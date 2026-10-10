@@ -452,6 +452,26 @@ def _run_preflight_process(
             cleanup_uncertain = InfrastructureError("export preflight cleanup could not be confirmed")
             raise cleanup_uncertain from cleanup_error
 
+    def restore_launch_handler(signum: int) -> None:
+        if signum not in previous_handlers:
+            return
+        previous = previous_handlers[signum]
+        try:
+            signal.signal(signum, previous)
+        except KeyboardInterrupt:
+            # The interruption may precede the native restoration call.
+            if signal.getsignal(signum) is not previous:
+                try:
+                    signal.signal(signum, previous)
+                except BaseException:
+                    if cleanup_uncertain is None:
+                        raise
+            if cleanup_uncertain is None:
+                raise
+        except BaseException:
+            if cleanup_uncertain is None:
+                raise
+
     try:
         with os.fdopen(stdout_fd, "wb") as stdout, os.fdopen(stderr_fd, "wb") as stderr:
             timeout = wait_budget()
@@ -479,18 +499,9 @@ def _run_preflight_process(
                         close_probe()
                 finally:
                     try:
-                        if signal.SIGINT in previous_handlers:
-                            signal.signal(signal.SIGINT, previous_handlers[signal.SIGINT])
-                    except BaseException:
-                        if cleanup_uncertain is None:
-                            raise
+                        restore_launch_handler(signal.SIGINT)
                     finally:
-                        if signal.SIGTERM in previous_handlers:
-                            try:
-                                signal.signal(signal.SIGTERM, previous_handlers[signal.SIGTERM])
-                            except BaseException:
-                                if cleanup_uncertain is None:
-                                    raise
+                        restore_launch_handler(signal.SIGTERM)
                 if deferred_signal is not None:
                     if process is not None:
                         close_probe()
