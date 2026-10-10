@@ -627,6 +627,7 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
         self.assertEqual(reduced["evidence_ids"], sorted(reduced["evidence_ids"]))
         nominal = groups[("nominal", "null")]
         self.assertIsNone(nominal["area_fraction"])
+        self.assertEqual(payload["chat_template_kwargs"], {"enable_thinking": False})
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
         self.assertLessEqual(len(encoded), 16_000)
 
@@ -637,3 +638,4 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
             "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
         self.assertEqual(json.loads(sent[0]["messages"][1]["content"]), PACKET)
         self.assertIn("1 or 2 brief", sent[0]["messages"][0]["content"])
+        self.assertNotIn("chat_template_kwargs", sent[0])

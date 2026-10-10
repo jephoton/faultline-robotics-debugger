@@ -421,6 +421,11 @@ def _request_payload(packet: dict) -> dict:
         "stream": False,
         "response_format": {"type": "json_object"},
     }
+    if version_2:
+        # Nemotron 3 Nano reasons by default and its thinking tokens count against
+        # max_tokens; the v2 context already carries the analysis, so the first
+        # v2 attempt exhausted the limit while thinking. Turn thinking off.
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
                          allow_nan=False).encode("utf-8")
     if len(encoded) > (_MAX_REQUEST_BYTES_V2 if version_2 else _MAX_REQUEST_BYTES):
