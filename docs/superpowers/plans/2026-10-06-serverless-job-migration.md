@@ -170,7 +170,7 @@ specific to this one-hour single-L40S validation; no earlier cap is reusable.
   artifacts directory. Verify manifest hashes and actual readable media/JSONL.
   Observe the Job terminal state; cancel/poll if required. Retain only resources
   within approved duration; deletion needs explicit target/approval checks.
-- [ ] Show new paired recordings in the existing viewer. Compare outcomes honestly
+- [x] Show new paired recordings in the existing viewer. Compare outcomes honestly
   without relabeling historical cases. Any failed pilot yields partial evidence,
   cause and remaining work rather than a migration-complete claim.
 - [x] Update `FEEDBACK.md`, `docs/dev-log.md`, root roadmap and existing handoff

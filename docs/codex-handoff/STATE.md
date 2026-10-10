@@ -22,11 +22,17 @@ instances or disks, ending the ~US$0.47/day disk charge. Historical evidence
 was already local; the VM's pre-installed environment is gone (Serverless
 replaces it).
 
-Pending teardown, each needing Jethro's explicit OK: delete the private bucket
-(24 h retention from ~04:00 UTC Oct 10) and revoke the read-only access key,
-service account and `faultline-pilot-readers` group; keep or prune registry
-images. The local 21.7 GB image is kept as the rebuild cache while image code
-may still change.
+Jethro approved bucket deletion. The read-only access key, its service
+account, group membership and `faultline-pilot-readers` group are deleted.
+The bucket delete was refused (`BucketNotEmpty`, 371 KB); its 1-day lifecycle
+rule expires the objects by about 12:45 UTC Oct 11, after which the empty
+bucket must be deleted (or Jethro empties it in the console first). Registry
+images are kept. The local 21.7 GB image is kept as the rebuild cache for M3
+Serverless work, per Jethro.
+
+The viewer (loopback 8765) catalogs the recovered Serverless pair without
+changes: nominal `eee1af5c99a80e72` versus masked `80681a5f1443988c`, shown
+side by side with linked playback.
 
 ## October 10 launch-guard integration and v5 image (Claude Code)
 
