@@ -165,6 +165,75 @@ class DiagnosticLIBEROBenchmarkTests(unittest.TestCase):
 
         self.assertIsNone(benchmark._extract_frame(None))
 
+    def _external_benchmark(self, directory):
+        import json
+        from pathlib import Path
+        candidate = Path(directory) / "candidate.json"
+        candidate.write_text(json.dumps({"task_id": 0, "model_xml": "<mujoco/>"}), encoding="utf-8")
+        benchmark = self.benchmark_type(
+            suite="libero_object",
+            external_reset={"candidate": str(candidate),
+                            "metadata_out": str(Path(directory) / "external_reset.json")})
+        frames = []
+        benchmark._recorder = types.SimpleNamespace(record_video=frames.append)
+        benchmark._env = None
+        benchmark._current_task_id = None
+        benchmark.absolute_action = False
+        env = types.SimpleNamespace(robots=[])
+        benchmark._make_env = lambda task: env
+        benchmark._asset_roots = lambda: {}
+        return benchmark, env, frames
+
+    def test_external_reset_restores_instead_of_upstream_and_records_hashes(self) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from robot_debug import external_reset as kernel
+
+        calls = []
+        settled = np.full((4, 4, 3), 7, dtype=np.uint8)
+
+        def restore(env, candidate, resolved):
+            calls.append((env, candidate["task_id"], resolved))
+            return {"observation": {"frame": settled},
+                    "reset_metadata": {"state_sha256": "abc", "restoration_verified": False}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, env, frames = self._external_benchmark(directory)
+            with patch.object(kernel, "validate_external_reset", side_effect=lambda value: value), \
+                    patch.object(kernel, "resolve_external_assets", return_value={"xml": "ok"}) as resolve, \
+                    patch.object(kernel, "restore_external_reset", side_effect=restore):
+                task = {"task_id": 0, "task_obj": object(), "name": "task 0"}
+                self.assertIs(benchmark.reset(task)["frame"], settled)
+                benchmark.reset(task)
+            self.assertEqual(len(calls), 2)
+            self.assertIs(calls[0][0], env)
+            self.assertEqual(resolve.call_count, 1)
+            self.assertEqual(len(frames), 2)
+            self.assertTrue(all(np.array_equal(frame, settled) for frame in frames))
+            records = json.loads((Path(directory) / "external_reset.json").read_text(encoding="utf-8"))
+            self.assertEqual([record["state_sha256"] for record in records], ["abc", "abc"])
+
+    def test_external_reset_rejects_task_mismatch_and_bad_config(self) -> None:
+        import tempfile
+        from unittest.mock import patch
+        from robot_debug import external_reset as kernel
+
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, _env, _frames = self._external_benchmark(directory)
+            with patch.object(kernel, "validate_external_reset", side_effect=lambda value: value):
+                with self.assertRaises(kernel.ExternalResetError):
+                    benchmark.reset({"task_id": 1, "task_obj": object(), "name": "task 1"})
+        for bad in ({"candidate": "a"}, {"candidate": "", "metadata_out": "b"}, "path",
+                    {"candidate": "a", "metadata_out": "b", "extra": "c"}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                self.benchmark_type(suite="libero_object", external_reset=bad)
+
+    def test_without_external_reset_upstream_reset_is_used(self) -> None:
+        benchmark = self.benchmark_type(suite="libero_object")
+        self.assertIsNone(benchmark.external_reset)
+
 
 if __name__ == "__main__":
     unittest.main()
