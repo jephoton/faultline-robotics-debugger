@@ -6,6 +6,16 @@ tests is not necessarily a failure seen in the live pilot.
 
 ## Serverless export failure and deadline review — October 10
 
+Resumed quality review additionally reproduced interruption during probe launch:
+the OS creates a child before Python's Popen constructor returns its handle.
+SIGTERM in that interval caused main to report143 without calling group cleanup.
+The reviewer triggered the signal inside the genuine constructor's exec-error
+pipe read, retained the exact fixture PID, observed the live group and then
+independently killed/reaped it. This is an injected CPU race, not an observed
+Nebius Job incident. Launch signal deferral is being added only to the export
+probe: record ownership, confirm cleanup, then replay the prior signal handler.
+No shared evaluator/model kernel or robot-policy configuration is changed.
+
 The first Job reached GR00T model readiness and served two episodes, but exited
 with "source evidence changed during open" while exporting. Bucket inspection
 found a 3,133-byte staging log and an empty final object. Claude identified a
