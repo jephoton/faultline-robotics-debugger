@@ -147,3 +147,28 @@ Incorrect: observation 1 says all masked groups had zero successes (4 masked
 episodes succeeded) and cites only nominal episodes; hypothesis 3 is muddled.
 Interpretation remains subordinate to the deterministic facts, which are
 always correct. Acceptance is Jethro's decision.
+
+### Continued iteration (Jethro: "try improving further")
+
+Added v2-06/v2-07 labels so worst-case reservations stay within the US$0.10 cap;
+rejected responses are now saved with a rule diagnosis in the ignored attempt
+folder (never in reports). Mask groups gained `outcome`
+(`all_succeeded`/`all_failed`/`mixed`) and `image_region` (plain-language
+placement with explicit coordinates, origin top-left).
+
+| Attempt | Change | Result | Tokens in/out | Est. cost |
+| --- | --- | --- | --- | --- |
+| v2-05 | group outcome labels; "never generalise about masked groups" | valid; false "all masked failed" gone; said "lower-right" for a top-right mask; "libre-object" typo | 3139/962 | US$0.00042 |
+| v2-06 | `image_region` text; exact suite name | valid; **all factual statements correct**, including the key contrast x 0.625–1 fails 4/4 vs x 0.75–1 succeeds 2/2; hypotheses propose untested x 0.5–0.75 masks | 3296/1116 | US$0.00047 |
+
+Running total: about US$0.0033 of the US$0.10 cap; v2-07 unused.
+
+**v2-06 (report `58c2ad9f…`) assessment.** No factual error found against the
+deterministic facts. Remaining blemishes: two observations cite one group they
+do not describe; stiff wording that echoes field names; limitations omit the
+22-episode sample size. Recommended as the M5C demonstration report, labelled
+"human review required" as the viewer already does. Jethro decides acceptance.
+
+Lesson: the useful division of labour is Faultline computing every number,
+grouping and spatial description, and the model selecting contrasts and
+proposing next experiments.

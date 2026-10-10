@@ -7,9 +7,9 @@ M5; the push waits until M5 is complete. Nemotron v2 (`58aa33b`..`6bab798`):
 geometry-aware packet v2, deterministic counts/totals/mask groups sent with the
 packet, v2 prompt, thinking disabled, attempt labels `v2-01`..`v2-05` capped at
 US$0.10. Four calls cost ≈US$0.0024; `v2-05` unused. Best report `8f469903…`
-(v2-03) is shown in the restarted viewer with all eight reports (v1 history
-intact). It is much better than October 6 but still says all masked groups had
-zero successes; acceptance is Jethro's. Details: `docs/experiments/m5-nemotron-pilot.md`.
+(v2-03) was superseded by v2-06 (`58c2ad9f…`, ≈US$0.0033 total so far, v2-07
+unused): no factual errors found, states the key x 0.625 vs x 0.75 contrast,
+proposes untested masks. Recommended for the M5C demo; acceptance is Jethro's. Details: `docs/experiments/m5-nemotron-pilot.md`.
 
 Serverless pilot mask correction: `(0.5,0,.375,.375)` is not the certified M4
 rectangle `(0.625,0,.375,.375)`. Next: M5B external restore plan and its
