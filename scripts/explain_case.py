@@ -17,7 +17,7 @@ if str(SOURCE) not in sys.path:
 
 from robot_debug.case_store import inspect_case
 from robot_debug.evidence_packet import make_evidence_packet, packet_identity
-from robot_debug.explanation import build_offline_report
+from robot_debug.explanation import build_offline_report, explain_rejection
 from robot_debug.explanation_store import make_stored_report, store_report
 from robot_debug.token_factory import (
     TokenFactoryError,
@@ -31,9 +31,10 @@ from robot_debug.token_factory import (
 PILOT_ROOT = (
     REPOSITORY_ROOT / "artifacts" / "m5-nemotron-pilot-repair-20261006")
 # October 10 v2 iteration: at most five labelled attempts, each with its own
-# exclusive US$0.02 reservation (US$0.10 approved cap).
+# exclusive US$0.02 reservation (US$0.10 approved cap; v2-06/07 added October 10
+# so that even worst-case reservations stay within it).
 ATTEMPTS_ROOT = REPOSITORY_ROOT / "artifacts" / "m5-nemotron-attempts"
-ATTEMPT_LABELS = ("v2-01", "v2-02", "v2-03", "v2-04", "v2-05")
+ATTEMPT_LABELS = ("v2-01", "v2-02", "v2-03", "v2-04", "v2-05", "v2-06", "v2-07")
 
 
 class ExplainCaseError(ValueError):
@@ -160,6 +161,12 @@ def run_live(workspace: Path, case_id: str, env_file: Path | None,
         pilot_root.mkdir(parents=True, exist_ok=True)
     deps.reserve_pilot(pilot_root, case_id, initial_id)
     result = deps.request_interpretation(pre_reservation_packet, api_key)
+    if attempt is not None and "rejected_content" in result:
+        diagnosis = {"reason": explain_rejection(result["rejected_content"],
+                                                 pre_reservation_packet),
+                     "content": result["rejected_content"]}
+        with (pilot_root / "rejected-response.json").open("x", encoding="utf-8") as handle:
+            json.dump(diagnosis, handle, ensure_ascii=False, indent=2)
 
     final_packet = _fresh_packet(workspace, case_id, deps.inspect_case, packet_version)
     if packet_identity(final_packet) != initial_id:

@@ -153,7 +153,7 @@ class ExplainCaseCliTests(unittest.TestCase):
                             packet_version=2, attempt="v2-99")
 
     def test_cli_attempt_labels_are_an_allowlist(self):
-        for label in ("v2-06", "../escape", "v2-01/../../x"):
+        for label in ("v2-08", "../escape", "v2-01/../../x"):
             result = self.invoke("live", "--workspace", self.workspace, "--case-id",
                                  self.case_id, "--packet-version", "2", "--attempt", label)
             self.assertEqual(json.loads(result.stdout), {"error": "invalid arguments"})

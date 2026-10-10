@@ -79,6 +79,49 @@ def _validate_response(response_json: str, packet: dict) -> dict:
     return result
 
 
+def explain_rejection(response_json: object, packet: dict) -> str:
+    """Name the first evidence-contract rule a rejected response breaks (local diagnosis)."""
+    if type(response_json) is not str:
+        return "content is not text"
+    try:
+        value = json.loads(response_json)
+    except ValueError:
+        return "content is not valid JSON"
+    if type(value) is not dict:
+        return "content is not a JSON object"
+    expected = {"schema_version", "observations", "hypotheses", "limitations"}
+    if set(value) != expected:
+        return "keys differ: extra {} missing {}".format(
+            sorted(set(value) - expected), sorted(expected - set(value)))
+    if value["schema_version"] != 1:
+        return "schema_version is not 1"
+    ids = {item["evidence_id"] for item in validate_evidence_packet(packet)["episodes"]}
+    for field, maximum in (("observations", 4), ("hypotheses", 3)):
+        entries = value[field]
+        if type(entries) is not list or len(entries) > maximum:
+            return "{} must be a list of at most {}".format(field, maximum)
+        for index, entry in enumerate(entries):
+            if type(entry) is not dict or set(entry) != {"text", "evidence_ids"}:
+                return "{}[{}] keys are not text and evidence_ids".format(field, index)
+            text, citations = entry["text"], entry["evidence_ids"]
+            if type(text) is not str or not 0 < len(text) <= 600 or not text.strip():
+                return "{}[{}] text is empty or over 600 characters".format(field, index)
+            if type(citations) is not list or not 1 <= len(citations) <= 64:
+                return "{}[{}] needs 1 to 64 evidence_ids".format(field, index)
+            unknown = [c for c in citations if c not in ids]
+            if unknown:
+                return "{}[{}] cites unknown evidence_ids {}".format(field, index, unknown[:3])
+            if len(set(citations)) != len(citations):
+                return "{}[{}] repeats an evidence_id".format(field, index)
+    limitations = value["limitations"]
+    if type(limitations) is not list or len(limitations) > 6:
+        return "limitations must be a list of at most 6"
+    for index, item in enumerate(limitations):
+        if type(item) is not str or not 0 < len(item) <= 600 or not item.strip():
+            return "limitations[{}] is empty, not text or over 600 characters".format(index)
+    return "rejected by a stricter check (control characters or duplicate keys)"
+
+
 def validate_explanation(response_json: str, packet: dict) -> dict:
     """Check JSON structure and citation membership, not the prose's truth."""
     validated_packet = validate_evidence_packet(packet)
@@ -130,6 +173,12 @@ def mask_groups(packet: dict) -> list:
     for key in sorted(groups, key=lambda item: (order[item[0]], item[1])):
         group = groups[key]
         group["evidence_ids"].sort()
+        if group["successes"] == group["episodes"]:
+            group["outcome"] = "all_succeeded"
+        elif group["policy_failures"] == group["episodes"]:
+            group["outcome"] = "all_failed"
+        else:
+            group["outcome"] = "mixed"
         result.append(group)
     return result
 

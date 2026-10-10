@@ -628,7 +628,6 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
                          [{"height": 0.5, "width": 0.25, "x": 0.75, "y": 0.0}])
         self.assertEqual(body["totals"]["masks_with_only_failures"],
                          [packet["reduced_mask"]["rectangle"]])
-        self.assertIn("never write that all masked episodes failed", system)
         for phrase in ("never add up or recount", "must differ from every mask", "one seed"):
             self.assertIn(phrase, system)
         self.assertEqual(body["packet"]["schema_version"], 2)
@@ -643,6 +642,32 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
         self.assertEqual(payload["chat_template_kwargs"], {"enable_thinking": False})
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
         self.assertLessEqual(len(encoded), 16_000)
+        self.assertIn("never write that all masked episodes failed", system)
+        self.assertEqual(reduced["outcome"], "all_failed")
+        self.assertEqual(nominal["outcome"], "all_succeeded")
+        self.assertIn("never generalise", system)
+
+    def test_rejected_content_is_returned_for_local_diagnosis_without_key(self):
+        bad = json.dumps({"schema_version": 1, "observations": [
+            {"text": "x", "evidence_ids": ["ffffffffffffffff"]}], "hypotheses": [],
+            "limitations": []})
+
+        def transport(method, path, payload, api_key):
+            return {"model": MODEL, "choices": [{"message": {"content": bad},
+                    "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}
+
+        result = request_interpretation(_v2_packet(), KEY, transport)
+        self.assertEqual(result["provenance"]["request_status"], "invalid_response")
+        self.assertEqual(result["rejected_content"], bad)
+        from robot_debug.explanation import explain_rejection
+        self.assertIn("unknown evidence_ids", explain_rejection(bad, _v2_packet()))
+
+        leaked = bad.replace('"x"', json.dumps(KEY))
+        result = request_interpretation(_v2_packet(), KEY, lambda *a: {
+            "model": MODEL, "choices": [{"message": {"content": leaked}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+        self.assertNotIn("rejected_content", result)
 
     def test_v1_request_is_unchanged(self):
         sent = []

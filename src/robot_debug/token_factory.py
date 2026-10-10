@@ -69,7 +69,10 @@ _SYSTEM_PROMPT_V2 = (
     "budget-local and not a global minimum, that there is no causal proof, and "
     "that human review is required. Copy evidence_ids exactly from the input. "
     "Use only numbers that appear in counts_by_role, totals or mask_groups; never "
-    "add up or recount episodes yourself. totals.masks_with_successes lists the "
+    "add up or recount episodes yourself. Each mask group has an outcome of "
+    "all_succeeded, all_failed or mixed: describe every group by its own outcome "
+    "and never generalise about \"masked groups\" as a whole. "
+    "totals.masks_with_successes lists the "
     "masks under which the policy still succeeded: never write that all masked "
     "episodes failed unless that list is empty. Every rectangle a hypothesis proposes "
     "must differ from every mask in mask_groups, because those were already "
@@ -527,13 +530,22 @@ def request_interpretation(packet: dict, api_key: str,
                 "provenance": _provenance("invalid_response", "output_limit",
                                            latency, prompt, completion)}
     try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        content = None
+    try:
         content, interpretation = _response_content(response, validated)
         if api_key in content or _contains_secret(interpretation, api_key):
             raise ValueError
     except Exception:
-        return {"response_json": None,
-                "provenance": _provenance("invalid_response", "invalid_response",
-                                           latency, prompt, completion)}
+        result = {"response_json": None,
+                  "provenance": _provenance("invalid_response", "invalid_response",
+                                             latency, prompt, completion)}
+        # Keep rejected model text in memory for local diagnosis only; it is
+        # never stored in a report and is withheld if it contains the key.
+        if type(content) is str and api_key not in content:
+            result["rejected_content"] = content
+        return result
     return {"response_json": content,
             "provenance": _provenance("completed", None, latency,
                                        prompt, completion)}
