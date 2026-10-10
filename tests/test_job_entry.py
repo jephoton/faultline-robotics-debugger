@@ -609,6 +609,135 @@ class ExportPreflightProcessTests(unittest.TestCase):
         self.assertEqual(143, code)
         self._assert_gone(int(marker.read_text(encoding="utf-8")))
 
+    def test_sigterm_at_spawn_return_cleans_owned_group_before_exit_143(self) -> None:
+        config = self.root / "spawn-workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        previous = signal.getsignal(signal.SIGTERM)
+        owned = []
+        tracked_popen = job_entry.subprocess.Popen
+
+        def signal_after_spawn(*args, **kwargs):
+            process = tracked_popen(*args, **kwargs)
+            owned.append(process.pid)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return process
+
+        output = io.StringIO()
+        with mock.patch.object(job_entry, "_preflight_child_argv", return_value=[
+            sys.executable, "-B", "-c", "import time; time.sleep(60)"
+        ]), mock.patch.object(job_entry.subprocess, "Popen", side_effect=signal_after_spawn):
+            code = main(
+                ["--config", str(config)], layout=self.layout, environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started after SIGTERM"),
+                stdout=output,
+            )
+
+        self.assertEqual(143, code)
+        self.assertEqual(1, len(owned))
+        with self.assertRaises(ProcessLookupError):
+            os.killpg(owned[0], 0)
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_signal_inside_real_popen_constructor_closes_group_before_exit(self) -> None:
+        config = self.root / "constructor-workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        real_fork_exec = subprocess._fork_exec
+        for signum, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+            with self.subTest(signum=signum):
+                previous = signal.getsignal(signum)
+                owned = []
+
+                def signal_inside_constructor(*args):
+                    pid = real_fork_exec(*args)
+                    owned.append(pid)
+                    os.kill(os.getpid(), signum)
+                    return pid
+
+                with mock.patch.object(job_entry, "_preflight_child_argv", return_value=[
+                    sys.executable, "-B", "-c", "import time; time.sleep(60)"
+                ]), mock.patch.object(subprocess, "_fork_exec", side_effect=signal_inside_constructor):
+                    code = main(
+                        ["--config", str(config)], layout=self.layout, environ={},
+                        runner=lambda *_args, **_kwargs: self.fail("runner started after signal"),
+                        stdout=io.StringIO(),
+                    )
+                self.assertEqual(expected, code)
+                self.assertEqual(1, len(owned))
+                with self.assertRaises(ProcessLookupError):
+                    os.killpg(owned[0], 0)
+                self.assertIs(signal.getsignal(signum), previous)
+
+    def test_launch_signal_with_uncertain_cleanup_is_runtime_error(self) -> None:
+        config = self.root / "uncertain-workload.json"
+        config.write_text(json.dumps(VALID), encoding="utf-8")
+        previous = signal.getsignal(signal.SIGTERM)
+        tracked_popen = job_entry.subprocess.Popen
+        self._uncertain_processes = []
+
+        def signal_after_spawn(*args, **kwargs):
+            process = tracked_popen(*args, **kwargs)
+            self._uncertain_processes.append(process)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return process
+
+        with mock.patch.object(job_entry, "_preflight_child_argv", return_value=[
+            sys.executable, "-B", "-c", "import time; time.sleep(60)"
+        ]), mock.patch.object(job_entry.subprocess, "Popen", side_effect=signal_after_spawn), \
+             mock.patch.object(job_entry, "close_owned_process_group", side_effect=OSError("uncertain")):
+            code = main(
+                ["--config", str(config)], layout=self.layout, environ={},
+                runner=lambda *_args, **_kwargs: self.fail("runner started after signal"),
+                stdout=io.StringIO(),
+            )
+        self.assertEqual(3, code)
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous)
+        for process in self._uncertain_processes:
+            self._cleanup_owned_process_group(process.pid)
+            process.poll()
+
+    def test_launch_error_restores_handlers_and_reports_fixed_error(self) -> None:
+        previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+        with mock.patch.object(job_entry.subprocess, "Popen", side_effect=OSError("private argv")):
+            with self.assertRaisesRegex(InfrastructureError, "process could not be started") as error:
+                self._run_fixture([sys.executable, "-B", "-c", "pass"])
+        self.assertNotIn("private argv", str(error.exception))
+        for signum, handler in previous.items():
+            self.assertIs(signal.getsignal(signum), handler)
+
+    def test_ignored_sigint_stays_ignored_during_launch(self) -> None:
+        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        tracked_popen = job_entry.subprocess.Popen
+
+        def send_ignored_signal(*args, **kwargs):
+            process = tracked_popen(*args, **kwargs)
+            os.kill(os.getpid(), signal.SIGINT)
+            return process
+
+        try:
+            with mock.patch.object(job_entry.subprocess, "Popen", side_effect=send_ignored_signal):
+                self._run_fixture([sys.executable, "-B", "-c", "pass"])
+            self.assertEqual(signal.SIG_IGN, signal.getsignal(signal.SIGINT))
+        finally:
+            signal.signal(signal.SIGINT, previous)
+
+    def test_non_main_thread_rejects_before_spawn(self) -> None:
+        failures = []
+
+        def run() -> None:
+            try:
+                self._run_fixture([sys.executable, "-B", "-c", "pass"])
+            except BaseException as error:
+                failures.append(error)
+
+        with mock.patch.object(job_entry.subprocess, "Popen") as popen:
+            thread = threading.Thread(target=run)
+            thread.start()
+            thread.join(3)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(1, len(failures))
+        self.assertIsInstance(failures[0], InfrastructureError)
+        popen.assert_not_called()
+
     def test_sigint_during_probe_cleans_group_before_exit_130(self) -> None:
         config = self.root / "sigint-workload.json"
         config.write_text(json.dumps(VALID), encoding="utf-8")

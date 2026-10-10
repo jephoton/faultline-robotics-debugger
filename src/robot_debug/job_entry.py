@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import uuid
@@ -430,50 +431,80 @@ def _run_preflight_process(
         raise
 
     process = None
+    deferred_signal = None
+    previous_handlers = {}
+
+    def defer_launch_signal(signum: int, _frame: object) -> None:
+        nonlocal deferred_signal
+        if deferred_signal is None:
+            deferred_signal = signum
+
+    def close_probe() -> None:
+        nonlocal process
+        owned = process
+        process = None
+        try:
+            close_owned_process_group(owned, owned.pid)
+        except KeyboardInterrupt:
+            raise
+        except BaseException as cleanup_error:
+            raise InfrastructureError("export preflight cleanup could not be confirmed") from cleanup_error
+
     try:
         with os.fdopen(stdout_fd, "wb") as stdout, os.fdopen(stderr_fd, "wb") as stderr:
             timeout = wait_budget()
             if timeout <= 0:
                 raise InfrastructureError("no time remains for export preflight")
-            process = subprocess.Popen(
-                list(argv),
-                cwd=str(cwd),
-                env={},
-                shell=False,
-                start_new_session=True,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-            )
+            if threading.current_thread() is not threading.main_thread():
+                raise InfrastructureError("export preflight launch requires the main thread")
             try:
+                try:
+                    for signum in (signal.SIGINT, signal.SIGTERM):
+                        previous = signal.getsignal(signum)
+                        if previous != signal.SIG_IGN:
+                            previous_handlers[signum] = signal.signal(signum, defer_launch_signal)
+                    process = subprocess.Popen(
+                        list(argv),
+                        cwd=str(cwd),
+                        env={},
+                        shell=False,
+                        start_new_session=True,
+                        stdin=subprocess.DEVNULL,
+                        stdout=stdout,
+                        stderr=stderr,
+                    )
+                    if deferred_signal is not None:
+                        close_probe()
+                finally:
+                    try:
+                        if signal.SIGINT in previous_handlers:
+                            signal.signal(signal.SIGINT, previous_handlers[signal.SIGINT])
+                    finally:
+                        if signal.SIGTERM in previous_handlers:
+                            signal.signal(signal.SIGTERM, previous_handlers[signal.SIGTERM])
+                if deferred_signal is not None:
+                    if process is not None:
+                        close_probe()
+                    signal.raise_signal(deferred_signal)
+                    raise InfrastructureError("export preflight interrupted during launch")
                 timeout = wait_budget()
                 if timeout <= 0:
                     raise subprocess.TimeoutExpired(list(argv), 0)
                 return_code = process.wait(timeout=timeout)
+                close_probe()
             except KeyboardInterrupt:
-                try:
-                    close_owned_process_group(process, process.pid)
-                except KeyboardInterrupt:
-                    raise
-                except BaseException as cleanup_error:
-                    raise InfrastructureError(
-                        "export preflight cleanup could not be confirmed"
-                    ) from cleanup_error
+                if process is not None:
+                    close_probe()
                 raise
             except BaseException as error:
-                try:
-                    close_owned_process_group(process, process.pid)
-                except KeyboardInterrupt:
+                launch_failed = process is None
+                if process is not None:
+                    close_probe()
+                if isinstance(error, InfrastructureError):
                     raise
-                except BaseException as cleanup_error:
-                    raise InfrastructureError("export preflight cleanup could not be confirmed") from cleanup_error
+                if isinstance(error, OSError) and launch_failed:
+                    raise
                 raise InfrastructureError("export preflight did not complete") from error
-            try:
-                close_owned_process_group(process, process.pid)
-            except KeyboardInterrupt:
-                raise
-            except BaseException as error:
-                raise InfrastructureError("export preflight cleanup could not be confirmed") from error
     except InfrastructureError:
         raise
     except OSError as error:
