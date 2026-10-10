@@ -219,11 +219,15 @@ def run_workload(
     """Run one workload while keeping process and cloud mechanics injectable."""
 
     accepted = validate_workload_config(config)
-    if absolute_deadline is not None and (
-        type(absolute_deadline) not in (int, float)
-        or (type(absolute_deadline) is float and not math.isfinite(absolute_deadline))
-    ):
-        _fail("absolute_deadline must be a finite number")
+    if absolute_deadline is not None:
+        if type(absolute_deadline) not in (int, float):
+            _fail("absolute_deadline must be a finite number")
+        try:
+            absolute_deadline = float(absolute_deadline)
+        except OverflowError as error:
+            raise JobRuntimeError("absolute_deadline must be a finite number") from error
+        if not math.isfinite(absolute_deadline):
+            _fail("absolute_deadline must be a finite number")
     roots = _validated_paths(paths)
     run_id = accepted["run_id"]
     run_root = roots.work_root / run_id

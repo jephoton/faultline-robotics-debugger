@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import ctypes
 from contextlib import nullcontext
 from pathlib import Path
 import re
@@ -391,6 +392,63 @@ class ExportPreflightProcessTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.layout = _layout(self.root)
+        if sys.platform == "linux":
+            self._libc = ctypes.CDLL(None, use_errno=True)
+            previous = ctypes.c_int()
+            self.assertEqual(self._libc.prctl(37, ctypes.byref(previous), 0, 0, 0), 0)
+            self.assertEqual(self._libc.prctl(36, 1, 0, 0, 0), 0)
+            self.addCleanup(self._restore_subreaper, previous.value)
+
+        real_popen = subprocess.Popen
+
+        def tracked_popen(*args, **kwargs):
+            process = real_popen(*args, **kwargs)
+            if kwargs.get("start_new_session"):
+                self.addCleanup(self._cleanup_owned_process_group, process.pid)
+            return process
+
+        self._popen_patch = mock.patch.object(job_entry.subprocess, "Popen", side_effect=tracked_popen)
+        self._popen_patch.start()
+        self.addCleanup(self._popen_patch.stop)
+
+    def _restore_subreaper(self, previous: int) -> None:
+        self.assertEqual(self._libc.prctl(36, previous, 0, 0, 0), 0)
+
+    def _reap_adopted_children(self) -> None:
+        while True:
+            try:
+                pid, _status = os.waitpid(-1, os.WNOHANG)
+            except ChildProcessError:
+                return
+            if pid == 0:
+                return
+
+    def _cleanup_owned_process_group(self, process_group: int) -> None:
+        try:
+            os.killpg(process_group, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + 2.0
+        while True:
+            self._reap_adopted_children()
+            try:
+                os.killpg(process_group, 0)
+            except ProcessLookupError:
+                return
+            if time.monotonic() >= deadline:
+                os.killpg(process_group, signal.SIGKILL)
+                break
+            time.sleep(0.03)
+        deadline = time.monotonic() + 2.0
+        while True:
+            self._reap_adopted_children()
+            try:
+                os.killpg(process_group, 0)
+            except ProcessLookupError:
+                return
+            if time.monotonic() >= deadline:
+                self.fail("owned preflight process group survived test cleanup")
+            time.sleep(0.03)
 
     def _wait_for_file(self, path: Path, timeout: float = 5.0) -> None:
         limit = time.monotonic() + timeout
@@ -402,6 +460,12 @@ class ExportPreflightProcessTests(unittest.TestCase):
     def _assert_gone(self, pid: int) -> None:
         limit = time.monotonic() + 3.0
         while True:
+            try:
+                waited, _status = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                waited = 0
+            if waited == pid:
+                return
             try:
                 os.kill(pid, 0)
             except ProcessLookupError:

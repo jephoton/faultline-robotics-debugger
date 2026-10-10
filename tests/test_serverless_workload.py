@@ -435,8 +435,15 @@ class ServerlessWorkloadTests(unittest.TestCase):
         self.assertEqual("partial", exports[0][2]["status"])
 
     def test_absolute_deadline_must_be_a_finite_non_boolean_number(self) -> None:
-        for invalid in (True, "2500", float("inf"), float("nan")):
-            with self.subTest(invalid=invalid), self.assertRaises(JobRuntimeError):
+        for label, invalid in (
+            ("boolean", True),
+            ("string", "2500"),
+            ("infinity", float("inf")),
+            ("nan", float("nan")),
+            ("huge-positive-integer", 10**10000),
+            ("huge-negative-integer", -(10**10000)),
+        ):
+            with self.subTest(invalid=label), self.assertRaises(JobRuntimeError):
                 self.invoke(absolute_deadline=invalid)
 
     def test_startup_consuming_launch_window_prevents_model_start(self) -> None:
