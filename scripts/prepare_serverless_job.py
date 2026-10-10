@@ -21,7 +21,7 @@ _REQUIRED_FIELDS = frozenset({
     "hf_secret",
     "workload_file",
 })
-_OPTIONAL_FIELDS = frozenset({"registry_secret", "image_digest"})
+_OPTIONAL_FIELDS = frozenset({"registry_secret", "image_digest", "external_reset_file"})
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 _IMAGE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IMAGE_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
@@ -72,6 +72,8 @@ def prepare(config: dict[str, object]) -> list[str]:
         command.extend(["--registry-secret", registry_secret])
     command.extend([
         "--inject-file", values["workload_file"] + ":/etc/faultline/workload.json",
+        *(["--inject-file", values["external_reset_file"] + ":/etc/faultline/external-reset.json.gz"]
+          if "external_reset_file" in values else []),
         "--working-dir", "/opt/robot-debug",
         "--container-command", "/opt/conda/envs/libero/bin/python",
         "--args",
@@ -119,6 +121,9 @@ def _validate(config: object) -> dict[str, str]:
         if selector is not None and _SECRET_SELECTOR.fullmatch(selector) is None:
             raise ConfigError(field + " must be a Secret Stash selector, not a secret value")
     _validate_workload_file(values["workload_file"])
+    if "external_reset_file" in values:
+        # Same local-path and 64 KiB inject limits as the workload file.
+        _validate_workload_file(values["external_reset_file"])
     return values
 
 

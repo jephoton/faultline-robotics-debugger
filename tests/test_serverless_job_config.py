@@ -57,6 +57,19 @@ class ServerlessJobConfigTests(unittest.TestCase):
         config.update(overrides)
         return config
 
+    def test_external_reset_file_adds_a_second_bounded_inject_file(self) -> None:
+        Path("external-reset.json.gz").write_bytes(b"\x1f\x8b" + b"x" * 100)
+        argv = self.module.prepare(self.valid_config(external_reset_file="external-reset.json.gz"))
+        injects = [argv[i + 1] for i, value in enumerate(argv) if value == "--inject-file"]
+        self.assertEqual(injects, ["workload.json:/etc/faultline/workload.json",
+                                   "external-reset.json.gz:/etc/faultline/external-reset.json.gz"])
+        self.assertNotIn("external-reset.json.gz:/etc/faultline/external-reset.json.gz",
+                         self.module.prepare(self.valid_config()))
+        Path("big.json.gz").write_bytes(b"x" * (64 * 1024 + 1))
+        for value in ("big.json.gz", "missing.json.gz", "a:b.gz", 7):
+            with self.subTest(value=value), self.assertRaises(self.module.ConfigError):
+                self.module.prepare(self.valid_config(external_reset_file=value))
+
     def test_valid_config_builds_exact_bounded_dry_run_argv(self) -> None:
         argv = self.module.prepare(self.valid_config())
         self.assertEqual(argv, [

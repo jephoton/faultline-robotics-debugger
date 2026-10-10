@@ -69,6 +69,8 @@ class ImageLayout:
     work_root: Path = Path("/tmp/faultline-work")
     hf_home: Path = Path("/tmp/faultline-hf")
     export_root: Path = Path("/persistent/faultline-runs")
+    # Optional private injected file for the m5b mode (gzip candidate JSON).
+    external_reset_file: Path = Path("/etc/faultline/external-reset.json.gz")
 
 
 def load_workload(path: Path) -> Dict[str, Any]:
@@ -636,6 +638,7 @@ def main(
             exporter=exporter,
             clock=clock,
             absolute_deadline=deadline,
+            external_reset_source=layout.external_reset_file,
         )
     except KeyboardInterrupt:
         print(json.dumps({"status": "interrupted", "run_id": config["run_id"]}), file=stdout)
