@@ -37,8 +37,9 @@ def _stage_rect(prefix: str, rect: Rect, attempt: int, delta: Optional[float] = 
 
 class ReductionSession:
     """Durable, deterministic reduction state machine with bounded launches."""
-    def __init__(self, *, upstream_root: Path, project_root: Path, results_root: Path, launch_cutoff_seconds: float, command_runner: Callable[..., Any], monotonic_clock: Callable[[], float]) -> None:
+    def __init__(self, *, upstream_root: Path, project_root: Path, results_root: Path, launch_cutoff_seconds: float, command_runner: Callable[..., Any], monotonic_clock: Callable[[], float], external_reset_candidate: Optional[Path] = None) -> None:
         self.upstream_root, self.project_root, self.results_root = upstream_root, project_root, results_root
+        self.external_reset_candidate = external_reset_candidate
         self.launch_cutoff_seconds, self.command_runner, self.clock = launch_cutoff_seconds, command_runner, monotonic_clock
         self.started_at = self.clock(); self.session_dir, self.summary = self._open_or_create()
         self.prior_elapsed = float(self.summary.get("elapsed_seconds", 0.0))
@@ -126,6 +127,7 @@ class ReductionSession:
         output_dir, config_path = self.session_dir / "runs" / name, self.configs_dir / (name + ".yaml")
         kwargs: dict[str, Any] = {"config_path": config_path, "output_dir": output_dir, "project_root": self.project_root, "stage_name": name, "episode_indices": (0,)}
         if rect is not None: kwargs.update(x=rect.x, y=rect.y, width=rect.width, height=rect.height)
+        if self.external_reset_candidate is not None: kwargs["external_reset_candidate"] = self.external_reset_candidate
         base._write_config(**kwargs)
         stage = {"stage": name, "rectangle": None if rect is None else _rect_dict(rect), "area": None if rect is None else rect.area, "planned_episode_indices": [0], "config_path": "configs/{}.yaml".format(name), "output_path": "runs/{}".format(name), "results": [], "physical_episode_count": 0, "status": "completed", "infrastructure_error": None, "invalid_evidence": None}
         stage["status"] = "in_flight"; self.summary["config_paths"].append(stage["config_path"]); self.summary["in_flight"] = stage; self.save()
@@ -214,7 +216,7 @@ class ReductionSession:
     def _write_manifest(self) -> None:
         if not self.summary["lineage"]: return
         final = Rect(**self.summary["certified_rectangle"]); stage = next(item for item in self.summary["completed"]["stages"] if item["rectangle"] == _rect_dict(final) and item["stage"].startswith("delta-"))
-        manifest = {"schema_version": 1, "task_id": 0, "episode_index": 0, "seed": 7, "expected_outcome": "policy_failure", "acceptance_rule": {"failures": 4, "attempts": 5}, "rectangle": _rect_dict(final), "source_summary": "session_summary.json", "replay_command": "vla-eval run --config {}".format(stage["config_path"]), "repository_revision": self.summary["repository_revision"], "model_identity": MODEL_ID}
+        manifest = {"schema_version": 1, "task_id": 0, "episode_index": 0, "seed": 7, "start_state": "benchmark_init" if self.external_reset_candidate is None else "external_reset", "expected_outcome": "policy_failure", "acceptance_rule": {"failures": 4, "attempts": 5}, "rectangle": _rect_dict(final), "source_summary": "session_summary.json", "replay_command": "vla-eval run --config {}".format(stage["config_path"]), "repository_revision": self.summary["repository_revision"], "model_identity": MODEL_ID}
         base._atomic_write_json(self.session_dir / "replay_case.json", manifest)
     def run(self) -> dict[str, Any]:
         if self.summary["stop_reason"]:
@@ -232,8 +234,9 @@ class ReductionSession:
         if self.summary["stop_reason"] in {"reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"}: self._write_manifest()
         return self.summary
 
-def run_session(*, upstream_root: Union[Path, str], project_root: Union[Path, str], results_root: Union[Path, str], launch_cutoff_seconds: float = 1320, command_runner: Callable[..., Any] = subprocess.run, monotonic_clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
-    return ReductionSession(upstream_root=Path(upstream_root).resolve(), project_root=Path(project_root).resolve(), results_root=Path(results_root).resolve(), launch_cutoff_seconds=launch_cutoff_seconds, command_runner=command_runner, monotonic_clock=monotonic_clock).run()
+def run_session(*, upstream_root: Union[Path, str], project_root: Union[Path, str], results_root: Union[Path, str], launch_cutoff_seconds: float = 1320, command_runner: Callable[..., Any] = subprocess.run, monotonic_clock: Callable[[], float] = time.monotonic, external_reset_candidate: Optional[Union[Path, str]] = None) -> dict[str, Any]:
+    external = None if external_reset_candidate is None else Path(external_reset_candidate).resolve()
+    return ReductionSession(upstream_root=Path(upstream_root).resolve(), project_root=Path(project_root).resolve(), results_root=Path(results_root).resolve(), launch_cutoff_seconds=launch_cutoff_seconds, command_runner=command_runner, monotonic_clock=monotonic_clock, external_reset_candidate=external).run()
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--upstream-root", required=True, type=Path); parser.add_argument("--project-root", required=True, type=Path); parser.add_argument("--results-root", required=True, type=Path); parser.add_argument("--launch-cutoff-seconds", type=float, default=1320); run_session(**vars(parser.parse_args()))
 if __name__ == "__main__": main()

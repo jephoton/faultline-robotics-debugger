@@ -91,6 +91,28 @@ class FailureReductionDriverTests(unittest.TestCase):
         self.assertNotIn(str(Path.home()), json.dumps(manifest)); self.assertTrue((self.results / "failure-reduction" / manifest["replay_command"].rsplit(" ", 1)[1]).is_file())
         self.assertEqual(summary["geometry"]["parent"]["area"], .25); self.assertEqual(summary["geometry"]["final"]["area"], .1875); self.assertEqual(summary["model_identity"], reduction.MODEL_ID)
 
+    def test_external_reset_reaches_every_stage_config_and_the_manifest(self):
+        candidate = self.root / "external-reset" / "candidate.json"
+        candidate.parent.mkdir(); candidate.write_text("{}", encoding="utf-8")
+        responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), *([aggregate()] * 5)]
+        runner = Runner(responses)
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=runner, monotonic_clock=Clock(*range(1000)), external_reset_candidate=candidate)
+        self.assertEqual(summary["stop_reason"], "reduced_failure_with_nominal_controls")
+        for command, _cwd, _check in runner.commands:
+            config = Path(command[-1]).read_text(encoding="utf-8")
+            self.assertIn("external_reset:", config)
+            self.assertIn(json.dumps(str(candidate.resolve())), config)
+            self.assertIn("external_reset.json", config)
+        manifest = json.loads((self.results / "failure-reduction" / "replay_case.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["start_state"], "external_reset")
+
+    def test_benchmark_start_is_recorded_without_external_reset(self):
+        responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), *([aggregate()] * 5)]
+        _summary, runner = self.run_driver(responses)
+        self.assertNotIn("external_reset", Path(runner.commands[0][0][-1]).read_text(encoding="utf-8"))
+        manifest = json.loads((self.results / "failure-reduction" / "replay_case.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["start_state"], "benchmark_init")
+
     def test_resume_reconstructs_three_pending_attempts_and_launches_fourth_at_global_limit(self):
         initial = [aggregate(), *self.parent_passes(), *([aggregate(), aggregate()] * 4), *([aggregate(False)] * 4)]
         interrupted = WritingInterruptAtRunner(initial, interrupt_at=16)

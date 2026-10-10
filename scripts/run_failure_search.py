@@ -326,6 +326,7 @@ def _write_config(
     y: Optional[float] = None,
     width: Optional[float] = None,
     height: Optional[float] = None,
+    external_reset_candidate: Optional[Path] = None,
 ) -> None:
     for name, value in (("task_id", task_id), ("seed", seed)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -381,6 +382,16 @@ def _write_config(
                 "        height: {:.6f}".format(height),
                 "        color: [0, 0, 0]",
                 "        opacity: 1.0",
+            ]
+        )
+    if external_reset_candidate is not None:
+        # Start from the accepted external demo state instead of the benchmark's
+        # init state; restore hashes are written beside the stage outputs.
+        params.extend(
+            [
+                "      external_reset:",
+                "        candidate: {}".format(_yaml_scalar(external_reset_candidate)),
+                "        metadata_out: {}".format(_yaml_scalar(Path(output_dir) / "external_reset.json")),
             ]
         )
     text = "\n".join(
