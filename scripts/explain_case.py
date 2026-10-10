@@ -30,6 +30,10 @@ from robot_debug.token_factory import (
 
 PILOT_ROOT = (
     REPOSITORY_ROOT / "artifacts" / "m5-nemotron-pilot-repair-20261006")
+# October 10 v2 iteration: at most five labelled attempts, each with its own
+# exclusive US$0.02 reservation (US$0.10 approved cap).
+ATTEMPTS_ROOT = REPOSITORY_ROOT / "artifacts" / "m5-nemotron-attempts"
+ATTEMPT_LABELS = ("v2-01", "v2-02", "v2-03", "v2-04", "v2-05")
 
 
 class ExplainCaseError(ValueError):
@@ -69,6 +73,7 @@ def _parser() -> argparse.ArgumentParser:
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--workspace", type=Path, required=True)
     prepare.add_argument("--case-id", required=True)
+    prepare.add_argument("--packet-version", type=int, choices=(1, 2), default=1)
 
     preflight_command = commands.add_parser("preflight")
     preflight_command.add_argument("--env-file", type=Path)
@@ -77,10 +82,13 @@ def _parser() -> argparse.ArgumentParser:
     live.add_argument("--workspace", type=Path, required=True)
     live.add_argument("--case-id", required=True)
     live.add_argument("--env-file", type=Path)
+    live.add_argument("--packet-version", type=int, choices=(1, 2), default=1)
+    live.add_argument("--attempt", choices=ATTEMPT_LABELS)
     return parser
 
 
-def _fresh_packet(workspace: Path, case_id: str, inspect: Callable) -> dict:
+def _fresh_packet(workspace: Path, case_id: str, inspect: Callable,
+                  packet_version: int = 1) -> dict:
     case = inspect(workspace, case_id)
     try:
         available = case["capabilities"]["inspection"]["status"] == "available"
@@ -88,7 +96,7 @@ def _fresh_packet(workspace: Path, case_id: str, inspect: Callable) -> dict:
         available = False
     if not available:
         raise ExplainCaseError("case evidence is unavailable or changed")
-    return make_evidence_packet(case)
+    return make_evidence_packet(case, schema_version=packet_version)
 
 
 def _offline_provenance() -> dict:
@@ -113,9 +121,10 @@ def _summary(record: dict) -> dict:
 
 
 def run_prepare(workspace: Path, case_id: str,
-                *, deps: Dependencies = DEFAULT_DEPENDENCIES) -> dict:
+                *, deps: Dependencies = DEFAULT_DEPENDENCIES,
+                packet_version: int = 1) -> dict:
     """Store a deterministic offline report without loading credentials."""
-    packet = _fresh_packet(workspace, case_id, deps.inspect_case)
+    packet = _fresh_packet(workspace, case_id, deps.inspect_case, packet_version)
     report = build_offline_report(packet)
     record = make_stored_report(case_id, packet, report, _offline_provenance())
     deps.store_report(workspace, record)
@@ -131,22 +140,28 @@ def run_preflight(env_file: Path | None,
 
 
 def run_live(workspace: Path, case_id: str, env_file: Path | None,
-             *, deps: Dependencies = DEFAULT_DEPENDENCIES) -> dict:
-    """Reserve and make the single approved paid attempt, then store safely."""
-    initial_packet = _fresh_packet(workspace, case_id, deps.inspect_case)
+             *, deps: Dependencies = DEFAULT_DEPENDENCIES,
+             packet_version: int = 1, attempt: str | None = None) -> dict:
+    """Reserve and make one approved paid attempt, then store safely."""
+    if attempt is not None and attempt not in ATTEMPT_LABELS:
+        raise ExplainCaseError("unknown attempt label")
+    pilot_root = PILOT_ROOT if attempt is None else ATTEMPTS_ROOT / attempt
+    initial_packet = _fresh_packet(workspace, case_id, deps.inspect_case, packet_version)
     initial_id = packet_identity(initial_packet)
 
     api_key = deps.load_api_key(env_file)
     deps.preflight(api_key)
 
-    pre_reservation_packet = _fresh_packet(workspace, case_id, deps.inspect_case)
+    pre_reservation_packet = _fresh_packet(workspace, case_id, deps.inspect_case, packet_version)
     if packet_identity(pre_reservation_packet) != initial_id:
         raise ExplainCaseError("case evidence changed during explanation")
 
-    deps.reserve_pilot(PILOT_ROOT, case_id, initial_id)
+    if attempt is not None:
+        pilot_root.mkdir(parents=True, exist_ok=True)
+    deps.reserve_pilot(pilot_root, case_id, initial_id)
     result = deps.request_interpretation(pre_reservation_packet, api_key)
 
-    final_packet = _fresh_packet(workspace, case_id, deps.inspect_case)
+    final_packet = _fresh_packet(workspace, case_id, deps.inspect_case, packet_version)
     if packet_identity(final_packet) != initial_id:
         raise ExplainCaseError("case evidence changed during explanation")
 
@@ -162,11 +177,13 @@ def main(argv=None) -> int:
     try:
         args = _parser().parse_args(argv)
         if args.command == "prepare":
-            result = run_prepare(args.workspace, args.case_id)
+            result = run_prepare(args.workspace, args.case_id,
+                                 packet_version=args.packet_version)
         elif args.command == "preflight":
             result = run_preflight(args.env_file)
         else:
-            result = run_live(args.workspace, args.case_id, args.env_file)
+            result = run_live(args.workspace, args.case_id, args.env_file,
+                              packet_version=args.packet_version, attempt=args.attempt)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True, allow_nan=False))
         return 0
     except TokenFactoryError as exc:

@@ -52,6 +52,29 @@ class ExplanationStoreTests(unittest.TestCase):
         self.assertEqual(read_case_reports(self.workspace, self.case["case_id"]),
                          {"reports": [record], "warnings": []})
 
+    def test_v1_and_v2_reports_are_both_read_against_their_own_version(self):
+        v1 = self.record()
+        packet_v2 = make_evidence_packet(self.case, schema_version=2)
+        v2 = make_stored_report(self.case["case_id"], packet_v2,
+                                build_offline_report(packet_v2),
+                                dict(self.provenance, created_at="2026-10-10T12:00:00Z"))
+        store_report(self.workspace, v1)
+        store_report(self.workspace, v2)
+        result = read_case_reports(self.workspace, self.case["case_id"])
+        self.assertEqual(result["warnings"], [])
+        self.assertEqual([r["packet"]["schema_version"] for r in result["reports"]], [1, 2])
+
+    def test_v2_report_with_stale_masks_is_rejected(self):
+        packet_v2 = make_evidence_packet(self.case, schema_version=2)
+        stale = copy.deepcopy(packet_v2)
+        for episode in stale["episodes"]:
+            if episode["mask"] is not None:
+                episode["mask"] = {"x": 0.0, "y": 0.0, "width": 0.1, "height": 0.1}
+        record = make_stored_report(self.case["case_id"], stale,
+                                    build_offline_report(stale), self.provenance)
+        with self.assertRaises(ExplanationStoreError):
+            store_report(self.workspace, record)
+
     def record(self, report=None, provenance=None):
         return make_stored_report(self.case["case_id"], self.packet,
                                   report or build_offline_report(self.packet),

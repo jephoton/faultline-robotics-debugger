@@ -123,6 +123,44 @@ class ExplainCaseCliTests(unittest.TestCase):
         self.assertEqual(output["interpretation_status"], "validated-structure")
         self.assertEqual(output["request_status"], "completed")
 
+    def test_v2_attempt_reserves_its_own_root_and_sends_a_v2_packet(self):
+        module = load_script()
+        packet = make_evidence_packet(inspect_case(self.workspace, self.case_id), schema_version=2)
+        response = json.dumps({
+            "schema_version": 1,
+            "observations": [{"text": "Observed outcome.",
+                              "evidence_ids": [packet["episodes"][0]["evidence_id"]]}],
+            "hypotheses": [], "limitations": ["Human review required."],
+        })
+        reserved, sent = [], []
+        deps = module.Dependencies(
+            inspect_case=inspect_case, load_api_key=lambda _: "secret",
+            preflight=lambda _: {},
+            reserve_pilot=lambda root, case_id, packet_id: reserved.append((root, packet_id)) or {},
+            request_interpretation=lambda packet_sent, key: sent.append(packet_sent) or {
+                "response_json": response, "provenance": live_provenance()},
+            store_report=lambda workspace, record: Path("report"),
+        )
+        attempts = self.base / "attempts"
+        with patch.object(module, "ATTEMPTS_ROOT", attempts):
+            module.run_live(self.workspace, self.case_id, None, deps=deps,
+                            packet_version=2, attempt="v2-01")
+        self.assertEqual(reserved, [(attempts / "v2-01", packet_identity(packet))])
+        self.assertTrue((attempts / "v2-01").is_dir())
+        self.assertEqual(sent[0]["schema_version"], 2)
+        with self.assertRaises(module.ExplainCaseError):
+            module.run_live(self.workspace, self.case_id, None, deps=deps,
+                            packet_version=2, attempt="v2-99")
+
+    def test_cli_attempt_labels_are_an_allowlist(self):
+        for label in ("v2-06", "../escape", "v2-01/../../x"):
+            result = self.invoke("live", "--workspace", self.workspace, "--case-id",
+                                 self.case_id, "--packet-version", "2", "--attempt", label)
+            self.assertEqual(json.loads(result.stdout), {"error": "invalid arguments"})
+        result = self.invoke("live", "--workspace", self.workspace, "--case-id",
+                             self.case_id, "--packet-version", "3")
+        self.assertEqual(json.loads(result.stdout), {"error": "invalid arguments"})
+
     def test_failed_catalog_never_reserves_or_posts(self):
         module = load_script()
         calls = []

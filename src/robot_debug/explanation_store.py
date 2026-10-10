@@ -265,13 +265,15 @@ def _safe_existing(path: Path, *, directory: bool | None = None) -> None:
         _fail(_STORAGE)
 
 
-def _fresh_packet(workspace: Path, case_id: str) -> dict:
+def _fresh_packets(workspace: Path, case_id: str) -> dict:
+    """Current projections of the case for every packet version, by version."""
     try:
         _paths(workspace, case_id)
         case = inspect_case(workspace, case_id)
         if case["capabilities"]["inspection"]["status"] != "available":
             _fail(_CASE_CHANGED)
-        return make_evidence_packet(case)
+        return {version: make_evidence_packet(case, schema_version=version)
+                for version in (1, 2)}
     except ExplanationStoreError:
         raise
     except Exception:
@@ -302,7 +304,8 @@ def _read_record(path: Path) -> dict:
 def store_report(workspace: Path, value: dict) -> Path:
     """Publish one immutable report atomically within its registered case."""
     record = validate_stored_report(value)
-    fresh = _fresh_packet(Path(workspace), record["case_id"])
+    version = record["packet"]["schema_version"]
+    fresh = _fresh_packets(Path(workspace), record["case_id"])[version]
     if _canonical(fresh) != _canonical(record["packet"]):
         _fail(_CASE_CHANGED)
     _case_dir, reports = _paths(Path(workspace), record["case_id"])
@@ -329,7 +332,7 @@ def store_report(workspace: Path, value: dict) -> Path:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        final_packet = _fresh_packet(Path(workspace), record["case_id"])
+        final_packet = _fresh_packets(Path(workspace), record["case_id"])[version]
         if _canonical(final_packet) != _canonical(record["packet"]):
             _fail(_CASE_CHANGED)
         try:
@@ -353,14 +356,14 @@ def store_report(workspace: Path, value: dict) -> Path:
 def read_case_reports(workspace: Path, case_id: str) -> dict:
     """Read a bounded valid report set, isolating corrupt immutable sidecars."""
     try:
-        initial = _fresh_packet(Path(workspace), case_id)
+        initial = _fresh_packets(Path(workspace), case_id)
     except ExplanationStoreError:
         return {"reports": [], "warnings": [_CASE_WARNING]}
     try:
         _case_dir, reports_dir = _paths(Path(workspace), case_id)
         if not reports_dir.exists():
-            final = _fresh_packet(Path(workspace), case_id)
-            if _canonical(initial) != _canonical(final):
+            final = _fresh_packets(Path(workspace), case_id)
+            if any(_canonical(initial[v]) != _canonical(final[v]) for v in initial):
                 return {"reports": [], "warnings": [_CASE_WARNING]}
             return {"reports": [], "warnings": []}
         _safe_existing(reports_dir, directory=True)
@@ -383,14 +386,17 @@ def read_case_reports(workspace: Path, case_id: str) -> dict:
             record = _read_record(path)
             if name != record["report_id"] + ".json" or record["case_id"] != case_id:
                 _fail()
-            if _canonical(record["packet"]) != _canonical(initial):
+            # A report is shown only against the current case's projection of
+            # its own packet version, so v1 history stays visible beside v2.
+            if _canonical(record["packet"]) != _canonical(
+                    initial[record["packet"]["schema_version"]]):
                 _fail()
             records.append(record)
         except ExplanationStoreError:
             corrupt = True
     try:
-        final = _fresh_packet(Path(workspace), case_id)
-        if _canonical(initial) != _canonical(final):
+        final = _fresh_packets(Path(workspace), case_id)
+        if any(_canonical(initial[v]) != _canonical(final[v]) for v in initial):
             return {"reports": [], "warnings": [_CASE_WARNING]}
     except ExplanationStoreError:
         return {"reports": [], "warnings": [_CASE_WARNING]}
