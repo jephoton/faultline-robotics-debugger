@@ -165,6 +165,31 @@ class ServerlessJobConfigTests(unittest.TestCase):
                 argv = self.module.prepare(self.valid_config(image=image))
                 self.assertEqual(argv[argv.index("--image") + 1], image)
 
+    def test_accepts_nebius_tag_only_with_expected_digest(self) -> None:
+        image = "cr.eu-north1.nebius.cloud/e00registry/faultline-serverless:23d07cd4c584"
+        argv = self.module.prepare(
+            self.valid_config(image=image, image_digest="sha256:" + "b" * 64)
+        )
+        self.assertEqual(argv[argv.index("--image") + 1], image)
+        self.assertNotIn("sha256:" + "b" * 64, argv)
+
+    def test_rejects_tags_without_digest_or_outside_nebius_registry(self) -> None:
+        digest = "sha256:" + "b" * 64
+        for image, image_digest in (
+            ("cr.eu-north1.nebius.cloud/e00registry/faultline-serverless:abc", None),
+            ("ghcr.io/owner/faultline-image:abc", digest),
+            ("cr.eu-north1.nebius.cloud/e00registry/faultline-serverless", digest),
+            ("cr.eu-north1.nebius.cloud/e00registry/faultline-serverless:bad/tag", digest),
+            ("cr.eu-north1.nebius.cloud/e00registry/faultline-serverless:abc", "sha256:short"),
+            ("cr.eu-north1.nebius.cloud/e00registry/image@" + "sha256:" + "a" * 64, digest),
+        ):
+            overrides = {"image": image}
+            if image_digest is not None:
+                overrides["image_digest"] = image_digest
+            with self.subTest(image=image, image_digest=image_digest):
+                with self.assertRaises(self.module.ConfigError):
+                    self.module.prepare(self.valid_config(**overrides))
+
     def test_rejects_non_one_gpu_platform_or_preset(self) -> None:
         for overrides in (
             {"platform": "gpu-h100-sxm"},

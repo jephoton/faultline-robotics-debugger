@@ -21,9 +21,14 @@ _REQUIRED_FIELDS = frozenset({
     "hf_secret",
     "workload_file",
 })
-_OPTIONAL_FIELDS = frozenset({"registry_secret"})
+_OPTIONAL_FIELDS = frozenset({"registry_secret", "image_digest"})
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 _IMAGE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_IMAGE_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
+# Nebius Jobs reject @sha256 image references (an internal label exceeds 64
+# characters), so a tag in a private Nebius registry is accepted only with the
+# digest it must resolve to; the submitter re-checks that mapping in the registry.
+_NEBIUS_REGISTRY = re.compile(r"cr\.[a-z0-9-]+\.nebius\.cloud\Z")
 _REGISTRY_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 _REPOSITORY_COMPONENT = re.compile(
     r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*\Z"
@@ -92,18 +97,19 @@ def _validate(config: object) -> dict[str, str]:
         if type(value) is not str:
             raise ConfigError(field + " must be a string")
         values[field] = value
-    if "registry_secret" in config:
-        value = config["registry_secret"]
-        if type(value) is not str:
-            raise ConfigError("registry_secret must be a string")
-        values["registry_secret"] = value
+    for field in _OPTIONAL_FIELDS:
+        if field in config:
+            value = config[field]
+            if type(value) is not str:
+                raise ConfigError(field + " must be a string")
+            values[field] = value
 
     if _RUN_ID.fullmatch(values["run_id"]) is None:
         raise ConfigError("run_id must be 1-63 lowercase ASCII letters, digits, or interior hyphens")
     for field, pattern in _ID_PATTERNS.items():
         if pattern.fullmatch(values[field]) is None:
             raise ConfigError(field + " has the wrong Nebius resource ID kind or syntax")
-    _validate_image(values["image"])
+    _validate_image(values["image"], values.get("image_digest"))
     if values["platform"] != "gpu-l40s-a":
         raise ConfigError("platform must be the approved single-GPU gpu-l40s-a platform")
     if values["preset"] != "1gpu-16vcpu-64gb":
@@ -116,12 +122,31 @@ def _validate(config: object) -> dict[str, str]:
     return values
 
 
-def _validate_image(value: str) -> None:
-    if value.count("@") != 1:
-        raise ConfigError("image must be an explicit immutable @sha256 digest")
-    name, digest = value.rsplit("@", 1)
-    if _IMAGE_DIGEST.fullmatch(digest) is None or "://" in name:
-        raise ConfigError("image must be an explicit immutable @sha256 digest")
+def _validate_image(value: str, image_digest: str | None = None) -> None:
+    if image_digest is not None and _IMAGE_DIGEST.fullmatch(image_digest) is None:
+        raise ConfigError("image_digest must be a sha256 digest")
+    if "@" in value:
+        if value.count("@") != 1:
+            raise ConfigError("image must be an explicit immutable @sha256 digest")
+        name, digest = value.rsplit("@", 1)
+        if _IMAGE_DIGEST.fullmatch(digest) is None or "://" in name:
+            raise ConfigError("image must be an explicit immutable @sha256 digest")
+        if image_digest is not None and image_digest != digest:
+            raise ConfigError("image_digest does not match the image reference")
+    else:
+        name, separator, tag = value.rpartition(":")
+        if (
+            image_digest is None
+            or not separator
+            or "/" in tag
+            or _IMAGE_TAG.fullmatch(tag) is None
+            or "://" in name
+            or _NEBIUS_REGISTRY.fullmatch(name.split("/", 1)[0]) is None
+        ):
+            raise ConfigError(
+                "image must be an explicit immutable @sha256 digest, or a tag in a "
+                "private Nebius registry together with image_digest"
+            )
 
     components = name.split("/")
     if len(components) < 2 or any(not component for component in components):
