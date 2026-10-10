@@ -16,12 +16,17 @@ This validates deployment, not a new research claim (one episode per condition).
 Estimated spend for both Jobs ≈ US$0.75 pre-tax plus small storage; reconcile
 with posted billing.
 
+Deleted with Jethro's approval (Oct 10, 13:49 UTC): the stopped
+`robot-debug-pilot` VM and its managed 200 GiB boot disk. The project now has no
+instances or disks, ending the ~US$0.47/day disk charge. Historical evidence
+was already local; the VM's pre-installed environment is gone (Serverless
+replaces it).
+
 Pending teardown, each needing Jethro's explicit OK: delete the private bucket
 (24 h retention from ~04:00 UTC Oct 10) and revoke the read-only access key,
-service account and `faultline-pilot-readers` group; delete the stopped
-`robot-debug-pilot` VM and 200 GiB disk (its keep-until condition — a valid
-Serverless pilot — is now met); keep or prune registry images; remove the local
-21.7 GB image and compact Docker's disk.
+service account and `faultline-pilot-readers` group; keep or prune registry
+images. The local 21.7 GB image is kept as the rebuild cache while image code
+may still change.
 
 ## October 10 launch-guard integration and v5 image (Claude Code)
 
