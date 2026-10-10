@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import stat
@@ -213,10 +214,16 @@ def run_workload(
     evaluator_factory: Callable[..., Callable[..., Any]],
     exporter: Callable[..., Dict[str, Any]] = export_closed_evidence,
     clock: Callable[[], float] = time.monotonic,
+    absolute_deadline: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Run one workload while keeping process and cloud mechanics injectable."""
 
     accepted = validate_workload_config(config)
+    if absolute_deadline is not None and (
+        type(absolute_deadline) not in (int, float)
+        or (type(absolute_deadline) is float and not math.isfinite(absolute_deadline))
+    ):
+        _fail("absolute_deadline must be a finite number")
     roots = _validated_paths(paths)
     run_id = accepted["run_id"]
     run_root = roots.work_root / run_id
@@ -229,7 +236,9 @@ def run_workload(
         raise JobRuntimeError("workload run destination must be new") from error
 
     started = clock()
-    launch_deadline = started + float(accepted["deadline_seconds"]) - _CLEANUP_RESERVE_SECONDS
+    duration_deadline = started + float(accepted["deadline_seconds"])
+    deadline = duration_deadline if absolute_deadline is None else min(duration_deadline, absolute_deadline)
+    launch_deadline = deadline - _CLEANUP_RESERVE_SECONDS
     reason = "completed"
     status = "complete"
     pilot_outcomes = []

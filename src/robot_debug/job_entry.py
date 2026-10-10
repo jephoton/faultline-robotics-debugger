@@ -442,6 +442,7 @@ def main(
             evaluator_factory=evaluator_factory(layout, environ, progress),
             exporter=exporter,
             clock=clock,
+            absolute_deadline=deadline,
         )
     except KeyboardInterrupt:
         print(json.dumps({"status": "interrupted", "run_id": config["run_id"]}), file=stdout)

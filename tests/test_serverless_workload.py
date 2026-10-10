@@ -266,7 +266,7 @@ class ServerlessWorkloadTests(unittest.TestCase):
         }
 
     def invoke(self, *, model_failure=None, model=None, runner=None, exporter=None, clock=None,
-               config=None, evaluator_factory=None, model_factory=None):
+               config=None, evaluator_factory=None, model_factory=None, absolute_deadline=None):
         events: list[object] = []
         model = model or FakeModel(events, failure=model_failure)
         runner = runner or FixtureRunner(events)
@@ -290,6 +290,7 @@ class ServerlessWorkloadTests(unittest.TestCase):
             evaluator_factory=evaluator_factory or recording_evaluator_factory,
             exporter=recording_exporter,
             clock=clock or FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107),
+            absolute_deadline=absolute_deadline,
         )
         return result, events, runner, exports
 
@@ -396,6 +397,35 @@ class ServerlessWorkloadTests(unittest.TestCase):
         self.assertNotIn("start", events)
         self.assertFalse(any(isinstance(item, tuple) and item[0] == "factory" for item in events))
         self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_absolute_deadline_caps_readiness_and_workload_budget(self) -> None:
+        events: list[object] = []
+        model = FakeModel(events)
+        result, _, _, _ = self.invoke(
+            model=model,
+            clock=FakeClock(100, 100, 101, 102, 103, 104, 105, 106, 107),
+            config=dict(self.config, deadline_seconds=2400),
+            absolute_deadline=2500,
+        )
+        readiness = next(item for item in events if isinstance(item, tuple) and item[0] == "ready")
+        self.assertEqual(2486.0, readiness[1])
+        self.assertEqual("complete", result["status"])
+
+    def test_absolute_deadline_inside_cleanup_reserve_skips_model_factory(self) -> None:
+        factories = []
+        result, _, _, exports = self.invoke(
+            model_factory=lambda **kwargs: factories.append(kwargs),
+            clock=FakeClock(100, 100),
+            absolute_deadline=114,
+        )
+        self.assertEqual("deadline_exhausted", result["stop_reason"])
+        self.assertEqual([], factories)
+        self.assertEqual("partial", exports[0][2]["status"])
+
+    def test_absolute_deadline_must_be_a_finite_non_boolean_number(self) -> None:
+        for invalid in (True, "2500", float("inf"), float("nan")):
+            with self.subTest(invalid=invalid), self.assertRaises(JobRuntimeError):
+                self.invoke(absolute_deadline=invalid)
 
     def test_startup_consuming_launch_window_prevents_model_start(self) -> None:
         events: list[object] = []

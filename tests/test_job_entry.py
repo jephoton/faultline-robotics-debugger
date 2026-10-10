@@ -30,6 +30,7 @@ from robot_debug.job_entry import (
 from robot_debug.job_model import ModelProcess
 from robot_debug.job_process import InfrastructureError, close_owned_process_group
 from robot_debug.job_runtime import JobRuntimeError
+from robot_debug.job_workload import WorkloadPaths, run_workload
 from scripts import serverless_prefetch
 
 
@@ -400,13 +401,14 @@ class MainTests(unittest.TestCase):
 
         return run
 
-    def _main(self, runner, environ=None) -> tuple:
+    def _main(self, runner, environ=None, clock=None) -> tuple:
         output = io.StringIO()
         code = main(
             ["--config", str(self.config)],
             layout=self.layout,
             environ={"HF_TOKEN": "hf_value"} if environ is None else environ,
             runner=runner,
+            clock=clock or time.monotonic,
             stdout=output,
         )
         return code, output.getvalue()
@@ -438,6 +440,52 @@ class MainTests(unittest.TestCase):
         self.assertEqual(kwargs["exporter"].inner.keywords["secret_values"], ("hf_value",))
         evaluator = kwargs["evaluator_factory"](timeout_seconds=5, log_root=self.root / "logs")
         self.assertNotIn("HF_TOKEN", evaluator.evaluator._env)
+
+    def test_runner_receives_original_absolute_deadline(self) -> None:
+        now = [100.0]
+        readiness_deadlines = []
+
+        class Model:
+            def start(self):
+                pass
+
+            def wait_ready(self, *, deadline):
+                readiness_deadlines.append(deadline)
+
+            def check_alive(self):
+                pass
+
+            def close(self):
+                pass
+
+        def actual_runner(config, **kwargs):
+            return run_workload(
+                config,
+                paths=WorkloadPaths(
+                    kwargs["paths"].project_root,
+                    kwargs["paths"].upstream_root,
+                    kwargs["paths"].work_root,
+                    kwargs["paths"].export_root,
+                ),
+                model_factory=lambda **_fields: Model(),
+                evaluator_factory=lambda **_fields: lambda *_args, **_kwargs: None,
+                exporter=lambda *_args, **_kwargs: {"files": []},
+                clock=lambda: now[0],
+                absolute_deadline=kwargs["absolute_deadline"],
+            )
+
+        original_preflight = job_entry.export_preflight
+
+        def elapsed_preflight(layout, run_id):
+            original_preflight(layout, run_id)
+            now[0] = 500.0
+
+        from unittest import mock
+
+        with mock.patch.object(job_entry, "export_preflight", side_effect=elapsed_preflight):
+            code, _ = self._main(actual_runner, clock=lambda: 100.0)
+        self.assertEqual(1, code)
+        self.assertEqual([2486.0], readiness_deadlines)
 
     def test_missing_token_scans_nothing(self) -> None:
         self._main(self._runner("complete"), environ={})
