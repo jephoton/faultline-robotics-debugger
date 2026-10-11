@@ -467,6 +467,53 @@ class SummarizeTests(SummarizeBase):
         self.assertNotIn("IGNORE", json.dumps(stored))
         self.assertNotIn("evil", json.dumps(output))
 
+    def test_existing_diagnosis_file_or_write_error_never_loses_the_paid_result(self):
+        self.stored_record()
+        content = json.dumps({"related_work": [{"text": INJECTION, "source_ids": ["S1"]}],
+                              "limitations": ["Public context."]})
+        response = {"response_json": None, "rejected_content": content,
+                    "provenance": live_provenance("invalid_response", "invalid_response")}
+        blocked = self.module.ATTEMPTS_ROOT / "r-03"
+        blocked.mkdir(parents=True)
+        (blocked / "rejected-response.json").write_text("{}", encoding="utf-8")
+        events = []
+        output = self.module.run_summarize(
+            self.workspace, self.case_id, None, "r-03",
+            deps=self.summarize_deps(events, response=response))
+        self.assertIs(output["diagnosis_written"], False)
+        self.assertEqual(output["summary_status"], "rejected")
+        self.assertEqual(sum(1 for e in events if not isinstance(e, str) and e[0] == "store"), 1)
+        self.assertEqual((blocked / "rejected-response.json").read_text(), "{}")
+        # A path that cannot even be created is also survivable.
+        (self.module.ATTEMPTS_ROOT / "r-04").write_text("a file", encoding="utf-8")
+        events = []
+        output = self.module.run_summarize(
+            self.workspace, self.case_id, None, "r-04",
+            deps=self.summarize_deps(events, response=response, reserve_attempt=lambda *a: {}))
+        self.assertIs(output["diagnosis_written"], False)
+        self.assertEqual(sum(1 for e in events if not isinstance(e, str) and e[0] == "store"), 1)
+
+    def test_diagnosis_is_written_after_the_record_is_stored(self):
+        self.stored_record()
+        content = json.dumps({"related_work": [{"text": INJECTION, "source_ids": ["S1"]}],
+                              "limitations": ["Public context."]})
+        response = {"response_json": None, "rejected_content": content,
+                    "provenance": live_provenance("invalid_response", "invalid_response")}
+        target = self.module.ATTEMPTS_ROOT / "r-02" / "rejected-response.json"
+        seen = []
+
+        def store(workspace, record):
+            seen.append(target.exists())
+            return Path("record")
+
+        events = []
+        output = self.module.run_summarize(
+            self.workspace, self.case_id, None, "r-02",
+            deps=self.summarize_deps(events, response=response, store_research_record=store))
+        self.assertEqual(seen, [False])
+        self.assertTrue(target.exists())
+        self.assertIs(output["diagnosis_written"], True)
+
     def test_provider_error_is_stored_with_its_status(self):
         self.stored_record()
         events = []

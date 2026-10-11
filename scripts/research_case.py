@@ -200,21 +200,15 @@ def run_summarize(workspace: Path, case_id: str, env_file: Path | None, attempt:
     deps.reserve_attempt(ATTEMPTS_ROOT / attempt, attempt, case_id, initial_id,
                          record["record_id"])
     result = deps.request_research_summary(context, api_key)
-    if "rejected_content" in result:
-        diagnosis = {"reason": rejection_reason(result["rejected_content"], context),
-                     "content": result["rejected_content"]}
-        (ATTEMPTS_ROOT / attempt).mkdir(parents=True, exist_ok=True)
-        with (ATTEMPTS_ROOT / attempt / "rejected-response.json").open(
-                "x", encoding="utf-8") as handle:
-            json.dump(diagnosis, handle, ensure_ascii=False, indent=2)
 
     final_packet = _fresh_packet(workspace, case_id, deps.inspect_case)
     if packet_identity(final_packet) != initial_id:
+        _write_diagnosis(attempt, result, context)
         raise ResearchCaseError("case evidence changed during research")
     summary = build_summary(result, context)
     stored = with_summary(record, summary)
     deps.store_research_record(workspace, stored)
-    return {
+    output = {
         "case_id": case_id,
         "record_id": stored["record_id"],
         "attempt": attempt,
@@ -222,6 +216,26 @@ def run_summarize(workspace: Path, case_id: str, env_file: Path | None, attempt:
         "request_status": stored["summary"]["provenance"]["request_status"],
         "estimated_cost_usd": stored["summary"]["provenance"]["estimated_cost_usd"],
     }
+    if "rejected_content" in result:
+        # Written only after the paid result is safely stored; never fails the command.
+        output["diagnosis_written"] = _write_diagnosis(attempt, result, context)
+    return output
+
+
+def _write_diagnosis(attempt: str, result: dict, context: dict) -> bool:
+    """Save rejected model text beside the attempt marker; True when it was written."""
+    if "rejected_content" not in result:
+        return False
+    try:
+        diagnosis = {"reason": rejection_reason(result["rejected_content"], context),
+                     "content": result["rejected_content"]}
+        (ATTEMPTS_ROOT / attempt).mkdir(parents=True, exist_ok=True)
+        with (ATTEMPTS_ROOT / attempt / "rejected-response.json").open(
+                "x", encoding="utf-8") as handle:
+            json.dump(diagnosis, handle, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
 
 
 def main(argv=None) -> int:
