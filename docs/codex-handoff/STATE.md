@@ -10,6 +10,13 @@ benchmark (pre-settle = dataset hash, post-settle `6420e5e0…`, mask applied).
 Image v8 `9413ad4ea434` → `sha256:71527bef…`. Job `faultline-m5b-demo1-20261011`
 (`m5b-grid` from demo_1, US$2 cap) submitted with a fresh private bucket and
 read-only key (`faultline-m5b-demo1-20261011`). Push to GitHub waits for M5.
+Result: nominal success; top-left failed once then 0/5 replays → not
+reproducible, no reduction; top-right was never reached (grid stops at its first
+apparent failure). 81 files verified. Download identity revoked. Three buckets
+await lifecycle expiry before deletion: `faultline-pilot-20261010` (≈12:45 UTC
+Oct 11), `faultline-m5b-20261010` (≈02:45 UTC Oct 12),
+`faultline-m5b-demo1-20261011` (≈03:26 UTC Oct 12). Estimated compute for this
+Job ≈ US$0.41; total Oct 10–11 ≈ US$2.5 pre-tax.
 
 ## October 11 external grid and search validation (Claude Code)
 
