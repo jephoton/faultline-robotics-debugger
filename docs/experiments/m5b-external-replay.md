@@ -114,3 +114,37 @@ The top-left failure did not recur (0/5), so the grid stopped with
 `policy_failure_not_reproducible` and no reduction ran. Because the grid stops
 at its first apparent failure, the top-right position — the region implicated
 from the benchmark start and from demo_0 — was **not tested** from demo_1.
+
+## Result: reduced failure from external demo_1 (October 11)
+
+Jethro asked to test the top-right region directly from demo_1. Job
+`faultline-m5b-demo1-tr-20261011` (`m5b` mode: certified re-run, then the
+unchanged reducer with the M4 parent from the external start; image
+`9413ad4ea434`), ~16 minutes, 193 files verified, 23 videos decode, all 22
+external restores matched demo_1's pinned hash. The Nebius CLI session expired
+mid-run (watchdog saw `UNKNOWN`); the container deadline and provider timeout
+remained as backstops and the Job completed normally.
+
+Certified M4 re-run (benchmark start): policy_failure (280 steps), again.
+
+| Step (external demo_1 start) | Rectangle (x, y, w, h) | Area | Outcomes | Decision |
+| --- | --- | --- | --- | --- |
+| sentinel | none | — | success | pass |
+| parent | (0.5, 0, 0.5, 0.5) | 25.00 % | F F F F | pass |
+| remove left 0.125 | (0.625, 0, 0.375, 0.5) | 18.75 % | S F F F F | pass |
+| remove left 0.125 | (0.75, 0, 0.25, 0.5) | 12.50 % | S S | reject |
+| remove bottom 0.125 | (0.625, 0, 0.375, 0.375) | **14.06 %** | F F F F | pass |
+| remove left 0.125 | (0.75, 0, 0.25, 0.375) | 9.38 % | S | budget exhausted |
+| nominal controls ×5 | none | — | S S S S S | passed |
+
+Stop reason `reduced_failure_with_nominal_controls`; 22 valid episodes; replay
+manifest records `start_state: external_reset`.
+
+**Interpretation.** From an externally supplied demonstration start (demo_1),
+Faultline found, confirmed, reduced and certified a replayable failure, with
+matched nominal controls. The reduced rectangle `(0.625, 0, 0.375, 0.375)` is
+**identical** to the M4 result from the benchmark start, reached independently
+from a different object layout — consistent with the policy depending on the
+top-right image region in this task. demo_0, by contrast, shows the same
+region failing only intermittently (4/9). One task, one seed, budget-local
+reduction; not a causal or global-minimum claim.

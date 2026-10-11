@@ -1,5 +1,17 @@
 # Faultline current project state
 
+## October 11 M5B achieved: reduced failure from external demo_1 (Claude Code)
+
+`faultline-m5b-demo1-tr-20261011` (`m5b` mode from demo_1): certified M4 re-run
+failed again; external reduction → `reduced_failure_with_nominal_controls`,
+parent 25 % → final `(0.625,0,.375,.375)` 14.06 % — identical to M4's benchmark
+result — with 5/5 nominal controls; 22 restores verified; 193 files verified.
+ADR 0022 (grid keeps searching after unreproducible failures, 30-episode cap)
+is committed (`1dc9e70`, `6f3443a`) but not yet in a pushed image. Download
+identity revoked; bucket `faultline-m5b-demo1-tr-20261011` joins the deletion
+queue (≈03:53 UTC Oct 12). M5 sub-parts all complete pending Jethro's sign-off;
+then push and move to M3.
+
 ## October 11 M5C accepted; demo_1 external run (Claude Code)
 
 ADR 0021: Jethro accepted Nemotron report v2-06 (`58c2ad9f…`) as the M5C
