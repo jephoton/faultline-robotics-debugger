@@ -172,3 +172,20 @@ do not describe; stiff wording that echoes field names; limitations omit the
 Lesson: the useful division of labour is Faultline computing every number,
 grouping and spatial description, and the model selecting contrasts and
 proposing next experiments.
+
+### Final blemish-fixing attempts (October 11) and decision
+
+Jethro asked to fix v2-06's remaining blemishes. Two attempts added wording,
+citation-scope, sample-size, count and inference-rule instructions:
+
+| Attempt | Result | Est. cost |
+| --- | --- | --- |
+| v2-07 | rejected: 5 observations (limit 4); plain wording and "22 total episodes" achieved, but hypotheses inverted ("does not rely on" a region whose masking caused failure) | US$0.00042 |
+| v2-08 | rejected: garbled evidence ID `4bd13cbb8e80b97ce` (two real IDs fused); omitted a group; one hypothesis wrong | US$0.00037 |
+
+Both rejections were diagnosed from the new locally saved rejection files and
+correctly blocked by the evidence contract. Additional constraints pushed the
+small model (thinking off) past reliable behaviour, so the prompt was reverted
+to the v2-06 version (`83773bf`) and iteration stopped. Total for the v2
+iteration ≈ US$0.0041. **v2-06 (`58c2ad9f…`) remains the M5C demonstration
+report**; its remaining issues are wording and one extra cited group, not facts.
