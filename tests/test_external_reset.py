@@ -741,5 +741,30 @@ class RestorationTests(unittest.TestCase):
                         self.restore(env, value, malformed, state)
                     self.assertEqual(env.calls, [])
 
+
+class AcceptedDemoTests(unittest.TestCase):
+    """ADR 0021: demo_1 is accepted with its own pinned hash; others are not."""
+
+    def test_demo_1_needs_its_own_pinned_hash(self):
+        self.assertEqual(external_reset_module.ACCEPTED_DEMOS, ("demo_0", "demo_1"))
+        self.assertEqual(external_reset_module.DEMO_1_STATE_SHA256,
+                         "39fcb000764607812d74c6fdbb92625f796370a5e1e6d3d76f6e4b86ba463722")
+        with mock.patch("robot_debug.external_reset.DEMO_1_STATE_SHA256", SYNTHETIC_STATE_SHA256):
+            accepted = validate_external_reset(candidate(demo="demo_1"))
+        self.assertEqual(accepted["demo"], "demo_1")
+        with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256):
+            with self.assertRaises(ExternalResetError):
+                validate_external_reset(candidate(demo="demo_1"))
+            self.assertEqual(validate_external_reset(candidate())["demo"], "demo_0")
+
+    def test_other_demos_are_rejected(self):
+        with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256),                 mock.patch("robot_debug.external_reset.DEMO_1_STATE_SHA256", SYNTHETIC_STATE_SHA256):
+            for demo in ("demo_2", "demo_10", "", 1):
+                with self.subTest(demo=demo), self.assertRaises(ExternalResetError):
+                    validate_external_reset(candidate(demo=demo))
+        with self.assertRaises(ExternalResetError):
+            read_external_reset(Path("unused.hdf5"), demo_name="demo_2")
+
+
 if __name__ == "__main__":
     unittest.main()

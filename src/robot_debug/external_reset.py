@@ -19,6 +19,19 @@ import numpy as np
 SOURCE_SHA256 = "42189d4415d4c51aaaf0708300653fccc39239cd3f2709079a713cd8d1678a8d"
 SOURCE_SIZE = 780_145_352
 STATE_SHA256 = "5d4cd69032368d08d09453ef6ed4fa8c4ad697bf152d919eb673837274ba0df1"
+# ADR 0021 (October 11): demo_1 of the same file is also accepted, with its own
+# pinned first-state hash. Every other demo stays rejected.
+DEMO_1_STATE_SHA256 = "39fcb000764607812d74c6fdbb92625f796370a5e1e6d3d76f6e4b86ba463722"
+ACCEPTED_DEMOS = ("demo_0", "demo_1")
+
+
+def _expected_state_sha256(demo: object) -> str:
+    """Pinned first-state hash for an accepted demo (read at call time)."""
+    if demo == "demo_0":
+        return STATE_SHA256
+    if demo == "demo_1":
+        return DEMO_1_STATE_SHA256
+    raise ExternalResetError("external reset demo is not accepted")
 STATE_LENGTH = 110
 MAX_XML_BYTES = 2 * 1024 * 1024
 MAX_METADATA_BYTES = 64 * 1024
@@ -129,11 +142,15 @@ def validate_external_reset(value: dict) -> dict:
         ("schema_version", 1),
         ("suite", "libero_object"),
         ("task_id", 0),
-        ("demo", "demo_0"),
         ("state_index", 0),
         ("source_sha256", SOURCE_SHA256),
-        ("state_sha256", STATE_SHA256),
     )
+    demo = value.get("demo")
+    if type(demo) is not str or demo not in ACCEPTED_DEMOS:
+        _fail()
+    expected_state = _expected_state_sha256(demo)
+    if type(value.get("state_sha256")) is not str or value["state_sha256"] != expected_state:
+        _fail()
     for key, expected in fixed:
         actual = value.get(key)
         if type(actual) is not type(expected) or actual != expected:
@@ -149,7 +166,7 @@ def validate_external_reset(value: dict) -> dict:
                 _fail()
         except (OverflowError, TypeError, ValueError):
             _fail()
-    if _state_sha256(state) != STATE_SHA256:
+    if _state_sha256(state) != expected_state:
         _fail()
     xml = value.get("model_xml")
     _parse_xml(xml)
@@ -300,7 +317,7 @@ def _validate_metadata(data) -> None:
         raise ExternalResetError("invalid external reset source")
 
 
-def _read_state(demo, dataset) -> list[float]:
+def _read_state(demo, dataset, expected_state: str) -> list[float]:
     dtype = getattr(dataset, "dtype", None)
     if (
         getattr(dataset, "ndim", None) != 2
@@ -325,15 +342,16 @@ def _read_state(demo, dataset) -> list[float]:
         raise ExternalResetError("invalid external reset source")
     if any(not math.isfinite(value) for value in row + initial) or row != initial:
         raise ExternalResetError("invalid external reset source")
-    if _state_sha256(row) != STATE_SHA256:
+    if _state_sha256(row) != expected_state:
         raise ExternalResetError("invalid external reset source")
     return row
 
 
-def read_external_reset(path: Path) -> dict:
-    """Read the sole accepted state/XML pair from a verified local HDF5 file."""
+def read_external_reset(path: Path, demo_name: str = "demo_0") -> dict:
+    """Read one accepted demo's first state and XML from the verified local HDF5 file."""
     if not isinstance(path, Path):
         raise ExternalResetError("invalid external reset path")
+    expected_state = _expected_state_sha256(demo_name)
     try:
         import h5py  # type: ignore[import-not-found]
     except (ImportError, ModuleNotFoundError):
@@ -342,9 +360,9 @@ def read_external_reset(path: Path) -> dict:
     try:
         with h5py.File(path, "r") as handle:
             data = _hard_child(h5py, handle, "data", h5py.Group)
-            demo = _hard_child(h5py, data, "demo_0", h5py.Group)
+            demo = _hard_child(h5py, data, demo_name, h5py.Group)
             states = _hard_child(h5py, demo, "states", h5py.Dataset)
-            state = _read_state(demo, states)
+            state = _read_state(demo, states, expected_state)
             xml = _text_attr(demo, "model_file", MAX_XML_BYTES)
             _parse_xml(xml)
             _validate_metadata(data)
@@ -358,10 +376,10 @@ def read_external_reset(path: Path) -> dict:
         "schema_version": 1,
         "suite": "libero_object",
         "task_id": 0,
-        "demo": "demo_0",
+        "demo": demo_name,
         "state_index": 0,
         "source_sha256": SOURCE_SHA256,
-        "state_sha256": STATE_SHA256,
+        "state_sha256": expected_state,
         "state": state,
         "model_xml": xml,
         "model_xml_sha256": _sha256(xml.encode("utf-8")),
