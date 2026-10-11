@@ -15,6 +15,7 @@ import math
 import os
 import re
 import secrets
+import unicodedata
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -40,8 +41,17 @@ _ID = re.compile(r"[0-9a-f]{64}\Z")
 _UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _SOURCE_ID = re.compile(r"S([1-9][0-9]?)\Z")
 _CITATION = re.compile(r"\[S(\d+)\]")
+# A dotted host-like token (any alphabetic final label), with or without a path.
 _BARE_DOMAIN = re.compile(
-    r"[A-Za-z0-9-]+\.(?:com|org|net|io|ai|edu|gov|dev|co|info|ac|uk|de)\b", re.IGNORECASE)
+    r"[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+# Whole words that would turn a literature note into a proof or causal claim.
+_CAUSAL_CLAIM = re.compile(
+    r"\b(?:prove|proves|proved|proven|proving|proof|proofs|caused|causes|causing|causal"
+    r"|causation|causality)\b", re.IGNORECASE)
+# Full stops that NFKC leaves alone (NFKC itself maps fullwidth and small forms).
+_DOT_LOOKALIKES = {code: "." for code in (
+    0x3002, 0xFF61, 0xFF0E, 0xFE52, 0x2024, 0xFE12, 0x0589, 0x06D4, 0x0701, 0x0702,
+    0x1362, 0x1803)}
 _MAX_RECORD = 131_072
 _MAX_RECORDS = 50
 _MAX_QUERIES = 3
@@ -244,13 +254,29 @@ def assign_sources(searches: list) -> list:
 
 # --- summary ---------------------------------------------------------------
 
+def summary_text_violation(value: str) -> str | None:
+    """A fixed rule name for text a summary may not contain, else None.
+
+    Checks run on the NFKC form with lookalike full stops mapped to ``.``, so
+    fullwidth or ideographic spellings of a link or domain are caught too. The
+    result names the rule and never contains the text.
+    """
+    text = unicodedata.normalize("NFKC", value).translate(_DOT_LOOKALIKES)
+    lowered = text.lower()
+    if "http" in lowered or "www." in lowered or "://" in text:
+        return "link"
+    if "](" in text:
+        return "markdown link"
+    if _BARE_DOMAIN.search(text) is not None:
+        return "web address"
+    if _CAUSAL_CLAIM.search(text) is not None:
+        return "proof or causation claim"
+    return None
+
+
 def _summary_text(value: object) -> str:
     if (type(value) is not str or not 0 < len(value) <= _MAX_TEXT or value != value.strip()
-            or not value.isprintable()):
-        _fail()
-    lowered = value.lower()
-    if ("http" in lowered or "www." in lowered or "](" in value or "://" in value
-            or _BARE_DOMAIN.search(value) is not None):
+            or not value.isprintable() or summary_text_violation(value) is not None):
         _fail()
     return value
 

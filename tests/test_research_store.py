@@ -23,6 +23,7 @@ from robot_debug.research_store import (
     not_requested_summary,
     read_case_research,
     store_research_record,
+    summary_text_violation,
     validate_research_record,
     validate_summary_content,
     with_summary,
@@ -296,6 +297,32 @@ class SummaryTests(ResearchStoreBase):
         self.record(interpreted(related=[cited, ok, ok, ok]))
         self.assertEqual(
             validate_summary_content([ok], ["lim"], ["S1"]), ([ok], ["lim"]))
+
+    def test_stored_summaries_share_the_address_and_causal_claim_rules(self):
+        bad_texts = [
+            "Log in at bit.ly/abc to view [S1]",
+            "See evil.xyz/login [S1]",
+            "See arxiv" + chr(0x3002) + "org [S1]",
+            "See arxiv" + chr(0xff0e) + "org [S1]",
+            "This proves the gripper firmware caused the failure [S1]",
+            "A causal link [S1]",
+        ]
+        for text in bad_texts:
+            with self.subTest(text=text[:30]):
+                entry = {"text": text, "source_ids": ["S1"]}
+                with self.assertRaises(ResearchStoreError):
+                    self.record(interpreted(related=[entry]))
+                with self.assertRaises(ResearchStoreError):
+                    self.record(interpreted(limitations=[text]))
+        # A previously stored record is judged by the same rules when it is read back.
+        stored = self.record(interpreted())
+        tampered = json.loads(json.dumps(stored))
+        tampered["summary"]["related_work"][0]["text"] = "Proof that evil.xyz is right [S1]"
+        with self.assertRaises(ResearchStoreError):
+            validate_research_record(tampered)
+        self.assertIsNone(summary_text_violation("GR00T N1.7 at 0.375, x=0.625, 14% (e.g. LIBERO-Object)"))
+        self.assertEqual(summary_text_violation("see bit.ly/abc"), "web address")
+        self.assertEqual(summary_text_violation("it was caused by"), "proof or causation claim")
 
     def test_rejected_and_provider_error_statuses(self):
         rejected = {"status": "rejected", "related_work": [], "limitations": [],

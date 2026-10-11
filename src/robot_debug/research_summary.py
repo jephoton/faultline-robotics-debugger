@@ -17,8 +17,8 @@ from .explanation import interpretation_context
 from .research_query import area_percent, region_phrase, task_wording
 from .research_store import (
     ResearchStoreError,
-    _BARE_DOMAIN,
     _CITATION,
+    summary_text_violation,
     validate_summary_content,
 )
 
@@ -54,9 +54,12 @@ RESEARCH_SYSTEM_PROMPT = (
     "source_ids: 1 to 3 ids copied exactly from sources, never invented. Cite "
     "only sources that are actually relevant. limitations: 1 to 3 short strings "
     "saying that the sources are public context and not evidence about this "
-    "case, that they prove no cause, and that relevance was judged from short "
-    "snippets only. Refer to sources only by id, written like [S1]. Never write "
-    "URLs, web addresses or markdown links. For this case use only numbers that "
+    "case, that they establish no cause, and that relevance was judged from "
+    "short snippets only. Refer to sources only by id, written like [S1]; "
+    "do not include any domains or links. Never write URLs, web addresses or "
+    "markdown links. Describe similarity or a hypothesis worth testing, and "
+    "never claim proof or causation: do not use the words prove, proof, "
+    "caused, causes or causal. For this case use only numbers that "
     "appear in facts. Exact shape: "
     '{"related_work":[{"text":"brief note citing [S1]","source_ids":["S1"]}],'
     '"limitations":["brief limitation"]}'
@@ -137,13 +140,15 @@ def _diagnose_text(text: object, label: str) -> None:
         raise ResearchSummaryError(f"{label} is empty, not text or over {_MAX_TEXT} characters")
     if text != text.strip() or not text.isprintable():
         raise ResearchSummaryError(f"{label} has padding, line breaks or control characters")
-    lowered = text.lower()
-    if "http" in lowered or "www." in lowered or "://" in text:
+    violation = summary_text_violation(text)
+    if violation == "link":
         raise ResearchSummaryError(f"{label} contains a link")
-    if "](" in text:
+    if violation == "markdown link":
         raise ResearchSummaryError(f"{label} contains a markdown link")
-    if _BARE_DOMAIN.search(text) is not None:
+    if violation == "web address":
         raise ResearchSummaryError(f"{label} contains a web address")
+    if violation is not None:
+        raise ResearchSummaryError(f"{label} claims proof or causation")
 
 
 def validate_research_summary(value: object, record: object) -> dict:
