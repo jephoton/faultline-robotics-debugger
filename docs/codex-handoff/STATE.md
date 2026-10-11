@@ -1,5 +1,21 @@
 # Faultline current project state
 
+## October 11 M5D status (Claude Code)
+
+- M5D built per ADR 0024 and its plan: `scripts/research_case.py`
+  (`queries`, `search`, `summarize --attempt r-0N --env-file .env`), research
+  records under `<case>/research/`, viewer panel "Related public research
+  (context, not evidence)". Independent review: 2 medium + 5 low findings,
+  all fixed. Full suite 960 OK (58 skips).
+- Live run on the certified case: 3 Tavily credits used of the 50 cap, and
+  3 of 5 Nemotron attempts (about US$0.0007). See
+  `docs/experiments/m5d-tavily-research.md`. Next: Jethro judges usefulness;
+  then M3 batched inference (3 days), portfolio fallback (2 days), M6, and M7
+  from October 23 at the latest (ADR 0023 timeboxes accepted).
+- Commit history from October 9 was rewritten to drop AI co-author trailers
+  (`docs/history-rewrite-2026-10-11.md`); the force push to GitHub needs
+  Jethro. Local backup ref: `refs/backup/pre-trailer-rewrite`.
+
 ## October 11 handover before M5D (Claude Code)
 
 - Image v9 `05dd5fd7b862` → `sha256:23286ac986d9…` pushed and confirmed in the
