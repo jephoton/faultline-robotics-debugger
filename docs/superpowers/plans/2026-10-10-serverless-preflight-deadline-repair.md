@@ -101,7 +101,7 @@ suite, Python3.8 grammar and rebuilt image CPU tests. Commit the narrow fix as
 Claude's existing commits and prepared failed/retry configs; use a new image tag
 only after review. Paid retry still needs explicit approval.
 
-The currently pushed repaired image at c91383c still has these deadline bugs.
+The currently pushed repaired image at 74fe81e still has these deadline bugs.
 After integration root rebuilds cached application layers and checks imports,
 exit codes and preflight fixtures without a GPU. A further paid Job is a new
 attempt: the original single-Job approval does not silently authorize it. Obtain

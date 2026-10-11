@@ -186,6 +186,6 @@ citation-scope, sample-size, count and inference-rule instructions:
 Both rejections were diagnosed from the new locally saved rejection files and
 correctly blocked by the evidence contract. Additional constraints pushed the
 small model (thinking off) past reliable behaviour, so the prompt was reverted
-to the v2-06 version (`83773bf`) and iteration stopped. Total for the v2
+to the v2-06 version (`ad002f1`) and iteration stopped. Total for the v2
 iteration ≈ US$0.0041. **v2-06 (`58c2ad9f…`) remains the M5C demonstration
 report**; its remaining issues are wording and one extra cited group, not facts.

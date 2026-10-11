@@ -68,7 +68,7 @@ Python 3.8 in the image (pass on 3.11).
 Jethro chose to look for a reproducible failure from the external start before
 reducing. The search driver sweeps 20 benchmark start states, so the
 single-start **position grid** was used instead, chained into the reducer only
-if it confirms a failure (`m5b-grid` mode, `bd1a59e`/`afb8eaa`; reducer now
+if it confirms a failure (`m5b-grid` mode, `4507e66`/`9e0902d`; reducer now
 accepts any parent rectangle). Job `faultline-m5b-grid-20261011`, image
 `afb8eaa5d3d9` → `sha256:57c02730…`, ~15 minutes, 89 files exported and
 verified; all ten external restores matched the dataset hash.

@@ -46,7 +46,7 @@ failed again; external reduction → `reduced_failure_with_nominal_controls`,
 parent 25 % → final `(0.625,0,.375,.375)` 14.06 % — identical to M4's benchmark
 result — with 5/5 nominal controls; 22 restores verified; 193 files verified.
 ADR 0022 (grid keeps searching after unreproducible failures, 30-episode cap)
-is committed (`1dc9e70`, `6f3443a`) but not yet in a pushed image. Download
+is committed (`3c6a718`, `0e94767`) but not yet in a pushed image. Download
 identity revoked; bucket `faultline-m5b-demo1-tr-20261011` joins the deletion
 queue (≈03:53 UTC Oct 12). M5 sub-parts all complete pending Jethro's sign-off;
 then push and move to M3.
@@ -56,7 +56,7 @@ then push and move to M3.
 ADR 0021: Jethro accepted Nemotron report v2-06 (`58c2ad9f…`) as the M5C
 demonstration interpretation (**M5C complete**) and accepted external `demo_1`
 (same scene XML, own pinned first-state hash `39fcb000…`) as a second external
-start (`9413ad4`). CPU probe in the image restored demo_1 through the real
+start (`0f61d8f`). CPU probe in the image restored demo_1 through the real
 benchmark (pre-settle = dataset hash, post-settle `6420e5e0…`, mask applied).
 Image v8 `9413ad4ea434` → `sha256:71527bef…`. Job `faultline-m5b-demo1-20261011`
 (`m5b-grid` from demo_1, US$2 cap) submitted with a fresh private bucket and
@@ -112,7 +112,7 @@ Free CPU probes inside the image first showed the external restore works in the
 real simulator: pre-settle state hash equals the dataset (`5d4cd690…`), and
 post-settle `e029f8dc…` is identical across EGL/OSMesa and through the real
 `DiagnosticLIBEROBenchmark.reset()`, with the mask applied to policy and
-recorded frames. Wiring `06c1b2e`..`cc23a89`: benchmark hook with per-episode
+recorded frames. Wiring `3c1f927`..`d434664`: benchmark hook with per-episode
 restore sidecar, `external_reset_candidate` threaded through stage configs and
 the reducer (manifest records `start_state`), `m5b` workload mode that verifies
 the injected 7.8 KB gzip candidate before starting the model, prepare-script
@@ -128,7 +128,7 @@ armed. Candidate stays in ignored `artifacts/serverless-m5b-20261010/`.
 ## October 10 M5C Nemotron v2 and M5B scope (Claude Code)
 
 Jethro asked to keep improving Nemotron (Token Factory) and to include M5B in
-M5; the push waits until M5 is complete. Nemotron v2 (`58aa33b`..`6bab798`):
+M5; the push waits until M5 is complete. Nemotron v2 (`cbe1bb6`..`6a3ed39`):
 geometry-aware packet v2, deterministic counts/totals/mask groups sent with the
 packet, v2 prompt, thinking disabled, attempt labels `v2-01`..`v2-05` capped at
 US$0.10. Four calls cost ≈US$0.0024; `v2-05` unused. Best report `8f469903…`
@@ -143,7 +143,7 @@ Serverless wiring, then a paid validation needing Jethro's cap.
 ## October 10 Serverless pilot validated (Claude Code)
 
 Jethro approved one retry within the original US$3 cap (AI Cloud balance
-US$5.99 at the time). `faultline-pilot-20261010b` (v5 image `b233199`) COMPLETED
+US$5.99 at the time). `faultline-pilot-20261010b` (v5 image `f87ebb5`) COMPLETED
 in about 13 minutes: export preflight OK, pinned prefetch 369 s, nominal
 **success** (138 steps), reduced mask x=.5,y=0,w=h=.375 **policy_failure**
 (280 steps), 21 files exported. Recovered to ignored
@@ -182,7 +182,7 @@ side by side with linked playback.
 Claude reviewed Codex's `codex/serverless-preflight-launch-guard` as the
 read-only race reviewer: its two launch-race tests fail against the previous
 `job_entry.py` (probe group survives) and pass with the fix. Integrated as
-`1f3a4a6`..`b233199`. Full Windows suite OK (58 platform skips); WSL five Job
+`7f438b8`..`f87ebb5`. Full Windows suite OK (58 platform skips); WSL five Job
 suites OK; inside the rebuilt image (Python 3.8.20) the job and workload tests
 pass. Minor non-blocking note: a signal coinciding with an OSError from the
 probe launch exits 3 rather than 143; nothing is leaked.
@@ -207,7 +207,7 @@ paid run is authorized by "usage reset"; retry approval is still pending.
 ## October 10 retry readiness (Claude Code)
 
 Codex's preflight deadline repair (`codex/serverless-preflight-deadline`) was
-reviewed by Claude as an independent agent and integrated as `dadd25f`..`b12047e`:
+reviewed by Claude as an independent agent and integrated as `d2ddc08`..`fa0c2af`:
 one absolute deadline spans preflight and workload; the export probe runs in an
 owned, 30 s-capped child with an empty environment. Full Windows suite 773 OK/50
 skips; WSL job suites 155 OK. Inside the rebuilt image (Python 3.8.20, real POSIX)
@@ -231,7 +231,7 @@ video/trace evidence, or the final incurred charge.
 
 Claude repaired the exporter to use exclusive final filenames and byte/hash
 checks rather than bucket-mount rename/inode assumptions, added unique export
-probes and runtime exit3 reporting (`e7d6604` through `c91383c`). The c91383c image
+probes and runtime exit3 reporting (`b38c81e` through `74fe81e`). The 74fe81e image
 push completed; a fresh Nebius registry lookup confirms tag/digest agreement.
 No new Job or paid compute was started during Codex recovery.
 
@@ -249,7 +249,7 @@ remains deferred; M5 is not complete.
 
 Serverless entrypoint is integrated: `scripts/run_serverless_workload.py`,
 `src/robot_debug/job_entry.py` and `scripts/serverless_prefetch.py`
-(`214f344`, review fixes `288ebc2`, `2aaede9`; plan
+(`2cec408`, review fixes `723486a`, `20dff3a`; plan
 `docs/superpowers/plans/2026-10-09-serverless-entrypoint.md`). Prefetch pins
 the checkpoint and base model by commit in a private `HF_HOME`, records the
 unpinned Cosmos commit, then the model server runs offline without the token.
@@ -276,14 +276,14 @@ builder cap approval before any billable action.
 
 The serverless model-process plan
 (`docs/superpowers/plans/2026-10-09-serverless-model-process.md`) is
-integrated on main through `4fa6784`: shared bounded owned-process cleanup
+integrated on main through `34b4e85`: shared bounded owned-process cleanup
 (`close_owned_process_group`), `ModelProcess` lifetime ownership and
 RFC 6455 WebSocket-upgrade readiness with an absolute deadline. Review found
 one wording issue (shared cleanup error said "evaluator"); fixed. Focused
 suites: WSL 36 tests/one Windows-only skip with real processes and sockets;
 Windows 36 tests/26 POSIX skips. Full Windows suite 718 OK/31 skips. Python
 3.8 grammar check passed. The Dockerfile now copies application code after
-the heavy pinned model install (`71e3188`) so code edits keep that layer cached.
+the heavy pinned model install (`664fe40`) so code edits keep that layer cached.
 
 Next per the migration plan: pinned Hugging Face snapshot acquisition,
 production model argv wiring, final CLI and whole-workload SIGTERM/export

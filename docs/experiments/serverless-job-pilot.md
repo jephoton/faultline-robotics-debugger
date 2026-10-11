@@ -72,7 +72,7 @@ tag resolves to
 `sha256:19c9bacae24f74e71ae5df048df37da3b40180b4f2070a1fa5e3824f5fd1aa0b`.
 Independent review then found the preflight/deadline regressions described in
 the [repair plan](../superpowers/plans/2026-10-10-serverless-preflight-deadline-repair.md).
-The image must be rebuilt after that repair; c91383c is not the final retry
+The image must be rebuilt after that repair; 74fe81e is not the final retry
 candidate. No additional Job was submitted during Codex recovery. A new paid
 attempt needs a new explicit allowance and live resource/balance checks.
 
@@ -109,7 +109,7 @@ yet. Local process/config kernels and actual image validation precede the pilot.
 ### October 9–10 full image build, probes and private push
 
 The complete Serverless image (`deploy/serverless/Dockerfile`, application
-code at `23d07cd`) was built locally after workstation disk cleanup. A planned
+code at `759fc8e`) was built locally after workstation disk cleanup. A planned
 Nebius CPU builder VM was refused because the tenant's non-GPU vCPU quota is 0;
 nothing was provisioned. Two local build failures were workstation/network
 issues, not packaging defects: AVG antivirus HTTPS scanning replaced GitHub's
@@ -138,16 +138,16 @@ lifecycle remain unverified until the paid pilot.
 
 ### October 10 live pilots: one failed export, one complete validation
 
-**Attempt 1 — `faultline-pilot-20261010` (image `23d07cd`, FAILED).** The Job
+**Attempt 1 — `faultline-pilot-20261010` (image `759fc8e`, FAILED).** The Job
 provisioned, pulled the image, and the model log shows GR00T loading and serving
 two episodes, but evidence export aborted (`source evidence changed during
 open`): the bucket mount does not keep inode identity across opens and renames
 by non-atomic copy. Only a staging log and an empty final object reached the
 bucket; no manifest. Root cause reproduced locally by simulating unstable
-destination inodes; fixed in `e7d6604` (exclusive final paths, content-hash
+destination inodes; fixed in `b38c81e` (exclusive final paths, content-hash
 verification, no rename). No outcome claim is made from attempt 1.
 
-**Attempt 2 — `faultline-pilot-20261010b` (image `b233199`, digest
+**Attempt 2 — `faultline-pilot-20261010b` (image `f87ebb5`, digest
 `sha256:decd037a…cbca3c`, COMPLETED).** Separately approved by Jethro within the
 original US$3 cap. Timeline (UTC): submitted 12:29, container start 12:34:14,
 export preflight OK 12:34:15, pinned prefetch done 12:40:24 (369 s), nominal

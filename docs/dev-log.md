@@ -31,7 +31,7 @@ Read-only recovery saved the two partial objects separately; no manifest,
 videos, traces or outcomes were recovered. Two EPISODE_END messages are not
 success assertions. Do not reconstruct results from a model log.
 
-Independent review of c91383c caught two further local safety regressions before
+Independent review of 74fe81e caught two further local safety regressions before
 a retry: export preflight could stall indefinitely, and run_workload computed
 a fresh relative deadline after preflight. Clock100 + duration2400 followed by
 a clock400 workload produced launch deadline2786 instead of2486. The repair
