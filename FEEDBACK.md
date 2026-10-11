@@ -325,3 +325,20 @@ reused the cached layers and took about three minutes; model prefetch about
 6.5 minutes dominates short Jobs, so persistent model caching would help repeat
 runs. One status poll returned an unknown state mid-run before recovering.
 Nothing in this run was a provider defect.
+
+### October 11: Tavily Search (M5D) and Nemotron research summaries
+
+First runtime use of Tavily Search (`basic` depth, 5 results, 3 fixed queries
+built from public case descriptors): 3 credits of the free 1,000-credit
+monthly plan, 15 distinct sources, `usage.credits` reported and matching our
+ledger. Onboarding was only an API key and one documented endpoint. Strength:
+the generic occlusion query surfaced a directly relevant paper (LIBERO-Occ,
+scene-induced occlusion of VLA policies in LIBERO) and a GR00T LIBERO issue on
+GitHub; the narrow, numeric query ("upper-right 14% occluded") drifted to
+industrial bin-picking pages. Lesson: descriptive queries beat literal
+measurements. Three Nemotron summary attempts (about US$0.0007 total): the
+first misattributed a source and compared unrelated benchmark numbers; the
+second was rejected by our validator for causal wording; the third passed and
+was on topic, though one paraphrase was muddled. Verdict: Tavily is worth
+reusing for source discovery; the LLM note still needs human review and a
+strict citation validator.
