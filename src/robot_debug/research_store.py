@@ -54,6 +54,8 @@ _DOT_LOOKALIKES = {code: "." for code in (
     0x1362, 0x1803)}
 _MAX_RECORD = 131_072
 _MAX_RECORDS = 50
+_MAX_SCANNED_ENTRIES = 4 * _MAX_RECORDS
+_TEMPORARY_NAME = re.compile(r"\.[0-9a-f]{64}\.[0-9a-f]{16}\.tmp\Z")
 _MAX_QUERIES = 3
 _MAX_RESULTS = 5
 _MAX_RELATED = 4
@@ -586,7 +588,14 @@ def read_case_research(workspace: Path, case_id: str) -> dict:
         _safe_existing(research, directory=True)
         entries = []
         with os.scandir(research) as iterator:
+            scanned = 0
             for entry in iterator:
+                scanned += 1
+                if scanned > _MAX_SCANNED_ENTRIES:
+                    return {"records": [], "warnings": [_LIMIT_WARNING]}
+                if _TEMPORARY_NAME.fullmatch(entry.name) is not None:
+                    # An in-progress or leftover atomic-publish file, not a record.
+                    continue
                 entries.append(entry.name)
                 if len(entries) > _MAX_RECORDS:
                     return {"records": [], "warnings": [_LIMIT_WARNING]}

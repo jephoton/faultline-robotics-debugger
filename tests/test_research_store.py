@@ -554,6 +554,26 @@ class StorageTests(ResearchStoreBase):
         self.assertEqual(read_case_research(self.workspace, self.case_id),
                          {"records": [], "warnings": ["research collection exceeds the scan limit"]})
 
+    def test_in_progress_temporary_files_are_not_records_or_corruption(self):
+        record = self.record()
+        store_research_record(self.workspace, record)
+        for index in range(60):
+            name = f".{index:064x}.{index:016x}.tmp"
+            (self.research_dir / name).write_text("partial")
+        self.assertEqual(read_case_research(self.workspace, self.case_id),
+                         {"records": [record], "warnings": []})
+        # Lookalike names that are not exact temporary files still warn.
+        (self.research_dir / f".{'a' * 64}.nothex.tmp").write_text("x")
+        self.assertEqual(read_case_research(self.workspace, self.case_id)["warnings"],
+                         ["one or more research records are unavailable or invalid"])
+
+    def test_temporary_files_cannot_make_the_directory_scan_unbounded(self):
+        self.research_dir.mkdir()
+        for index in range(201):
+            (self.research_dir / f".{index:064x}.{index:016x}.tmp").write_text("partial")
+        self.assertEqual(read_case_research(self.workspace, self.case_id),
+                         {"records": [], "warnings": ["research collection exceeds the scan limit"]})
+
     def test_stale_case_returns_no_records_and_a_fixed_warning(self):
         store_research_record(self.workspace, self.record())
         (self.source / "failure-reduction" / "replay_case.json").unlink()
