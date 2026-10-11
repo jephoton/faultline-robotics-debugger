@@ -93,3 +93,24 @@ image region from both starts, but from the external start it is
 intermittent (about 44 %, small sample) rather than reliable, so it does not
 meet the 4-of-5 reproducibility bar that reduction requires. This is evidence
 of a start-state-dependent failure rate, not a robustness or causal claim.
+
+## Follow-up: demo_1 external start (October 11, ADR 0021)
+
+Job `faultline-m5b-demo1-20261011` (`m5b-grid`, image `9413ad4ea434` →
+`sha256:71527bef…`), ~14 minutes, 81 files verified, all videos decode; all nine
+restores matched demo_1's pinned hash (post-settle `a884ead3…` on Nebius versus
+`6420e5e0…` in the workstation CPU probe, the same host-dependent pattern as
+demo_0).
+
+| Stage (external demo_1 start) | 0.5×0.5 mask at | Outcome | Steps |
+| --- | --- | --- | --- |
+| nominal-sentinel | none | success | 173 |
+| grid | bottom-left (0, 0.5) | success | 138 |
+| grid | bottom-right (0.5, 0.5) | success | 137 |
+| grid | top-left (0, 0) | policy_failure | 280 |
+| replays 1–5 | top-left (0, 0) | all success | 137–145 |
+
+The top-left failure did not recur (0/5), so the grid stopped with
+`policy_failure_not_reproducible` and no reduction ran. Because the grid stops
+at its first apparent failure, the top-right position — the region implicated
+from the benchmark start and from demo_0 — was **not tested** from demo_1.
