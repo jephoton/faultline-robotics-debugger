@@ -31,6 +31,8 @@ class ResearchSummaryError(ValueError):
 
 
 MAX_SNIPPET_IN_CONTEXT = 300
+MAX_TITLE_BYTES_IN_CONTEXT = 240
+MAX_SNIPPET_BYTES_IN_CONTEXT = 600
 _MAX_RESPONSE_BYTES = 16_384
 _MAX_TEXT = 400
 
@@ -80,9 +82,13 @@ def research_context(packet: dict, record: dict) -> dict:
         if record["packet_id"] != packet_identity(validated):
             raise ResearchSummaryError("record does not match the packet")
         queries = record["queries"]
-        sources = [
-            {"source_id": item["source_id"], "title": item["title"], "url": item["url"],
-             "snippet": item["snippet"][:MAX_SNIPPET_IN_CONTEXT].rstrip()}
+        scored = [
+            ({"source_id": item["source_id"],
+              "title": _clip_bytes(item["title"], MAX_TITLE_BYTES_IN_CONTEXT),
+              "url": item["url"],
+              "snippet": _clip_bytes(item["snippet"][:MAX_SNIPPET_IN_CONTEXT].rstrip(),
+                                     MAX_SNIPPET_BYTES_IN_CONTEXT)},
+             item["score"])
             for entry in queries for item in entry["results"]]
     except ResearchSummaryError:
         raise
@@ -90,7 +96,7 @@ def research_context(packet: dict, record: dict) -> dict:
         raise ResearchSummaryError("invalid research record") from None
     rectangle = validated["reduced_mask"]["rectangle"]
     totals = interpretation_context(validated)["totals"]
-    return {
+    context = {
         "facts": {
             "policy": "GR00T N1 vision-language-action policy",
             "suite": validated["task"]["suite"],
@@ -100,8 +106,41 @@ def research_context(packet: dict, record: dict) -> dict:
             "reduced_mask_region": region_phrase(rectangle),
             "reduced_mask_area_percent": area_percent(rectangle),
         },
-        "sources": sources,
+        "sources": [source for source, _score in scored],
     }
+    return _fit_sources(context, scored)
+
+
+def _clip_bytes(text: str, limit: int) -> str:
+    """The longest prefix of ``text`` whose UTF-8 encoding fits ``limit`` bytes."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= limit:
+        return text
+    return encoded[:limit].decode("utf-8", "ignore").rstrip()
+
+
+def _fit_sources(context: dict, scored: list) -> dict:
+    """Drop the lowest-scoring sources until the request is within its size bound.
+
+    Source IDs are never renumbered. The size is the real request size, so
+    callers see the same limit that ``check_research_request`` enforces. When
+    one source remains the context is returned as is and that check decides.
+    """
+    from .token_factory import TokenFactoryError, check_research_request
+
+    remaining = list(scored)
+    while True:
+        try:
+            check_research_request(context)
+            return context
+        except TokenFactoryError:
+            if len(remaining) <= 1:
+                return context
+        # Lowest score first; on a tie the later source goes first.
+        lowest = min(range(len(remaining)), key=lambda i: (remaining[i][1], -i))
+        del remaining[lowest]
+        context = {"facts": context["facts"],
+                   "sources": [source for source, _score in remaining]}
 
 
 def context_source_ids(context: object) -> list:

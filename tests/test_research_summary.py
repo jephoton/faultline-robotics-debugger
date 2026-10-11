@@ -350,6 +350,73 @@ class PromptAndRequestTests(Base):
         check_research_request(context)
         self.assertEqual(len(context["sources"]), 15)
 
+    def cjk_record(self, count_per_query=5, queries=3):
+        number = 0
+        searches = []
+        for q in range(queries):
+            results = []
+            for j in range(count_per_query):
+                number += 1
+                results.append({
+                    "title": chr(0x6a21) * 200,
+                    "url": "https://example.org/" + f"{q}-{j}-" + "u" * 460,
+                    "snippet": chr(0x5931) * 600, "score": round(number / 100, 2)})
+            searches.append({**search_result(f"q{q}", []), "results": results})
+        record = make_research_record(
+            self.case_id, self.packet, assign_sources(searches),
+            not_requested_summary("2026-10-12T09:00:10Z"))
+        return record
+
+    def test_non_ascii_sources_fit_by_byte_caps_then_lowest_scores_are_dropped(self):
+        record = self.cjk_record()
+        self.assertEqual(len(context_source_ids(record)), 15)
+        context = research_context(self.packet, record)
+        check_research_request(context)
+        kept = [item["source_id"] for item in context["sources"]]
+        self.assertTrue(0 < len(kept) < 15)
+        self.assertEqual(len(set(kept)), len(kept))
+        # IDs are never renumbered: the survivors keep their record IDs, in order.
+        by_id = {item["source_id"]: item for entry in record["queries"]
+                 for item in entry["results"]}
+        numbers = [int(source_id[1:]) for source_id in kept]
+        self.assertEqual(numbers, sorted(numbers))
+        for item in context["sources"]:
+            original = by_id[item["source_id"]]
+            self.assertEqual(item["url"], original["url"])
+            self.assertTrue(original["title"].startswith(item["title"]))
+            self.assertTrue(original["snippet"].startswith(item["snippet"]))
+            self.assertLessEqual(len(item["title"].encode("utf-8")), 240)
+            self.assertLessEqual(len(item["snippet"].encode("utf-8")), 600)
+        # Scores rise with the ID here, so only the lowest-scoring (earliest) IDs go.
+        self.assertEqual(numbers, list(range(16 - len(kept), 16)))
+        self.assertEqual(context_source_ids(context), kept)
+
+    def test_ascii_sources_that_fit_are_never_dropped(self):
+        queries = assign_sources([
+            {**search_result(f"q{i}", []), "results": [
+                {"title": "T" * 200, "url": "https://example.org/" + f"{i}-{j}-" + "u" * 460,
+                 "snippet": "s" * 600, "score": 0.1 * (j + 1)} for j in range(5)]}
+            for i in range(3)])
+        record = make_research_record(self.case_id, self.packet, queries,
+                                      not_requested_summary("2026-10-12T09:00:10Z"))
+        context = research_context(self.packet, record)
+        self.assertEqual(len(context["sources"]), 15)
+        self.assertEqual([s["source_id"] for s in context["sources"]],
+                         [f"S{n}" for n in range(1, 16)])
+
+    def test_summary_citing_a_kept_source_is_valid_and_a_dropped_one_is_not(self):
+        record = self.cjk_record()
+        context = research_context(self.packet, record)
+        kept = context_source_ids(context)
+        dropped = next(f"S{n}" for n in range(1, 16) if f"S{n}" not in kept)
+        good = {"related_work": [{"text": f"A similar perturbation [{kept[0]}]",
+                                  "source_ids": [kept[0]]}],
+                "limitations": ["Public context only."]}
+        validate_research_summary(json.dumps(good), context)
+        bad = {**good, "related_work": [{"text": f"Cites [{dropped}]", "source_ids": [dropped]}]}
+        with self.assertRaises(ResearchSummaryError):
+            validate_research_summary(json.dumps(bad), context)
+
     def test_oversized_request_fails_before_transport(self):
         context = copy.deepcopy(self.context)
         context["sources"][0]["snippet"] = "x" * 21_000
