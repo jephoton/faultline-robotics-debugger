@@ -317,6 +317,50 @@ class ServerlessWorkloadTests(unittest.TestCase):
                 self.assertNotIn("run", events)
                 self.assertEqual("partial", exports[0][2]["status"])
 
+    def _grid_summary(self, stop_reason, failure=None):
+        summary = valid_driver_summary("grid")
+        summary["stop_reason"] = stop_reason
+        summary["first_apparent_failure"] = failure
+        return summary
+
+    def test_m5b_grid_reduces_only_a_confirmed_grid_failure(self) -> None:
+        from tests.test_external_reset import SYNTHETIC_STATE_SHA256, candidate
+        found = {"stage": "grid-x000-y050", "x": 0.0, "y": 0.5, "width": 0.5, "height": 0.5}
+        cases = (
+            ("reproducible_failure_with_nominal_controls", found, True),
+            ("no_policy_failure_in_grid", None, False),
+            ("policy_failure_not_reproducible", found, False),
+        )
+        for index, (stop, failure, reduces) in enumerate(cases):
+            with self.subTest(stop=stop):
+                source = self._m5b_source(candidate())
+                grid_calls, reduce_calls = [], []
+
+                def fake_grid(**kwargs):
+                    grid_calls.append(kwargs)
+                    return self._grid_summary(stop, failure)
+
+                def fake_reduce(**kwargs):
+                    reduce_calls.append(kwargs)
+                    return valid_driver_summary("reduce")
+
+                config = dict(self.config, mode="m5b-grid", run_id="m5b-grid-{}".format(index))
+                with mock.patch("robot_debug.external_reset.STATE_SHA256", SYNTHETIC_STATE_SHA256),                         mock.patch("scripts.run_position_grid_search.run_session", side_effect=fake_grid),                         mock.patch("scripts.run_failure_reduction.run_session", side_effect=fake_reduce):
+                    result, _events, _runner, _exports = self.invoke(
+                        config=config, external_reset_source=source)
+                self.assertEqual("complete", result["status"])
+                self.assertEqual(stop, result["grid_stop_reason"])
+                self.assertTrue(Path(grid_calls[0]["external_reset_candidate"]).is_file())
+                self.assertEqual(reduces, bool(reduce_calls))
+                if reduces:
+                    self.assertEqual(reduce_calls[0]["parent_rectangle"],
+                                     {"x": 0.0, "y": 0.5, "width": 0.5, "height": 0.5})
+                    self.assertEqual(reduce_calls[0]["external_reset_candidate"],
+                                     grid_calls[0]["external_reset_candidate"])
+                    self.assertEqual("parent_not_reproducible", result["reduction_stop_reason"])
+                else:
+                    self.assertIsNone(result["reduction_stop_reason"])
+
     def test_m5b_runs_certified_replay_then_external_reduction(self) -> None:
         from tests.test_external_reset import SYNTHETIC_STATE_SHA256, candidate
         source = self._m5b_source(candidate())

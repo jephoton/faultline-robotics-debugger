@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 
 _CONFIG_FIELDS = {"schema_version", "mode", "run_id", "deadline_seconds"}
-_MODES = {"pilot", "search", "grid", "reduce", "m5b"}
+_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"}
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.ASCII)
 _ALLOWED_SUFFIXES = {".json", ".jsonl", ".mp4", ".sqlite", ".yaml", ".yml", ".txt", ".log"}
 _CREDENTIAL_NAME = re.compile(

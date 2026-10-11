@@ -290,8 +290,9 @@ def run_workload(
 
     external_candidate = None
     reduction_stop_reason = None
+    grid_summary: Optional[Dict[str, Any]] = None
     try:
-        if accepted["mode"] == "m5b":
+        if accepted["mode"] in ("m5b", "m5b-grid"):
             try:
                 external_candidate = _load_external_reset(
                     external_reset_source, run_root / "external-reset")
@@ -462,6 +463,38 @@ def run_workload(
                         driver_failure = _driver_reason(driver_summary)
                         if driver_failure is not None:
                             latch_failure(driver_failure)
+                elif mode == "m5b-grid":
+                    # Find a failing position from the external start, then shrink
+                    # it from the same start only if the grid confirmed it.
+                    grid_summary = run_position_grid_search.run_session(
+                        upstream_root=roots.upstream_root,
+                        project_root=roots.project_root,
+                        results_root=run_root / "m5b-grid" / "grid",
+                        launch_cutoff_seconds=max(0.0, remaining()),
+                        command_runner=bounded_runner,
+                        monotonic_clock=clock,
+                        external_reset_candidate=external_candidate,
+                    )
+                    driver_failure = _driver_reason(grid_summary)
+                    if driver_failure is not None:
+                        latch_failure(driver_failure)
+                    elif (grid_summary.get("stop_reason") == "reproducible_failure_with_nominal_controls"
+                          and latch["reason"] is None):
+                        found = grid_summary["first_apparent_failure"]
+                        driver_summary = run_failure_reduction.run_session(
+                            upstream_root=roots.upstream_root,
+                            project_root=roots.project_root,
+                            results_root=run_root / "m5b-grid" / "reduce",
+                            launch_cutoff_seconds=max(0.0, remaining()),
+                            command_runner=bounded_runner,
+                            monotonic_clock=clock,
+                            external_reset_candidate=external_candidate,
+                            parent_rectangle={key: found[key] for key in ("x", "y", "width", "height")},
+                        )
+                        reduction_stop_reason = driver_summary.get("stop_reason")
+                        driver_failure = _driver_reason(driver_summary)
+                        if driver_failure is not None:
+                            latch_failure(driver_failure)
                 else:
                     drivers = {
                         "search": run_failure_search.run_session,
@@ -510,8 +543,13 @@ def run_workload(
     }
     if pilot_outcomes:
         summary["pilot_outcomes"] = pilot_outcomes
-    if accepted["mode"] == "m5b":
+    if accepted["mode"] in ("m5b", "m5b-grid"):
         summary["reduction_stop_reason"] = reduction_stop_reason
+    if grid_summary is not None:
+        summary["grid_stop_reason"] = grid_summary.get("stop_reason")
+        found = grid_summary.get("first_apparent_failure")
+        summary["grid_failure_rectangle"] = None if not found else {
+            key: found[key] for key in ("x", "y", "width", "height")}
     _write_summary(run_root, summary)
     if cleanup_confirmed:
         exporter(
