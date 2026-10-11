@@ -2,6 +2,15 @@
 
 ## October 11 M5 complete (Jethro sign-off)
 
+**Visibility correction:** GitHub reports `jephoton/faultline-robotics-debugger`
+as **public**, and its event log shows a single `PublicEvent` by `jephoton` on
+2026-09-12, so the repository has been public since the project began. Earlier
+handoff notes and `docs/research/2026-10-06-submission-alignment.md` calling it
+private were wrong. A scan before the October 11 push found no secrets or full
+Nebius resource IDs in tracked files (docs use shortened IDs); evidence, the
+external dataset extract and credentials stay in ignored `artifacts/` and `.env`.
+Keep that discipline: anything committed is public.
+
 Jethro marked **M5 complete** on October 11. M5A case workbench/viewer; saved
 case reproduced in fresh Serverless sessions (certified M4 rectangle failed in
 two runs); M5B external demo_1 start → reduced failure identical to M4
