@@ -24,10 +24,12 @@ from robot_debug.research_summary import (
     MAX_SNIPPET_IN_CONTEXT,
     RESEARCH_SYSTEM_PROMPT,
     ResearchSummaryError,
+    ATTEMPT_LABELS,
     build_summary,
     context_source_ids,
     rejection_reason,
     research_context,
+    reserve_attempt,
     validate_research_summary,
 )
 from robot_debug.token_factory import (
@@ -444,6 +446,40 @@ class OutputHandlingTests(Base):
         with self.assertRaises(ResearchStoreError):
             with_summary(self.record, {**summary, "related_work": [
                 {"text": "smuggled", "source_ids": ["S1"]}]})
+
+
+class ReserveAttemptTests(Base):
+    def reserve(self, root, label="r-01", **overrides):
+        values = {"case_id": self.case_id, "packet_id": packet_identity(self.packet),
+                  "record_id": self.record["record_id"]}
+        values.update(overrides)
+        return reserve_attempt(root, label, values["case_id"], values["packet_id"],
+                               values["record_id"])
+
+    def test_reservation_is_exclusive_and_records_the_research_cap(self):
+        root = Path(self.tmp.name) / "attempts" / "r-01"
+        marker = self.reserve(root)
+        self.assertEqual(ATTEMPT_LABELS, ("r-01", "r-02", "r-03", "r-04", "r-05"))
+        self.assertEqual(marker["reservation_usd"], 0.01)
+        self.assertEqual(json.loads((root / "reservation.json").read_text()), marker)
+        self.assertEqual(set(marker), {"schema_version", "reservation_usd", "attempt_label",
+                                       "case_id", "packet_id", "record_id", "model"})
+        with self.assertRaisesRegex(TokenFactoryError, "^reservation_exists$"):
+            self.reserve(root)
+        (root / "reservation.json").write_bytes(b'{"partial"')
+        with self.assertRaisesRegex(TokenFactoryError, "^reservation_exists$"):
+            self.reserve(root)
+        self.reserve(Path(self.tmp.name) / "attempts" / "r-02", "r-02")
+
+    def test_labels_and_identifiers_are_validated_before_anything_is_created(self):
+        root = Path(self.tmp.name) / "attempts" / "x"
+        for label in ("r-06", "r-00", "../x", "v2-01", ""):
+            with self.assertRaisesRegex(TokenFactoryError, "^invalid_reservation$"):
+                self.reserve(root, label)
+        for field in ("case_id", "packet_id", "record_id"):
+            with self.assertRaisesRegex(TokenFactoryError, "^invalid_reservation$"):
+                self.reserve(root, **{field: "not-hex"})
+        self.assertFalse(root.exists())
 
 
 if __name__ == "__main__":

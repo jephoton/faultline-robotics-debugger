@@ -8,7 +8,9 @@ it is structured, cites retrieved source IDs and contains no links.
 from __future__ import annotations
 
 import json
+import os
 import re
+from pathlib import Path
 
 from .evidence_packet import EvidencePacketError, packet_identity, validate_evidence_packet
 from .explanation import interpretation_context
@@ -206,6 +208,73 @@ def rejection_reason(value: object, record: object) -> str:
     except ResearchSummaryError as exc:
         return str(exc)
     return "valid"
+
+
+ATTEMPT_LABELS = ("r-01", "r-02", "r-03", "r-04", "r-05")
+_HEX_ID = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def reserve_attempt(attempt_root: Path, label: str, case_id: str, packet_id: str,
+                    record_id: str) -> dict:
+    """Exclusively persist one US$0.01 attempt reservation before any paid request.
+
+    The marker is created with ``O_EXCL`` and is retained after any failure, so
+    a labelled attempt can be paid for at most once.
+    """
+    from .token_factory import (
+        MODEL, RESEARCH_RESERVATION_USD, TokenFactoryError, _fsync_directory,
+        _is_reparse, _safe_path)
+
+    if (label not in ATTEMPT_LABELS
+            or any(type(item) is not str or _HEX_ID.fullmatch(item) is None
+                   for item in (case_id, packet_id, record_id))):
+        raise TokenFactoryError("invalid_reservation")
+    root = Path(attempt_root)
+    if not _safe_path(root):
+        raise TokenFactoryError("unsafe_pilot_path")
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        raise TokenFactoryError("unsafe_pilot_path") from None
+    if not root.is_dir() or not _safe_path(root) or _is_reparse(root):
+        raise TokenFactoryError("unsafe_pilot_path")
+    reservation = {
+        "schema_version": 1,
+        "reservation_usd": float(RESEARCH_RESERVATION_USD),
+        "attempt_label": label,
+        "case_id": case_id,
+        "packet_id": packet_id,
+        "record_id": record_id,
+        "model": MODEL,
+    }
+    encoded = json.dumps(reservation, sort_keys=True, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    try:
+        descriptor = os.open(root / "reservation.json", flags, 0o600)
+    except FileExistsError:
+        raise TokenFactoryError("reservation_exists") from None
+    except Exception:
+        raise TokenFactoryError("unsafe_pilot_path") from None
+    try:
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = None
+        with stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _fsync_directory(root)
+    except KeyboardInterrupt:
+        raise
+    except Exception:
+        # A partial marker still consumes the attempt.
+        raise TokenFactoryError("reservation_exists") from None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    return reservation
 
 
 def build_summary(result: dict, context: dict) -> dict:
