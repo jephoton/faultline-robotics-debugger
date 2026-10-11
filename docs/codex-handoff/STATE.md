@@ -1,5 +1,17 @@
 # Faultline current project state
 
+## October 11 M5 complete (Jethro sign-off)
+
+Jethro marked **M5 complete** on October 11. M5A case workbench/viewer; saved
+case reproduced in fresh Serverless sessions (certified M4 rectangle failed in
+two runs); M5B external demo_1 start → reduced failure identical to M4
+(`docs/experiments/m5b-external-replay.md`); M5C Nemotron v2-06 accepted
+(ADR 0021). Serverless migration complete. M5 ran October 3–11. Next: M3
+(refresh the frozen expanded-M3 status, then Jethro chooses portfolio versus
+batched inference and a spending cap). Outstanding housekeeping: delete the four
+expired-object buckets after their lifecycle windows; rebuild/push an image
+before the next grid run (ADR 0022 not yet in an image).
+
 ## October 11 M5B achieved: reduced failure from external demo_1 (Claude Code)
 
 `faultline-m5b-demo1-tr-20261011` (`m5b` mode from demo_1): certified M4 re-run
