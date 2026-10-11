@@ -11,6 +11,10 @@ success → `no_policy_failure_in_sweep`, matching the September VM run. All
 evidence verified (89 + 95 files). Records: `docs/experiments/m5b-external-replay.md`,
 `docs/experiments/serverless-job-pilot.md`. Estimated Serverless compute
 Oct 10–11 ≈ US$2.1 pre-tax across five Jobs; reconcile with billing.
+M5B download identity (key, service account, group) revoked. Both buckets
+(`faultline-pilot-20261010`, `faultline-m5b-20261010`) refuse deletion until
+their 1-day lifecycle expiry empties them (pilot ≈12:45 UTC Oct 11, M5B ≈02:45
+UTC Oct 12); then delete both (Jethro approved bucket deletion).
 
 ## October 11 M5B result (Claude Code)
 
