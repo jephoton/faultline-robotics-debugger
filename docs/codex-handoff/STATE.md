@@ -1,5 +1,23 @@
 # Faultline current project state
 
+## October 11 handover before M5D (Claude Code)
+
+- Image v9 `05dd5fd7b862` → `sha256:23286ac986d9…` pushed and confirmed in the
+  private registry; it includes ADR 0022 (grid keeps searching after flukes).
+  Use v9 for any further grid Jobs.
+- Nebius AI Cloud balance reported by Jethro: **US$3.68** (October 11).
+- Roadmap order (ADR 0023): M5D → M3 batched inference → portfolio fallback →
+  M6 → M7 (due Oct 30 10:00 PT). Proposed timeboxes in ADR 0023 still need
+  Jethro's confirmation.
+- `TAVILY_API_KEY` is now set in the ignored `.env` (value never printed).
+  Next: M5D design checkpoint — trigger, query construction from allowlisted
+  case descriptors, caching/provenance, request cap, viewer display — then a
+  plan in `docs/superpowers/plans/` before any Tavily call.
+- Housekeeping: delete buckets `faultline-pilot-20261010`,
+  `faultline-m5b-20261010`, `faultline-m5b-demo1-20261011`,
+  `faultline-m5b-demo1-tr-20261011` once their 1-day lifecycle empties them
+  (all by ≈04:00 UTC Oct 12). Their download identities are already revoked.
+
 ## October 11 M5 complete (Jethro sign-off)
 
 **Visibility correction:** GitHub reports `jephoton/faultline-robotics-debugger`
