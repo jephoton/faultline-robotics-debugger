@@ -551,3 +551,121 @@ def request_interpretation(packet: dict, api_key: str,
     return {"response_json": content,
             "provenance": _provenance("completed", None, latency,
                                        prompt, completion)}
+
+
+# --- M5D: source-cited research summary (additive; nothing above is changed) --
+
+RESEARCH_RESERVATION_USD = Decimal("0.01")
+_MAX_REQUEST_BYTES_RESEARCH = 20_000
+_MAX_TOKENS_RESEARCH = 1500
+
+
+def _research_payload(context: dict) -> dict:
+    # Imported here because research_summary's dependency chain reaches this module.
+    from .research_summary import RESEARCH_SYSTEM_PROMPT, context_source_ids
+
+    context_source_ids(context)
+    user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": _MAX_TOKENS_RESEARCH,
+        "temperature": 0,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    if len(encoded) > _MAX_REQUEST_BYTES_RESEARCH:
+        raise TokenFactoryError("request_too_large")
+    return payload
+
+
+def check_research_request(context: dict) -> None:
+    """Raise before any reservation if the request would exceed its size bound."""
+    _research_payload(context)
+
+
+def _research_provenance(status: str, error_code: str | None, latency: float,
+                         prompt_tokens: int | None = None,
+                         completion_tokens: int | None = None) -> dict:
+    value = _provenance(status, error_code, latency, prompt_tokens, completion_tokens)
+    value["reservation_usd"] = float(RESEARCH_RESERVATION_USD)
+    return value
+
+
+def request_research_summary(context: dict, api_key: str,
+                             transport: Transport | None = None) -> dict:
+    """Make exactly one bounded POST for a source-cited related-work summary.
+
+    Returns ``response_json`` (the validated model text, else None), the
+    ``provenance`` and, on success, the validated ``summary``. Rejected model
+    text is returned only as ``rejected_content`` for local diagnosis.
+    """
+    from .research_summary import validate_research_summary
+
+    if not _valid_key(api_key):
+        raise TokenFactoryError("invalid_api_key")
+    payload = _research_payload(context)
+    call = _default_transport if transport is None else transport
+    started = time.monotonic()
+    try:
+        response = call("POST", "chat/completions", payload, api_key)
+    except (Exception, KeyboardInterrupt) as exc:
+        latency = time.monotonic() - started
+        code = _post_error_code(exc)
+        if code == "timeout":
+            status = "transport_error"
+        elif code == "invalid_response":
+            status = "invalid_response"
+        else:
+            status = "http_error"
+        return {"response_json": None,
+                "provenance": _research_provenance(status, code, latency)}
+    latency = time.monotonic() - started
+    try:
+        if type(response) is not dict or response.get("model") != MODEL:
+            raise ValueError
+        prompt, completion = _usage(response)
+        if completion is not None and completion > _MAX_TOKENS_RESEARCH:
+            raise ValueError
+    except Exception:
+        return {"response_json": None,
+                "provenance": _research_provenance("invalid_response", "invalid_response",
+                                                   latency)}
+    choices = response.get("choices")
+    if (type(choices) is list and len(choices) == 1
+            and type(choices[0]) is dict
+            and choices[0].get("finish_reason") == "length"):
+        return {"response_json": None,
+                "provenance": _research_provenance("invalid_response", "output_limit",
+                                                   latency, prompt, completion)}
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        content = None
+    try:
+        if (type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict
+                or choices[0].get("finish_reason") != "stop"
+                or type(choices[0].get("message")) is not dict
+                or type(content) is not str):
+            raise ValueError
+        summary = validate_research_summary(content, context)
+        if api_key in content or _contains_secret(summary, api_key):
+            raise ValueError
+    except Exception:
+        result = {"response_json": None,
+                  "provenance": _research_provenance("invalid_response", "invalid_response",
+                                                     latency, prompt, completion)}
+        # Rejected model text stays in memory for local diagnosis only; it is
+        # never stored in a record and is withheld if it contains the key.
+        if type(content) is str and api_key not in content:
+            result["rejected_content"] = content
+        return result
+    return {"response_json": content, "summary": summary,
+            "provenance": _research_provenance("completed", None, latency,
+                                               prompt, completion)}
