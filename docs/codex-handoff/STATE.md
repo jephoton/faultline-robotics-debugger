@@ -1,5 +1,16 @@
 # Faultline current project state
 
+## October 11 M5C accepted; demo_1 external run (Claude Code)
+
+ADR 0021: Jethro accepted Nemotron report v2-06 (`58c2ad9f…`) as the M5C
+demonstration interpretation (**M5C complete**) and accepted external `demo_1`
+(same scene XML, own pinned first-state hash `39fcb000…`) as a second external
+start (`9413ad4`). CPU probe in the image restored demo_1 through the real
+benchmark (pre-settle = dataset hash, post-settle `6420e5e0…`, mask applied).
+Image v8 `9413ad4ea434` → `sha256:71527bef…`. Job `faultline-m5b-demo1-20261011`
+(`m5b-grid` from demo_1, US$2 cap) submitted with a fresh private bucket and
+read-only key (`faultline-m5b-demo1-20261011`). Push to GitHub waits for M5.
+
 ## October 11 external grid and search validation (Claude Code)
 
 `m5b-grid` (external start): quadrants bottom-left/bottom-right/top-left all
