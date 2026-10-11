@@ -333,14 +333,72 @@ class LedgerTests(TavilyBase):
         self.assertEqual(list(real.iterdir()), [])
 
 
+class ReportedCreditTests(TavilyBase):
+    def test_extra_reported_credits_are_reserved_after_the_response(self):
+        result = self.run_search(Recorder(raw_response(usage={"credits": 3})))
+        self.assertEqual(result["credits"], 3)
+        self.assertEqual(result["ledger_entries"], 3)
+        self.assertEqual(credits_reserved(self.ledger), 3)
+        cached = self.run_search(lambda *args: self.fail("transport called"))
+        self.assertEqual((cached["from_cache"], cached["ledger_entries"]), (True, 0))
+        self.assertEqual(credits_reserved(self.ledger), 3)
+
+    def test_ordinary_responses_reserve_exactly_one_entry(self):
+        for usage in ({"credits": 1}, {"credits": 0}, {"credits": "many"}, None):
+            with self.subTest(usage=usage):
+                result = self.run_search(Recorder(raw_response(usage=usage)), refresh=True)
+                self.assertEqual(result["ledger_entries"], 1)
+
+    def test_overrun_keeps_the_paid_result_and_blocks_further_searches(self):
+        digest = query_hash(QUERY)
+        for _ in range(CREDIT_CAP - 2):
+            reserve_credit(self.ledger, digest)
+        result = self.run_search(Recorder(raw_response(usage={"credits": 5})), refresh=True)
+        self.assertEqual(result["credits"], 5)
+        self.assertEqual(result["ledger_entries"], 2)
+        self.assertEqual(credits_reserved(self.ledger), CREDIT_CAP)
+        self.assertEqual(len(result["results"]), 2)
+        self.assertTrue(self.run_search(lambda *a: self.fail("transport called"))["from_cache"])
+        recorder = Recorder()
+        with self.assertRaisesRegex(TavilyError, "^credit_cap$"):
+            self.run_search(recorder, refresh=True)
+        self.assertEqual(recorder.calls, [])
+
+
+class StorageOrderTests(TavilyBase):
+    def test_unusable_cache_directory_never_burns_a_credit(self):
+        self.cache.write_text("a file, not a directory", encoding="utf-8")
+        recorder = Recorder()
+        with self.assertRaisesRegex(TavilyError, "^unsafe_path$"):
+            self.run_search(recorder)
+        self.assertEqual(recorder.calls, [])
+        self.assertEqual(credits_reserved(self.ledger), 0)
+
+    def test_symlinked_cache_target_never_burns_a_credit(self):
+        real = self.base / "real"
+        real.mkdir()
+        self.cache.mkdir()
+        target = self.cache / (query_hash(QUERY) + ".json")
+        try:
+            os.symlink(real, target, target_is_directory=True)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        recorder = Recorder()
+        with self.assertRaisesRegex(TavilyError, "^unsafe_path$"):
+            self.run_search(recorder)
+        self.assertEqual(recorder.calls, [])
+        self.assertEqual(credits_reserved(self.ledger), 0)
+
+
 class CacheTests(TavilyBase):
     def test_second_call_hits_the_cache_without_transport_or_credit(self):
         first = self.run_search(Recorder())
         self.assertFalse(first["from_cache"])
         second = self.run_search(lambda *args: self.fail("transport called"))
         self.assertTrue(second["from_cache"])
-        self.assertEqual({k: v for k, v in second.items() if k != "from_cache"},
-                         {k: v for k, v in first.items() if k != "from_cache"})
+        volatile = {"from_cache", "ledger_entries"}
+        self.assertEqual({k: v for k, v in second.items() if k not in volatile},
+                         {k: v for k, v in first.items() if k not in volatile})
         self.assertEqual(credits_reserved(self.ledger), 1)
 
     def test_cache_file_is_keyed_by_query_and_fixed_parameters(self):
@@ -393,7 +451,7 @@ class NormalizationTests(TavilyBase):
     def test_result_shape_is_allowlisted_and_metadata_is_kept(self):
         result = self.run_search(Recorder())
         self.assertEqual(set(result), {"query", "retrieved_at", "request_id", "response_time",
-                                       "credits", "from_cache", "results"})
+                                       "credits", "from_cache", "ledger_entries", "results"})
         self.assertEqual(result["query"], QUERY)
         self.assertRegex(result["retrieved_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
         self.assertEqual((result["request_id"], result["response_time"], result["credits"]),
@@ -467,6 +525,43 @@ class NormalizationTests(TavilyBase):
                 self.run_search(Recorder(response))
             self.assertNotIn(KEY, str(caught.exception))
         self.assertFalse(self.cache.exists() and any(self.cache.iterdir()))
+
+    def test_key_split_by_invisible_characters_is_rejected_everywhere(self):
+        split = KEY[:6] + "\u200b" + KEY[6:]
+        stripped_variants = (KEY[:5] + "\u2060" + KEY[5:], KEY[:9] + "\ufeff" + KEY[9:],
+                             KEY[:4] + "\u00ad" + KEY[4:], KEY[:7] + "\x00" + KEY[7:])
+        for variant in (split, *stripped_variants):
+            for response in (
+                    raw_response([raw_result(1, content=f"leak {variant} here")]),
+                    raw_response([raw_result(1, title=f"title {variant}")]),
+                    raw_response([raw_result(1, url=f"https://example.org/{variant}")]),
+                    raw_response(request_id=variant),
+                    raw_response(extra={"nested": [variant]}),
+                    raw_response(**{variant: "key position"}),
+            ):
+                with self.subTest(variant=repr(variant), response=str(response)[:40]):
+                    with self.assertRaisesRegex(TavilyError, "^invalid_response$") as caught:
+                        self.run_search(Recorder(response), refresh=True)
+                    self.assertNotIn(KEY, str(caught.exception))
+        self.assertFalse(self.cache.exists() and any(self.cache.iterdir()))
+
+    def test_cached_entries_containing_the_key_are_a_miss(self):
+        self.run_search(Recorder())
+        path = self.cache / (query_hash(QUERY) + ".json")
+        for field, value in (("snippet", f"leak {KEY}"), ("title", KEY)):
+            entry = json.loads(path.read_text())
+            entry["results"][0][field] = value
+            path.write_text(json.dumps(entry), encoding="utf-8")
+            recorder = Recorder()
+            result = self.run_search(recorder)
+            with self.subTest(field=field):
+                self.assertFalse(result["from_cache"])
+                self.assertEqual(len(recorder.calls), 1)
+        entry = json.loads(path.read_text())
+        entry["request_id"] = KEY
+        path.write_text(json.dumps(entry), encoding="utf-8")
+        self.assertFalse(self.run_search(Recorder())["from_cache"])
+        self.assertNotIn(KEY, path.read_text())
 
     def test_invalid_optional_metadata_becomes_null_and_credit_defaults_to_one(self):
         response = raw_response(request_id="x" * 300, response_time="fast",

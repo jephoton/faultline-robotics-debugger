@@ -166,8 +166,10 @@ def run_search(workspace: Path, case_id: str, env_file: Path | None,
         "queries": len(searches),
         "sources": sum(len(entry["results"]) for entry in record["queries"]),
         "cached_queries": sum(1 for item in searches if item["from_cache"]),
-        "tavily_credits_used": sum(item["credits"] for item in searches
-                                   if not item["from_cache"]),
+        # Ledger entries are what enforces the cap, so they are the authoritative count.
+        "tavily_credits_used": sum(item["ledger_entries"] for item in searches),
+        "tavily_credits_reported": sum(item["credits"] for item in searches
+                                       if not item["from_cache"]),
         "summary_status": record["summary"]["status"],
     }
 

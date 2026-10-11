@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
-from .token_factory import _fsync_directory, _is_reparse, _safe_path
+from .token_factory import _fsync_directory, _is_reparse, _safe_path, _without_invisible
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -330,8 +330,9 @@ def _clean_result(title: object, url: object, snippet: object,
 
 
 def _contains_secret(value: object, api_key: str) -> bool:
+    """True when the key appears in any string, as written or once invisible characters are removed."""
     if type(value) is str:
-        return api_key in value
+        return api_key in value or api_key in _without_invisible(value)
     if type(value) is list:
         return any(_contains_secret(item, api_key) for item in value)
     if type(value) is dict:
@@ -376,13 +377,16 @@ def _normalize(query: str, response: object, api_key: str) -> dict:
         if cleaned is not None:
             results.append(cleaned)
     request_id, elapsed, credits = _optional_metadata(response)
+    # The invisible-character stripping above can join a split key back together.
+    if _contains_secret([results, request_id], api_key):
+        raise TavilyError("invalid_response")
     return {
         "schema_version": 1,
         "query": query,
         "retrieved_at": _utc_now(),
         "request_id": request_id,
         "response_time": elapsed,
-        # One reserved ledger entry is one basic-depth credit.
+        # Provider-reported credits; the ledger is topped up to match in search().
         "credits": 1 if credits is None else credits,
         "results": results,
     }
@@ -447,6 +451,22 @@ def reserve_credit(ledger_root: Path, query_hash_value: str) -> int:
     raise TavilyError("credit_cap")
 
 
+def _reserve_extra_credits(ledger_root: Path, query_hash_value: str, extra: int) -> int:
+    """Reserve the credits a response reported beyond the first; return how many fit.
+
+    The provider has already charged them, so a shortfall never discards the
+    paid result: the ledger is simply filled and every later search is refused.
+    """
+    reserved = 0
+    for _ in range(max(0, extra)):
+        try:
+            reserve_credit(ledger_root, query_hash_value)
+        except TavilyError:
+            break
+        reserved += 1
+    return reserved
+
+
 def credits_reserved(ledger_root: Path) -> int:
     """Number of ledger entries consumed so far (0 when no ledger exists)."""
     root = Path(ledger_root)
@@ -462,8 +482,10 @@ _CACHE_KEYS = {"schema_version", "query", "retrieved_at", "request_id",
                "response_time", "credits", "results"}
 
 
-def _validate_cached(value: object, query: str) -> dict:
+def _validate_cached(value: object, query: str, api_key: str) -> dict:
     if type(value) is not dict or set(value) != _CACHE_KEYS:
+        raise TavilyError("invalid_response")
+    if _contains_secret(value, api_key):
         raise TavilyError("invalid_response")
     if (type(value["schema_version"]) is not int or value["schema_version"] != 1
             or value["query"] != query or type(value["retrieved_at"]) is not str
@@ -491,7 +513,7 @@ def _validate_cached(value: object, query: str) -> dict:
     return {**value, "response_time": elapsed, "results": cleaned}
 
 
-def _read_cache(cache_root: Path, key: str, query: str) -> dict | None:
+def _read_cache(cache_root: Path, key: str, query: str, api_key: str) -> dict | None:
     path = Path(cache_root) / f"{key}.json"
     try:
         if not _safe_path(path) or _is_reparse(path):
@@ -503,7 +525,7 @@ def _read_cache(cache_root: Path, key: str, query: str) -> dict | None:
             data = stream.read(_MAX_CACHE_BYTES + 1)
         if len(data) > _MAX_CACHE_BYTES:
             return None
-        return _validate_cached(_decode_json(data), query)
+        return _validate_cached(_decode_json(data), query, api_key)
     except (OSError, TavilyError, ValueError, TypeError, KeyError):
         return None
 
@@ -541,7 +563,9 @@ def search(query: str, api_key: str, *, ledger_root: Path, cache_root: Path,
 
     A live request reserves a credit first, makes exactly one POST with the
     fixed body, and caches the normalized response. ``refresh`` skips the cache
-    but still reserves a credit. The returned dict carries ``from_cache``.
+    but still reserves a credit. The returned dict carries ``from_cache`` and
+    ``ledger_entries``, the ledger entries this call reserved (0 from cache); it
+    exceeds one when the provider reported more than one credit.
     """
     if not _valid_key(api_key):
         raise TavilyError("invalid_api_key")
@@ -549,12 +573,17 @@ def search(query: str, api_key: str, *, ledger_root: Path, cache_root: Path,
     body = _request_body(clean)
     key = hashlib.sha256(_canonical(body)).hexdigest()
     if not refresh:
-        cached = _read_cache(cache_root, key, clean)
+        cached = _read_cache(cache_root, key, clean, api_key)
         if cached is not None:
             result = dict(cached)
             result.pop("schema_version")
             result["from_cache"] = True
+            result["ledger_entries"] = 0
             return result
+    # Everything that can refuse a write is checked before any credit is spent.
+    _ensure_directory(Path(cache_root))
+    if _is_reparse(Path(cache_root) / f"{key}.json"):
+        raise TavilyError("unsafe_path")
     reserve_credit(ledger_root, key)
     call = _default_transport if transport is None else transport
     try:
@@ -563,8 +592,10 @@ def search(query: str, api_key: str, *, ledger_root: Path, cache_root: Path,
         # The reserved credit stays consumed; no retry is attempted.
         raise TavilyError(_transport_code(exc)) from None
     entry = _normalize(clean, response, api_key)
+    ledger_entries = 1 + _reserve_extra_credits(ledger_root, key, entry["credits"] - 1)
     _write_cache(cache_root, key, entry)
     result = dict(entry)
     result.pop("schema_version")
     result["from_cache"] = False
+    result["ledger_entries"] = ledger_entries
     return result

@@ -11,6 +11,7 @@ import socket
 import ssl
 import stat
 import time
+import unicodedata
 import urllib.error
 from decimal import Decimal
 from pathlib import Path
@@ -598,6 +599,42 @@ def _research_provenance(status: str, error_code: str | None, latency: float,
     return value
 
 
+def _without_invisible(text: str) -> str:
+    """The text with control, format, surrogate, private-use and unassigned characters removed."""
+    return "".join(char for char in text
+                   if unicodedata.category(char) not in ("Cc", "Cf", "Cs", "Co", "Cn"))
+
+
+def _text_hides_key(text: str, api_key: str) -> bool:
+    return api_key in text or api_key in _without_invisible(text)
+
+
+def _strings(value: object):
+    if type(value) is str:
+        yield value
+    elif type(value) is list:
+        for item in value:
+            yield from _strings(item)
+    elif type(value) is dict:
+        for key, item in value.items():
+            yield from _strings(key)
+            yield from _strings(item)
+
+
+def _research_leaks_key(content: object, api_key: str) -> bool:
+    """True when model text carries the key as written, split by invisible
+    characters, or only after its JSON string escapes are decoded."""
+    if type(content) is not str:
+        return False
+    if _text_hides_key(content, api_key):
+        return True
+    try:
+        decoded = json.loads(content)
+    except (ValueError, RecursionError):
+        return False
+    return any(_text_hides_key(text, api_key) for text in _strings(decoded))
+
+
 def request_research_summary(context: dict, api_key: str,
                              transport: Transport | None = None) -> dict:
     """Make exactly one bounded POST for a source-cited related-work summary.
@@ -655,7 +692,7 @@ def request_research_summary(context: dict, api_key: str,
                 or type(content) is not str):
             raise ValueError
         summary = validate_research_summary(content, context)
-        if api_key in content or _contains_secret(summary, api_key):
+        if _research_leaks_key(content, api_key) or _contains_secret(summary, api_key):
             raise ValueError
     except Exception:
         result = {"response_json": None,
@@ -663,7 +700,7 @@ def request_research_summary(context: dict, api_key: str,
                                                      latency, prompt, completion)}
         # Rejected model text stays in memory for local diagnosis only; it is
         # never stored in a record and is withheld if it contains the key.
-        if type(content) is str and api_key not in content:
+        if type(content) is str and not _research_leaks_key(content, api_key):
             result["rejected_content"] = content
         return result
     return {"response_json": content, "summary": summary,

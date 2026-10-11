@@ -39,11 +39,14 @@ def load_script():
     return module
 
 
-def fake_search_result(query, from_cache=False, credits=1, count=2):
+def fake_search_result(query, from_cache=False, credits=1, count=2, ledger_entries=None):
     tag = zlib.crc32(query.encode()) % 100_000
+    if ledger_entries is None:
+        ledger_entries = 0 if from_cache else credits
     return {
         "query": query, "retrieved_at": "2026-10-12T09:00:00Z", "request_id": "req-1",
         "response_time": 1.0, "credits": credits, "from_cache": from_cache,
+        "ledger_entries": ledger_entries,
         "results": [{"title": f"Title {tag} {n}", "url": f"https://example.org/{tag}/{n}",
                      "snippet": f"Snippet {n}.", "score": 0.5} for n in range(count)],
     }
@@ -195,7 +198,7 @@ class SearchTests(Base):
         self.assertEqual(output, {
             "case_id": self.case_id, "record_id": record["record_id"], "queries": 3,
             "sources": 6, "cached_queries": 1, "tavily_credits_used": 2,
-            "summary_status": "not_requested"})
+            "tavily_credits_reported": 2, "summary_status": "not_requested"})
         text = json.dumps(output)
         for forbidden in (TAVILY_KEY, "Snippet", "example.org", str(self.base)):
             self.assertNotIn(forbidden, text)
@@ -209,6 +212,39 @@ class SearchTests(Base):
             store_research_record=lambda *args: Path("record"))
         self.module.run_search(self.workspace, self.case_id, None, refresh=True, deps=deps)
         self.assertEqual(seen, [True, True, True])
+
+    def test_ledger_entries_are_the_authoritative_credit_count(self):
+        """Provider-reported credits can differ; the ledger is what enforces the cap."""
+        results = iter((
+            fake_search_result("a", credits=3, ledger_entries=3),
+            fake_search_result("b", credits=5, ledger_entries=2),
+            fake_search_result("c", from_cache=True, credits=4)))
+        deps = self.deps(
+            load_tavily_key=lambda _: TAVILY_KEY,
+            tavily_search=lambda query, key, **o: dict(next(results), query=query),
+            store_research_record=lambda *a: Path("record"))
+        output = self.module.run_search(self.workspace, self.case_id, None, deps=deps)
+        self.assertEqual(output["tavily_credits_used"], 5)
+        self.assertEqual(output["tavily_credits_reported"], 8)
+        self.assertEqual(output["cached_queries"], 1)
+
+    def test_real_client_overrun_fills_the_ledger_and_refuses_the_next_query(self):
+        for index in range(1, 48):
+            tavily_search.reserve_credit(self.module.LEDGER_ROOT, "0" * 64)
+
+        def transport(payload, key):
+            return {"results": [{"title": "Paper", "url": f"https://arxiv.org/abs/{payload['query'][:5]}",
+                                 "content": "About occlusion.", "score": 0.7}],
+                    "request_id": "req", "usage": {"credits": 2}}
+
+        def search(query, key, **options):
+            return tavily_search.search(query, key, transport=transport, **options)
+
+        deps = self.deps(load_tavily_key=lambda _: TAVILY_KEY, tavily_search=search,
+                         store_research_record=self.module.store_research_record)
+        with self.assertRaisesRegex(TavilyError, "^credit_cap$"):
+            self.module.run_search(self.workspace, self.case_id, None, deps=deps)
+        self.assertEqual(credits_reserved(self.module.LEDGER_ROOT), 50)
 
     def test_failure_on_a_later_query_stores_nothing(self):
         calls = []

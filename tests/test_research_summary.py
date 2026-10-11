@@ -422,6 +422,24 @@ class OutputHandlingTests(Base):
         self.assert_rejected(result)
         self.assertNotIn("rejected_content", result)
 
+    def test_key_hidden_by_escapes_or_invisible_characters_is_rejected_and_withheld(self):
+        bs, zwsp = chr(92), chr(0x200b)
+        escaped_key = (bs + "u0054") + KEY[1:]
+        split_key = KEY[:5] + zwsp + KEY[5:]
+        variants = {
+            "json-escaped": '{"related_work":[{"text":"a [S1]","source_ids":["S1"]}],'
+                            '"limitations":["leak ' + escaped_key + '"]}',
+            "split": json.dumps({**GOOD, "limitations": ["leak " + split_key]},
+                                ensure_ascii=False),
+            "split-escaped": json.dumps({**GOOD, "limitations": ["leak " + split_key]}),
+        }
+        for name, content in variants.items():
+            with self.subTest(name=name):
+                result = self.run_content(content)
+                self.assert_rejected(result)
+                self.assertNotIn("rejected_content", result)
+                self.assertNotIn(KEY, json.dumps(result))
+
     def test_truncation_records_output_limit_with_cost(self):
         response = self.response(
             choices=[{"message": {"content": "{"}, "finish_reason": "length"}],
