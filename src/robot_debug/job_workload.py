@@ -480,7 +480,7 @@ def run_workload(
                         latch_failure(driver_failure)
                     elif (grid_summary.get("stop_reason") == "reproducible_failure_with_nominal_controls"
                           and latch["reason"] is None):
-                        found = grid_summary["first_apparent_failure"]
+                        found = grid_summary["confirmed_failure"]
                         driver_summary = run_failure_reduction.run_session(
                             upstream_root=roots.upstream_root,
                             project_root=roots.project_root,
@@ -547,9 +547,10 @@ def run_workload(
         summary["reduction_stop_reason"] = reduction_stop_reason
     if grid_summary is not None:
         summary["grid_stop_reason"] = grid_summary.get("stop_reason")
-        found = grid_summary.get("first_apparent_failure")
+        found = grid_summary.get("confirmed_failure")
         summary["grid_failure_rectangle"] = None if not found else {
             key: found[key] for key in ("x", "y", "width", "height")}
+        summary["grid_rejected_failures"] = len(grid_summary.get("rejected_failures") or [])
     _write_summary(run_root, summary)
     if cleanup_confirmed:
         exporter(

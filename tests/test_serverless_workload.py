@@ -321,6 +321,9 @@ class ServerlessWorkloadTests(unittest.TestCase):
         summary = valid_driver_summary("grid")
         summary["stop_reason"] = stop_reason
         summary["first_apparent_failure"] = failure
+        confirmed = stop_reason.startswith("reproducible_failure")
+        summary["confirmed_failure"] = failure if confirmed else None
+        summary["rejected_failures"] = [] if confirmed or failure is None else [dict(failure)]
         return summary
 
     def test_m5b_grid_reduces_only_a_confirmed_grid_failure(self) -> None:

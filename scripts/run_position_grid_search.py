@@ -23,6 +23,9 @@ GRID_SIDE = 0.50
 EPISODE_INDEX = 0
 REPLAYS_PER_FAILURE = 5
 MATCHED_NOMINAL_CONTROLS = 5
+# ADR 0022: an unreproducible apparent failure no longer ends the session; the
+# grid moves on to the next position. This cap bounds every session's episodes.
+MAX_EPISODES = 30
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,8 @@ def run_session(
             "grid_positions": [asdict(point) for point in GRID_POINTS],
             "replays_per_failure": REPLAYS_PER_FAILURE,
             "matched_nominal_controls": MATCHED_NOMINAL_CONTROLS,
+            "max_episodes": MAX_EPISODES,
+            "continue_after_unreproducible_failure": True,
             "launch_cutoff_seconds": launch_cutoff_seconds,
         },
         "completed": {
@@ -106,6 +111,8 @@ def run_session(
         },
         "outcomes": [],
         "first_apparent_failure": None,
+        "confirmed_failure": None,
+        "rejected_failures": [],
         "reproducible": None,
         "nominal_controls_passed": None,
         "elapsed_seconds": 0.0,
@@ -201,8 +208,14 @@ def run_session(
         save("nominal_sentinel_failed")
         return summary
 
-    candidate = None
+    def episodes_used():
+        return len(summary["completed"]["stages"])
+
+    replay_counter = 0
     for point in GRID_POINTS:
+        if episodes_used() >= MAX_EPISODES:
+            save("episode_cap_reached")
+            return summary
         grid_stage = launch(point.stage, point=point)
         if grid_stage is None:
             return summary
@@ -214,34 +227,45 @@ def run_session(
         if grid_stage.invalid_evidence is not None:
             save("grid_invalid_evidence")
             return summary
-        if grid_stage.results[0].outcome == "policy_failure":
-            candidate = point
-            summary["first_apparent_failure"] = {
-                "stage": point.stage, "x": point.x, "y": point.y,
-                "width": GRID_SIDE, "height": GRID_SIDE,
-            }
+        if grid_stage.results[0].outcome != "policy_failure":
+            continue
+        rectangle = {"stage": point.stage, "x": point.x, "y": point.y,
+                     "width": GRID_SIDE, "height": GRID_SIDE}
+        if summary["first_apparent_failure"] is None:
+            summary["first_apparent_failure"] = dict(rectangle)
+        if episodes_used() + REPLAYS_PER_FAILURE + MATCHED_NOMINAL_CONTROLS > MAX_EPISODES:
+            save("episode_cap_reached")
+            return summary
+        summary["completed"]["replay_outcomes"] = []
+        save()
+        for _ in range(REPLAYS_PER_FAILURE):
+            replay_counter += 1
+            replay = launch("replay-{}".format(replay_counter), point=point)
+            if replay is None:
+                return summary
+            if replay.infrastructure_error is not None or (replay.results and replay.results[0].outcome == "infrastructure_error"):
+                save("replay_infrastructure_error")
+                return summary
+            if replay.invalid_evidence is not None:
+                save("replay_invalid_evidence")
+                return summary
+            summary["completed"]["replay_outcomes"].append(replay.results[0].outcome)
+            save()
+        replays = list(summary["completed"]["replay_outcomes"])
+        if base.is_reproducible(replays):
+            summary["reproducible"] = True
+            summary["confirmed_failure"] = dict(rectangle)
             save()
             break
-    if candidate is None:
-        save("no_policy_failure_in_grid")
-        return summary
-
-    for index in range(1, REPLAYS_PER_FAILURE + 1):
-        replay = launch("replay-{}".format(index), point=candidate)
-        if replay is None:
-            return summary
-        if replay.infrastructure_error is not None or (replay.results and replay.results[0].outcome == "infrastructure_error"):
-            save("replay_infrastructure_error")
-            return summary
-        if replay.invalid_evidence is not None:
-            save("replay_invalid_evidence")
-            return summary
-        summary["completed"]["replay_outcomes"].append(replay.results[0].outcome)
+        # A fluke: record it and keep searching the remaining positions.
+        summary["rejected_failures"].append(dict(rectangle, replay_outcomes=replays))
         save()
-    summary["reproducible"] = base.is_reproducible(summary["completed"]["replay_outcomes"])
-    save()
-    if not summary["reproducible"]:
-        save("policy_failure_not_reproducible")
+    if summary["confirmed_failure"] is None:
+        if summary["rejected_failures"]:
+            summary["reproducible"] = False
+            save("policy_failure_not_reproducible")
+        else:
+            save("no_policy_failure_in_grid")
         return summary
 
     for index in range(1, MATCHED_NOMINAL_CONTROLS + 1):

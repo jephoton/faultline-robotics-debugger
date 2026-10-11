@@ -117,10 +117,42 @@ class PositionGridDriverTests(unittest.TestCase):
         self.assertEqual(summary["stop_reason"], "reproducible_failure_nominal_controls_failed")
         self.assertFalse(summary["nominal_controls_passed"]); self.assertEqual(len(runner.commands), 13)
 
-    def test_nonreproducible_failure_does_not_run_controls(self):
-        summary, runner = self.run_driver([aggregate(), aggregate(False)] + [aggregate(False)] * 3 + [aggregate()] * 2)
+    def test_nonreproducible_failure_keeps_searching_without_controls(self):
+        # ADR 0022: a fluke no longer ends the session; the other seven positions still run.
+        summary, runner = self.run_driver([aggregate(), aggregate(False)] + [aggregate(False)] * 3 + [aggregate()] * 2 + [aggregate()] * 7)
         self.assertEqual(summary["stop_reason"], "policy_failure_not_reproducible")
-        self.assertEqual(len(runner.commands), 7); self.assertEqual(summary["completed"]["control_outcomes"], [])
+        self.assertEqual(len(runner.commands), 14); self.assertEqual(summary["completed"]["control_outcomes"], [])
+        self.assertEqual(len(summary["completed"]["positions_attempted"]), 8)
+        self.assertFalse(summary["reproducible"]); self.assertIsNone(summary["confirmed_failure"])
+        self.assertEqual([item["stage"] for item in summary["rejected_failures"]], [position_grid.GRID_POINTS[0].stage])
+        self.assertEqual(summary["rejected_failures"][0]["replay_outcomes"], ["policy_failure"] * 3 + ["success"] * 2)
+
+    def test_fluke_then_confirmed_failure_runs_controls_with_unique_replays(self):
+        responses = ([aggregate(), aggregate(False)] + [aggregate()] * 5          # pos 1 fails once, replays all succeed
+                     + [aggregate(), aggregate(False)] + [aggregate(False)] * 5  # pos 2 ok, pos 3 confirmed
+                     + [aggregate()] * 5)                                         # nominal controls
+        summary, runner = self.run_driver(responses)
+        first, third = position_grid.GRID_POINTS[0], position_grid.GRID_POINTS[2]
+        self.assertEqual(summary["stop_reason"], "reproducible_failure_with_nominal_controls")
+        self.assertEqual(summary["first_apparent_failure"]["stage"], first.stage)
+        self.assertEqual(summary["confirmed_failure"]["stage"], third.stage)
+        self.assertEqual([item["stage"] for item in summary["rejected_failures"]], [first.stage])
+        replays = [stage["stage"] for stage in summary["completed"]["stages"] if stage["stage"].startswith("replay-")]
+        self.assertEqual(replays, ["replay-{}".format(index) for index in range(1, 11)])
+        self.assertEqual(summary["outcomes"][8]["perturbation"]["x"], third.x)
+        self.assertEqual(len(runner.commands), 1 + 3 + 10 + 5)
+
+    def test_episode_cap_stops_before_replays_would_exceed_it(self):
+        self.assertEqual(position_grid.MAX_EPISODES, 30)
+        fluke = [aggregate(False)] + [aggregate()] * 5
+        responses = [aggregate()] + fluke * 5
+        summary, runner = self.run_driver(responses)
+        self.assertEqual(summary["stop_reason"], "episode_cap_reached")
+        # 1 sentinel + 4 x (1 position + 5 replays) = 25; a fifth round would need
+        # 26 + 5 replays + 5 controls > 30, so the session stops at the cap.
+        self.assertEqual(len(runner.commands), 26)
+        self.assertEqual(len(summary["rejected_failures"]), 4)
+        self.assertEqual(summary["planned"]["max_episodes"], 30)
 
     def test_sentinel_failure_and_infrastructure_stop_durably(self):
         for response, reason in ((aggregate(False), "nominal_sentinel_failed"), (Response(None, 4), "nominal_sentinel_infrastructure_error")):
