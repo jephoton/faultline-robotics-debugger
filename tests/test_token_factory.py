@@ -647,7 +647,8 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
         self.assertEqual(nominal["outcome"], "all_succeeded")
         self.assertIn("never generalise", system)
         for phrase in ("never quote field names", "only from the groups that statement names",
-                       "total number of episodes"):
+                       "total number of episodes", "never more than 4",
+                       "that region matters to the policy"):
             self.assertIn(phrase, system)
 
     def test_rejected_content_is_returned_for_local_diagnosis_without_key(self):
