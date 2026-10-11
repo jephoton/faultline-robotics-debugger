@@ -6,6 +6,7 @@ const state = {
   explanations: null, explanationCaseId: null, explanationReportId: null,
   explanationNewestReportId: null,
   explanationRequestGeneration: 0,
+  research: null, researchCaseId: null, researchRequestGeneration: 0,
 };
 
 const outcomeLabels = {
@@ -259,6 +260,147 @@ function renderExplanations() {
   renderExplanationProvenance(provenance, record.provenance);
 }
 
+function beginResearchRequest(caseId, clearPrevious) {
+  state.researchRequestGeneration += 1;
+  state.researchCaseId = caseId;
+  if (clearPrevious) state.research = null;
+  return state.researchRequestGeneration;
+}
+function commitResearchResponse(caseId, generation, payload) {
+  if (state.caseId !== caseId || state.researchCaseId !== caseId ||
+      state.researchRequestGeneration !== generation) return false;
+  state.research = payload && Array.isArray(payload.records) && Array.isArray(payload.warnings)
+    ? payload : { records: [], warnings: ["Research records are unavailable."] };
+  return true;
+}
+async function refreshResearch(caseId) {
+  const generation = beginResearchRequest(caseId, false);
+  if (!/^[0-9a-f]{64}$/.test(caseId)) {
+    commitResearchResponse(caseId, generation, { records: [], warnings: [] });
+    renderResearch();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/cases/${caseId}/research`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`research request failed: ${response.status}`);
+    const payload = await response.json();
+    if (commitResearchResponse(caseId, generation, payload)) renderResearch();
+  } catch (_) {
+    if (commitResearchResponse(caseId, generation, {
+      records: [], warnings: ["Research records are temporarily unavailable."],
+    })) renderResearch();
+  }
+}
+// Research text is untrusted web content: the DOM is built with createElement
+// and textContent only, and links are created only for https URLs.
+function researchHttpsUrl(value) {
+  try {
+    const parsed = new URL(String(value));
+    return parsed.protocol === "https:" ? parsed.href : null;
+  } catch (_) { return null; }
+}
+function researchHostname(value) {
+  try { return new URL(String(value)).hostname || "unknown host"; } catch (_) { return "unknown host"; }
+}
+function researchSources(record) {
+  const sources = new Map();
+  (Array.isArray(record.queries) ? record.queries : []).forEach((query) => {
+    (Array.isArray(query && query.results) ? query.results : []).forEach((result) => {
+      if (result && typeof result.source_id === "string" && !sources.has(result.source_id)) {
+        sources.set(result.source_id, { result, query });
+      }
+    });
+  });
+  return sources;
+}
+function researchLink(href, text, label) {
+  const anchor = document.createElement("a");
+  anchor.textContent = text;
+  anchor.href = href; anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
+  if (label) anchor.setAttribute("aria-label", label);
+  return anchor;
+}
+function renderResearchRelated(container, record, sources) {
+  const summary = record.summary || {};
+  const entries = Array.isArray(summary.related_work) ? summary.related_work : [];
+  if (!entries.length) appendText(container, "None supplied.");
+  entries.forEach((entry) => {
+    const item = appendText(container, entry && entry.text);
+    const chips = document.createElement("div"); chips.className = "evidence-citations";
+    (Array.isArray(entry && entry.source_ids) ? entry.source_ids : []).forEach((sourceId) => {
+      const chip = document.createElement("span"); chip.className = "source-chip";
+      const known = sources.get(sourceId);
+      const href = known ? researchHttpsUrl(known.result.url) : null;
+      if (href) {
+        chip.append(researchLink(href, `[${sourceId}]`, `Open source ${sourceId}: ${known.result.title}`));
+      } else {
+        chip.classList.add("unknown-source");
+        chip.textContent = `[${sourceId}] source unavailable`;
+      }
+      chips.append(chip);
+    });
+    item.append(chips);
+  });
+  const limitations = Array.isArray(summary.limitations) ? summary.limitations : [];
+  if (limitations.length) {
+    appendText(container, "Limitations");
+    limitations.forEach((text) => appendText(container, text));
+  }
+}
+function renderResearchSources(list, sources) {
+  sources.forEach(({ result, query }, sourceId) => {
+    const item = document.createElement("li");
+    const href = researchHttpsUrl(result.url);
+    const title = String(result.title || result.url || sourceId);
+    if (href) {
+      item.append(`[${sourceId}] `, researchLink(href, title));
+    } else {
+      item.append(`[${sourceId}] ${title} (link not shown: not an https URL)`);
+    }
+    const meta = document.createElement("span"); meta.className = "research-source-meta";
+    meta.textContent = `${researchHostname(result.url)} · retrieved ${String(query.retrieved_at || "unknown").slice(0, 10)} · query: ${query.query}`;
+    item.append(meta);
+    list.append(item);
+  });
+}
+function renderResearch() {
+  const disclosure = byId("case-research");
+  const loading = state.caseId !== "all" && (state.researchCaseId !== state.caseId || state.research === null);
+  const renderSignature = state.caseId === "all" ? "all" : loading ? `${state.caseId}:loading`
+    : JSON.stringify([state.caseId, state.research]);
+  if (disclosure.dataset.renderSignature === renderSignature) return;
+  disclosure.dataset.renderSignature = renderSignature;
+  const status = byId("research-status");
+  const related = byId("research-related");
+  const sourceList = byId("research-sources");
+  [related, sourceList].forEach((container) => container.replaceChildren());
+  if (state.caseId === "all") {
+    setText(status, "Select an available case to see stored public research."); return;
+  }
+  if (loading) { setText(status, "Loading public research…"); return; }
+  const warnings = state.research.warnings.map(String);
+  const records = state.research.records;
+  if (!records.length) {
+    setText(status, warnings.length ? `No stored research. ${warnings.join(" · ")}`
+      : "No public research stored for this case. It is added by the research_case command; viewing never calls a provider.");
+    return;
+  }
+  const record = records[records.length - 1];
+  const sources = researchSources(record);
+  const summary = record.summary || {};
+  const messages = {
+    not_requested: "Summary not requested; only retrieved sources are shown.",
+    rejected: "Summary rejected by the validator; only retrieved sources are shown.",
+    provider_error: "Summary unavailable: the model provider returned an error; only retrieved sources are shown.",
+    interpreted: "Summary cites retrieved sources only; treat it as context for human review.",
+  };
+  const message = messages[summary.status] || "Summary status unknown.";
+  setText(status, `${records.length} stored record(s) · showing newest · ${message}${warnings.length ? ` · ${warnings.join(" · ")}` : ""}`);
+  if (summary.status === "interpreted") renderResearchRelated(related, record, sources);
+  else appendText(related, message);
+  renderResearchSources(sourceList, sources);
+}
+
 async function refreshReduction() {
   // The read-only API validates session_summary.json, replay_case.json, and accepted lineage.
   try {
@@ -310,6 +452,11 @@ async function refreshCases() {
       renderExplanations();
     }
     refreshExplanations(state.caseId);
+    if (previous !== state.caseId || state.researchCaseId !== state.caseId) {
+      beginResearchRequest(state.caseId, true);
+      renderResearch();
+    }
+    refreshResearch(state.caseId);
   } catch (_) { state.caseError = "Saved case index unavailable; showing existing episode evidence."; }
   renderCaseWorkbench();
 }
@@ -535,6 +682,7 @@ function renderRunList() {
 function render() {
   renderCaseWorkbench();
   renderExplanations();
+  renderResearch();
   setText(byId("connection-status"), `READ ONLY / ${displayEpisodes().length} EPISODES`);
   const filter = byId("outcome-filter");
   if (filter.options.length === 1) Object.entries(outcomeLabels).forEach(([value, label]) => {
@@ -610,6 +758,9 @@ byId("case-select").addEventListener("change", (event) => {
   renderExplanations();
   refreshRecipe(state.caseId);
   refreshExplanations(state.caseId);
+  beginResearchRequest(state.caseId, true);
+  renderResearch();
+  refreshResearch(state.caseId);
   const visible = displayEpisodes();
   state.primaryId = (visible.find(isPerturbed) || visible[0] || {}).episode_id || null;
   state.comparisonId = (defaultComparison() || {}).episode_id || null;

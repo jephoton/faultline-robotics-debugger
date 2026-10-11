@@ -58,8 +58,8 @@ main { min-width: 0; padding: var(--space-3); }
 .case-capabilities span { display: block; margin-top: var(--space-1); overflow-wrap: anywhere; }
 .case-capabilities small { display: block; color: var(--muted); font-size: .65rem; margin-top: var(--space-1); }
 #case-details { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-1); }
-#case-details summary, #case-explanations summary { align-items: center; color: var(--cyan); cursor: pointer; display: flex; font-size: .75rem; min-height: 24px; }
-#case-details summary:focus-visible, #case-explanations summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#case-details summary, #case-explanations summary, #case-research summary { align-items: center; color: var(--cyan); cursor: pointer; display: flex; font-size: .75rem; min-height: 24px; }
+#case-details summary:focus-visible, #case-explanations summary:focus-visible, #case-research summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 #case-detail-reasons { color: var(--muted); font-size: .72rem; }
 #case-prerequisites, #case-measurements, .case-export-label { color: var(--muted); font-size: .75rem; margin: var(--space-2) 0 var(--space-1); }
 #case-recipe { max-height: 12rem; overflow: auto; margin: var(--space-1) 0; }
@@ -77,6 +77,17 @@ main { min-width: 0; padding: var(--space-3); }
 .evidence-citations { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
 .evidence-citations button { font-size: .7rem; }
 .unavailable-citation { color: var(--amber); font-size: .7rem; }
+#case-research { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-1); }
+.research-banner { border-left: 3px solid var(--amber); color: var(--amber); font-size: .75rem; margin: var(--space-1) 0; padding: var(--space-1) var(--space-2); overflow-wrap: anywhere; }
+#research-status { color: var(--muted); font-size: .75rem; }
+.research-sources { margin: var(--space-1) 0; padding-left: var(--space-3); }
+.research-sources li { color: var(--muted); font-size: .75rem; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
+.research-sources a, .source-chip a { color: var(--cyan); }
+.research-sources a:focus-visible, .source-chip a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.research-source-meta { display: block; font-size: .7rem; }
+.source-chip { display: inline-block; font-size: .7rem; margin-right: var(--space-1); }
+.source-chip a, .source-chip span { display: inline-block; min-height: 24px; min-width: 24px; padding: var(--space-1) 0; }
+.source-chip.unknown-source { color: var(--amber); }
 #demo-guide { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
 #demo-guide ol { display: flex; gap: var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: .76rem; }
 #demo-guide strong { color: var(--cyan); margin-right: var(--space-1); }

@@ -10,7 +10,7 @@ import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, Callable, Mapping, Optional, Sequence, Type
 from urllib.parse import unquote, urlsplit
 
 from robot_debug.viewer.catalog import ArtifactCatalog
@@ -20,6 +20,17 @@ from robot_debug.explanation_store import read_case_reports
 
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
+
+ResearchReader = Callable[[Path, str], Mapping[str, Any]]
+
+
+def default_research_reader(workspace: Path, case_id: str) -> Mapping[str, Any]:
+    """Read stored research records; imported lazily so the viewer starts without it."""
+    try:
+        from robot_debug.research_store import read_case_research
+    except ImportError as error:
+        raise OSError("research records are unavailable") from error
+    return read_case_research(workspace, case_id)
 
 
 def public_value(value: Any) -> Any:
@@ -116,9 +127,15 @@ def public_recipe(case: dict) -> dict:
 
 
 def make_handler(
-    catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None
+    catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None,
+    research_reader: Optional[ResearchReader] = None,
 ) -> Type[BaseHTTPRequestHandler]:
-    """Create a handler closed over a catalog and the packaged static assets."""
+    """Create a handler closed over a catalog and the packaged static assets.
+
+    ``research_reader`` reads stored (never fetched) research records and
+    defaults to ``robot_debug.research_store.read_case_research``.
+    """
+    read_research = research_reader or default_research_reader
 
     class ViewerHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -135,11 +152,14 @@ def make_handler(
                 elif path.startswith("/api/cases/"):
                     parts = path.split("/")
                     if (len(parts) not in (4, 5)
-                            or (len(parts) == 5 and parts[4] not in {"recipe", "explanations"})
+                            or (len(parts) == 5 and parts[4] not in {"recipe", "explanations", "research"})
                             or CASE_ID.fullmatch(parts[3]) is None):
                         self.send_json(400, {"error": "case ID must be a full lowercase SHA-256 digest"})
                     elif len(parts) == 5 and parts[4] == "explanations":
                         self.send_json(200, read_case_reports(
+                            case_workspace or catalog.artifact_root / "cases", parts[3]))
+                    elif len(parts) == 5 and parts[4] == "research":
+                        self.send_json(200, read_research(
                             case_workspace or catalog.artifact_root / "cases", parts[3]))
                     else:
                         case = inspect_case(case_workspace or catalog.artifact_root / "cases", parts[3])
@@ -237,11 +257,11 @@ def make_handler(
 
 def create_server(
     artifact_root: Path, host: str = "127.0.0.1", port: int = 8765,
-    case_workspace: Optional[Path] = None,
+    case_workspace: Optional[Path] = None, research_reader: Optional[ResearchReader] = None,
 ) -> ThreadingHTTPServer:
     catalog = ArtifactCatalog(artifact_root)
     web_root = Path(__file__).with_name("web")
-    return ThreadingHTTPServer((host, port), make_handler(catalog, web_root, case_workspace))
+    return ThreadingHTTPServer((host, port), make_handler(catalog, web_root, case_workspace, research_reader))
 
 
 def build_parser() -> argparse.ArgumentParser:
