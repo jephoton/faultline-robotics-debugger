@@ -68,8 +68,13 @@ def run_session(
     launch_cutoff_seconds: float = 1320,
     command_runner: Callable[..., Any] = subprocess.run,
     monotonic_clock: Callable[[], float] = time.monotonic,
+    external_reset_candidate: Optional[Union[Path, str]] = None,
 ) -> Dict[str, Any]:
-    """Run the fixed sequence and persist evidence after every decision."""
+    """Run the fixed sequence and persist evidence after every decision.
+
+    With ``external_reset_candidate`` every stage starts from the accepted
+    external demo state instead of the benchmark's init state.
+    """
 
     started_at = monotonic_clock()
     base.should_launch_next(0.0, launch_cutoff_seconds)
@@ -155,6 +160,8 @@ def run_session(
             side=None if point is None else GRID_SIDE,
             x=None if point is None else point.x,
             y=None if point is None else point.y,
+            **({} if external_reset_candidate is None
+               else {"external_reset_candidate": Path(external_reset_candidate).resolve()}),
         )
         try:
             completed = command_runner(

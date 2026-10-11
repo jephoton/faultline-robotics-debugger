@@ -85,6 +85,18 @@ class PositionGridDriverTests(unittest.TestCase):
                 self.assertIn("{}: {}".format(field, value), text)
         self.assertNotIn("agentview_occlusion", self.config("nominal-sentinel"))
 
+    def test_external_reset_reaches_every_grid_stage(self):
+        candidate = self.root / "candidate.json"; candidate.write_text("{}", encoding="utf-8")
+        runner = Runner([aggregate()] * 9)
+        position_grid.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=runner, monotonic_clock=Clock(*range(200)), external_reset_candidate=candidate)
+        for command, _cwd, _check in runner.commands:
+            text = Path(command[-1]).read_text(encoding="utf-8")
+            self.assertIn("external_reset:", text)
+            self.assertIn(json.dumps(str(candidate.resolve())), text)
+        plain = Runner([aggregate()] * 9)
+        position_grid.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.root / "plain", command_runner=plain, monotonic_clock=Clock(*range(200)))
+        self.assertNotIn("external_reset", Path(plain.commands[0][0][-1]).read_text(encoding="utf-8"))
+
     def test_reproducible_second_cell_failure_runs_matched_controls(self):
         responses = [aggregate(), aggregate(), aggregate(False)] + [aggregate(False)] * 4 + [aggregate()] + [aggregate()] * 5
         summary, runner = self.run_driver(responses)

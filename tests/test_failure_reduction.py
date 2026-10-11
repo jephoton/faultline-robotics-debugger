@@ -106,6 +106,16 @@ class FailureReductionDriverTests(unittest.TestCase):
         manifest = json.loads((self.results / "failure-reduction" / "replay_case.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["start_state"], "external_reset")
 
+    def test_custom_parent_rectangle_is_gated_reduced_and_planned(self):
+        runner = Runner([aggregate(), *([aggregate(False)] * 4), *([aggregate()] * 30)])
+        parent = {"x": 0.0, "y": 0.5, "width": 0.5, "height": 0.5}
+        summary = reduction.run_session(upstream_root=self.upstream, project_root=self.project, results_root=self.results, command_runner=runner, monotonic_clock=Clock(*range(1000)), parent_rectangle=parent)
+        self.assertEqual(summary["planned"]["parent_rectangle"], parent)
+        self.assertEqual(summary["geometry"]["parent"]["area"], 0.25)
+        parent_stages = [s["stage"] for s in summary["completed"]["stages"] if s["stage"].startswith("parent-")]
+        self.assertTrue(parent_stages and all(s.startswith("parent-x0000-y0500-w0500-h0500") for s in parent_stages))
+        self.assertEqual(summary["completed"]["decisions"][0]["rectangle"], parent)
+
     def test_benchmark_start_is_recorded_without_external_reset(self):
         responses = [aggregate(), *self.parent_passes(), aggregate(), aggregate(), *([aggregate(False)] * 4), aggregate(), aggregate(), aggregate(), aggregate(), aggregate(False), aggregate(), *([aggregate()] * 5)]
         _summary, runner = self.run_driver(responses)

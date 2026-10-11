@@ -37,9 +37,11 @@ def _stage_rect(prefix: str, rect: Rect, attempt: int, delta: Optional[float] = 
 
 class ReductionSession:
     """Durable, deterministic reduction state machine with bounded launches."""
-    def __init__(self, *, upstream_root: Path, project_root: Path, results_root: Path, launch_cutoff_seconds: float, command_runner: Callable[..., Any], monotonic_clock: Callable[[], float], external_reset_candidate: Optional[Path] = None) -> None:
+    def __init__(self, *, upstream_root: Path, project_root: Path, results_root: Path, launch_cutoff_seconds: float, command_runner: Callable[..., Any], monotonic_clock: Callable[[], float], external_reset_candidate: Optional[Path] = None, parent_rect: Optional[Rect] = None) -> None:
         self.upstream_root, self.project_root, self.results_root = upstream_root, project_root, results_root
         self.external_reset_candidate = external_reset_candidate
+        # The M4 parent by default; a confirmed grid failure can supply another.
+        self.parent_rect = PARENT_RECT if parent_rect is None else parent_rect
         self.launch_cutoff_seconds, self.command_runner, self.clock = launch_cutoff_seconds, command_runner, monotonic_clock
         self.started_at = self.clock(); self.session_dir, self.summary = self._open_or_create()
         self.prior_elapsed = float(self.summary.get("elapsed_seconds", 0.0))
@@ -53,20 +55,20 @@ class ReductionSession:
                 self.save("invalid_evidence"); self.reconciliation_terminal = True
 
     @staticmethod
-    def _plan() -> dict[str, Any]:
-        return {"session_directory_name": SESSION_DIRECTORY_NAME, "parent_rectangle": _rect_dict(PARENT_RECT), "deltas": list(DELTAS), "parent_attempt_budget": PARENT_ATTEMPT_BUDGET, "candidate_attempt_budget": CANDIDATE_ATTEMPT_BUDGET, "nominal_controls": NOMINAL_CONTROLS, "total_valid_episode_limit": TOTAL_VALID_EPISODE_LIMIT, "model_identity": MODEL_ID, "launch_cutoff_seconds": None}
+    def _plan(parent_rect: Rect = PARENT_RECT) -> dict[str, Any]:
+        return {"session_directory_name": SESSION_DIRECTORY_NAME, "parent_rectangle": _rect_dict(parent_rect), "deltas": list(DELTAS), "parent_attempt_budget": PARENT_ATTEMPT_BUDGET, "candidate_attempt_budget": CANDIDATE_ATTEMPT_BUDGET, "nominal_controls": NOMINAL_CONTROLS, "total_valid_episode_limit": TOTAL_VALID_EPISODE_LIMIT, "model_identity": MODEL_ID, "launch_cutoff_seconds": None}
 
     def _open_or_create(self) -> tuple[Path, dict[str, Any]]:
         root = self.results_root.resolve(); existing = root / SESSION_DIRECTORY_NAME; summary_path = existing / "session_summary.json"
         if existing.exists() and summary_path.exists():
             if existing.is_symlink(): raise ValueError("refusing symlinked session directory: {}".format(existing))
-            summary = json.loads(summary_path.read_text(encoding="utf-8")); actual, expected = dict(summary.get("planned", {})), self._plan()
+            summary = json.loads(summary_path.read_text(encoding="utf-8")); actual, expected = dict(summary.get("planned", {})), self._plan(self.parent_rect)
             actual.pop("launch_cutoff_seconds", None); expected.pop("launch_cutoff_seconds", None)
             if actual != expected: raise ValueError("stored reduction plan constants or parent geometry do not match")
             return existing.resolve(), summary
         directory = base._prepare_session_directory(root, session_directory_name=SESSION_DIRECTORY_NAME)
-        plan = self._plan(); plan["launch_cutoff_seconds"] = self.launch_cutoff_seconds
-        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(PARENT_RECT), "geometry": {"parent": _geometry(PARENT_RECT), "current": _geometry(PARENT_RECT), "final": _geometry(PARENT_RECT)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "physical_episode_count": 0, "config_paths": [], "in_flight": None, "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(PARENT_RECT)}, "reduction_search_stop": None, "stop_reason": None}
+        plan = self._plan(self.parent_rect); plan["launch_cutoff_seconds"] = self.launch_cutoff_seconds
+        return directory, {"schema_version": 1, "planned": plan, "model_identity": MODEL_ID, "repository_revision": self._repository_revision(), "completed": {"stages": [], "decisions": [], "sentinel_outcome": None, "control_outcomes": []}, "outcomes": [], "lineage": [], "certified_rectangle": _rect_dict(self.parent_rect), "geometry": {"parent": _geometry(self.parent_rect), "current": _geometry(self.parent_rect), "final": _geometry(self.parent_rect)}, "candidate_valid_attempts": 0, "valid_episode_count": 0, "physical_episode_count": 0, "config_paths": [], "in_flight": None, "elapsed_seconds": 0.0, "reduction_search": {"active_delta": DELTAS[0], "current_rectangle": _rect_dict(self.parent_rect)}, "reduction_search_stop": None, "stop_reason": None}
 
     def elapsed(self) -> float: return self.prior_elapsed + max(0.0, self.clock() - self.started_at)
     def _valid_count(self) -> int: return sum(len(stage.get("results", [])) for stage in self.summary["completed"]["stages"] if stage["status"] == "completed")
@@ -223,7 +225,7 @@ class ReductionSession:
             if self.summary["stop_reason"] in {"reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"}: self._write_manifest()
             return self.summary
         if not self.run_sentinel(): return self.summary
-        parent = self.run_gate(label="parent", rect=PARENT_RECT)
+        parent = self.run_gate(label="parent", rect=self.parent_rect)
         if parent is None: return self.summary
         if parent is not GateDecision.PASS: self.save("parent_not_reproducible"); return self.summary
         if self.summary["reduction_search_stop"] and not self.summary["lineage"]:
@@ -234,9 +236,10 @@ class ReductionSession:
         if self.summary["stop_reason"] in {"reduced_failure_with_nominal_controls", "reduced_failure_nominal_controls_failed"}: self._write_manifest()
         return self.summary
 
-def run_session(*, upstream_root: Union[Path, str], project_root: Union[Path, str], results_root: Union[Path, str], launch_cutoff_seconds: float = 1320, command_runner: Callable[..., Any] = subprocess.run, monotonic_clock: Callable[[], float] = time.monotonic, external_reset_candidate: Optional[Union[Path, str]] = None) -> dict[str, Any]:
+def run_session(*, upstream_root: Union[Path, str], project_root: Union[Path, str], results_root: Union[Path, str], launch_cutoff_seconds: float = 1320, command_runner: Callable[..., Any] = subprocess.run, monotonic_clock: Callable[[], float] = time.monotonic, external_reset_candidate: Optional[Union[Path, str]] = None, parent_rectangle: Optional[dict[str, float]] = None) -> dict[str, Any]:
     external = None if external_reset_candidate is None else Path(external_reset_candidate).resolve()
-    return ReductionSession(upstream_root=Path(upstream_root).resolve(), project_root=Path(project_root).resolve(), results_root=Path(results_root).resolve(), launch_cutoff_seconds=launch_cutoff_seconds, command_runner=command_runner, monotonic_clock=monotonic_clock, external_reset_candidate=external).run()
+    parent = None if parent_rectangle is None else Rect(**{key: float(parent_rectangle[key]) for key in ("x", "y", "width", "height")})
+    return ReductionSession(upstream_root=Path(upstream_root).resolve(), project_root=Path(project_root).resolve(), results_root=Path(results_root).resolve(), launch_cutoff_seconds=launch_cutoff_seconds, command_runner=command_runner, monotonic_clock=monotonic_clock, external_reset_candidate=external, parent_rect=parent).run()
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--upstream-root", required=True, type=Path); parser.add_argument("--project-root", required=True, type=Path); parser.add_argument("--results-root", required=True, type=Path); parser.add_argument("--launch-cutoff-seconds", type=float, default=1320); run_session(**vars(parser.parse_args()))
 if __name__ == "__main__": main()
