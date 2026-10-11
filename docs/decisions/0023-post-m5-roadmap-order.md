@@ -1,7 +1,7 @@
 # ADR 0023: Post-M5 roadmap order
 
-**Status:** Order accepted by Jethro on October 11, 2026. Timeboxes proposed,
-pending Jethro's confirmation.
+**Status:** Order accepted by Jethro on October 11, 2026. Timeboxes accepted
+the same day in a tighter form (see Guards).
 
 ## Decision (accepted)
 
@@ -15,12 +15,15 @@ pending Jethro's confirmation.
 5. **M7** submission afterwards. Deadline: October 30, 10:00 PT
    (October 31, 01:00 Singapore); target October 29.
 
-## Proposed guards (pending confirmation)
+## Guards (accepted October 11, tighter than first proposed)
 
-- Batched inference: up to 4 working days. "Stuck" = GR00T cannot produce
+Jethro chose a tighter M3 window than the first proposal (4 and 3 days).
+
+- M5D: about 1.5 days (October 12–13). Design in ADR 0024.
+- Batched inference: up to 3 working days. "Stuck" = GR00T cannot produce
   per-episode-equivalent actions in batch mode, or a working adapter shows no
   measurable throughput gain in a matched comparison.
-- Portfolio fallback: up to 3 working days.
+- Portfolio fallback: up to 2 working days.
 - M7 starts no later than October 23 regardless of where M3/M6 stand.
 
 ## Consequences
