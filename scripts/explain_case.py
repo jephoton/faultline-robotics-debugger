@@ -32,9 +32,9 @@ PILOT_ROOT = (
     REPOSITORY_ROOT / "artifacts" / "m5-nemotron-pilot-repair-20261006")
 # October 10 v2 iteration: at most five labelled attempts, each with its own
 # exclusive US$0.02 reservation (US$0.10 approved cap; v2-06/07 added October 10
-# so that even worst-case reservations stay within it).
+# and v2-08/09 on October 11, so that even worst-case reservations stay within it).
 ATTEMPTS_ROOT = REPOSITORY_ROOT / "artifacts" / "m5-nemotron-attempts"
-ATTEMPT_LABELS = ("v2-01", "v2-02", "v2-03", "v2-04", "v2-05", "v2-06", "v2-07")
+ATTEMPT_LABELS = ("v2-01", "v2-02", "v2-03", "v2-04", "v2-05", "v2-06", "v2-07", "v2-08", "v2-09")
 
 
 class ExplainCaseError(ValueError):
