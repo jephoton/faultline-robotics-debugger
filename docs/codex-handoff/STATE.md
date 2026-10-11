@@ -1,5 +1,17 @@
 # Faultline current project state
 
+## October 11 external grid and search validation (Claude Code)
+
+`m5b-grid` (external start): quadrants bottom-left/bottom-right/top-left all
+succeeded; top-right failed but replays were S,S,F,F,S → not reproducible, no
+reduction. Combined with M5B, the top-right 25 % mask fails 4/9 from the
+external start versus 4/4 from the benchmark start: same sensitive region,
+start-dependent rate. `search` on Serverless: nominal 19/20, centred sweep all
+success → `no_policy_failure_in_sweep`, matching the September VM run. All
+evidence verified (89 + 95 files). Records: `docs/experiments/m5b-external-replay.md`,
+`docs/experiments/serverless-job-pilot.md`. Estimated Serverless compute
+Oct 10–11 ≈ US$2.1 pre-tax across five Jobs; reconcile with billing.
+
 ## October 11 M5B result (Claude Code)
 
 Job `faultline-m5b-20261010` COMPLETED (~14 min, ≈US$0.40 est.): certified M4

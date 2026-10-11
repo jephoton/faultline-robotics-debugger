@@ -181,3 +181,27 @@ reproduction of the M4 case. Estimated cost: two Jobs of about 12–13
 minutes each at US$1.7468/h ≈ US$0.75 pre-tax plus small disk/bucket charges;
 posted billing still to be reconciled. Jethro reported an AI Cloud balance of
 US$5.99 at retry time.
+
+### October 11 `search` mode validation
+
+Jethro asked to run the only driver not yet exercised on Serverless. Job
+`faultline-search-20261011` (image `afb8eaa5d3d9`, benchmark starts, no external
+state) COMPLETED in ~18 minutes; 95 files exported and verified; every video
+decodes.
+
+| Stage | Result |
+| --- | --- |
+| Nominal, task 0, init states 0–19 (one evaluator run, 311 s) | 19/20 success (init 15 failed, 280 steps); gate (≥16) passed |
+| Centred square sweep on init 0, sides 0.25–0.50 | all six succeeded (137–139 steps) |
+| Stop reason | `no_policy_failure_in_sweep` |
+
+This reproduces the September VM search outcome (`no_policy_failure_in_sweep`;
+nominal 20/20 there). All six workload modes have now run on Serverless or had
+their drivers exercised there: `pilot`, `m5b` (reduce driver), `m5b-grid` (grid
+driver), and `search`; plain `grid`/`reduce` from the benchmark start share
+those drivers. Centred masks never cover the top-right region where the
+reductions found sensitivity, consistent with this negative sweep.
+
+Estimated Serverless compute on October 10–11: two pilots ≈ US$0.75, M5B
+≈ US$0.40, m5b-grid ≈ US$0.44, search ≈ US$0.52 (L40S at US$1.7468/h,
+pre-tax, from submission to finish); posted billing to be reconciled.
