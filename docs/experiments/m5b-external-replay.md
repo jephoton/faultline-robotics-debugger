@@ -62,3 +62,34 @@ Single task, single external demo/state, one seed; three parent attempts; the
 external dataset's licence conflict is unresolved, so the candidate and
 recordings stay private. `tests/test_external_reset.py` mocks fail only under
 Python 3.8 in the image (pass on 3.11).
+
+## Follow-up: position grid from the external start (October 11)
+
+Jethro chose to look for a reproducible failure from the external start before
+reducing. The search driver sweeps 20 benchmark start states, so the
+single-start **position grid** was used instead, chained into the reducer only
+if it confirms a failure (`m5b-grid` mode, `bd1a59e`/`afb8eaa`; reducer now
+accepts any parent rectangle). Job `faultline-m5b-grid-20261011`, image
+`afb8eaa5d3d9` → `sha256:57c02730…`, ~15 minutes, 89 files exported and
+verified; all ten external restores matched the dataset hash.
+
+| Stage (external demo_0 start) | 0.5×0.5 mask at | Outcome | Steps |
+| --- | --- | --- | --- |
+| nominal-sentinel | none | success | 136 |
+| grid | bottom-left (0, 0.5) | success | 130 |
+| grid | bottom-right (0.5, 0.5) | success | 118 |
+| grid | top-left (0, 0) | success | 140 |
+| grid | **top-right (0.5, 0)** | policy_failure | 280 |
+| replays 1–5 | top-right (0.5, 0) | success, success, failure, failure, success | 157/160/280/280/271 |
+
+The grid's reproducibility rule rejected the top-right failure
+(`policy_failure_not_reproducible`), so no reduction ran.
+
+**Combined reading.** From the external start, the top-right 25 % mask failed
+4 of 9 episodes across both Jobs (1/3 in the M5B reducer gate, 1 grid + 2/5
+replays), while the other three quadrants succeeded. From the benchmark start
+the same rectangle failed 4/4 in M4. The policy's sensitivity sits in the same
+image region from both starts, but from the external start it is
+intermittent (about 44 %, small sample) rather than reliable, so it does not
+meet the 4-of-5 reproducibility bar that reduction requires. This is evidence
+of a start-state-dependent failure rate, not a robustness or causal claim.
