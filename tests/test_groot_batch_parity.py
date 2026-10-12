@@ -52,29 +52,61 @@ def fake_torch() -> types.SimpleNamespace:
     )
 
 
-class FakeServer:
-    """Action = per-item noise + that item's own state, so routing mistakes are visible."""
+class FakeDecodeStep:
+    """Mirrors GrootN17ActionDecodeStep: the LIBERO gripper rounding hangs off one attribute."""
 
-    def __init__(self, torch, *, swap_batch_states: bool = False, scale: float = 1.0, wobble: float = 0.0) -> None:
+    def __init__(self, transform="libero") -> None:
+        self.action_decode_transform = transform
+
+
+class FakeUnpackStep:
+    """Mirrors the fallback GrootActionUnpackUnnormalizeStep flag."""
+
+    def __init__(self, enabled=True) -> None:
+        self.libero_gripper_action = enabled
+
+
+class FakeServer:
+    """Action = per-item noise + that item's own state, so routing mistakes are visible.
+
+    The last dimension is the gripper; like the real postprocessor it is turned into
+    ``-sign(2g - 1)`` as the final step unless the rounding attribute is switched off.
+    """
+
+    def __init__(self, torch, *, swap_batch_states: bool = False, scale: float = 1.0, wobble: float = 0.0,
+                 gripper=None, steps=None) -> None:
         self.torch = torch
         self.swap = swap_batch_states
         self.scale = scale
         self.wobble = wobble
+        self.gripper = gripper  # (value for single calls, value for batched calls) before rounding
+        self._postprocess = types.SimpleNamespace(steps=[FakeDecodeStep()] if steps is None else steps)
 
-    def _chunk(self, noise, states):
-        return noise + states[:, None, :1] * self.scale
+    def _rounding_active(self) -> bool:
+        return any(
+            getattr(step, "action_decode_transform", None) or getattr(step, "libero_gripper_action", False)
+            for step in self._postprocess.steps
+        )
+
+    def _finish(self, chunk, batched: bool):
+        chunk = chunk.copy()
+        if self.gripper is not None:
+            chunk[..., -1] = self.gripper[1 if batched else 0]
+        if self._rounding_active():
+            chunk[..., -1] = -np.sign(2.0 * chunk[..., -1] - 1.0)
+        return chunk.astype(np.float32)
 
     def predict(self, obs, ctx):
         noise = self.torch.randn((1, 3, 7))
-        return {"actions": self._chunk(noise, obs["states"][None])[0].astype(np.float32)}
+        return {"actions": self._finish(noise + obs["states"][None][:, None, :1] * self.scale, False)[0]}
 
     def predict_batch(self, obs_batch, ctx_batch):
         noise = self.torch.randn((len(obs_batch), 3, 7))
         states = np.stack([obs["states"] for obs in obs_batch])
         if self.swap:
             states = states[::-1]
-        chunk = self._chunk(noise, states) + self.wobble
-        return [{"actions": chunk[i].astype(np.float32)} for i in range(len(obs_batch))]
+        chunk = self._finish(noise + states[:, None, :1] * self.scale + self.wobble, True)
+        return [{"actions": chunk[i]} for i in range(len(obs_batch))]
 
 
 class ParityTests(unittest.TestCase):
@@ -91,9 +123,13 @@ class ParityTests(unittest.TestCase):
         self.torch.manual_seed(1234)
         return self.module.per_item_noise(self.torch, 1234, offsets, self.counter)
 
+    def isolate(self, server):
+        return lambda: self.module.gripper_rounding_disabled(server._postprocess)
+
     def run_parity(self, server, per_item=True, tolerance=0.05):
         return self.module.run_parity(
-            server, self.observations, noise=self.noise, per_item=per_item, tolerance=tolerance
+            server, self.observations, noise=self.noise, isolate=self.isolate(server),
+            per_item=per_item, tolerance=tolerance,
         )
 
     def test_observations_are_fixed_distinct_and_in_harness_format(self) -> None:
@@ -106,6 +142,82 @@ class ParityTests(unittest.TestCase):
         self.assertEqual((4, 4, 3), a["images"]["agentview"].shape)
         self.assertEqual(np.float32, a["states"].dtype)
         self.assertIn("alphabet soup", a["task_description"])
+
+    # -- D1: judged before gripper rounding -------------------------------------------
+
+    def test_parity_is_judged_before_the_gripper_rounding_on_every_dimension(self) -> None:
+        # Pre-rounding gripper 0.505 (single) vs 0.495 (batch): 0.01 apart, but the sign
+        # step turns that into a full flip. It must pass, and the flip is only reported.
+        result = self.run_parity(FakeServer(self.torch, gripper=(0.505, 0.495)))
+        self.assertTrue(result["passed"], result)
+        self.assertTrue(result["compared_before_gripper_rounding"])
+        self.assertAlmostEqual(0.01, result["per_dim_max_abs_diff"][-1], places=5)
+        self.assertEqual(12, result["gripper_flips_after_rounding"])  # 3 chunk steps x 4 checks
+        self.assertLessEqual(result["max_abs_diff"], 0.05)
+        for check in (v for k, v in result["checks"].items() if k.startswith("batch_")):
+            self.assertEqual(7, len(check["per_dim_max_abs_diff"]))
+            self.assertEqual(3, check["gripper_flips_after_rounding"])
+
+    def test_a_gripper_difference_beyond_tolerance_before_rounding_fails_even_if_rounded_values_match(self) -> None:
+        # Both round to the same sign, but the underlying values are 0.2 apart.
+        result = self.run_parity(FakeServer(self.torch, gripper=(0.9, 0.7)))
+        self.assertFalse(result["passed"])
+        self.assertEqual(0, result["gripper_flips_after_rounding"])
+        self.assertAlmostEqual(0.2, result["per_dim_max_abs_diff"][-1], places=5)
+        self.assertFalse(result["checks"]["batch_ab_item0_vs_single_a"]["passed"])
+
+    def test_non_gripper_dimensions_are_gated_too(self) -> None:
+        result = self.run_parity(FakeServer(self.torch, wobble=0.06))
+        self.assertFalse(result["passed"])
+        self.assertGreater(max(result["per_dim_max_abs_diff"][:-1]), 0.05)
+
+    def test_rounding_is_restored_after_every_isolated_call(self) -> None:
+        server = FakeServer(self.torch, steps=[FakeDecodeStep(), FakeUnpackStep()])
+        self.run_parity(server)
+        self.assertEqual("libero", server._postprocess.steps[0].action_decode_transform)
+        self.assertTrue(server._postprocess.steps[1].libero_gripper_action)
+
+    def test_isolation_switches_each_known_step_kind_off_only_inside_the_context(self) -> None:
+        steps = [FakeDecodeStep(), FakeUnpackStep(), types.SimpleNamespace(other=1)]
+        post = types.SimpleNamespace(steps=steps)
+        with self.module.gripper_rounding_disabled(post) as count:
+            self.assertEqual(2, count)
+            self.assertIsNone(steps[0].action_decode_transform)
+            self.assertFalse(steps[1].libero_gripper_action)
+            self.assertEqual(1, steps[2].other)
+        self.assertEqual("libero", steps[0].action_decode_transform)
+        self.assertTrue(steps[1].libero_gripper_action)
+
+    def test_isolation_restores_the_steps_when_the_call_raises(self) -> None:
+        step = FakeDecodeStep()
+        with self.assertRaises(RuntimeError):
+            with self.module.gripper_rounding_disabled(types.SimpleNamespace(steps=[step])):
+                raise RuntimeError("model call failed")
+        self.assertEqual("libero", step.action_decode_transform)
+
+    def test_a_postprocessor_that_cannot_be_isolated_is_an_error_not_a_pass(self) -> None:
+        for post in (types.SimpleNamespace(steps=[]), types.SimpleNamespace(steps=[types.SimpleNamespace()]),
+                     types.SimpleNamespace()):
+            with self.assertRaisesRegex(RuntimeError, "cannot isolate"):
+                with self.module.gripper_rounding_disabled(post):
+                    pass
+
+    def test_without_active_rounding_the_flip_count_is_zero(self) -> None:
+        result = self.run_parity(FakeServer(self.torch, steps=[FakeDecodeStep(transform=None)]))
+        self.assertTrue(result["passed"])
+        self.assertEqual(0, result["gripper_flips_after_rounding"])
+
+    def test_per_dim_helpers(self) -> None:
+        left = np.zeros((2, 3, 4))
+        right = left.copy()
+        right[1, 2, 3] = 0.5
+        right[0, 0, 0] = -0.25
+        self.assertEqual([0.25, 0.0, 0.0, 0.5], self.module.per_dim_max_abs_diff(left, right))
+        self.assertEqual([float("inf")], self.module.per_dim_max_abs_diff(np.zeros(3), np.zeros(4)))
+        a = np.array([[1.0, -1.0]])
+        b = np.array([[1.0, 1.0]])
+        self.assertEqual(1, self.module.gripper_flips(a, b))
+        self.assertEqual(0, self.module.gripper_flips(a, a))
 
     def test_correct_batching_passes_all_checks_including_item_one(self) -> None:
         result = self.run_parity(FakeServer(self.torch))
@@ -124,8 +236,9 @@ class ParityTests(unittest.TestCase):
             self.torch.manual_seed(1234)
             return self.module._null_context()
 
+        server = FakeServer(self.torch)
         result = self.module.run_parity(
-            FakeServer(self.torch), self.observations, noise=seeded, per_item=False
+            server, self.observations, noise=seeded, isolate=self.isolate(server), per_item=False
         )
         self.assertNotIn("batch_ab_item1_vs_single_b", result["checks"])
         # With a generator whose batched draw starts with the single draw, item 0 matches.
