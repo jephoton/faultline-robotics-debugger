@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+import json
+import os
+from typing import Any, Dict, List, Mapping, Optional
+
+import numpy as np
 
 from vla_eval.benchmarks.libero.benchmark import LIBEROBenchmark
 
@@ -14,6 +18,10 @@ from robot_debug.occlusion import (
 )
 
 _CAMERAS = ("agentview", "wrist")
+# The camera-effect probe: the first observation after reset and every 40th step up to 280.
+PROBE_STEP_INTERVAL = 40
+PROBE_LAST_STEP = 280
+PROBE_MAX_BYTES = 16 * 1024
 
 
 class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
@@ -23,6 +31,13 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     single-strength ``image_perturbation`` family (ADR 0026) can be applied.
     The scalar family hits both cameras first, then any occlusion is drawn.
     Without the new options every observation is exactly what it was before.
+
+    With ``camera_probe`` (a JSON path) and a wrist occlusion or scalar family
+    configured, a small sidecar records, per camera, the mean and standard
+    deviation of the policy-input image before and after the perturbation at the
+    first observation after reset and every 40th step up to 280. It proves each
+    camera was perturbed without storing frames, is rewritten atomically, stays
+    under 16 KB and never changes the observation.
     """
 
     def __init__(
@@ -34,8 +49,14 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         external_reset: Optional[Mapping[str, Any]] = None,
         wrist_occlusion: Optional[Mapping[str, Any]] = None,
         image_perturbation: Optional[Mapping[str, Any]] = None,
+        camera_probe: Optional[str] = None,
         **kwargs: Any
     ) -> None:
+        if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
+            raise ValueError("camera_probe must be a non-empty path")
+        self.camera_probe = camera_probe
+        self._probe_episodes: List[Dict[str, Any]] = []
+        self._probe_truncated = False
         if external_reset is not None:
             if (not isinstance(external_reset, Mapping)
                     or set(external_reset) != {"candidate", "metadata_out"}
@@ -189,12 +210,77 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         observation = super().make_obs(raw_obs, task)
         step = self._obs_step
         self._obs_step += 1
+        unperturbed = observation["images"] if self._probe_due(step) else None
         if self._scalar_active():
             observation = self._perturb_cameras(observation, step)
         observation = apply_agentview_occlusion(observation, self.agentview_occlusion)
         if self.wrist_occlusion.enabled:
             observation = apply_wrist_occlusion(observation, self.wrist_occlusion)
+        if unperturbed is not None:
+            self._record_probe(step, unperturbed, observation["images"])
         return observation
+
+    def _probe_due(self, step: int) -> bool:
+        return (
+            self.camera_probe is not None
+            and (self._scalar_active() or self.wrist_occlusion.enabled)
+            and step <= PROBE_LAST_STEP
+            and step % PROBE_STEP_INTERVAL == 0
+        )
+
+    @staticmethod
+    def _image_stats(image: Any) -> Dict[str, float]:
+        data = np.asarray(image, dtype=np.float64)
+        return {"mean": round(float(data.mean()), 4), "std": round(float(data.std()), 4)}
+
+    def _record_probe(self, step: int, before: Mapping[str, Any], after: Mapping[str, Any]) -> None:
+        """Append one sample and rewrite the sidecar; a probe problem never breaks the episode."""
+
+        try:
+            sample: Dict[str, Any] = {"step": step}
+            for camera in _CAMERAS:
+                if camera in before and camera in after:
+                    unperturbed = self._image_stats(before[camera])
+                    perturbed = self._image_stats(after[camera])
+                    sample[camera] = {
+                        "unperturbed_mean": unperturbed["mean"], "unperturbed_std": unperturbed["std"],
+                        "perturbed_mean": perturbed["mean"], "perturbed_std": perturbed["std"],
+                    }
+            index = max(self._episode_index, 0)
+            if not self._probe_episodes or self._probe_episodes[-1]["episode_index"] != index:
+                self._probe_episodes.append({"episode_index": index, "samples": []})
+            self._probe_episodes[-1]["samples"].append(sample)
+            text = self._probe_text()
+            if len(text.encode("utf-8")) > PROBE_MAX_BYTES:
+                # Keep the file within its bound: drop what was just added and say so.
+                self._probe_episodes[-1]["samples"].pop()
+                if not self._probe_episodes[-1]["samples"]:
+                    self._probe_episodes.pop()
+                self._probe_truncated = True
+                text = self._probe_text()
+            self._write_probe(text)
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def _probe_text(self) -> str:
+        document: Dict[str, Any] = {
+            "schema_version": 1,
+            "perturbation": self.perturbation_record(),
+            "episodes": self._probe_episodes,
+        }
+        if self._probe_truncated:
+            document["truncated"] = True
+        return json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+    def _write_probe(self, text: str) -> None:
+        target = self.camera_probe
+        directory = os.path.dirname(target)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temporary = target + ".partial.json"  # an allowed evidence suffix, in case a kill leaves it
+        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        os.replace(temporary, target)
 
     def _perturb_cameras(self, observation: Any, step: int) -> dict:
         images = dict(observation["images"])

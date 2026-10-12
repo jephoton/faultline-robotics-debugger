@@ -52,6 +52,15 @@ class M6Runner:
             raise self.raise_error
         output = Path(config["output_dir"])
         output.mkdir(parents=True)
+        if params.get("camera_probe"):
+            # What the benchmark writes: a half-brightness wrist and an untouched agent view.
+            stats = {"unperturbed_mean": 100.0, "unperturbed_std": 20.0,
+                     "perturbed_mean": 50.0, "perturbed_std": 10.0}
+            clean = dict(stats, perturbed_mean=100.0, perturbed_std=20.0)
+            Path(params["camera_probe"]).write_text(json.dumps({
+                "schema_version": 1, "perturbation": {"seed": 7},
+                "episodes": [{"episode_index": 0, "samples": [
+                    {"step": 0, "agentview": clean, "wrist": stats}]}]}), encoding="utf-8")
         fails = policy_fails(params) or stem in self.nominal_fails
         (output / "pilot_aggregate.json").write_text(json.dumps(aggregate(success=not fails)), encoding="utf-8")
         media = output / "episodes" / "pilot"
@@ -153,6 +162,21 @@ class SmokeWorkloadTests(WorkloadTestCase):
         self.assertEqual({"success": 2}, conditions["blur_0.6"]["outcomes"])
         self.assertEqual({"policy_failure": 2}, conditions["darken_0.6"]["outcomes"])
         self.assertTrue(detail["complete"])
+
+    def test_perturbed_configs_get_a_probe_path_beside_them_and_the_summary_reports_the_effect(self):
+        _summary, _world, runner, _calls = self.invoke(SMOKE)
+        configs = self.paths.work_root / SMOKE["run_id"] / "m6" / "configs"
+
+        self.assertEqual(str(configs / "wrist-mask-only-01.camera_probe.json"),
+                         runner.params["wrist-mask-only-01"]["camera_probe"])
+        self.assertNotIn("camera_probe", runner.params["nominal-01"])
+        self.assertTrue((configs / "blur-s600000-01.camera_probe.json").is_file())
+        self.assertFalse(list(configs.glob("nominal*.camera_probe.json")))
+        conditions = self.m6_summary(SMOKE)["conditions"]
+        self.assertIsNone(conditions["nominal"]["camera_effect"])
+        effect = conditions["wrist_mask_only"]["camera_effect"]
+        self.assertEqual({"mean_ratio": 1.0, "std_ratio": 1.0, "samples": 12}, effect["agentview"])
+        self.assertEqual({"mean_ratio": 0.5, "std_ratio": 0.5, "samples": 12}, effect["wrist"])
 
     def test_the_generic_model_start_is_skipped(self):
         _summary, world, _runner, _calls = self.invoke(SMOKE)

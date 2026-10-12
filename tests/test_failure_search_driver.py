@@ -108,10 +108,11 @@ class WriteConfigTests(unittest.TestCase):
             x=.625, y=0, width=.375, height=.375,
             wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}))
 
-        self.assertTrue(text.endswith(
-            "      wrist_occlusion:\n        enabled: true\n        x: 0.000000\n"
-            "        y: 0.000000\n        width: 1.000000\n        height: 1.000000\n"
-            "        color: [0, 0, 0]\n        opacity: 1.0\n"))
+        block = ("      wrist_occlusion:\n        enabled: true\n        x: 0.000000\n"
+                 "        y: 0.000000\n        width: 1.000000\n        height: 1.000000\n"
+                 "        color: [0, 0, 0]\n        opacity: 1.0\n")
+        self.assertIn(block, text)
+        self.assertTrue(text[text.index(block) + len(block):].startswith("      camera_probe:"))
         self.assertLess(text.index("agentview_occlusion"), text.index("wrist_occlusion"))
 
     def test_wrist_only_run_has_no_agentview_block(self):
@@ -124,8 +125,9 @@ class WriteConfigTests(unittest.TestCase):
     def test_image_perturbation_block(self):
         text = self.params_block(self.write_config(image_perturbation={"kind": "noise", "severity": 0.0125}))
 
-        self.assertTrue(text.endswith(
-            "      image_perturbation:\n        kind: noise\n        severity: 0.012500\n"))
+        block = "      image_perturbation:\n        kind: noise\n        severity: 0.012500\n"
+        self.assertIn(block, text)
+        self.assertTrue(text[text.index(block) + len(block):].startswith("      camera_probe:"))
 
     def test_blocks_parse_back_as_yaml_for_the_benchmark(self):
         import yaml
@@ -154,6 +156,28 @@ class WriteConfigTests(unittest.TestCase):
         self.assertTrue(RectOcclusion.from_mapping(
             dict(params["wrist_occlusion"], color=tuple(params["wrist_occlusion"]["color"]))).enabled)
         self.assertEqual(0.2, ScalarPerturbation.from_mapping(params["image_perturbation"]).severity)
+
+    def test_camera_probe_is_written_beside_the_config_only_for_the_new_perturbations(self):
+        import json
+        import yaml
+        for options in ({"wrist_occlusion": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                        {"image_perturbation": {"kind": "blur", "severity": 0.4}}):
+            with self.subTest(options=options):
+                text = self.write_config(**options)
+                params = yaml.safe_load(text)["benchmarks"][0]["params"]
+                self.assertEqual(
+                    str(self.root / "stage.camera_probe.json"), params["camera_probe"])
+        for options in ({}, {"x": .625, "y": 0, "width": .375, "height": .375},
+                        {"wrist_occlusion": None, "image_perturbation": None}):
+            with self.subTest(options=options):
+                self.assertNotIn("camera_probe", self.write_config(**options))
+        text = self.write_config(image_perturbation={"kind": "blur", "severity": 0.4})
+        self.assertIn(json.dumps(str(self.root / "stage.camera_probe.json")), text)
+
+    def test_camera_probe_precedes_the_external_reset_block(self):
+        text = self.write_config(image_perturbation={"kind": "blur", "severity": 0.4},
+                                 external_reset_candidate=self.root / "c.json")
+        self.assertLess(text.index("camera_probe"), text.index("external_reset"))
 
     def test_rejects_invalid_wrist_occlusion(self):
         good = {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}

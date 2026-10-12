@@ -390,6 +390,11 @@ def _write_config(
         params.extend(_wrist_occlusion_lines(wrist_occlusion))
     if image_perturbation is not None:
         params.extend(_image_perturbation_lines(image_perturbation))
+    if wrist_occlusion is not None or image_perturbation is not None:
+        # The per-camera effect probe (ADR 0026): a small JSON sidecar beside the config,
+        # written only when one of the new perturbations is configured.
+        params.append("      camera_probe: {}".format(
+            _yaml_scalar(Path(config_path).with_name(Path(config_path).stem + ".camera_probe.json"))))
     if external_reset_candidate is not None:
         # Start from the accepted external demo state instead of the benchmark's
         # init state; restore hashes are written beside the stage outputs.

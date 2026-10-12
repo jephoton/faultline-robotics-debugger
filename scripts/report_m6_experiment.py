@@ -104,19 +104,77 @@ def _counts(row: Mapping[str, Any]) -> Dict[str, int]:
     }
 
 
+CHANGE_TOLERANCE = 0.01
+
+
+def effect_text(effect: Optional[Mapping[str, Any]], camera: str) -> str:
+    """``mean ratio / std ratio`` of the policy input after against before the perturbation."""
+
+    stats = (effect or {}).get(camera)
+    if not isinstance(stats, Mapping):
+        return "-"
+    mean, std = stats.get("mean_ratio"), stats.get("std_ratio")
+    return "{} / {}".format("-" if mean is None else "{:.2f}".format(mean),
+                            "-" if std is None else "{:.2f}".format(std))
+
+
+def camera_changed(effect: Optional[Mapping[str, Any]], camera: str) -> Optional[bool]:
+    """Whether the probe saw the camera's policy input change; ``None`` without probe data."""
+
+    stats = (effect or {}).get(camera)
+    if not isinstance(stats, Mapping):
+        return None
+    ratios = [stats.get("mean_ratio"), stats.get("std_ratio")]
+    known = [value for value in ratios if isinstance(value, (int, float))]
+    if not known:
+        return None
+    return any(abs(value - 1.0) > CHANGE_TOLERANCE for value in known)
+
+
+CAMERA_LABELS = {"agentview": "agent view", "wrist": "wrist"}
+
+
+def camera_check(conditions: Mapping[str, Any]) -> List[str]:
+    """What the per-camera probe saw for each perturbed condition (rule-based)."""
+
+    sentences: List[str] = []
+    for key, row in conditions.items():
+        if key == "nominal":
+            continue
+        effect = row.get("camera_effect")
+        label = dict(WRIST_CONDITIONS).get(key, key)
+        family, _, severity = key.partition("_")
+        if key not in dict(WRIST_CONDITIONS) and family in FAMILY_LABELS and severity:
+            label = "{} at s = {}".format(FAMILY_LABELS[family], severity)
+        if effect is None:
+            sentences.append("{}: no probe data.".format(label))
+            continue
+        changed = [CAMERA_LABELS[c] for c in ("agentview", "wrist") if camera_changed(effect, c)]
+        unchanged = [CAMERA_LABELS[c] for c in ("agentview", "wrist") if camera_changed(effect, c) is False]
+        text = "{}: policy input changed on {}".format(label, " and ".join(changed) if changed else "neither camera")
+        if unchanged:
+            text += "; unchanged on {}".format(" and ".join(unchanged))
+        if key not in dict(WRIST_CONDITIONS) and unchanged:
+            text += ". **A scalar family should change both cameras; fix before the main Job**"
+        sentences.append(text + ".")
+    return sentences
+
+
 def wrist_table(conditions: Mapping[str, Any]) -> List[str]:
     lines = [
-        "| Condition | Runs | Successes | Policy failures | Not completed | Median duration (s) |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Condition | Runs | Successes | Policy failures | Not completed | Median duration (s) "
+        "| Agent view mean / std ratio | Wrist mean / std ratio |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for key, label in WRIST_CONDITIONS:
         row = conditions.get(key)
         if row is None:
             continue
         counts = _counts(row)
-        lines.append("| {} | {} | {} | {} | {} | {} |".format(
+        lines.append("| {} | {} | {} | {} | {} | {} | {} | {} |".format(
             label, counts["valid"] + counts["missing"], counts["success"], counts["failure"],
-            counts["missing"], _cell(row.get("median_duration_seconds"))))
+            counts["missing"], _cell(row.get("median_duration_seconds")),
+            effect_text(row.get("camera_effect"), "agentview"), effect_text(row.get("camera_effect"), "wrist")))
     return lines
 
 
@@ -165,8 +223,9 @@ def wrist_reading(conditions: Mapping[str, Any]) -> List[str]:
 
 def smoke_family_table(conditions: Mapping[str, Any], families: Sequence[str]) -> List[str]:
     lines = [
-        "| Family | Severity | Physical value | Successes | Policy failures | Median duration (s) |",
-        "| --- | ---: | --- | ---: | ---: | ---: |",
+        "| Family | Severity | Physical value | Successes | Policy failures | Median duration (s) "
+        "| Agent view mean / std ratio | Wrist mean / std ratio |",
+        "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for family in families:
         for key, row in conditions.items():
@@ -174,10 +233,11 @@ def smoke_family_table(conditions: Mapping[str, Any], families: Sequence[str]) -
                 continue
             severity = float(key.split("_", 1)[1])
             counts = _counts(row)
-            lines.append("| {} | {:g} | {} | {} | {} | {} |".format(
+            lines.append("| {} | {:g} | {} | {} | {} | {} | {} | {} |".format(
                 FAMILY_LABELS.get(family, family), severity,
                 physical_text(physical_value(family, severity)), counts["success"], counts["failure"],
-                _cell(row.get("median_duration_seconds"))))
+                _cell(row.get("median_duration_seconds")),
+                effect_text(row.get("camera_effect"), "agentview"), effect_text(row.get("camera_effect"), "wrist")))
     return lines
 
 
@@ -202,8 +262,9 @@ def _ordered(families: Mapping[str, Any], order: Sequence[str]) -> List[str]:
 def threshold_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> List[str]:
     lines = [
         "| Family | Smallest reproducibly failing severity | Physical value | Last non-reproducing level "
-        "| Levels tried | Episodes | Stop reason |",
-        "| --- | ---: | --- | ---: | ---: | ---: | --- |",
+        "| Levels tried | Episodes | Stop reason | Agent view mean / std ratio at threshold "
+        "| Wrist mean / std ratio at threshold |",
+        "| --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: |",
     ]
     for family in _ordered(families, order):
         result = families[family]
@@ -212,11 +273,13 @@ def threshold_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> L
             shown = "none up to 1.0"
         else:
             shown = _severity(threshold)
-        lines.append("| {} | {} | {} | {} | {} | {} | {} |".format(
+        effect = result.get("threshold_camera_effect")
+        lines.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
             FAMILY_LABELS.get(family, family), shown, physical_text(result.get("threshold_physical")),
             _severity(result.get("lower_bound")) if result.get("levels") else "-",
             len(result.get("levels") or ()), result.get("attempts_used", 0),
-            _STOP_TEXT.get(str(result.get("stop_reason")), str(result.get("stop_reason")))))
+            _STOP_TEXT.get(str(result.get("stop_reason")), str(result.get("stop_reason"))),
+            effect_text(effect, "agentview"), effect_text(effect, "wrist")))
     return lines
 
 
@@ -299,6 +362,12 @@ def render_smoke(summary: Mapping[str, Any]) -> List[str]:
         lines += smoke_family_table(conditions, families)
         lines += ["", "A single level per family only shows that each family reaches the policy and can be run; "
                   "it does not locate a threshold."]
+    lines += ["", "## Camera-effect check (per-camera probe)", "",
+              "The benchmark records the mean and standard deviation of each camera's policy input before and "
+              "after the perturbation (first observation and every 40th step to 280). A ratio of 1.00 / 1.00 "
+              "means that camera was unchanged; the mean ratio shows brightness loss or occlusion, the std "
+              "ratio shows lost contrast or added noise.", ""]
+    lines += ["- " + sentence for sentence in camera_check(conditions)]
     return lines + ["", *timing_lines(summary)]
 
 
@@ -322,6 +391,8 @@ def render_threshold(summary: Mapping[str, Any]) -> List[str]:
     order = config.get("families") or ()
     lines += threshold_table(families, order) + ["", *level_table(families, order), ""]
     lines += ["- " + sentence for sentence in threshold_reading(families, config)]
+    lines += ["", "The camera columns are the median perturbed/unperturbed ratios of the policy input's mean and "
+              "standard deviation over the threshold level's attempts (1.00 / 1.00 would mean unchanged)."]
     return lines + ["", *timing_lines(summary)]
 
 

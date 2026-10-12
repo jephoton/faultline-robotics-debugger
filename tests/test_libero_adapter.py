@@ -464,6 +464,152 @@ class DiagnosticLIBEROBenchmarkTests(unittest.TestCase):
             self.assertEqual({"state_sha256": "abc"}, records[0])
             self.assertEqual("blur", records[1]["perturbation"]["image_perturbation"]["kind"])
 
+    # ---- M6: per-camera perturbation probe --------------------------------
+
+    def _probe_benchmark(self, directory, **options):
+        from pathlib import Path
+        path = Path(directory) / "case.camera_probe.json"
+        options.setdefault("image_perturbation", {"kind": "darken", "severity": 0.5})
+        return self.benchmark_type(seed=7, camera_probe=str(path), **options), path
+
+    def _drive(self, benchmark, steps, raw=None):
+        benchmark._begin_episode()
+        for _ in range(steps):
+            benchmark.make_obs(raw or self._raw(), {"name": "t"})
+
+    @staticmethod
+    def _load(path):
+        import json
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_probe_samples_the_first_observation_and_every_40th_step_to_280(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            self._drive(benchmark, 300)
+            episode = self._load(path)["episodes"][0]
+            self.assertEqual([0, 40, 80, 120, 160, 200, 240, 280], [s["step"] for s in episode["samples"]])
+            self.assertEqual(0, episode["episode_index"])
+
+    def test_probe_records_perturbed_and_unperturbed_statistics_per_camera(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            self._drive(benchmark, 1)
+            document = self._load(path)
+            sample = document["episodes"][0]["samples"][0]
+            self.assertEqual(1, document["schema_version"])
+            self.assertEqual("darken", document["perturbation"]["image_perturbation"]["kind"])
+            self.assertEqual(7, document["perturbation"]["seed"])
+            for camera, value in (("agentview", 120), ("wrist", 60)):
+                with self.subTest(camera=camera):
+                    stats = sample[camera]
+                    self.assertAlmostEqual(float(value), stats["unperturbed_mean"], places=3)
+                    self.assertAlmostEqual(0.0, stats["unperturbed_std"], places=3)
+                    self.assertAlmostEqual(round(value * 0.525), stats["perturbed_mean"], places=3)
+                    self.assertAlmostEqual(0.0, stats["perturbed_std"], places=3)
+
+    def test_probe_sees_the_final_policy_image_including_occlusion(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(
+                directory, image_perturbation=None,
+                wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0})
+            self._drive(benchmark, 1)
+            sample = self._load(path)["episodes"][0]["samples"][0]
+            self.assertEqual(0.0, sample["wrist"]["perturbed_mean"])
+            self.assertEqual(60.0, sample["wrist"]["unperturbed_mean"])
+            self.assertEqual(sample["agentview"]["unperturbed_mean"], sample["agentview"]["perturbed_mean"])
+
+    def test_probe_is_not_written_without_a_path_or_without_a_new_perturbation(self) -> None:
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            no_path = self.benchmark_type(seed=7, image_perturbation={"kind": "darken", "severity": 0.5})
+            self._drive(no_path, 3)
+            path = Path(directory) / "p.json"
+            for options in (
+                {},
+                {"agentview_occlusion": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}},
+                {"image_perturbation": {"kind": "blur", "severity": 0.0}},
+            ):
+                with self.subTest(options=options):
+                    benchmark = self.benchmark_type(seed=7, camera_probe=str(path), **options)
+                    self._drive(benchmark, 3)
+                    self.assertFalse(path.exists())
+            self.assertEqual([], list(Path(directory).iterdir()))
+
+    def test_probe_file_is_replaced_atomically_and_updates_as_the_episode_runs(self) -> None:
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            benchmark._begin_episode()
+            benchmark.make_obs(self._raw(), {"name": "t"})
+            self.assertEqual(1, len(self._load(path)["episodes"][0]["samples"]))
+            for _ in range(40):
+                benchmark.make_obs(self._raw(), {"name": "t"})
+            self.assertEqual(2, len(self._load(path)["episodes"][0]["samples"]))
+            self.assertEqual([path.name], [p.name for p in Path(directory).iterdir()])
+
+    def test_each_episode_gets_its_own_record(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            self._drive(benchmark, 2)
+            self._drive(benchmark, 2)
+            episodes = self._load(path)["episodes"]
+            self.assertEqual([0, 1], [e["episode_index"] for e in episodes])
+
+    def test_probe_size_is_bounded_and_marked_truncated(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            for _ in range(60):
+                self._drive(benchmark, 300)
+            document = self._load(path)
+            self.assertLessEqual(path.stat().st_size, 16 * 1024)
+            self.assertTrue(document["truncated"])
+            self.assertGreaterEqual(len(document["episodes"]), 3)
+
+    def test_untruncated_probe_has_no_truncated_flag_and_is_small(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, path = self._probe_benchmark(directory)
+            self._drive(benchmark, 300)
+            self.assertNotIn("truncated", self._load(path))
+            self.assertLess(path.stat().st_size, 4096)
+
+    def test_an_unwritable_probe_never_breaks_the_episode(self) -> None:
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            blocker = Path(directory) / "file"
+            blocker.write_text("x", encoding="utf-8")
+            benchmark = self.benchmark_type(
+                seed=7, camera_probe=str(blocker / "child.json"),
+                image_perturbation={"kind": "darken", "severity": 0.5})
+            self._drive(benchmark, 2)
+
+    def test_invalid_probe_paths_are_rejected(self) -> None:
+        for value in ("", 3, ["a"]):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                self.benchmark_type(camera_probe=value, image_perturbation={"kind": "darken", "severity": 0.5})
+
+    def test_probe_does_not_change_the_policy_observation(self) -> None:
+        import tempfile
+        spec = {"kind": "noise", "severity": 0.5}
+        with tempfile.TemporaryDirectory() as directory:
+            probed, _path = self._probe_benchmark(directory, image_perturbation=spec)
+            plain = self.benchmark_type(seed=7, image_perturbation=spec)
+            probed._begin_episode()
+            plain._begin_episode()
+            for _ in range(3):
+                a = probed.make_obs(self._raw(), {"name": "t"})["images"]
+                b = plain.make_obs(self._raw(), {"name": "t"})["images"]
+                for camera in ("agentview", "wrist"):
+                    np.testing.assert_array_equal(a[camera], b[camera])
+
 
 if __name__ == "__main__":
     unittest.main()

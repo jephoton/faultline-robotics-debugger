@@ -71,6 +71,88 @@ def severity_token(severity: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Per-camera effect probe (written by the benchmark beside each perturbed config)
+# ---------------------------------------------------------------------------
+
+PROBE_SUFFIX = ".camera_probe.json"
+PROBE_CAMERAS = ("agentview", "wrist")
+PROBE_MAX_BYTES = 16 * 1024
+
+
+def probe_path(configs_dir: Path, case_id: str) -> Path:
+    return Path(configs_dir) / (case_id + PROBE_SUFFIX)
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError("non-standard JSON constant: " + value)
+
+
+def load_probe(path: Path) -> Optional[Dict[str, Any]]:
+    """Read one probe sidecar; anything missing, oversized or malformed is ``None``."""
+
+    try:
+        path = Path(path)
+        if path.stat().st_size > PROBE_MAX_BYTES:
+            return None
+        document = json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject_constant)
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(document, dict) or document.get("schema_version") != 1
+        or not isinstance(document.get("episodes"), list)
+    ):
+        return None
+    return document
+
+
+def _ratio(numerator: Any, denominator: Any) -> Optional[float]:
+    if (
+        isinstance(numerator, (int, float)) and isinstance(denominator, (int, float))
+        and not isinstance(numerator, bool) and not isinstance(denominator, bool)
+        and math.isfinite(numerator) and math.isfinite(denominator) and denominator > 0
+    ):
+        return numerator / denominator
+    return None
+
+
+def camera_effect(probes: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Median perturbed/unperturbed mean and std ratio per camera over every probe sample.
+
+    A ratio of 1.0 means the camera's policy input was unchanged; the mean ratio
+    shows brightness changes and occlusion, the std ratio shows lost or added
+    contrast and detail. Zero denominators are skipped. ``None`` when there is no sample.
+    """
+
+    effect: Dict[str, Any] = {"items": len(probes)}
+    found = False
+    for camera in PROBE_CAMERAS:
+        means: List[float] = []
+        stds: List[float] = []
+        samples = 0
+        for probe in probes:
+            for episode in probe.get("episodes", ()):
+                for sample in episode.get("samples", ()) if isinstance(episode, Mapping) else ():
+                    stats = sample.get(camera) if isinstance(sample, Mapping) else None
+                    if not isinstance(stats, Mapping):
+                        continue
+                    samples += 1
+                    mean = _ratio(stats.get("perturbed_mean"), stats.get("unperturbed_mean"))
+                    std = _ratio(stats.get("perturbed_std"), stats.get("unperturbed_std"))
+                    if mean is not None:
+                        means.append(mean)
+                    if std is not None:
+                        stds.append(std)
+        if samples:
+            found = True
+            effect[camera] = {
+                "mean_ratio": be._round(be.percentile(means, 50), 4),
+                "std_ratio": be._round(be.percentile(stds, 50), 4),
+                "samples": samples,
+            }
+    return effect if found else None
+
+
+# ---------------------------------------------------------------------------
 # Manifests
 # ---------------------------------------------------------------------------
 
@@ -404,6 +486,40 @@ def run_m6(
     smoke_items = smoke_manifest() if not threshold else []
     controls = nominal_controls() if threshold else []
 
+    probe_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+
+    def effect_for(subset: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Camera effect over the *valid* items of a condition or level (warm-up never included)."""
+
+        probes = []
+        for record in subset:
+            if record["status"] != "valid":
+                continue
+            case_id = record["case_id"]
+            if case_id not in probe_cache:
+                probe_cache[case_id] = load_probe(probe_path(configs, case_id))
+            if probe_cache[case_id] is not None:
+                probes.append(probe_cache[case_id])
+        return camera_effect(probes)
+
+    def enriched_families() -> Dict[str, Any]:
+        records = state["records"]
+        families: Dict[str, Any] = {}
+        for name, result in state["families"].items():
+            copy = dict(result)
+            levels = []
+            for level in result.get("levels", ()):
+                item = dict(level)
+                item["camera_effect"] = effect_for([
+                    r for r in records if r.get("family") == name and r.get("severity") == level["severity"]])
+                levels.append(item)
+            copy["levels"] = levels
+            threshold = result.get("threshold_severity")
+            copy["threshold_camera_effect"] = next(
+                (item["camera_effect"] for item in levels if item["severity"] == threshold), None)
+            families[name] = copy
+        return families
+
     def build() -> Dict[str, Any]:
         records = sorted(state["records"], key=lambda r: r["case_id"])
         started = [r for r in records if r.get("started", True)]
@@ -414,6 +530,9 @@ def run_m6(
             for item in smoke_items:
                 planned_by_kind[item["kind"]] = planned_by_kind.get(item["kind"], 0) + 1
         nominal_planned = NOMINAL_CONTROLS if threshold else SMOKE_NOMINAL_REPEATS
+        conditions = condition_stats(records, planned_by_kind)
+        for kind, row in conditions.items():
+            row["camera_effect"] = effect_for([r for r in records if r["kind"] == kind])
         summary: Dict[str, Any] = {
             "schema_version": 1,
             "mode": mode,
@@ -426,9 +545,9 @@ def run_m6(
             "planned_items": len(smoke_items) if not threshold else None,
             "attempted": len(started),
             "valid_count": len(valid),
-            "conditions": condition_stats(records, planned_by_kind),
+            "conditions": conditions,
             "nominal_controls": state["nominal_controls"] or nominal_summary(records, nominal_planned),
-            "families": state["families"],
+            "families": enriched_families(),
             "warmup": state["warmup"],
             "server_argv": state["server_argv"],
             "memory_start": state["memory_start"],

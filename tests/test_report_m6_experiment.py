@@ -16,6 +16,7 @@ from tests.test_m6_experiment import (
     BOUNDARIES,
     THRESHOLD_CONFIG,
     M6World,
+    ProbingWorld,
     RunTestCase,
     boundary_decide,
     smoke_decide,
@@ -136,6 +137,60 @@ class RenderTests(RunTestCase):
         self.assertEqual("contrast x0.46", report.physical_text({"name": "contrast_factor", "value": 0.46}))
         for bad in (None, {}, {"name": "other", "value": 1}, {"name": "noise_sigma", "value": "x"}):
             self.assertEqual("-", report.physical_text(bad))
+
+
+class CameraEffectReportTests(RunTestCase):
+    def test_smoke_tables_show_the_camera_ratios(self):
+        summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
+        text = report.render_report([summary])
+
+        self.assertIn("Agent view mean / std ratio | Wrist mean / std ratio", text)
+        self.assertIn("| Same rectangle on the wrist image only | 12 | 12 | 0 | 0 | 0.0 | 1.00 / 1.00 | 0.50 / 0.75 |", text)
+        self.assertIn("| Nominal control (no perturbation) | 6 | 6 | 0 | 0 | 0.0 | - | - |", text)
+        self.assertRegex(text, r"\| Darkening \| 0\.6 \| brightness x0\.43 \| 0 \| 2 \| 0\.0 \| 0\.70 / 0\.85 \| 0\.70 / 0\.85 \|")
+
+    def test_camera_check_says_which_cameras_changed(self):
+        summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
+        text = report.render_report([summary])
+
+        self.assertIn("## Camera-effect check (per-camera probe)", text)
+        self.assertIn("Same rectangle on the wrist image only: policy input changed on wrist; unchanged on agent view.", text)
+        self.assertIn("Reduced agent-view mask + wrist image black: policy input changed on agent view and wrist.", text)
+        self.assertIn("Darkening at s = 0.6: policy input changed on agent view and wrist.", text)
+        self.assertNotIn("fix before the main Job", text)
+
+    def test_a_scalar_family_that_leaves_a_camera_unchanged_is_flagged(self):
+        summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
+        summary["conditions"]["blur_0.6"]["camera_effect"]["wrist"] = {
+            "mean_ratio": 1.0, "std_ratio": 1.004, "samples": 4}
+        text = report.render_report([summary])
+        self.assertIn("Gaussian blur at s = 0.6: policy input changed on agent view; unchanged on wrist. "
+                      "**A scalar family should change both cameras; fix before the main Job**.", text)
+
+    def test_missing_probe_data_is_stated(self):
+        summary = self.run_m6(M6World(smoke_decide), "m6-smoke")
+        text = report.render_report([summary])
+        self.assertIn("Same rectangle on the wrist image only: no probe data.", text)
+        self.assertIn("Darkening at s = 0.6: no probe data.", text)
+
+    def test_noise_counts_as_changed_through_the_std_ratio(self):
+        self.assertTrue(report.camera_changed({"wrist": {"mean_ratio": 1.0, "std_ratio": 1.6}}, "wrist"))
+        self.assertFalse(report.camera_changed({"wrist": {"mean_ratio": 1.005, "std_ratio": 0.995}}, "wrist"))
+        self.assertIsNone(report.camera_changed({"wrist": {}}, "wrist"))
+        self.assertIsNone(report.camera_changed(None, "wrist"))
+
+    def test_threshold_table_shows_the_effect_at_the_threshold_level(self):
+        world = ProbingWorld(boundary_decide(BOUNDARIES))
+        summary = self.run_m6(world, "m6-threshold", dict(THRESHOLD_CONFIG))
+        text = report.render_report([summary])
+
+        self.assertIn("Agent view mean / std ratio at threshold | Wrist mean / std ratio at threshold", text)
+        expected = report.effect_text(summary["families"]["darken"]["threshold_camera_effect"], "wrist")
+        self.assertNotEqual("-", expected)
+        darken_row = [line for line in text.splitlines() if line.startswith("| Darkening | 0.35 |")][0]
+        self.assertTrue(darken_row.endswith("| {} | {} |".format(expected, expected)))
+        blur_row = [line for line in text.splitlines() if line.startswith("| Gaussian blur |")][0]
+        self.assertTrue(blur_row.endswith("| - | - |"))
 
 
 class CommandLineTests(unittest.TestCase):

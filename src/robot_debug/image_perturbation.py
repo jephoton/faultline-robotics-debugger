@@ -14,6 +14,11 @@ Mappings:
 Noise is a deterministic function of (episode seed, step index, camera, kind,
 severity) through a stable SHA-256 hash, never Python's salted ``hash()``, so a
 replay reproduces every frame exactly (for a fixed NumPy build).
+
+The key deliberately has **no attempt index** (coordinator decision, October 13):
+the perturbation is a fixed, replayable function of the episode, so every attempt
+at one level sees the identical noise. Variation between attempts comes only from
+the policy and the simulator, which is what the 4-of-5 reproducibility gate measures.
 """
 
 from __future__ import annotations

@@ -595,6 +595,151 @@ class ThresholdRunTests(RunTestCase):
         self.assertFalse(list((self.root / "m6").rglob("*.sqlite-*")))
 
 
+def fake_probe(kwargs):
+    """What the benchmark probe would write for a config (two samples)."""
+
+    def camera(unperturbed_mean, unperturbed_std, mean_ratio, std_ratio):
+        return {"unperturbed_mean": unperturbed_mean, "unperturbed_std": unperturbed_std,
+                "perturbed_mean": round(unperturbed_mean * mean_ratio, 4),
+                "perturbed_std": round(unperturbed_std * std_ratio, 4)}
+
+    agent, wrist = (1.0, 1.0), (1.0, 1.0)
+    if "x" in kwargs:  # the agent-view rectangle
+        agent = (0.9, 0.8)
+    spec = kwargs.get("image_perturbation")
+    if spec is not None:
+        both = (1.0 - 0.5 * spec["severity"], 1.0 - 0.25 * spec["severity"])
+        agent, wrist = both, both
+    if "wrist_occlusion" in kwargs:
+        wrist = (0.5, 0.75)
+    samples = [
+        {"step": step, "agentview": camera(100.0, 40.0, *agent), "wrist": camera(80.0, 20.0, *wrist)}
+        for step in (0, 40)
+    ]
+    return {"schema_version": 1, "perturbation": {"seed": 7},
+            "episodes": [{"episode_index": 0, "samples": samples}]}
+
+
+class ProbingWorld(M6World):
+    """Writes the benchmark's probe sidecar beside each perturbed config, like the real image."""
+
+    def write_config(self, **kwargs):
+        super().write_config(**kwargs)
+        if "wrist_occlusion" in kwargs or "image_perturbation" in kwargs:
+            path = kwargs["config_path"]
+            path.with_name(path.stem + m6.PROBE_SUFFIX).write_text(
+                json.dumps(fake_probe(kwargs)), encoding="utf-8")
+
+
+class CameraEffectTests(unittest.TestCase):
+    def test_median_ratios_per_camera(self):
+        def doc(rows):
+            return {"schema_version": 1, "episodes": [{"episode_index": 0, "samples": [
+                {"step": 40 * i, "agentview": {"unperturbed_mean": um, "unperturbed_std": us,
+                                               "perturbed_mean": pm, "perturbed_std": ps}}
+                for i, (um, us, pm, ps) in enumerate(rows)]}]}
+
+        effect = m6.camera_effect([doc([(100, 10, 50, 20), (100, 10, 60, 30), (100, 10, 90, 40)])])
+        self.assertEqual({"items": 1, "agentview": {"mean_ratio": 0.6, "std_ratio": 3.0, "samples": 3}}, effect)
+
+    def test_pools_samples_across_items_and_skips_zero_denominators(self):
+        def doc(um, us, pm, ps):
+            return {"schema_version": 1, "episodes": [{"episode_index": 0, "samples": [
+                {"step": 0, "wrist": {"unperturbed_mean": um, "unperturbed_std": us,
+                                      "perturbed_mean": pm, "perturbed_std": ps}}]}]}
+
+        effect = m6.camera_effect([doc(100, 10, 50, 5), doc(100, 0, 70, 3), doc(0, 10, 9, 20)])
+        self.assertEqual(3, effect["items"])
+        # mean ratios 0.5 and 0.7 (the zero-mean image is skipped); std ratios 0.5 and 2.0 (zero std skipped)
+        self.assertEqual({"mean_ratio": 0.6, "std_ratio": 1.25, "samples": 3}, effect["wrist"])
+
+    def test_no_probes_means_no_effect(self):
+        self.assertIsNone(m6.camera_effect([]))
+        self.assertIsNone(m6.camera_effect([{"schema_version": 1, "episodes": []}]))
+
+    def test_load_probe_rejects_missing_malformed_and_foreign_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertIsNone(m6.load_probe(root / "missing.json"))
+            for name, text in (("garbage.json", "{no"), ("list.json", "[]"), ("schema.json", '{"schema_version": 2}'),
+                               ("episodes.json", '{"schema_version": 1, "episodes": 3}'),
+                               ("nan.json", '{"schema_version": 1, "episodes": [], "x": NaN}')):
+                (root / name).write_text(text, encoding="utf-8")
+                with self.subTest(name=name):
+                    self.assertIsNone(m6.load_probe(root / name))
+            (root / "ok.json").write_text(json.dumps(fake_probe({"image_perturbation": {"severity": 0.2}})),
+                                          encoding="utf-8")
+            self.assertEqual(1, m6.load_probe(root / "ok.json")["schema_version"])
+
+    def test_oversized_probe_files_are_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "big.json"
+            path.write_text(json.dumps({"schema_version": 1, "episodes": [], "pad": "x" * 40000}),
+                            encoding="utf-8")
+            self.assertIsNone(m6.load_probe(path))
+
+
+class CameraEffectRunTests(RunTestCase):
+    def test_smoke_conditions_carry_the_camera_effect(self):
+        summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
+        conditions = summary["conditions"]
+
+        self.assertIsNone(conditions["nominal"]["camera_effect"])
+        wrist_only = conditions["wrist_mask_only"]["camera_effect"]
+        self.assertEqual(12, wrist_only["items"])
+        self.assertEqual({"mean_ratio": 1.0, "std_ratio": 1.0, "samples": 24}, wrist_only["agentview"])
+        self.assertEqual({"mean_ratio": 0.5, "std_ratio": 0.75, "samples": 24}, wrist_only["wrist"])
+        darken = conditions["darken_0.6"]["camera_effect"]
+        self.assertEqual(2, darken["items"])
+        self.assertEqual(darken["agentview"], darken["wrist"])
+        self.assertEqual(0.7, darken["agentview"]["mean_ratio"])
+        self.assertEqual(0.85, darken["agentview"]["std_ratio"])
+
+    def test_threshold_levels_and_thresholds_carry_the_camera_effect(self):
+        world = ProbingWorld(boundary_decide(BOUNDARIES))
+        summary = self.run_m6(world, "m6-threshold", dict(THRESHOLD_CONFIG))
+        darken = summary["families"]["darken"]
+
+        by_severity = {level["severity"]: level for level in darken["levels"]}
+        self.assertEqual(0.8, by_severity[0.4]["camera_effect"]["wrist"]["mean_ratio"])
+        self.assertEqual(5, by_severity[0.4]["camera_effect"]["items"])
+        self.assertEqual(by_severity[0.35]["camera_effect"], darken["threshold_camera_effect"])
+        self.assertEqual(0.825, darken["threshold_camera_effect"]["agentview"]["mean_ratio"])
+        self.assertIsNone(summary["families"]["blur"]["threshold_camera_effect"])
+        self.assertIsNotNone(summary["families"]["blur"]["levels"][0]["camera_effect"])
+        self.assertIsNone(summary["conditions"]["nominal"]["camera_effect"])
+
+    def test_missing_or_broken_probes_leave_the_effect_empty_without_failing_the_run(self):
+        world = ProbingWorld(smoke_decide)
+        original = world.write_config
+
+        def write_config(**kwargs):
+            original(**kwargs)
+            path = kwargs["config_path"]
+            probe = path.with_name(path.stem + m6.PROBE_SUFFIX)
+            if path.stem.startswith("darken"):
+                probe.unlink()
+            elif path.stem.startswith("noise"):
+                probe.write_text("{broken", encoding="utf-8")
+
+        world.write_config = write_config
+        summary = self.run_m6(world, "m6-smoke")
+        self.assertTrue(summary["complete"])
+        self.assertIsNone(summary["conditions"]["darken_0.6"]["camera_effect"])
+        self.assertIsNone(summary["conditions"]["noise_0.6"]["camera_effect"])
+        self.assertIsNotNone(summary["conditions"]["blur_0.6"]["camera_effect"])
+
+    def test_the_warmup_probe_is_not_counted(self):
+        world = ProbingWorld(smoke_decide)
+        summary = self.run_m6(world, "m6-smoke")
+        self.assertIsNone(summary["conditions"]["nominal"]["camera_effect"])
+        self.assertEqual("warmup-nominal-01", summary["warmup"]["case_id"])
+
+    def test_summary_json_round_trips_with_the_camera_effect(self):
+        summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
+        self.assertEqual(json.loads(json.dumps(summary, sort_keys=True)), self.saved())
+
+
 class PythonCompatibilityTests(unittest.TestCase):
     """The simulator image runs the workload and the benchmark adapter on Python 3.8."""
 
