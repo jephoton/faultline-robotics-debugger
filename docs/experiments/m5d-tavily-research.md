@@ -31,8 +31,28 @@ US$0.01 each; 2 unused). No GPU or AI Cloud spend.
 - The validator worked as intended: it blocked causal wording, and
   misattribution is still only catchable by a human reading the snippets.
 
+## Follow-up: what the reduced mask hides (October 12, no spend)
+
+Prompted by the S11 wrist-camera lead, frames from the saved M4 recordings
+(the policy's agent-view input, 256×256 at 20 fps) were compared:
+
+- At the start the mask `(0.625, 0, 0.375, 0.375)` covers only background and
+  the upper part of the arm; the soup, the basket and the other objects are
+  all below it.
+- In the nominal run the arm grasps the soup and lifts it up through the
+  masked region before carrying it left to the basket.
+- With the mask, the arm still reaches and grasps the soup, but the gripper
+  and the held can disappear behind the black box during the lift, and the
+  episode ends with the can held short of the basket.
+- Durations: all 5 nominal controls succeed in 6.90–7.10 s; all 4
+  reduced-mask attempts end at exactly 14.05 s, the 280-step episode cap.
+  The failure is a timeout after a successful grasp, not a missed grasp.
+
+Hypothesis for M6 (not a finding): GR00T relies on the agent view to track the
+arm and held object during transport, and the intact wrist view does not
+compensate. Recorded under M6 in `PROJECT_PLAN.md`.
+
 ## Status
 
-Awaiting Jethro's usefulness judgement in the viewer (panel "Related public
-research (context, not evidence)"). Records and snippets stay in ignored
+Accepted by Jethro on October 12, 2026. Records and snippets stay in ignored
 `artifacts/`.
