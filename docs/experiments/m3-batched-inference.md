@@ -53,7 +53,7 @@ of its inference call.
   `outcome_drift`; the replication rule (ADR 0025, fixed before the rerun)
   required a rerun with no masked success in its batched phase, which held
   (12/12 failures). Across all runs: 1 late success in 38 batched masked
-  episodes, 0 in 36 unbatched; not statistically distinguishable, and
+  episodes, 0 in 48 unbatched; not statistically distinguishable, and
   consistent with a stochastic timeout near the cap.
 
 ## Spend (estimates at US$1.7468/h, not yet reconciled with billing)
