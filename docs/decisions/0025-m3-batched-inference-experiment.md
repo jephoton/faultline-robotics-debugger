@@ -64,6 +64,20 @@ Accepted by Jethro before any GPU Job:
   (`works`, `no_measurable_gain`, `outcome_drift`, `incomplete`); any claim
   names the worker count it applies to.
 
+## Replication rule (October 12, set before the rerun)
+
+The first measurement Job gave +18% at 12 workers with batching but one late
+masked success (11.0 s, `mask-10`) in the batched phase, which the rule above
+labels `outcome_drift`. Jethro chose one rerun of the 12-worker pair, with
+phase order reversed (batched first) and a 690 s workload deadline to stay
+inside the US$1.50 cap. Verdict rules, fixed before the rerun:
+
+- batched ≥ 1.15× unbatched again **and** no masked success in the rerun →
+  `works at 12 workers (2 runs)`, reported with the first run's late success;
+- any masked success in the rerun's batched phase → investigate batching
+  before any claim;
+- speedup below 1.15× → `no measurable gain` at 12 workers.
+
 ## Claim boundary
 
 Any result is specific to GR00T N1.7 on LIBERO-Object task 0 with this harness
