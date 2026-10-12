@@ -44,13 +44,25 @@ _PHYSICAL_FORMAT = {
 }
 _STOP_TEXT = {
     "threshold_found": "threshold found",
-    "no_reproducible_failure": "no reproducible failure up to s = 1.0",
     "budget_exhausted": "attempt budget exhausted",
     "deadline_exhausted": "Job deadline reached",
     "infrastructure_error": "infrastructure error",
     "nominal_failed": "not run: nominal controls failed",
     "not_run": "not run",
 }
+
+
+def sweep_top(result: Mapping[str, Any], default: Sequence[float] = ()) -> Optional[float]:
+    """The largest severity the search was configured to try (not a hard-coded 1.0)."""
+
+    sweep = result.get("sweep") or default
+    return max(sweep) if sweep else None
+
+
+def stop_text(stop: Any, top: Optional[float]) -> str:
+    if stop == "no_reproducible_failure":
+        return "no reproducible failure up to s = {:g}".format(top) if top is not None else "no reproducible failure"
+    return _STOP_TEXT.get(str(stop), str(stop))
 
 
 class ReportError(ValueError):
@@ -270,7 +282,8 @@ def threshold_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> L
         result = families[family]
         threshold = result.get("threshold_severity")
         if threshold is None and result.get("stop_reason") == "no_reproducible_failure":
-            shown = "none up to 1.0"
+            top = sweep_top(result)
+            shown = "none up to {:g}".format(top) if top is not None else "none"
         else:
             shown = _severity(threshold)
         effect = result.get("threshold_camera_effect")
@@ -278,7 +291,7 @@ def threshold_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> L
             FAMILY_LABELS.get(family, family), shown, physical_text(result.get("threshold_physical")),
             _severity(result.get("lower_bound")) if result.get("levels") else "-",
             len(result.get("levels") or ()), result.get("attempts_used", 0),
-            _STOP_TEXT.get(str(result.get("stop_reason")), str(result.get("stop_reason"))),
+            stop_text(result.get("stop_reason"), sweep_top(result)),
             effect_text(effect, "agentview"), effect_text(effect, "wrist")))
     return lines
 
@@ -308,16 +321,16 @@ def threshold_reading(families: Mapping[str, Any], config: Mapping[str, Any]) ->
                     lower, lower, threshold))
         elif stop == "no_reproducible_failure":
             sentences.append(
-                "{}: no level up to s = 1.0 reached {} failures, so the policy is robust to this family in the "
-                "tested range (not a claim beyond it).".format(label, gate))
+                "{}: no level up to s = {:g} reached {} failures, so the policy is robust to this family in the "
+                "tested range (not a claim beyond it).".format(
+                    label, sweep_top(result, config.get("sweep") or ()) or 1.0, gate))
         elif stop == "nominal_failed":
             sentences.append("{}: not evaluated, the nominal controls did not all succeed.".format(label))
         else:
             detail = ""
             if threshold is not None:
                 detail = " The best reproducing level seen so far is s = {:g} (coarse, not refined).".format(threshold)
-            sentences.append("{}: incomplete ({}).{}".format(
-                label, _STOP_TEXT.get(str(stop), str(stop)), detail))
+            sentences.append("{}: incomplete ({}).{}".format(label, stop_text(stop, None), detail))
     return sentences
 
 

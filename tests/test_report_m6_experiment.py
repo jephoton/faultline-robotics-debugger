@@ -55,11 +55,11 @@ class RenderTests(RunTestCase):
         self.assertIn("## Threshold search per family (main Job)", text)
         self.assertIn("| Darkening | 0.35 | brightness x0.67 | 0.3375 | 6 | 30 | threshold found |", text)
         self.assertIn("| Gaussian noise | 0.55 | noise sigma 55.0 of 255 | 0.5375 | 7 | 35 | threshold found |", text)
-        self.assertIn("| Gaussian blur | none up to 1.0 | - | 1 | 5 | 25 | no reproducible failure up to s = 1.0 |", text)
+        self.assertIn("| Gaussian blur | none up to 1 | - | 1 | 5 | 25 | no reproducible failure up to s = 1 |", text)
         self.assertIn("| Contrast reduction | 0.05 | contrast x0.95 | 0.0375 | 5 | 25 | threshold found |", text)
         self.assertIn("0.2: 0/5; 0.4: 5/5; 0.3: 0/5; 0.35: 5/5; 0.325: 0/5; 0.3375: 0/5", text)
         self.assertIn("boundary under this rule lies in (0.3375, 0.35]", text)
-        self.assertIn("robust to this family in the tested range", text)
+        self.assertIn("no level up to s = 1 reached 4 of 5 failures, so the policy is robust to this family in the tested range", text)
         self.assertIn("Nominal controls: 5 of 5 succeeded", text)
         self.assertIn("4 of 5", text)
         self.assertIn("not the onset of any failure", text)
@@ -85,6 +85,23 @@ class RenderTests(RunTestCase):
         text = report.render_report([self.smoke_summary(decide)])
         self.assertIn("(this wrist rectangle alone was enough to cause failure here)", text)
         self.assertIn("(the policy completed the task even with the wrist image black)", text)
+
+    def test_no_failure_wording_uses_the_configured_sweep_maximum(self):
+        config = dict(THRESHOLD_CONFIG, families=["blur", "darken"], sweep=[0.25, 0.5], bisection_steps=1)
+        world = M6World(boundary_decide({"blur": None, "darken": 0.25}))
+        summary = self.run_m6(world, "m6-threshold", config)
+        text = report.render_report([summary])
+
+        self.assertIn("| Gaussian blur | none up to 0.5 | - | 0.5 | 2 | 10 | no reproducible failure up to s = 0.5 |", text)
+        self.assertIn("Gaussian blur: no level up to s = 0.5 reached 4 of 5 failures", text)
+        self.assertNotIn("up to 1.0", text)
+        self.assertNotIn("up to s = 1.0", text)
+        self.assertIn("(not a claim beyond it)", text)
+
+    def test_the_default_sweep_still_reads_up_to_one(self):
+        text = report.render_report([self.threshold_summary()])
+        self.assertIn("none up to 1", text)
+        self.assertIn("no level up to s = 1 reached", text)
 
     def test_both_summaries_in_one_report(self):
         text = report.render_report([self.smoke_summary(), self.threshold_summary()])
