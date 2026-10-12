@@ -195,7 +195,8 @@ class FakeModel:
         log = Path(self.kwargs["timing_log"])
         log.parent.mkdir(parents=True, exist_ok=True)
         size = self.kwargs["max_batch_size"]
-        lines = [
+        lines = [{"t": 0.1, "batch_size": 1, "inference_ms": 900.0, "wait_ms": [0.0]}]  # warm-up call
+        lines += [
             {"t": 1.0 + i, "batch_size": size, "inference_ms": 50.0, "wait_ms": [1.0] * size}
             for i in range(3)
         ]
@@ -228,8 +229,10 @@ class World:
 
     def __init__(self, *, workers_hint=4, item_seconds=0.01, fail_case=None, model_fail=None,
                  outcome_for=None, block_until_cancel=False, timeout_case=None, leave_companions=False,
-                 on_check_alive=None):
+                 on_check_alive=None, on_run=None):
+        self.on_run = on_run
         self.timeout_case = timeout_case
+        self.nonzero_case = None
         self.leave_companions = leave_companions
         self.on_check_alive = on_check_alive
         self.events = []
@@ -247,7 +250,7 @@ class World:
         self.latched = None
         self.models_at_run = []
         self.outcome_for = outcome_for or (
-            lambda case: "success" if case.startswith("nominal") else "policy_failure"
+            lambda case: "success" if case.replace("warmup-", "").startswith("nominal") else "policy_failure"
         )
         self.set_calls = []
         self.configs = []
@@ -267,6 +270,8 @@ class World:
     def run_item(self, command, *, item_timeout, cancel):
         case = Path(command[-1]).stem
         output = Path(command[-1]).parent.parent / "runs" / case
+        if self.on_run is not None:
+            self.on_run(case)
         with self.lock:
             self.running += 1
             self.max_running = max(self.max_running, self.running)
@@ -280,7 +285,9 @@ class World:
             companions = [output / "recording.sqlite-wal", output / "recording.sqlite-shm"]
         try:
             if self.block_until_cancel:
-                cancel.wait(30)
+                deadline = time.monotonic() + 30
+                while not cancel.wait(0.05) and time.monotonic() < deadline:
+                    pass  # short slices so a pending KeyboardInterrupt is delivered promptly
                 raise RunCancelled("cancelled")
             time.sleep(self.item_seconds)
             if cancel.is_set():
@@ -292,6 +299,9 @@ class World:
                 except subprocess.TimeoutExpired as expired:
                     raise InfrastructureError("evaluator timed out") from expired
             if case == self.fail_case:
+                self.latched = "evaluator_failed"
+                raise InfrastructureError("evaluator returned nonzero")
+            if case == self.nonzero_case:
                 self.latched = "evaluator_failed"
                 raise InfrastructureError("evaluator returned nonzero")
             for companion in companions:  # a normal exit checkpoints and removes them
@@ -321,6 +331,7 @@ class RunPhasesTests(unittest.TestCase):
             model_factory=world.model_factory, set_model=world.set_model, run_item=world.run_item,
             failure=failure or (lambda: world.latched), remaining=lambda: self.remaining_value[0],
             launch_deadline=5000.0, progress=progress or (lambda *_a, **_k: None),
+            server_clock=lambda: 0.5,
             parity_runner=parity_runner, write_config=world.write_config, load_result=world.load_result,
         )
         kwargs.update(overrides)
@@ -334,8 +345,8 @@ class RunPhasesTests(unittest.TestCase):
         self.assertEqual([("start", 1), ("ready", 5000.0), ("close", 1), ("start", 4), ("ready", 5000.0),
                           ("close", 4)], world.events)
         self.assertEqual(1, world.max_live, "the previous server must be gone before the next starts")
-        self.assertEqual(8, len(world.ran))
-        self.assertEqual({"nominal-01", "nominal-02", "mask-01", "mask-02"}, set(world.ran))
+        self.assertEqual(9, len(world.ran))
+        self.assertEqual({"nominal-01", "nominal-02", "mask-01", "mask-02"}, set(world.ran) - {"warmup-nominal-01"})
         self.assertTrue(all(live == 1 for live in world.models_at_run), "evaluators ran against a live server")
         self.assertEqual([world.models[0], None, world.models[1], None], world.set_calls)
         first, second = summary["phases"]
@@ -367,7 +378,8 @@ class RunPhasesTests(unittest.TestCase):
         world = World()
         self.run_phases(world, [[4, 4]])
         by_case = {c["stage_name"]: c for c in world.configs}
-        self.assertEqual({"m3-nominal-01", "m3-nominal-02", "m3-mask-01", "m3-mask-02"}, set(by_case))
+        self.assertEqual({"m3-nominal-01", "m3-nominal-02", "m3-mask-01", "m3-mask-02", "m3-warmup-nominal-01"},
+                         set(by_case))
         self.assertNotIn("x", by_case["m3-nominal-01"])
         mask = by_case["m3-mask-01"]
         self.assertEqual((0.625, 0.0, 0.375, 0.375), (mask["x"], mask["y"], mask["width"], mask["height"]))
@@ -377,8 +389,8 @@ class RunPhasesTests(unittest.TestCase):
     def test_workers_steal_from_one_queue_and_never_exceed_the_worker_count(self) -> None:
         world = World(item_seconds=0.05)
         self.run_phases(world, [[4, 1]], repeats=6)  # 12 items, 4 workers
-        self.assertEqual(12, len(world.ran))
-        self.assertEqual(12, len(set(world.ran)))
+        self.assertEqual(13, len(world.ran))  # 12 items and the warm-up
+        self.assertEqual(13, len(set(world.ran)))
         self.assertEqual(4, world.max_running)
 
     def test_summary_file_is_written_and_json_clean(self) -> None:
@@ -413,7 +425,7 @@ class RunPhasesTests(unittest.TestCase):
         self.assertEqual("incomplete", summary["verdict"])
 
     def test_invalid_evidence_is_never_counted_as_valid(self) -> None:
-        world = World(outcome_for=lambda case: "infrastructure_error")
+        world = World(outcome_for=lambda case: "success" if case.startswith("warmup") else "infrastructure_error")
         summary = self.run_phases(world, [[4, 1]])
         record = summary["phases"][0]
         self.assertEqual(0, record["valid_count"])
@@ -490,7 +502,7 @@ class RunPhasesTests(unittest.TestCase):
             )
         self.assertEqual(["complete", "deadline_skipped", "complete"], [p["status"] for p in summary["phases"]])
         self.assertEqual("deadline_exhausted", summary["stop_reason"])
-        self.assertEqual(8, len(world.ran))
+        self.assertEqual(9, len(world.ran))
 
     def test_smoke_parity_failure_starts_no_server(self) -> None:
         world = World()
@@ -686,12 +698,12 @@ class RunPhasesTests(unittest.TestCase):
             state["t"] += 800.0
 
         def tick():
-            state["t"] += 20.0  # every phase reads the clock a few times: ~100 s per phase
+            state["t"] += 5.0  # every phase reads the clock ~25 times: ~125 s per phase
             return state["t"]
 
         summary = self.run_phases(
             world, [[4, 1], [4, 4]], prefetch=prefetch, clock=tick,
-            remaining=lambda: 1500.0 - state["t"],
+            remaining=lambda: 2000.0 - state["t"],
         )
         self.assertGreaterEqual(summary["prefetch_seconds"], 800.0)
         self.assertEqual(["complete", "complete"], [p["status"] for p in summary["phases"]])
@@ -789,12 +801,89 @@ class RunPhasesTests(unittest.TestCase):
 
         self.assertIsNone(be.memory_snapshot(str(meminfo), garbled)["gpu_used_mb"])
 
+    # -- D2: one untimed warm-up on the first server ------------------------------------
+
+    def test_first_phase_gets_one_untimed_warmup_before_any_manifest_item(self) -> None:
+        world = World()
+        summary = self.run_phases(world, [[4, 1], [4, 4]])
+        self.assertEqual("warmup-nominal-01", world.ran[0])
+        self.assertEqual(1, world.ran.count("warmup-nominal-01"), "only the first server is warmed up")
+        warm = summary["warmup"]
+        self.assertEqual(("warmup-nominal-01", "valid", "success", True),
+                         (warm["case_id"], warm["status"], warm["outcome"], warm["matches_known_outcome"]))
+        self.assertIn("duration_seconds", warm)
+        for phase in summary["phases"]:
+            self.assertEqual(4, phase["valid_count"])
+            self.assertNotIn("warmup-nominal-01", {i["case_id"] for i in phase["items"]})
+        warm_dir = self.root / "m3-batch" / "warmup"
+        self.assertTrue((warm_dir / "configs" / "warmup-nominal-01.yaml").is_file())
+        self.assertEqual(1, [c["stage_name"] for c in world.configs].count("m3-warmup-nominal-01"))
+
+    def test_warmup_runs_against_the_live_first_server_before_workers_start(self) -> None:
+        world = World()
+        self.run_phases(world, [[4, 1], [4, 4]])
+        self.assertEqual(1, world.models_at_run[0])
+        self.assertEqual(("start", 1), world.events[0])
+        self.assertNotIn(("start", 4), world.events[: world.events.index(("close", 1))])
+
+    def test_warmup_time_and_outcome_stay_out_of_phase_metrics(self) -> None:
+        state = {"t": 0.0}
+        world = World(
+            outcome_for=lambda case: "policy_failure" if case.startswith("warmup") else (
+                "success" if case.startswith("nominal") else "policy_failure"),
+            on_run=lambda case: state.update(t=state["t"] + 100.0) if case.startswith("warmup") else None,
+        )
+        summary = self.run_phases(world, [[4, 1]], clock=lambda: state["t"])
+        self.assertEqual(100.0, summary["warmup"]["duration_seconds"])
+        self.assertFalse(summary["warmup"]["matches_known_outcome"])
+        phase = summary["phases"][0]
+        self.assertEqual(0.0, phase["total_seconds"], "warm-up time must not count toward the phase")
+        self.assertEqual([], phase["drift_ids"], "a surprising warm-up outcome is not drift")
+        self.assertEqual("complete", phase["status"])
+
+    def test_warmup_calls_are_excluded_from_the_server_timing(self) -> None:
+        world = World()
+        summary = self.run_phases(world, [[4, 4]])
+        timing = summary["phases"][0]["timing"]
+        self.assertEqual(3, timing["calls"])
+        self.assertEqual(1, timing["calls_before_timed_launch_excluded"])
+        self.assertEqual(50.0, timing["inference_ms_p95"])
+
+    def test_a_failed_warmup_stops_the_phase_before_any_manifest_item(self) -> None:
+        world = World()
+        world.nonzero_case = "warmup-nominal-01"
+        summary = self.run_phases(world, [[4, 1], [4, 4]])
+        self.assertEqual(["warmup-nominal-01"], world.ran)
+        self.assertEqual("infrastructure_error", summary["warmup"]["status"])
+        self.assertEqual(0, summary["phases"][0]["attempted"])
+        self.assertEqual("incomplete", summary["phases"][0]["status"])
+        self.assertEqual(["incomplete", "not_run"], [p["status"] for p in summary["phases"]])
+        self.assertEqual("evaluator_failed", summary["stop_reason"])
+
+    def test_a_timed_out_warmup_loses_its_run_dir_and_the_export_still_works(self) -> None:
+        world = World(timeout_case="warmup-nominal-01", leave_companions=True)
+        summary = self.run_phases(world, [[4, 1]])
+        self.assertEqual("timed_out", summary["warmup"]["status"])
+        self.assertTrue(summary["warmup"]["run_dir_removed"])
+        self.assertFalse((self.root / "m3-batch" / "warmup" / "runs" / "warmup-nominal-01").exists())
+        self.assertFalse(list((self.root / "m3-batch").rglob("*.sqlite-*")))
+        self.export_batch_tree()
+
+    def test_warmup_needs_a_full_item_timeout_of_time(self) -> None:
+        world = World()
+        self.remaining_value[0] = be.ITEM_TIMEOUT_SECONDS - 1
+        summary = self.run_phases(world, [[4, 1]])
+        self.assertEqual([], world.ran)
+        self.assertEqual("skipped_deadline", summary["warmup"]["status"])
+        self.assertEqual("deadline_exhausted", summary["stop_reason"])
+
     def test_progress_events_report_phase_lifecycle_and_summary(self) -> None:
         world = World()
         events = []
         self.run_phases(world, [[4, 1], [4, 4]], progress=lambda event, **fields: events.append(event))
         self.assertEqual(
-            ["batch_phase_start", "batch_phase_done", "batch_phase_start", "batch_phase_done", "batch_summary"],
+            ["batch_phase_start", "batch_warmup_done", "batch_phase_done", "batch_phase_start",
+             "batch_phase_done", "batch_summary"],
             events,
         )
 

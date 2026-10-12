@@ -122,7 +122,7 @@ class BatchWorkloadTests(unittest.TestCase):
             [e for e in world.events if e == "export" or e[0] in ("start", "close")],
         )
         self.assertLess(world.events.index(("close", 4)), world.events.index("export"))
-        self.assertEqual(4, len(runner.calls))
+        self.assertEqual(5, len(runner.calls))  # four items and one warm-up
         self.assertEqual("complete", self.exports[0][2]["status"])
         detail = self.batch_summary(SMOKE)
         self.assertTrue(detail["smoke"]["passed"])
@@ -138,7 +138,7 @@ class BatchWorkloadTests(unittest.TestCase):
 
     def test_every_evaluator_gets_the_cancel_event_and_a_bounded_timeout(self) -> None:
         _summary, _world, _runner, factory_calls = self.invoke(SMOKE, parity=self.passing_parity)
-        self.assertEqual(4, len(factory_calls))
+        self.assertEqual(5, len(factory_calls))
         for call in factory_calls:
             self.assertIsInstance(call["cancel"], threading.Event)
             self.assertLessEqual(call["timeout_seconds"], 480.0)
@@ -165,7 +165,7 @@ class BatchWorkloadTests(unittest.TestCase):
         summary, world, runner, _calls = self.invoke(config)
         self.assertEqual(("complete", "completed"), (summary["status"], summary["stop_reason"]))
         self.assertEqual(2, summary["batch_phases_complete"])
-        self.assertEqual(48, len(runner.calls))
+        self.assertEqual(49, len(runner.calls))  # 2 x 24 items and one warm-up
         detail = self.batch_summary(config)
         self.assertEqual(24, detail["items_per_phase"])
         self.assertEqual(["compared"], [c["status"] for c in detail["comparisons"]])
@@ -286,8 +286,8 @@ class BatchWorkloadTests(unittest.TestCase):
             clock=clock, absolute_deadline=clock() + 14.0 + 301.0, parity_runner=self.passing_parity,
         )
         self.assertEqual(("partial", "deadline_exhausted"), (summary["status"], summary["stop_reason"]))
-        statuses = {i["status"] for i in self.batch_summary(config)["phases"][0]["items"]}
-        self.assertIn("timed_out", statuses)
+        # the first item to run is the warm-up; it is the one cut short by the deadline
+        self.assertEqual("timed_out", self.batch_summary(config)["warmup"]["status"])
 
     def test_a_killed_evaluators_leftover_companions_do_not_block_the_real_export(self) -> None:
         config = dict(MEASUREMENT, run_id="m3-batch-measure-companions", phases=[[4, 1]])
@@ -333,7 +333,8 @@ class BatchWorkloadTests(unittest.TestCase):
         self.invoke(SMOKE, parity=self.passing_parity)
         names = [event for event, _ in self.progress_events]
         self.assertEqual(
-            ["batch_parity_start", "batch_parity_done", "batch_phase_start", "batch_phase_done", "batch_summary"],
+            ["batch_parity_start", "batch_parity_done", "batch_phase_start", "batch_warmup_done",
+             "batch_phase_done", "batch_summary"],
             names,
         )
 

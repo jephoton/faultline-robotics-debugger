@@ -144,10 +144,12 @@ def read_timing_records(path: Path) -> Tuple[List[Dict[str, Any]], int]:
         try:
             item = json.loads(line)
             batch = item["batch_size"]
+            started = float(item["t"])
             inference = float(item["inference_ms"])
             waits = [float(value) for value in item["wait_ms"]]
             if (
-                type(batch) is not int or batch < 1 or len(waits) != batch
+                not math.isfinite(started)
+                or type(batch) is not int or batch < 1 or len(waits) != batch
                 or not math.isfinite(inference) or inference < 0
                 or any(not math.isfinite(value) or value < 0 for value in waits)
             ):
@@ -155,14 +157,24 @@ def read_timing_records(path: Path) -> Tuple[List[Dict[str, Any]], int]:
         except (ValueError, KeyError, TypeError):
             malformed += 1
             continue
-        records.append({"batch_size": batch, "inference_ms": inference, "wait_ms": waits})
+        records.append({"t": started, "batch_size": batch, "inference_ms": inference, "wait_ms": waits})
     return records, malformed
 
 
-def timing_stats(path: Path, warm_elapsed_seconds: Optional[float]) -> Optional[Dict[str, Any]]:
-    """Server-side statistics for one phase, or ``None`` when no timing was logged."""
+def timing_stats(
+    path: Path, warm_elapsed_seconds: Optional[float], min_t: Optional[float] = None
+) -> Optional[Dict[str, Any]]:
+    """Server-side statistics for one phase, or ``None`` when no timing was logged.
+
+    ``min_t`` drops calls that started before it (the untimed warm-up episode). Server
+    ``t`` and the Job clock are the same host's monotonic clock.
+    """
 
     records, malformed = read_timing_records(path)
+    before_launch = 0
+    if min_t is not None:
+        before_launch = sum(1 for record in records if record["t"] < min_t)
+        records = [record for record in records if record["t"] >= min_t]
     if not records:
         return None
     batch_sizes = [record["batch_size"] for record in records]
@@ -185,6 +197,7 @@ def timing_stats(path: Path, warm_elapsed_seconds: Optional[float]) -> Optional[
         "busy_seconds": _round(busy_seconds),
         "model_call_busy_share": _round(share, 4),
         "malformed_lines": malformed,
+        "calls_before_timed_launch_excluded": before_launch,
     }
 
 
@@ -380,8 +393,14 @@ def run_phases(
     item_timeout: float = ITEM_TIMEOUT_SECONDS,
     prefetch: Optional[Callable[[], Any]] = None,
     snapshot: Callable[[], Mapping[str, Any]] = memory_snapshot,
+    server_clock: Callable[[], float] = time.monotonic,
 ) -> Dict[str, Any]:
     """Run the planned phases in order and return the summary.
+
+    The first phase that runs starts with ONE untimed warm-up episode (the first
+    nominal item under its own run id, one worker): it is recorded separately and
+    excluded from every phase metric, including the server timing statistics
+    (``server_clock`` must read the same monotonic clock as the server's ``t``).
 
     ``prefetch()`` downloads the pinned inputs once, before parity and before the
     first phase, and is timed separately so it never counts toward a phase.
@@ -409,10 +428,12 @@ def run_phases(
     parity: Optional[Dict[str, Any]] = None
     stop_reason: Optional[str] = None
     scrub = {"companions_removed": 0}
-    extra: Dict[str, Any] = {"prefetch_seconds": None, "cleanup_unconfirmed": False}
+    extra: Dict[str, Any] = {"prefetch_seconds": None, "cleanup_unconfirmed": False, "warmup": None}
+    warmup_slot: Dict[str, Any] = {}
 
     def save() -> Dict[str, Any]:
         extra["sqlite_companions_removed"] = scrub["companions_removed"]
+        extra["warmup"] = dict(warmup_slot) if warmup_slot else None
         summary = build_summary(
             mode=mode, repeats_per_kind=repeats_per_kind, planned=planned,
             phases=records, parity=parity, stop_reason=stop_reason, extra=extra,
@@ -455,6 +476,7 @@ def run_phases(
                 not_run(index, "not_run")
 
         deadline_skipped = False
+        warmup_reported = False
         for index, (workers, size) in enumerate(planned):
             if blocked:
                 break
@@ -480,6 +502,7 @@ def run_phases(
                     launch_deadline=launch_deadline, clock=clock, write_config=write_config,
                     load_result=load_result, item_timeout=item_timeout, remaining=remaining,
                     snapshot=snapshot, scrub=scrub,
+                    warmup=warmup_slot if not warmup_slot else None, server_clock=server_clock,
                 )
             except PhaseFailure as error:
                 not_run(index, "start_failed")
@@ -488,6 +511,11 @@ def run_phases(
                 save()
                 continue
             records.append(record)
+            if warmup_slot and not warmup_reported:
+                warmup_reported = True
+                progress("batch_warmup_done", case_id=warmup_slot.get("case_id"),
+                         status=warmup_slot.get("status"), outcome=warmup_slot.get("outcome"),
+                         duration_seconds=warmup_slot.get("duration_seconds"))
             progress(
                 "batch_phase_done", phase=index + 1, workers=workers, max_batch_size=size,
                 status=record["status"], valid=record["valid_count"],
@@ -592,6 +620,8 @@ def _run_phase(
     remaining: Callable[[], float],
     snapshot: Callable[[], Mapping[str, Any]],
     scrub: Dict[str, int],
+    warmup: Optional[Dict[str, Any]] = None,
+    server_clock: Callable[[], float] = time.monotonic,
 ) -> Dict[str, Any]:
     label = phase_label(index, workers, size)
     phase_dir = batch_root / label
@@ -610,6 +640,8 @@ def _run_phase(
     results: List[Dict[str, Any]] = []
     model: Any = None
     server_argv: Optional[List[str]] = None
+    warmup_seconds = 0.0
+    launch_t: Optional[float] = None
 
     try:
         try:
@@ -636,15 +668,18 @@ def _run_phase(
                 raise PhaseFailure("model_died") from error
             ready_at = clock()
 
-            def evaluate(item: Mapping[str, Any]) -> Dict[str, Any]:
-                case_id = str(item["case_id"])
+            def evaluate(
+                item: Mapping[str, Any], *, case_id: Optional[str] = None,
+                configs_dir: Path = configs, runs_dir: Path = runs,
+            ) -> Dict[str, Any]:
+                case_id = str(item["case_id"]) if case_id is None else case_id
                 record: Dict[str, Any] = {
                     "case_id": case_id, "kind": item["kind"], "status": "infrastructure_error",
                     "outcome": None, "started_seconds": round(clock() - ready_at, 3),
                 }
                 try:
-                    config_path = configs / (case_id + ".yaml")
-                    output = runs / case_id
+                    config_path = configs_dir / (case_id + ".yaml")
+                    output = runs_dir / case_id
                     rectangle = item["rectangle"] or {}
                     write_config(
                         config_path=config_path, output_dir=output, project_root=project_root,
@@ -689,6 +724,49 @@ def _run_phase(
                         stop.set()
                         cancel.set()
 
+            if warmup is not None:
+                # One untimed episode on this first server: engine start-up, CUDA
+                # kernels and caches are warm before anything is measured.
+                first = manifest[0]
+                warm_base = batch_root / "warmup"
+                warm_base.mkdir(parents=True, exist_ok=True)
+                (warm_base / "configs").mkdir(exist_ok=True)
+                (warm_base / "runs").mkdir(exist_ok=True)
+                warm_started = clock()
+                if remaining() < item_timeout:
+                    outcome_record: Dict[str, Any] = {
+                        "case_id": "warmup-" + str(first["case_id"]), "kind": first["kind"],
+                        "status": "skipped_deadline", "outcome": None,
+                    }
+                    deadline_stop.set()
+                else:
+                    try:
+                        outcome_record = evaluate(
+                            first, case_id="warmup-" + str(first["case_id"]),
+                            configs_dir=warm_base / "configs", runs_dir=warm_base / "runs",
+                        )
+                    except BaseException:
+                        # Interrupted mid-evaluator: its group was terminated, so its
+                        # directory may be half-written; drop it before re-raising.
+                        remove_tree_within(warm_base / "runs" / ("warmup-" + str(first["case_id"])), batch_root)
+                        raise
+                warmup_seconds = clock() - warm_started
+                outcome_record.pop("started_seconds", None)
+                outcome_record.pop("ended_seconds", None)
+                outcome_record["duration_seconds"] = _round(warmup_seconds)
+                outcome_record["matches_known_outcome"] = (
+                    None if outcome_record["outcome"] is None
+                    else outcome_record["outcome"] == KNOWN_OUTCOMES.get(str(first["kind"]))
+                )
+                if outcome_record["status"] in ("cancelled", "timed_out"):
+                    outcome_record["run_dir_removed"] = remove_tree_within(
+                        warm_base / "runs" / outcome_record["case_id"], batch_root
+                    )
+                warmup.update(outcome_record)
+                if outcome_record["status"] != "valid":
+                    stop.set()
+                    cancel.set()
+            launch_t = server_clock()
             threads = [threading.Thread(target=worker, name="m3-batch-worker-{}".format(i), daemon=True)
                        for i in range(workers)]
             try:
@@ -736,9 +814,9 @@ def _run_phase(
         "drift_ids": drift_ids(results),
         "warm_elapsed_seconds": _round(warm),
         "startup_seconds": _round(ready_at - phase_started),
-        "total_seconds": _round(clock() - phase_started),
+        "total_seconds": _round(clock() - phase_started - warmup_seconds),
         "episodes_per_minute": _round(len(valid) / warm * 60.0, 4) if complete and warm else None,
-        "timing": timing_stats(timing_path, warm),
+        "timing": timing_stats(timing_path, warm, min_t=launch_t),
         "server_argv": server_argv,
         "memory_start": memory_start,
         "memory_end": memory_end,
