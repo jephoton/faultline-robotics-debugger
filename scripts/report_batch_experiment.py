@@ -82,7 +82,7 @@ def phase_table(phases: Sequence[Mapping[str, Any]]) -> List[str]:
                 mean=_cell(timing.get("mean_batch_size"), 2), p95=_cell(timing.get("p95_batch_size"), 1),
                 ip50=_cell(timing.get("inference_ms_p50")), ip95=_cell(timing.get("inference_ms_p95")),
                 wp50=_cell(timing.get("wait_ms_p50")), wp95=_cell(timing.get("wait_ms_p95")),
-                busy=_percent(timing.get("gpu_busy_share")),
+                busy=_percent(timing.get("model_call_busy_share")),
             )
         )
     return lines
@@ -120,7 +120,7 @@ def bottleneck_explanation(summary: Mapping[str, Any]) -> List[str]:
         return ["There is no completed unbatched phase, so this run cannot say where the bottleneck sits."]
     top = unbatched[-1]
     timing = _timing(top)
-    share = timing.get("gpu_busy_share")
+    share = timing.get("model_call_busy_share")
     if share is None:
         lines.append(
             "The {} worker unbatched phase has no server timing, so the server's share of the time is unknown.".format(

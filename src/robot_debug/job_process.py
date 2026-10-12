@@ -21,6 +21,10 @@ class InfrastructureError(RuntimeError):
     """The evaluator lifecycle could not be proven safely contained."""
 
 
+class CleanupUnconfirmed(InfrastructureError):
+    """An owned process group could not be proven gone after termination."""
+
+
 class EvaluatorCancelled(Exception):
     """The session owner cancelled a running evaluator; its group is confirmed gone."""
 

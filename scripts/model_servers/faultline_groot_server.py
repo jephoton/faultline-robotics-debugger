@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 _FLUSH_INTERVAL_SECONDS = 1.0
 _SIGTERM_EXIT_STATUS = 143
+_SHUTDOWN_FLUSH_TIMEOUT_SECONDS = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -153,9 +154,22 @@ class TimingLog:
             if self._clock() - self._last_flush >= self._flush_interval:
                 self._flush_locked()
 
-    def flush(self) -> None:
-        with self._lock:
+    def flush(self, timeout: Optional[float] = None) -> bool:
+        """Write buffered lines; with a timeout, give up (and drop them) if the lock stays busy.
+
+        The SIGTERM handler runs on the thread that may already hold the
+        non-reentrant lock, so it must never wait for it indefinitely.
+        """
+
+        if timeout is None:
+            self._lock.acquire()
+        elif not self._lock.acquire(timeout=timeout):
+            return False
+        try:
             self._flush_locked()
+        finally:
+            self._lock.release()
+        return True
 
     def _flush_locked(self) -> None:
         self._last_flush = self._clock()
@@ -174,7 +188,7 @@ def make_shutdown_handler(log: TimingLog, exit_fn: Callable[[int], Any] = os._ex
 
     def handler(_signum: int, _frame: Any) -> None:
         try:
-            log.flush()
+            log.flush(timeout=_SHUTDOWN_FLUSH_TIMEOUT_SECONDS)
         finally:
             exit_fn(_SIGTERM_EXIT_STATUS)
 

@@ -381,6 +381,30 @@ class TimingLogTests(ModuleCase):
         for key in json.loads(text):
             self.assertIn(key, {"t", "batch_size", "inference_ms", "wait_ms"})
 
+    def test_flush_with_a_timeout_gives_up_when_the_lock_is_held(self) -> None:
+        log = self.make()
+        log.record(self.clock(), 1, 1.0, [0.0])
+        log._lock.acquire()  # as if the interrupted thread were inside record()
+        try:
+            self.assertFalse(log.flush(timeout=0.05))
+        finally:
+            log._lock.release()
+        self.assertEqual([], self.lines())
+        self.assertTrue(log.flush(timeout=0.05))
+        self.assertEqual(1, len(self.lines()))
+
+    def test_shutdown_handler_still_exits_when_the_lock_is_never_released(self) -> None:
+        log = self.make()
+        log.record(self.clock(), 1, 1.0, [0.0])
+        exits = []
+        log._lock.acquire()
+        try:
+            with mock.patch.object(self.module, "_SHUTDOWN_FLUSH_TIMEOUT_SECONDS", 0.05):
+                self.module.make_shutdown_handler(log, exits.append)(15, None)
+        finally:
+            log._lock.release()
+        self.assertEqual([143], exits)
+
     def test_shutdown_handler_flushes_then_exits_with_signal_status(self) -> None:
         log = self.make()
         log.record(self.clock(), 1, 1.0, [0.0])

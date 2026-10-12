@@ -5,6 +5,7 @@ from __future__ import annotations
 import _thread
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import threading
 import time
@@ -13,7 +14,8 @@ import unittest
 from unittest import mock
 
 from robot_debug import batch_experiment as be
-from robot_debug.job_process import InfrastructureError, RunCancelled
+from robot_debug.job_process import CleanupUnconfirmed, InfrastructureError, RunCancelled
+from robot_debug.job_runtime import JobRuntimeError, export_closed_evidence
 from robot_debug.parallel_eval import build_manifest, manifest_hash
 
 
@@ -54,7 +56,7 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(290.0, stats["inference_ms_p95"])
         self.assertEqual(12.5, stats["wait_ms_p50"])
         self.assertEqual(0.6, stats["busy_seconds"])
-        self.assertEqual(0.15, stats["gpu_busy_share"])
+        self.assertEqual(0.15, stats["model_call_busy_share"])
         self.assertEqual(0, stats["malformed_lines"])
 
     def test_malformed_and_implausible_lines_are_counted_not_trusted(self) -> None:
@@ -204,9 +206,15 @@ class FakeModel:
         if self.fail == "ready":
             raise InfrastructureError("hidden")
 
+    @property
+    def argv(self):
+        return ["/py", "server.py", "--args.max_batch_size={}".format(self.kwargs["max_batch_size"])]
+
     def check_alive(self):
         if self.fail == "dead":
             raise InfrastructureError("hidden")
+        if self.world.on_check_alive is not None and self.world.live:
+            self.world.on_check_alive()
 
     def close(self):
         self.world.events.append(("close", self.kwargs["max_batch_size"]))
@@ -219,7 +227,11 @@ class World:
     """Shared fake process world: model factory, bounded runner, results."""
 
     def __init__(self, *, workers_hint=4, item_seconds=0.01, fail_case=None, model_fail=None,
-                 outcome_for=None, block_until_cancel=False):
+                 outcome_for=None, block_until_cancel=False, timeout_case=None, leave_companions=False,
+                 on_check_alive=None):
+        self.timeout_case = timeout_case
+        self.leave_companions = leave_companions
+        self.on_check_alive = on_check_alive
         self.events = []
         self.live = 0
         self.max_live = 0
@@ -254,11 +266,18 @@ class World:
 
     def run_item(self, command, *, item_timeout, cancel):
         case = Path(command[-1]).stem
+        output = Path(command[-1]).parent.parent / "runs" / case
         with self.lock:
             self.running += 1
             self.max_running = max(self.max_running, self.running)
             self.ran.append(case)
             self.models_at_run.append(self.live)
+        companions = []
+        if self.leave_companions:
+            output.mkdir(parents=True, exist_ok=True)
+            for name in ("recording.sqlite", "recording.sqlite-wal", "recording.sqlite-shm"):
+                (output / name).write_bytes(b"x")
+            companions = [output / "recording.sqlite-wal", output / "recording.sqlite-shm"]
         try:
             if self.block_until_cancel:
                 cancel.wait(30)
@@ -266,9 +285,17 @@ class World:
             time.sleep(self.item_seconds)
             if cancel.is_set():
                 raise RunCancelled("cancelled")
+            if case == self.timeout_case:
+                self.latched = "evaluator_failed"
+                try:
+                    raise subprocess.TimeoutExpired(command, 1)
+                except subprocess.TimeoutExpired as expired:
+                    raise InfrastructureError("evaluator timed out") from expired
             if case == self.fail_case:
                 self.latched = "evaluator_failed"
                 raise InfrastructureError("evaluator returned nonzero")
+            for companion in companions:  # a normal exit checkpoints and removes them
+                companion.unlink()
         finally:
             with self.lock:
                 self.running -= 1
@@ -526,6 +553,241 @@ class RunPhasesTests(unittest.TestCase):
         self.assertEqual(0, world.running, "every worker must have stopped")
         self.assertEqual(0, world.live)
         self.assertEqual([("start", 1), ("ready", 5000.0), ("close", 1)], world.events)
+
+    # -- killed evaluators must not poison the export -------------------------------
+
+    def export_batch_tree(self):
+        destination = self.root / "export" / "batch"
+        destination.parent.mkdir(exist_ok=True)
+        return export_closed_evidence(
+            self.root / "m3-batch", destination, status="partial", cleanup_confirmed=True
+        )
+
+    def test_exporter_rejects_leftover_sqlite_companions(self) -> None:
+        batch = self.root / "m3-batch" / "phase-01-w04-b01" / "runs" / "mask-01"
+        batch.mkdir(parents=True)
+        (batch / "recording.sqlite-wal").write_bytes(b"x")
+        with self.assertRaisesRegex(JobRuntimeError, "SQLite companion"):
+            self.export_batch_tree()
+        self.assertEqual(1, be.purge_sqlite_companions(self.root / "m3-batch"))
+        self.export_batch_tree()
+
+    def test_timed_out_and_cancelled_items_lose_their_run_dirs_and_the_export_succeeds(self) -> None:
+        world = World(timeout_case="nominal-01", leave_companions=True, item_seconds=0.05)
+        summary = self.run_phases(world, [[4, 1]])
+        record = summary["phases"][0]
+        by_status = {}
+        for item in record["items"]:
+            by_status.setdefault(item["status"], []).append(item)
+        self.assertEqual(["nominal-01"], [i["case_id"] for i in by_status["timed_out"]])
+        self.assertTrue(by_status["timed_out"][0]["run_dir_removed"])
+        for item in by_status.get("cancelled", []):
+            self.assertTrue(item["run_dir_removed"])
+        runs = self.root / "m3-batch" / "phase-01-w04-b01" / "runs"
+        self.assertFalse((runs / "nominal-01").exists())
+        self.assertFalse(list((self.root / "m3-batch").rglob("*.sqlite-*")))
+        self.export_batch_tree()
+        self.assertEqual("evaluator_failed", summary["stop_reason"])
+
+    def test_stray_companions_in_kept_items_are_purged_and_counted(self) -> None:
+        world = World(fail_case="mask-02", leave_companions=True, item_seconds=0.02)
+
+        original = world.run_item
+
+        def leaky(command, *, item_timeout, cancel):
+            case = Path(command[-1]).stem
+            try:
+                return original(command, item_timeout=item_timeout, cancel=cancel)
+            finally:
+                # a failed (not killed) item keeps its directory, with a stray companion
+                output = Path(command[-1]).parent.parent / "runs" / case
+                if case == "mask-02":
+                    (output / "left.sqlite-wal").write_bytes(b"x")
+
+        world.run_item = leaky
+        summary = self.run_phases(world, [[4, 1]])
+        self.assertGreaterEqual(summary["sqlite_companions_removed"], 1)
+        self.assertFalse(list((self.root / "m3-batch").rglob("*.sqlite-*")))
+        self.export_batch_tree()
+
+    def test_interrupt_also_scrubs_before_anything_can_be_exported(self) -> None:
+        world = World(block_until_cancel=True, leave_companions=True)
+        timer = threading.Timer(0.3, _thread.interrupt_main)
+        timer.start()
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_phases(world, [[4, 1]])
+        finally:
+            timer.cancel()
+        self.assertFalse(list((self.root / "m3-batch").rglob("*.sqlite-*")))
+        self.export_batch_tree()
+
+    def test_remove_tree_within_refuses_paths_outside_the_root_and_links(self) -> None:
+        outside = self.root / "outside"
+        outside.mkdir()
+        inside = self.root / "tree"
+        inside.mkdir()
+        self.assertFalse(be.remove_tree_within(outside, inside))
+        self.assertTrue(outside.exists())
+        self.assertTrue(be.remove_tree_within(inside / "missing", inside))
+        (inside / "gone").mkdir()
+        (inside / "gone" / "f").write_text("x", encoding="utf-8")
+        self.assertTrue(be.remove_tree_within(inside / "gone", inside))
+        self.assertFalse((inside / "gone").exists())
+
+    # -- item starts respect the Job deadline ----------------------------------------
+
+    def test_no_item_starts_when_less_than_one_item_timeout_remains(self) -> None:
+        world = World()
+        self.remaining_value[0] = be.ITEM_TIMEOUT_SECONDS - 1  # above the first-phase minimum
+        self.assertGreaterEqual(self.remaining_value[0], be.FIRST_PHASE_MINIMUM_SECONDS)
+        summary = self.run_phases(world, [[4, 1]])
+        self.assertEqual([], world.ran)
+        self.assertTrue(summary["phases"][0]["deadline_stopped"])
+        self.assertEqual("deadline_exhausted", summary["stop_reason"])
+        self.assertEqual("incomplete", summary["phases"][0]["status"])
+
+    def test_item_started_with_enough_time_but_timed_out_is_timed_out_not_deadline(self) -> None:
+        world = World(timeout_case="mask-01")
+        summary = self.run_phases(world, [[4, 1]])
+        statuses = {i["case_id"]: i["status"] for i in summary["phases"][0]["items"]}
+        self.assertEqual("timed_out", statuses["mask-01"])
+
+    # -- prefetch is separate from the phases -----------------------------------------
+
+    def test_prefetch_runs_once_before_parity_and_phases_and_is_timed_separately(self) -> None:
+        world = World()
+        order = []
+        state = {"t": 0.0}
+
+        def prefetch():
+            order.append("prefetch")
+            state["t"] += 900.0
+
+        def parity(**kwargs):
+            order.append("parity")
+            kwargs_seen.append(kwargs)
+            return {"passed": True}
+
+        kwargs_seen = []
+        summary = self.run_phases(
+            world, [[4, 4]], mode="m3-batch-smoke", parity_runner=parity, prefetch=prefetch,
+            clock=lambda: state["t"], remaining=lambda: 1000.0 - state["t"],
+        )
+        self.assertEqual(["prefetch", "parity"], order)
+        self.assertEqual(900.0, summary["prefetch_seconds"])
+        self.assertEqual(100.0, kwargs_seen[0]["timeout_seconds"], "parity budget is taken after prefetch")
+
+    def test_a_long_prefetch_no_longer_makes_the_last_phase_skip(self) -> None:
+        world = World()
+        state = {"t": 0.0}
+
+        def prefetch():
+            state["t"] += 800.0
+
+        def tick():
+            state["t"] += 20.0  # every phase reads the clock a few times: ~100 s per phase
+            return state["t"]
+
+        summary = self.run_phases(
+            world, [[4, 1], [4, 4]], prefetch=prefetch, clock=tick,
+            remaining=lambda: 1500.0 - state["t"],
+        )
+        self.assertGreaterEqual(summary["prefetch_seconds"], 800.0)
+        self.assertEqual(["complete", "complete"], [p["status"] for p in summary["phases"]])
+        for phase in summary["phases"]:
+            self.assertLess(phase["total_seconds"], 400.0)
+
+    def test_prefetch_failure_is_not_a_model_start_failure(self) -> None:
+        world = World()
+        calls = []
+
+        def broken():
+            raise subprocess.TimeoutExpired("prefetch", 1)
+
+        summary = self.run_phases(
+            world, [[4, 4]], mode="m3-batch-smoke", prefetch=broken,
+            parity_runner=lambda **k: calls.append(k) or {"passed": True},
+        )
+        self.assertEqual("prefetch_failed", summary["stop_reason"])
+        self.assertEqual([], world.models)
+        self.assertEqual([], calls)
+        self.assertEqual(["not_run"], [p["status"] for p in summary["phases"]])
+
+    # -- parity always leaves a verdict -----------------------------------------------
+
+    def test_parity_crash_timeout_and_unconfirmed_cleanup_still_write_both_files(self) -> None:
+        for error, code, cleanup in (
+            (subprocess.TimeoutExpired("parity", 1), "exception", False),
+            (InfrastructureError("parity check timed out"), "infrastructure_error", False),
+            (CleanupUnconfirmed("group"), "cleanup_unconfirmed", True),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.root_cleanup()
+
+                def crashed(**_kwargs):
+                    raise error
+
+                world = World()
+                summary = self.run_phases(world, [[4, 4]], mode="m3-batch-smoke", parity_runner=crashed)
+                verdict = json.loads((self.root / "m3-batch" / "parity.json").read_text(encoding="utf-8"))
+                self.assertFalse(verdict["passed"])
+                self.assertEqual(code, verdict["error_code"])
+                self.assertTrue((self.root / "m3-batch" / be.SUMMARY_NAME).is_file())
+                self.assertEqual(cleanup, summary["cleanup_unconfirmed"])
+                self.assertEqual("cleanup_unconfirmed" if cleanup else "parity_error", summary["stop_reason"])
+                self.assertEqual([], world.models)
+
+    def test_a_runner_that_wrote_no_file_still_gets_a_verdict_file(self) -> None:
+        world = World()
+        self.run_phases(world, [[4, 4]], mode="m3-batch-smoke", parity_runner=lambda **k: {"passed": True})
+        self.assertTrue((self.root / "m3-batch" / "parity.json").is_file())
+
+    # -- memory and per-phase argv ------------------------------------------------------
+
+    def test_phase_records_memory_snapshots_argv_and_progress_carries_them(self) -> None:
+        world = World()
+        events = []
+        summary = self.run_phases(
+            world, [[4, 1], [4, 4]],
+            snapshot=lambda: {"mem_available_mb": 512.0, "gpu_used_mb": 7.0},
+            progress=lambda event, **fields: events.append((event, fields)),
+        )
+        first, second = summary["phases"]
+        self.assertEqual({"mem_available_mb": 512.0, "gpu_used_mb": 7.0}, first["memory_start"])
+        self.assertEqual({"mem_available_mb": 512.0, "gpu_used_mb": 7.0}, first["memory_end"])
+        self.assertEqual(["server.py", "--args.max_batch_size=1"], first["server_argv"])
+        self.assertEqual(["server.py", "--args.max_batch_size=4"], second["server_argv"])
+        starts = [fields for event, fields in events if event == "batch_phase_start"]
+        self.assertTrue(all("mem_available_mb" in fields for fields in starts))
+        done = [fields for event, fields in events if event == "batch_phase_done"]
+        self.assertTrue(all("gpu_used_mb" in fields for fields in done))
+
+    def test_memory_snapshot_parses_meminfo_and_tolerates_missing_sources(self) -> None:
+        meminfo = self.root / "meminfo"
+        meminfo.write_text("MemTotal: 100 kB\nMemAvailable:   2097152 kB\n", encoding="utf-8")
+
+        def smi(argv, **kwargs):
+            return types.SimpleNamespace(returncode=0, stdout="1234, 46068\n")
+
+        snap = be.memory_snapshot(str(meminfo), smi)
+        self.assertEqual({"mem_available_mb": 2048.0, "gpu_used_mb": 1234.0, "gpu_total_mb": 46068.0}, snap)
+
+        def absent(argv, **kwargs):
+            raise FileNotFoundError("nvidia-smi")
+
+        none = be.memory_snapshot(str(self.root / "missing"), absent)
+        self.assertEqual({"mem_available_mb": None, "gpu_used_mb": None, "gpu_total_mb": None}, none)
+
+        def failing(argv, **kwargs):
+            return types.SimpleNamespace(returncode=9, stdout="")
+
+        self.assertIsNone(be.memory_snapshot(str(meminfo), failing)["gpu_used_mb"])
+
+        def garbled(argv, **kwargs):
+            return types.SimpleNamespace(returncode=0, stdout="garbage")
+
+        self.assertIsNone(be.memory_snapshot(str(meminfo), garbled)["gpu_used_mb"])
 
     def test_progress_events_report_phase_lifecycle_and_summary(self) -> None:
         world = World()

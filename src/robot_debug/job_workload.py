@@ -263,6 +263,8 @@ def _run_batch_mode(
             command, cwd=roots.upstream_root, check=False, item_timeout=item_timeout, cancel=cancel
         )
 
+    prefetch_hook = getattr(model_factory, "prefetch", None)
+
     return batch_experiment.run_phases(
         mode=accepted["mode"],
         phases=accepted["phases"],
@@ -279,6 +281,7 @@ def _run_batch_mode(
         clock=clock,
         progress=progress,
         parity_runner=parity_runner,
+        prefetch=None if prefetch_hook is None else (lambda: prefetch_hook(log_root=run_root / "logs")),
         write_config=run_failure_search._write_config,
         load_result=lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0],
     )
@@ -441,7 +444,13 @@ def run_workload(
                 except KeyboardInterrupt:
                     raise
                 except subprocess.TimeoutExpired as error:
-                    latch_failure("evaluator_failed")
+                    # A batch item whose timeout was shortened to the Job deadline
+                    # ran out of Job time; it did not fail on its own.
+                    latch_failure(
+                        "deadline_exhausted"
+                        if item_timeout is not None and remaining_at_factory < item_timeout
+                        else "evaluator_failed"
+                    )
                     raise InfrastructureError("evaluator timed out") from error
                 except EvaluatorCancelled as error:
                     # The evaluator's process group was confirmed gone before this
@@ -494,6 +503,8 @@ def run_workload(
                         progress=progress,
                         parity_runner=parity_runner,
                     )
+                    if batch_summary.get("cleanup_unconfirmed"):
+                        cleanup_confirmed = False
                     batch_reason = batch_summary.get("stop_reason")
                     if batch_reason is not None:
                         latch_failure(str(batch_reason))

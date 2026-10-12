@@ -18,7 +18,12 @@ import yaml
 
 from robot_debug import job_entry
 from robot_debug.job_entry import ImageLayout, ProductionModelFactory
-from robot_debug.job_process import DirectEvaluator, EvaluatorCancelled, InfrastructureError
+from robot_debug.job_process import (
+    CleanupUnconfirmed,
+    DirectEvaluator,
+    EvaluatorCancelled,
+    InfrastructureError,
+)
 from robot_debug.job_workload import WorkloadPaths, run_workload
 from tests.test_batch_experiment import World
 from tests.test_batch_wiring import MEASUREMENT, SMOKE, _layout
@@ -212,6 +217,108 @@ class BatchWorkloadTests(unittest.TestCase):
         self.assertEqual(("partial", "cleanup_unconfirmed"), (summary["status"], summary["stop_reason"]))
         self.assertEqual([], self.exports)
 
+    def test_prefetch_hook_runs_once_before_parity_with_the_run_log_root(self) -> None:
+        order = []
+
+        class Factory:
+            def __init__(self, world):
+                self.world = world
+
+            def __call__(self, **kwargs):
+                order.append("model")
+                return self.world.model_factory(**kwargs)
+
+            def prefetch(self, *, log_root):
+                order.append(("prefetch", log_root))
+
+        world = World(item_seconds=0.0)
+        config = dict(SMOKE, run_id="m3-batch-smoke-prefetch")
+
+        def parity(**kwargs):
+            order.append("parity")
+            return {"passed": True}
+
+        summary = run_workload(
+            config, paths=self.paths, model_factory=Factory(world),
+            evaluator_factory=lambda **_k: OutcomeRunner(), exporter=lambda *a, **k: {"ok": True},
+            clock=time.monotonic, parity_runner=parity,
+        )
+        self.assertEqual("complete", summary["status"])
+        self.assertEqual(
+            [("prefetch", self.paths.work_root / config["run_id"] / "logs"), "parity", "model"], order
+        )
+        detail = self.batch_summary(config)
+        self.assertIsNotNone(detail["prefetch_seconds"])
+
+    def test_unconfirmed_parity_group_cleanup_latches_and_never_exports(self) -> None:
+        config = dict(SMOKE, run_id="m3-batch-smoke-parity-cleanup")
+
+        def unconfirmed(**_kwargs):
+            raise CleanupUnconfirmed("group")
+
+        summary, world, _runner, _calls = self.invoke(config, parity=unconfirmed)
+        self.assertEqual(("partial", "cleanup_unconfirmed"), (summary["status"], summary["stop_reason"]))
+        self.assertEqual([], self.exports)
+        self.assertEqual([], world.models)
+        run_root = self.paths.work_root / config["run_id"] / "m3-batch"
+        self.assertTrue((run_root / "parity.json").is_file())
+        self.assertTrue((run_root / "batch_summary.json").is_file())
+
+    def test_item_timeout_shortened_by_the_job_deadline_is_deadline_exhausted(self) -> None:
+        config = dict(SMOKE, run_id="m3-batch-smoke-late-item")
+        skew = {"seconds": 0.0, "calls": 0}
+
+        def shorten_after_the_start_gate():
+            # call 1 is the phase's own liveness check; call 2 is the first item's, after its gate
+            skew["calls"] += 1
+            if skew["calls"] == 2:
+                skew["seconds"] = 5.0
+
+        world = World(item_seconds=0.0, on_check_alive=shorten_after_the_start_gate)
+
+        def clock():
+            return time.monotonic() + skew["seconds"]
+
+        runner = OutcomeRunner(raise_error=subprocess.TimeoutExpired(["vla-eval"], 1))
+        summary = run_workload(
+            config, paths=self.paths, model_factory=world.model_factory,
+            evaluator_factory=lambda **_k: runner, exporter=lambda *a, **k: {"ok": True},
+            clock=clock, absolute_deadline=clock() + 14.0 + 301.0, parity_runner=self.passing_parity,
+        )
+        self.assertEqual(("partial", "deadline_exhausted"), (summary["status"], summary["stop_reason"]))
+        statuses = {i["status"] for i in self.batch_summary(config)["phases"][0]["items"]}
+        self.assertIn("timed_out", statuses)
+
+    def test_a_killed_evaluators_leftover_companions_do_not_block_the_real_export(self) -> None:
+        config = dict(MEASUREMENT, run_id="m3-batch-measure-companions", phases=[[4, 1]])
+        world = World(timeout_case="nominal-01", leave_companions=True, item_seconds=0.02)
+
+        class WorldRunner:
+            """Adapts the fake world's killer to the evaluator-runner interface."""
+
+            def __call__(self, command, *, cwd, check=False):
+                config_path = Path(command[-1])
+                case = config_path.stem
+                output = config_path.parent.parent / "runs" / case
+                output.mkdir(parents=True, exist_ok=True)
+                (output / "recording.sqlite").write_bytes(b"x")
+                (output / "recording.sqlite-wal").write_bytes(b"x")
+                (output / "recording.sqlite-shm").write_bytes(b"x")
+                if case == "nominal-01":
+                    raise subprocess.TimeoutExpired(command, 1)
+                import shutil
+                shutil.rmtree(str(output))
+                return OutcomeRunner()(command, cwd=cwd, check=check)
+
+        summary = run_workload(
+            config, paths=self.paths, model_factory=world.model_factory,
+            evaluator_factory=lambda **_k: WorldRunner(), clock=time.monotonic,
+        )
+        self.assertEqual("partial", summary["status"])
+        exported = self.paths.export_root / config["run_id"]
+        self.assertTrue((exported / "manifest.json").is_file(), "the real exporter must have succeeded")
+        self.assertFalse(list(exported.rglob("*.sqlite-*")))
+
     def test_a_short_deadline_skips_the_phase_instead_of_starting_it(self) -> None:
         config = dict(SMOKE, run_id="m3-batch-smoke-late")
         summary, world, runner, _calls = self.invoke(
@@ -390,7 +497,7 @@ class ParityLaunchTests(unittest.TestCase):
                 with self.assertRaises(InfrastructureError):
                     self.run_parity(verdict, code)
 
-    def test_timeout_closes_the_group_and_propagates(self) -> None:
+    def test_timeout_closes_the_group_and_becomes_an_infrastructure_error(self) -> None:
         def hang(timeout):
             raise subprocess.TimeoutExpired("parity", timeout)
 
@@ -399,11 +506,41 @@ class ParityLaunchTests(unittest.TestCase):
         with mock.patch.object(job_entry, "_require_posix"), \
                 mock.patch.object(job_entry.subprocess, "Popen", return_value=process), \
                 mock.patch.object(job_entry, "close_owned_process_group") as close:
-            with self.assertRaises(subprocess.TimeoutExpired):
+            with self.assertRaisesRegex(InfrastructureError, "timed out") as raised:
                 self.factory.run_parity(
                     output=self.output, log_root=self.run_root / "logs", max_batch_size=4, timeout_seconds=1
                 )
+        self.assertNotIsInstance(raised.exception, subprocess.TimeoutExpired)
         close.assert_called_once()
+
+    def test_an_unconfirmable_group_is_cleanup_unconfirmed(self) -> None:
+        process = mock.Mock(pid=4242)
+        process.wait.return_value = 0
+        self.output.write_text(json.dumps({"passed": True}), encoding="utf-8")
+        with mock.patch.object(job_entry, "_require_posix"), \
+                mock.patch.object(job_entry.subprocess, "Popen", return_value=process), \
+                mock.patch.object(job_entry, "close_owned_process_group",
+                                  side_effect=InfrastructureError("stuck")):
+            with self.assertRaises(CleanupUnconfirmed):
+                self.factory.run_parity(
+                    output=self.output, log_root=self.run_root / "logs", max_batch_size=4, timeout_seconds=5
+                )
+
+    def test_a_prefetch_timeout_inside_parity_is_an_infrastructure_error(self) -> None:
+        with mock.patch.object(job_entry, "_require_posix"), \
+                mock.patch.object(job_entry, "prefetch_models",
+                                  side_effect=subprocess.TimeoutExpired("prefetch", 1)):
+            with self.assertRaisesRegex(InfrastructureError, "prefetch timed out"):
+                self.factory.run_parity(
+                    output=self.output, log_root=self.run_root / "logs", max_batch_size=4, timeout_seconds=5
+                )
+
+    def test_batch_prefetch_hook_prefetches_once_and_records_the_faultline_server(self) -> None:
+        self.factory.prefetch(log_root=self.run_root / "logs")
+        self.factory.prefetch(log_root=self.run_root / "logs")
+        self.assertEqual(1, len(self.prefetches))
+        provenance = json.loads((self.run_root / "provenance.json").read_text(encoding="utf-8"))
+        self.assertIn("faultline_groot_server.py", provenance["model_server_argv"][0])
 
     @unittest.skipIf(POSIX, "Windows-only fail-closed check")
     def test_non_posix_hosts_fail_closed(self) -> None:

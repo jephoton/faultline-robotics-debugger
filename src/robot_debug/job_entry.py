@@ -18,7 +18,12 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import uuid
 
 from .job_model import ModelProcess
-from .job_process import DirectEvaluator, InfrastructureError, close_owned_process_group
+from .job_process import (
+    CleanupUnconfirmed,
+    DirectEvaluator,
+    InfrastructureError,
+    close_owned_process_group,
+)
 from .job_runtime import JobRuntimeError, export_closed_evidence, validate_workload_config
 
 
@@ -295,6 +300,13 @@ def progress_printer(stdout: Any) -> Progress:
     return emit
 
 
+def _close_parity_group(process: Any) -> None:
+    try:
+        close_owned_process_group(process, process.pid)
+    except InfrastructureError as error:
+        raise CleanupUnconfirmed("parity process group cleanup could not be confirmed") from error
+
+
 def _require_posix(what: str) -> None:
     if os.name != "posix":
         raise InfrastructureError("{} requires POSIX process groups".format(what))
@@ -363,7 +375,10 @@ class ProductionModelFactory:
         _require_posix("parity check")
         log_root = Path(log_root)
         argv = model_server_argv(self._layout, server="faultline", max_batch_size=max_batch_size)
-        self.ensure_prefetched(log_root, argv=argv)
+        try:
+            self.ensure_prefetched(log_root, argv=argv)
+        except subprocess.TimeoutExpired as error:
+            raise InfrastructureError("model prefetch timed out") from error
         if not timeout_seconds > 0:
             raise InfrastructureError("no time remains for the parity check")
         command = [
@@ -389,10 +404,12 @@ class ProductionModelFactory:
             )
             try:
                 return_code = process.wait(timeout=timeout_seconds)
-            except BaseException:
-                close_owned_process_group(process, process.pid)
+            except BaseException as error:
+                _close_parity_group(process)
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise InfrastructureError("parity check timed out") from error
                 raise
-            close_owned_process_group(process, process.pid)
+            _close_parity_group(process)
         if return_code not in (0, 1):
             raise InfrastructureError("parity check crashed")
         try:
@@ -404,6 +421,13 @@ class ProductionModelFactory:
         if (return_code == 0) != (verdict.get("passed") is True):
             raise InfrastructureError("parity verdict disagrees with the exit status")
         return verdict
+
+    def prefetch(self, *, log_root: Path) -> None:
+        """Prefetch before any phase, so download time never lands in a phase."""
+
+        self.ensure_prefetched(
+            Path(log_root), argv=model_server_argv(self._layout, server="faultline", max_batch_size=1)
+        )
 
     def ensure_prefetched(self, log_root: Path, *, argv: Optional[Sequence[str]] = None) -> None:
         """Prefetch the pinned inputs and write provenance, once per Job."""

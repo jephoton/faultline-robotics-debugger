@@ -14,17 +14,21 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import threading
 import time
 from typing import Any, Callable, Deque, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from robot_debug.job_process import InfrastructureError, RunCancelled
+from robot_debug.job_process import CleanupUnconfirmed, InfrastructureError, RunCancelled
 from robot_debug.parallel_eval import build_manifest, manifest_hash
 
 SPEEDUP_BAR = 1.15
 KNOWN_OUTCOMES = {"nominal": "success", "mask": "policy_failure"}
 VALID_OUTCOMES = frozenset(KNOWN_OUTCOMES.values())
-ITEM_TIMEOUT_SECONDS = 480.0
+# M3 used 300 s per item; an item is never started with less than this left, so a
+# timeout is always the evaluator's own and never the Job deadline's.
+ITEM_TIMEOUT_SECONDS = 300.0
 FIRST_PHASE_MINIMUM_SECONDS = 240.0
 PARITY_CAP_SECONDS = 420.0
 SUMMARY_NAME = "batch_summary.json"
@@ -55,6 +59,74 @@ def percentile(values: Sequence[float], q: float) -> Optional[float]:
 
 def _round(value: Optional[float], digits: int = 3) -> Optional[float]:
     return None if value is None else round(float(value), digits)
+
+
+def memory_snapshot(
+    meminfo: str = "/proc/meminfo", run: Callable[..., Any] = subprocess.run
+) -> Dict[str, Optional[float]]:
+    """Free host memory and GPU memory in MiB; every missing source reads as ``None``."""
+
+    snapshot: Dict[str, Optional[float]] = {
+        "mem_available_mb": None, "gpu_used_mb": None, "gpu_total_mb": None,
+    }
+    try:
+        for line in Path(meminfo).read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                snapshot["mem_available_mb"] = round(int(line.split()[1]) / 1024.0, 1)
+                break
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        done = run(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        if done.returncode == 0:
+            used, total = [float(part) for part in done.stdout.strip().splitlines()[0].split(",")]
+            snapshot["gpu_used_mb"], snapshot["gpu_total_mb"] = used, total
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        pass
+    return snapshot
+
+
+_SQLITE_COMPANIONS = (".sqlite-wal", ".sqlite-shm")
+
+
+def purge_sqlite_companions(root: Path) -> int:
+    """Delete stray SQLite ``-wal``/``-shm`` files under ``root``; returns how many.
+
+    A killed evaluator can leave them behind, and the evidence exporter refuses
+    them, which would lose every phase's evidence.
+    """
+
+    removed = 0
+    root = Path(root)
+    if not root.is_dir():
+        return 0
+    for path in sorted(root.rglob("*")):
+        if path.name.lower().endswith(_SQLITE_COMPANIONS) and (path.is_file() or path.is_symlink()):
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+def remove_tree_within(path: Path, root: Path) -> bool:
+    """Remove ``path`` if it is a real directory inside ``root``; True when it is gone."""
+
+    path, root = Path(path), Path(root)
+    if not path.exists() and not path.is_symlink():
+        return True
+    try:
+        if path.is_symlink() or not path.is_dir():
+            return False
+        path.resolve().relative_to(root.resolve())
+        shutil.rmtree(str(path))
+    except (OSError, ValueError):
+        return False
+    return not path.exists()
 
 
 def read_timing_records(path: Path) -> Tuple[List[Dict[str, Any]], int]:
@@ -111,7 +183,7 @@ def timing_stats(path: Path, warm_elapsed_seconds: Optional[float]) -> Optional[
         "wait_ms_p50": _round(percentile(waits, 50)),
         "wait_ms_p95": _round(percentile(waits, 95)),
         "busy_seconds": _round(busy_seconds),
-        "gpu_busy_share": _round(share, 4),
+        "model_call_busy_share": _round(share, 4),
         "malformed_lines": malformed,
     }
 
@@ -224,6 +296,7 @@ def build_summary(
     phases: Sequence[Mapping[str, Any]],
     parity: Optional[Mapping[str, Any]],
     stop_reason: Optional[str],
+    extra: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     comparisons = compare_phases(phases)
     summary: Dict[str, Any] = {
@@ -243,6 +316,8 @@ def build_summary(
         "stop_reason": stop_reason,
         "verdict": overall_verdict(phases, comparisons, parity),
     }
+    if extra:
+        summary.update(extra)
     if mode == "m3-batch-smoke":
         batched = [p for p in phases if p["max_batch_size"] > 1]
         observed = max(
@@ -303,15 +378,19 @@ def run_phases(
     write_config: Optional[Callable[..., None]] = None,
     load_result: Optional[Callable[[Path], Any]] = None,
     item_timeout: float = ITEM_TIMEOUT_SECONDS,
+    prefetch: Optional[Callable[[], Any]] = None,
+    snapshot: Callable[[], Mapping[str, Any]] = memory_snapshot,
 ) -> Dict[str, Any]:
     """Run the planned phases in order and return the summary.
 
+    ``prefetch()`` downloads the pinned inputs once, before parity and before the
+    first phase, and is timed separately so it never counts toward a phase.
     ``run_item(command, item_timeout=..., cancel=...)`` is the bounded evaluator
     runner from ``run_workload``: it checks the deadline and the model, validates
     the generated evidence and raises ``InfrastructureError`` on any problem
     (``RunCancelled`` when this module cancelled the evaluator). ``failure()``
-    returns the latched failure code, if any. Exceptions that mean cleanup could
-    not be confirmed propagate to the caller untouched.
+    returns the latched failure code, if any. A server cleanup that cannot be
+    confirmed propagates to the caller untouched.
     """
 
     if write_config is None or load_result is None:
@@ -329,11 +408,14 @@ def run_phases(
     records: List[Dict[str, Any]] = []
     parity: Optional[Dict[str, Any]] = None
     stop_reason: Optional[str] = None
+    scrub = {"companions_removed": 0}
+    extra: Dict[str, Any] = {"prefetch_seconds": None, "cleanup_unconfirmed": False}
 
     def save() -> Dict[str, Any]:
+        extra["sqlite_companions_removed"] = scrub["companions_removed"]
         summary = build_summary(
             mode=mode, repeats_per_kind=repeats_per_kind, planned=planned,
-            phases=records, parity=parity, stop_reason=stop_reason,
+            phases=records, parity=parity, stop_reason=stop_reason, extra=extra,
         )
         write_summary(batch_root, summary)
         return summary
@@ -346,61 +428,103 @@ def run_phases(
             "planned": len(manifest), "valid_count": 0, "drift_ids": [],
         })
 
-    if mode == "m3-batch-smoke":
-        parity = _run_parity(parity_runner, batch_root, log_root, planned[0][1], remaining, progress)
-        if not parity.get("passed"):
-            stop_reason = "parity_failed" if parity.get("error") is None else "parity_error"
+    blocked = False
+    try:
+        if prefetch is not None:
+            started = clock()
+            progress("batch_prefetch_start")
+            try:
+                prefetch()
+            except Exception as error:
+                stop_reason, blocked = "prefetch_failed", True
+                progress("batch_prefetch_failed", error=type(error).__name__)
+            extra["prefetch_seconds"] = _round(clock() - started)
+            if not blocked:
+                progress("batch_prefetch_done", seconds=extra["prefetch_seconds"])
+        if mode == "m3-batch-smoke" and not blocked:
+            parity = _run_parity(
+                parity_runner, batch_root, log_root, planned[0][1], remaining, progress, extra
+            )
+            if not parity.get("passed"):
+                stop_reason = "parity_failed" if parity.get("error") is None else "parity_error"
+                if extra["cleanup_unconfirmed"]:
+                    stop_reason = "cleanup_unconfirmed"
+                blocked = True
+        if blocked:
             for index in range(len(planned)):
                 not_run(index, "not_run")
-            return save()
 
-    deadline_skipped = False
-    for index, (workers, size) in enumerate(planned):
-        if stop_reason is not None or failure() is not None:
-            not_run(index, "not_run")
-            continue
-        estimate = estimate_phase_seconds(records, workers)
-        available = remaining()
-        needed = FIRST_PHASE_MINIMUM_SECONDS if estimate is None else estimate
-        if available < needed:
-            not_run(index, "deadline_skipped")
-            deadline_skipped = True
-            progress("batch_phase_skipped", phase=index + 1, workers=workers, max_batch_size=size,
-                     remaining_seconds=round(available, 1), needed_seconds=round(needed, 1))
-            continue
-        progress("batch_phase_start", phase=index + 1, workers=workers, max_batch_size=size)
-        try:
-            record = _run_phase(
-                index=index, workers=workers, size=size, manifest=manifest, digest=digest,
-                batch_root=batch_root, log_root=log_root, project_root=project_root,
-                model_factory=model_factory, set_model=set_model, run_item=run_item,
-                launch_deadline=launch_deadline, clock=clock, write_config=write_config,
-                load_result=load_result, item_timeout=item_timeout,
+        deadline_skipped = False
+        for index, (workers, size) in enumerate(planned):
+            if blocked:
+                break
+            if stop_reason is not None or failure() is not None:
+                not_run(index, "not_run")
+                continue
+            estimate = estimate_phase_seconds(records, workers)
+            available = remaining()
+            needed = FIRST_PHASE_MINIMUM_SECONDS if estimate is None else estimate
+            if available < needed:
+                not_run(index, "deadline_skipped")
+                deadline_skipped = True
+                progress("batch_phase_skipped", phase=index + 1, workers=workers, max_batch_size=size,
+                         remaining_seconds=round(available, 1), needed_seconds=round(needed, 1))
+                continue
+            progress("batch_phase_start", phase=index + 1, workers=workers, max_batch_size=size,
+                     **dict(snapshot()))
+            try:
+                record = _run_phase(
+                    index=index, workers=workers, size=size, manifest=manifest, digest=digest,
+                    batch_root=batch_root, log_root=log_root, project_root=project_root,
+                    model_factory=model_factory, set_model=set_model, run_item=run_item,
+                    launch_deadline=launch_deadline, clock=clock, write_config=write_config,
+                    load_result=load_result, item_timeout=item_timeout, remaining=remaining,
+                    snapshot=snapshot, scrub=scrub,
+                )
+            except PhaseFailure as error:
+                not_run(index, "start_failed")
+                records[-1]["stop_reason"] = error.reason
+                stop_reason = error.reason
+                save()
+                continue
+            records.append(record)
+            progress(
+                "batch_phase_done", phase=index + 1, workers=workers, max_batch_size=size,
+                status=record["status"], valid=record["valid_count"],
+                episodes_per_minute=record.get("episodes_per_minute"),
+                warm_elapsed_seconds=record.get("warm_elapsed_seconds"),
+                **dict(record.get("memory_end") or {}),
             )
-        except PhaseFailure as error:
-            not_run(index, "start_failed")
-            records[-1]["stop_reason"] = error.reason
-            stop_reason = error.reason
+            if record["status"] != "complete":
+                stop_reason = failure() or (
+                    "deadline_exhausted" if record.get("deadline_stopped") else "phase_incomplete"
+                )
             save()
-            continue
-        records.append(record)
-        progress(
-            "batch_phase_done", phase=index + 1, workers=workers, max_batch_size=size,
-            status=record["status"], valid=record["valid_count"],
-            episodes_per_minute=record.get("episodes_per_minute"),
-            warm_elapsed_seconds=record.get("warm_elapsed_seconds"),
-        )
-        if record["status"] != "complete":
-            stop_reason = failure() or "phase_incomplete"
-        save()
-    if stop_reason is None and deadline_skipped:
-        stop_reason = "deadline_exhausted"
-    summary = save()
+        if stop_reason is None and deadline_skipped:
+            stop_reason = "deadline_exhausted"
+    finally:
+        # Last line of defence: the exporter rejects SQLite companions anywhere.
+        scrub["companions_removed"] += purge_sqlite_companions(batch_root)
+        summary = save()
     progress(
         "batch_summary", verdict=summary["verdict"], comparisons=summary["comparisons"],
         all_phases_complete=summary["all_phases_complete"],
+        sqlite_companions_removed=summary["sqlite_companions_removed"],
     )
     return summary
+
+
+def _parity_error_result(error: BaseException) -> Dict[str, Any]:
+    if isinstance(error, CleanupUnconfirmed):
+        code = "cleanup_unconfirmed"
+    elif isinstance(error, InfrastructureError):
+        code = "infrastructure_error"
+    else:
+        code = "exception"
+    return {
+        "schema_version": 1, "passed": False, "error_code": code,
+        "error": "{}: {}".format(type(error).__name__, str(error)[:200]),
+    }
 
 
 def _run_parity(
@@ -410,21 +534,38 @@ def _run_parity(
     max_batch_size: int,
     remaining: Callable[[], float],
     progress: Callable[..., None],
+    extra: Dict[str, Any],
 ) -> Dict[str, Any]:
+    """Run the parity check; a verdict file and a result dict exist whatever happens."""
+
+    output = batch_root / "parity.json"
+    wrote_here = False
     if runner is None:
-        return {"passed": False, "error": "parity runner unavailable"}
-    budget = min(PARITY_CAP_SECONDS, remaining())
-    if budget <= 0:
-        return {"passed": False, "error": "no time remains for the parity check"}
-    progress("batch_parity_start", timeout_seconds=round(budget, 1))
-    try:
-        result = dict(runner(
-            output=batch_root / "parity.json", log_root=log_root,
-            max_batch_size=max_batch_size, timeout_seconds=budget,
-        ))
-    except InfrastructureError as error:
-        result = {"passed": False, "error": "{}: {}".format(type(error).__name__, str(error)[:200])}
+        result: Dict[str, Any] = {"schema_version": 1, "passed": False, "error_code": "unavailable",
+                                  "error": "parity runner unavailable"}
+        wrote_here = True
+    else:
+        # The budget is taken after prefetch, so a slow download cannot starve it.
+        budget = min(PARITY_CAP_SECONDS, remaining())
+        if budget <= 0:
+            result = {"schema_version": 1, "passed": False, "error_code": "no_time",
+                      "error": "no time remains for the parity check"}
+            wrote_here = True
+        else:
+            progress("batch_parity_start", timeout_seconds=round(budget, 1))
+            try:
+                result = dict(runner(
+                    output=output, log_root=log_root, max_batch_size=max_batch_size,
+                    timeout_seconds=budget,
+                ))
+            except Exception as error:
+                result = _parity_error_result(error)
+                wrote_here = True
+                if isinstance(error, CleanupUnconfirmed):
+                    extra["cleanup_unconfirmed"] = True
     result["passed"] = result.get("passed") is True
+    if wrote_here or not output.exists():
+        output.write_bytes((json.dumps(result, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8"))
     progress("batch_parity_done", passed=result["passed"], max_abs_diff=result.get("max_abs_diff"),
              error=result.get("error"))
     return result
@@ -448,6 +589,9 @@ def _run_phase(
     write_config: Callable[..., None],
     load_result: Callable[[Path], Any],
     item_timeout: float,
+    remaining: Callable[[], float],
+    snapshot: Callable[[], Mapping[str, Any]],
+    scrub: Dict[str, int],
 ) -> Dict[str, Any]:
     label = phase_label(index, workers, size)
     phase_dir = batch_root / label
@@ -457,103 +601,125 @@ def _run_phase(
     runs.mkdir()
     timing_path = phase_dir / "server-timing.jsonl"
     phase_started = clock()
+    memory_start = dict(snapshot())
     cancel = threading.Event()
     stop = threading.Event()
+    deadline_stop = threading.Event()
     lock = threading.Lock()
     pending: Deque[Mapping[str, Any]] = deque(manifest)
     results: List[Dict[str, Any]] = []
     model: Any = None
+    server_argv: Optional[List[str]] = None
 
     try:
         try:
-            model = model_factory(log_root=log_root, server="faultline", max_batch_size=size,
-                                  timing_log=timing_path)
-        except Exception as error:
-            raise PhaseFailure("model_start_failed") from error
-        set_model(model)
-        try:
-            model.start()
-        except Exception as error:
-            raise PhaseFailure("model_start_failed") from error
-        try:
-            model.wait_ready(deadline=launch_deadline)
-        except Exception as error:
-            raise PhaseFailure("readiness_failed") from error
-        try:
-            model.check_alive()
-        except Exception as error:
-            raise PhaseFailure("model_died") from error
-        ready_at = clock()
-
-        def evaluate(item: Mapping[str, Any]) -> Dict[str, Any]:
-            case_id = str(item["case_id"])
-            record: Dict[str, Any] = {
-                "case_id": case_id, "kind": item["kind"], "status": "infrastructure_error",
-                "outcome": None, "started_seconds": round(clock() - ready_at, 3),
-            }
             try:
-                config_path = configs / (case_id + ".yaml")
-                output = runs / case_id
-                rectangle = item["rectangle"] or {}
-                write_config(
-                    config_path=config_path, output_dir=output, project_root=project_root,
-                    stage_name="m3-" + case_id, episode_indices=(0,), **rectangle
-                )
-                run_item(
-                    ["vla-eval", "run", "--config", str(config_path)],
-                    item_timeout=item_timeout, cancel=cancel,
-                )
-                result = load_result(output)
-                outcome = getattr(result, "outcome", None)
-                if outcome in VALID_OUTCOMES and getattr(result, "episode_index", 0) == 0:
-                    record.update(status="valid", outcome=outcome,
-                                  steps=getattr(result, "steps", None))
-                else:
-                    record["status"] = "invalid_evidence"
-            except RunCancelled:
-                record["status"] = "cancelled"
-            except InfrastructureError:
-                record["status"] = "infrastructure_error"
-            except Exception:
-                record["status"] = "infrastructure_error"
-            record["ended_seconds"] = round(clock() - ready_at, 3)
-            return record
+                model = model_factory(log_root=log_root, server="faultline", max_batch_size=size,
+                                      timing_log=timing_path)
+            except Exception as error:
+                raise PhaseFailure("model_start_failed") from error
+            set_model(model)
+            argv = getattr(model, "argv", None)
+            if argv is not None:
+                server_argv = list(argv)[1:]
+            try:
+                model.start()
+            except Exception as error:
+                raise PhaseFailure("model_start_failed") from error
+            try:
+                model.wait_ready(deadline=launch_deadline)
+            except Exception as error:
+                raise PhaseFailure("readiness_failed") from error
+            try:
+                model.check_alive()
+            except Exception as error:
+                raise PhaseFailure("model_died") from error
+            ready_at = clock()
 
-        def worker() -> None:
-            while not stop.is_set() and not cancel.is_set():
-                with lock:
-                    item = pending.popleft() if pending else None
-                if item is None:
-                    return
-                record = evaluate(item)
-                with lock:
-                    results.append(record)
-                if record["status"] != "valid":
-                    stop.set()
-                    cancel.set()
+            def evaluate(item: Mapping[str, Any]) -> Dict[str, Any]:
+                case_id = str(item["case_id"])
+                record: Dict[str, Any] = {
+                    "case_id": case_id, "kind": item["kind"], "status": "infrastructure_error",
+                    "outcome": None, "started_seconds": round(clock() - ready_at, 3),
+                }
+                try:
+                    config_path = configs / (case_id + ".yaml")
+                    output = runs / case_id
+                    rectangle = item["rectangle"] or {}
+                    write_config(
+                        config_path=config_path, output_dir=output, project_root=project_root,
+                        stage_name="m3-" + case_id, episode_indices=(0,), **rectangle
+                    )
+                    run_item(
+                        ["vla-eval", "run", "--config", str(config_path)],
+                        item_timeout=item_timeout, cancel=cancel,
+                    )
+                    result = load_result(output)
+                    outcome = getattr(result, "outcome", None)
+                    if outcome in VALID_OUTCOMES and getattr(result, "episode_index", 0) == 0:
+                        record.update(status="valid", outcome=outcome,
+                                      steps=getattr(result, "steps", None))
+                    else:
+                        record["status"] = "invalid_evidence"
+                except RunCancelled:
+                    record["status"] = "cancelled"
+                except InfrastructureError as error:
+                    timed_out = isinstance(error.__cause__, subprocess.TimeoutExpired)
+                    record["status"] = "timed_out" if timed_out else "infrastructure_error"
+                except Exception:
+                    record["status"] = "infrastructure_error"
+                record["ended_seconds"] = round(clock() - ready_at, 3)
+                return record
 
-        threads = [threading.Thread(target=worker, name="m3-batch-worker-{}".format(i), daemon=True)
-                   for i in range(workers)]
-        try:
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                while thread.is_alive():
-                    thread.join(0.5)
-        except BaseException:
-            cancel.set()
-            stop.set()
-            for thread in threads:
-                if thread.is_alive():
-                    thread.join(30)
-            raise
+            def worker() -> None:
+                while not stop.is_set() and not cancel.is_set():
+                    # Never start an item that the Job deadline could cut short.
+                    if remaining() < item_timeout:
+                        deadline_stop.set()
+                        stop.set()
+                        return
+                    with lock:
+                        item = pending.popleft() if pending else None
+                    if item is None:
+                        return
+                    record = evaluate(item)
+                    with lock:
+                        results.append(record)
+                    if record["status"] != "valid":
+                        stop.set()
+                        cancel.set()
+
+            threads = [threading.Thread(target=worker, name="m3-batch-worker-{}".format(i), daemon=True)
+                       for i in range(workers)]
+            try:
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    while thread.is_alive():
+                        thread.join(0.5)
+            except BaseException:
+                cancel.set()
+                stop.set()
+                for thread in threads:
+                    if thread.is_alive():
+                        thread.join(30)
+                raise
+        finally:
+            if model is not None:
+                # If this raises, the model stays registered so the workload's own
+                # cleanup retries it and records the failure.
+                model.close()
+                set_model(None)
     finally:
-        if model is not None:
-            # If this raises, the model stays registered so the workload's own
-            # cleanup retries it and records the failure.
-            model.close()
-            set_model(None)
+        # Killed evaluators can leave SQLite companions (and half-written media)
+        # behind; remove their run directories and any stray companions before
+        # anything is exported, including on interruption.
+        for entry in results:
+            if entry["status"] in ("cancelled", "timed_out"):
+                entry["run_dir_removed"] = remove_tree_within(runs / entry["case_id"], phase_dir)
+        scrub["companions_removed"] += purge_sqlite_companions(phase_dir)
 
+    memory_end = dict(snapshot())
     finished = [r for r in results if r.get("ended_seconds") is not None]
     valid = [r for r in results if r["status"] == "valid"]
     warm = None
@@ -573,6 +739,10 @@ def _run_phase(
         "total_seconds": _round(clock() - phase_started),
         "episodes_per_minute": _round(len(valid) / warm * 60.0, 4) if complete and warm else None,
         "timing": timing_stats(timing_path, warm),
+        "server_argv": server_argv,
+        "memory_start": memory_start,
+        "memory_end": memory_end,
+        "deadline_stopped": deadline_stop.is_set(),
         "items": sorted(results, key=lambda r: r["case_id"]),
     }
     return record

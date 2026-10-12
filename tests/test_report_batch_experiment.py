@@ -21,7 +21,7 @@ def phase(workers, size, epm, *, share=0.9, mean=None, drift=(), status="complet
         "calls": 100, "items_served": 240, "mean_batch_size": mean if mean is not None else float(size),
         "p95_batch_size": float(size), "max_batch_size_observed": size,
         "inference_ms_p50": 120.0, "inference_ms_p95": 180.0, "wait_ms_p50": 300.0, "wait_ms_p95": 700.0,
-        "busy_seconds": 100.0, "gpu_busy_share": share, "malformed_lines": 0,
+        "busy_seconds": 100.0, "model_call_busy_share": share, "malformed_lines": 0,
     }
     return {
         "index": 0, "label": be.phase_label(0, workers, size), "workers": workers, "max_batch_size": size,

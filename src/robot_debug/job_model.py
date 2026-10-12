@@ -75,6 +75,12 @@ class ModelProcess:
         self._started = False
         self._closed = False
 
+    @property
+    def argv(self) -> list:
+        """The server command line (no secrets: paths and flags only)."""
+
+        return list(self._argv)
+
     def start(self) -> None:
         if os.name != "posix":
             raise InfrastructureError("model process execution requires POSIX process groups")
