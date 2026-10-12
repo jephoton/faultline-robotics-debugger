@@ -240,6 +240,24 @@ def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] 
 # Shared evaluator pool
 # ---------------------------------------------------------------------------
 
+JOIN_SECONDS = 30.0
+
+
+def _join_all(threads: Sequence[threading.Thread], seconds: float) -> None:
+    """Join every live thread under ONE shared deadline (not ``seconds`` each)."""
+
+    deadline = time.monotonic() + seconds
+    for thread in threads:
+        if thread.is_alive():
+            thread.join(max(0.0, deadline - time.monotonic()))
+
+
+def snapshot_families(state: Mapping[str, Any], lock: Any) -> Dict[str, Any]:
+    """A copy of the finished family results, taken under the lock the family threads write with."""
+
+    with lock:
+        return dict(state["families"])
+
 
 class _Ticket:
     def __init__(self, item: Mapping[str, Any]) -> None:
@@ -296,14 +314,15 @@ class EvaluatorPool:
             while not ticket.event.wait(0.5):
                 pass  # short slices so a pending KeyboardInterrupt is delivered promptly
 
-    def shutdown(self, join_seconds: float = 30.0) -> None:
-        """Let queued items drain (they are cancelled when the pool is) and stop the workers."""
+    def shutdown(self, join_seconds: float = JOIN_SECONDS) -> None:
+        """Let queued items drain (they are cancelled when the pool is) and stop the workers.
+
+        All workers share one ``join_seconds`` deadline, so a stuck pool costs 30 s, not 30 s each.
+        """
 
         for _ in self._threads:
             self._queue.put(None)
-        for thread in self._threads:
-            if thread.is_alive():
-                thread.join(join_seconds)
+        _join_all(self._threads, join_seconds)
 
     def not_started_counts(self) -> Dict[str, int]:
         """How many submitted items never started, by reason (cancelled, deadline_skipped, ...)."""
@@ -502,10 +521,12 @@ def run_m6(
                 probes.append(probe_cache[case_id])
         return camera_effect(probes)
 
-    def enriched_families() -> Dict[str, Any]:
+    families_lock = threading.Lock()
+
+    def enriched_families(finished: Mapping[str, Any]) -> Dict[str, Any]:
         records = state["records"]
         families: Dict[str, Any] = {}
-        for name, result in state["families"].items():
+        for name, result in finished.items():
             copy = dict(result)
             levels = []
             for level in result.get("levels", ()):
@@ -530,6 +551,7 @@ def run_m6(
             for item in smoke_items:
                 planned_by_kind[item["kind"]] = planned_by_kind.get(item["kind"], 0) + 1
         nominal_planned = NOMINAL_CONTROLS if threshold else SMOKE_NOMINAL_REPEATS
+        finished_families = snapshot_families(state, families_lock)
         conditions = condition_stats(records, planned_by_kind)
         for kind, row in conditions.items():
             row["camera_effect"] = effect_for([r for r in records if r["kind"] == kind])
@@ -547,7 +569,7 @@ def run_m6(
             "valid_count": len(valid),
             "conditions": conditions,
             "nominal_controls": state["nominal_controls"] or nominal_summary(records, nominal_planned),
-            "families": enriched_families(),
+            "families": enriched_families(finished_families),
             "warmup": state["warmup"],
             "server_argv": state["server_argv"],
             "memory_start": state["memory_start"],
@@ -566,9 +588,9 @@ def run_m6(
             summary["all_nominal_succeeded"] = summary["nominal_controls"]["passed"]
         else:
             summary["complete"] = (
-                state["stop_reason"] is None and bool(state["families"])
+                state["stop_reason"] is None and bool(finished_families)
                 and all(item.get("stop_reason") in ("threshold_found", "no_reproducible_failure")
-                        for item in state["families"].values())
+                        for item in finished_families.values())
             )
         return summary
 
@@ -606,35 +628,40 @@ def run_m6(
                     )
                     pool = EvaluatorPool(workers=workers, evaluate=evaluate, remaining=remaining,
                                          item_timeout=item_timeout, cancel=cancel)
-                    first = (smoke_items or controls)[0]
-                    warm, warmup_seconds, skipped = be.run_warmup(
-                        evaluate=evaluate, first=first, batch_root=batch_root, remaining=remaining,
-                        item_timeout=item_timeout, clock=clock, known_outcomes=KNOWN_OUTCOMES,
-                    )
-                    state["warmup"] = warm
-                    progress("m6_warmup_done", status=warm.get("status"), outcome=warm.get("outcome"),
-                             duration_seconds=warm.get("duration_seconds"))
-                    if skipped:
-                        state["stop_reason"] = "deadline_exhausted"
-                    elif warm["status"] != "valid":
-                        state["stop_reason"] = failure() or "warmup_failed"
+                    try:
+                        first = (smoke_items or controls)[0]
+                        warm, warmup_seconds, skipped = be.run_warmup(
+                            evaluate=evaluate, first=first, batch_root=batch_root, remaining=remaining,
+                            item_timeout=item_timeout, clock=clock, known_outcomes=KNOWN_OUTCOMES,
+                        )
+                        state["warmup"] = warm
+                        progress("m6_warmup_done", status=warm.get("status"), outcome=warm.get("outcome"),
+                                 duration_seconds=warm.get("duration_seconds"))
+                        if skipped:
+                            state["stop_reason"] = "deadline_exhausted"
+                        elif warm["status"] != "valid":
+                            state["stop_reason"] = failure() or "warmup_failed"
+                            cancel.set()
+                        if state["stop_reason"] is None:
+                            launch_t = server_clock()
+                            pool.start()
+                            if threshold:
+                                _run_threshold(
+                                    pool=pool, config=config, controls=controls, state=state,
+                                    failure=failure, remaining=remaining, item_timeout=item_timeout,
+                                    progress=progress, save=save, families_lock=families_lock)
+                            else:
+                                _run_smoke(pool=pool, items=smoke_items, state=state, failure=failure,
+                                           progress=progress)
+                    except BaseException:
+                        # Mirror M3: cancel first, so the evaluators die before the server does.
                         cancel.set()
-                    if state["stop_reason"] is None:
-                        launch_t = server_clock()
-                        pool.start()
-                        if threshold:
-                            _run_threshold(
-                                pool=pool, config=config, controls=controls, state=state,
-                                failure=failure, remaining=remaining, item_timeout=item_timeout,
-                                progress=progress, save=save)
-                        else:
-                            _run_smoke(pool=pool, items=smoke_items, state=state, failure=failure,
-                                       progress=progress)
+                        raise
+                    finally:
+                        # Evaluators are cancelled, joined and gone before the server closes.
+                        pool.shutdown()
             except be.PhaseFailure as error:
                 state["stop_reason"] = error.reason
-            finally:
-                if pool is not None:
-                    pool.shutdown()
             state["memory_end"] = dict(snapshot())
     except BaseException:
         cancel.set()
@@ -690,6 +717,7 @@ def _run_threshold(
     *, pool: EvaluatorPool, config: Mapping[str, Any], controls: Sequence[Mapping[str, Any]],
     state: Dict[str, Any], failure: Callable[[], Optional[str]], remaining: Callable[[], float],
     item_timeout: float, progress: Callable[..., None], save: Callable[[], Any],
+    families_lock: Any,
 ) -> None:
     control_records = _wait_and_classify(pool, controls)
     state["records"] = list(pool.results)
@@ -699,18 +727,18 @@ def _run_threshold(
     if invalid:
         state["stop_reason"] = failure() or (
             "deadline_exhausted" if pool.deadline_stop.is_set() else "controls_incomplete")
-        for family in config["families"]:
-            state["families"][family] = _family_not_run(family, config, "not_run")
+        with families_lock:
+            for family in config["families"]:
+                state["families"][family] = _family_not_run(family, config, "not_run")
         return
     if not state["nominal_controls"]["passed"]:
         state["stop_reason"] = "nominal_controls_failed"
-        for family in config["families"]:
-            state["families"][family] = _family_not_run(family, config, "nominal_failed")
+        with families_lock:
+            for family in config["families"]:
+                state["families"][family] = _family_not_run(family, config, "nominal_failed")
         save()
         return
     save()
-
-    lock = threading.Lock()
 
     def run_family(family: str) -> None:
         def evaluate_level(severity: float, attempts: int) -> List[str]:
@@ -739,7 +767,7 @@ def _run_threshold(
             result = _family_not_run(family, config, "infrastructure_error")
             result["error"] = type(error).__name__
         result["family"] = family
-        with lock:
+        with families_lock:
             state["families"][family] = result
         progress("m6_family_done", family=family, stop_reason=result["stop_reason"],
                  threshold_severity=result["threshold_severity"], lower_bound=result["lower_bound"])
@@ -754,13 +782,12 @@ def _run_threshold(
                 thread.join(0.5)
     except BaseException:
         pool.cancel.set()
-        for thread in threads:
-            if thread.is_alive():
-                thread.join(30)
+        _join_all(threads, JOIN_SECONDS)
         raise
     finally:
         state["records"] = list(pool.results)
-    stops = {item["stop_reason"] for item in state["families"].values()}
+    with families_lock:
+        stops = {item["stop_reason"] for item in state["families"].values()}
     clean = {"threshold_found", "no_reproducible_failure"}
     if not stops <= clean:
         if failure() is not None:

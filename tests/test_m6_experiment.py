@@ -740,6 +740,130 @@ class CameraEffectRunTests(RunTestCase):
         self.assertEqual(json.loads(json.dumps(summary, sort_keys=True)), self.saved())
 
 
+class InterruptTests(RunTestCase):
+    """An interrupt must cancel and join every evaluator before the server is closed."""
+
+    def interrupted_run(self, mode, config):
+        from unittest import mock
+
+        seen = []
+        world = M6World(smoke_decide, block_until_cancel=False, leave_companions=True)
+        world.on_run = lambda case: setattr(world, "block_until_cancel", not case.startswith("warmup"))
+        pools = []
+        original_init = m6.EvaluatorPool.__init__
+
+        def recording_init(pool, **kwargs):
+            original_init(pool, **kwargs)
+            pools.append(pool)
+
+        def interrupt(tickets):
+            deadline = time.monotonic() + 5
+            while world.running < 5 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            raise KeyboardInterrupt
+
+        factory = world.model_factory
+
+        def watching_factory(**kwargs):
+            model = factory(**kwargs)
+            original_close = model.close
+
+            def close():
+                seen.append({"cancel": pools[0].cancel.is_set(), "running": world.running})
+                original_close()
+
+            model.close = close
+            return model
+
+        started = time.monotonic()
+        with mock.patch.object(m6.EvaluatorPool, "__init__", recording_init), \
+                mock.patch.object(m6.EvaluatorPool, "wait", staticmethod(interrupt)):
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_m6(world, mode, config, model_factory=watching_factory)
+        return world, seen, time.monotonic() - started
+
+    def check(self, world, seen, elapsed):
+        self.assertEqual([{"cancel": True, "running": 0}], seen,
+                         "the server closed only after the evaluators were cancelled and gone")
+        self.assertLess(elapsed, 10.0)
+        self.assertEqual([None], world.set_calls[-1:], "the model was unregistered after closing")
+        summary = self.saved()
+        self.assertFalse(summary["complete"])
+        self.assertFalse(list((self.root / "m6").rglob("*.sqlite-*")), "no SQLite companions remain")
+        killed = [item for item in summary["items"] if item["status"] == "cancelled"]
+        self.assertTrue(killed)
+        self.assertTrue(all(item["run_dir_removed"] for item in killed))
+        self.assertFalse(any((self.root / "m6" / "runs" / item["case_id"]).exists() for item in killed))
+
+    def test_interrupt_during_the_smoke_wave(self):
+        self.check(*self.interrupted_run("m6-smoke", None))
+
+    def test_interrupt_during_the_threshold_controls(self):
+        self.check(*self.interrupted_run("m6-threshold", dict(THRESHOLD_CONFIG)))
+
+    def test_shutdown_waits_for_all_workers_under_one_shared_deadline(self):
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+
+        def evaluate(item):
+            gate.wait(30)
+            return {"case_id": item["case_id"], "kind": "k", "status": "valid", "outcome": "success",
+                    "started_seconds": 0.0, "ended_seconds": 1.0}
+
+        pool = m6.EvaluatorPool(workers=12, evaluate=evaluate, remaining=lambda: 1000.0,
+                                item_timeout=300.0, cancel=threading.Event())
+        pool.start()
+        for index in range(12):
+            pool.submit({"case_id": "c{}".format(index), "kind": "k"})
+        time.sleep(0.1)
+        started = time.monotonic()
+        pool.shutdown(0.5)
+        self.assertLess(time.monotonic() - started, 2.0, "12 stuck workers cost one deadline, not twelve")
+
+    def test_family_threads_are_joined_under_one_deadline_too(self):
+        source = (Path(m6.__file__)).read_text(encoding="utf-8")
+        self.assertNotIn("thread.join(30)", source)
+
+
+class FamilySnapshotTests(unittest.TestCase):
+    def test_the_summary_copies_the_families_under_their_lock(self):
+        events = []
+
+        class Lock:
+            def __enter__(self):
+                events.append("enter")
+
+            def __exit__(self, *exc):
+                events.append("exit")
+
+        state = {"families": {"darken": {"stop_reason": "threshold_found"}}}
+        snapshot = m6.snapshot_families(state, Lock())
+        state["families"]["noise"] = {}
+        self.assertEqual(["enter", "exit"], events)
+        self.assertEqual({"darken"}, set(snapshot))
+
+    def test_a_family_thread_writing_during_summaries_never_breaks_them(self):
+        state = {"families": {}}
+        lock = threading.Lock()
+        stop = threading.Event()
+
+        def writer():
+            index = 0
+            while not stop.is_set():
+                with lock:
+                    state["families"]["f{}".format(index)] = {"stop_reason": "threshold_found"}
+                index += 1
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            for _ in range(300):
+                self.assertIsInstance(m6.snapshot_families(state, lock), dict)
+        finally:
+            stop.set()
+            thread.join()
+
+
 class PythonCompatibilityTests(unittest.TestCase):
     """The simulator image runs the workload and the benchmark adapter on Python 3.8."""
 
