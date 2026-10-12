@@ -234,6 +234,236 @@ class DiagnosticLIBEROBenchmarkTests(unittest.TestCase):
         benchmark = self.benchmark_type(suite="libero_object")
         self.assertIsNone(benchmark.external_reset)
 
+    # ---- M6: wrist occlusion and scalar image families -------------------
+
+    @staticmethod
+    def _raw(value_agent=120, value_wrist=60, frame=None):
+        agentview = np.full((8, 8, 3), value_agent, dtype=np.uint8)
+        return {"agentview": agentview, "wrist": np.full((8, 8, 3), value_wrist, dtype=np.uint8),
+                "states": np.array([1.0]), "frame": agentview.copy() if frame is None else frame}
+
+    def _without_wrist(self):
+        original = FakeLIBEROBenchmark.make_obs
+
+        def no_wrist(self_, raw_obs, task):
+            observation = original(self_, raw_obs, task)
+            del observation["images"]["wrist"]
+            return observation
+
+        FakeLIBEROBenchmark.make_obs = no_wrist
+        self.addCleanup(setattr, FakeLIBEROBenchmark, "make_obs", original)
+
+    def test_new_options_are_not_forwarded_upstream(self) -> None:
+        benchmark = self.benchmark_type(
+            suite="libero_object", seed=7,
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5},
+            image_perturbation={"kind": "blur", "severity": 0.4})
+
+        self.assertEqual({"suite": "libero_object", "seed": 7, "send_wrist_image": False,
+                          "send_state": False}, benchmark.upstream_kwargs)
+        self.assertTrue(benchmark.wrist_occlusion.enabled)
+        self.assertEqual(("blur", 0.4), (benchmark.image_perturbation.kind, benchmark.image_perturbation.severity))
+
+    def test_defaults_disable_both_new_features(self) -> None:
+        benchmark = self.benchmark_type()
+        self.assertFalse(benchmark.wrist_occlusion.enabled)
+        self.assertIsNone(benchmark.image_perturbation)
+
+    def test_invalid_new_options_are_rejected(self) -> None:
+        for kwargs in (
+            {"wrist_occlusion": {"x": 0.9, "y": 0.0, "width": 0.5, "height": 0.5}},
+            {"image_perturbation": {"kind": "sepia", "severity": 0.5}},
+            {"image_perturbation": {"kind": "blur", "severity": 1.5}},
+            {"image_perturbation": {"kind": "blur"}},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
+                self.benchmark_type(**kwargs)
+
+    def test_wrist_occlusion_masks_only_the_wrist_view(self) -> None:
+        raw = self._raw()
+        benchmark = self.benchmark_type(
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0})
+
+        observation = benchmark.make_obs(raw, {"name": "t"})
+
+        self.assertTrue((observation["images"]["wrist"] == 0).all())
+        np.testing.assert_array_equal(observation["images"]["agentview"], raw["agentview"])
+        self.assertTrue((raw["wrist"] == 60).all())
+
+    def test_wrist_and_agentview_occlusions_are_independent(self) -> None:
+        raw = self._raw()
+        benchmark = self.benchmark_type(
+            agentview_occlusion={"x": 0.5, "y": 0.0, "width": 0.5, "height": 0.5},
+            wrist_occlusion={"x": 0.0, "y": 0.5, "width": 0.5, "height": 0.5})
+
+        images = benchmark.make_obs(raw, {"name": "t"})["images"]
+
+        self.assertTrue((images["agentview"][:4, 4:] == 0).all())
+        self.assertTrue((images["agentview"][4:, :4] == 120).all())
+        self.assertTrue((images["wrist"][4:, :4] == 0).all())
+        self.assertTrue((images["wrist"][:4, 4:] == 60).all())
+
+    def test_wrist_occlusion_without_a_wrist_image_fails_closed(self) -> None:
+        benchmark = self.benchmark_type(
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5})
+        self._without_wrist()
+        with self.assertRaisesRegex(ValueError, "wrist"):
+            benchmark.make_obs(self._raw(), {"name": "t"})
+
+    def test_scalar_family_perturbs_both_cameras_and_keeps_state(self) -> None:
+        for kind in ("darken", "noise", "blur", "contrast"):
+            raw = self._raw()
+            raw["agentview"][::2] = 255  # give blur and contrast something to act on
+            raw["wrist"][::2] = 255
+            benchmark = self.benchmark_type(seed=7, image_perturbation={"kind": kind, "severity": 0.6})
+
+            observation = benchmark.make_obs(raw, {"name": "t"})
+
+            with self.subTest(kind=kind):
+                self.assertFalse(np.array_equal(observation["images"]["agentview"], raw["agentview"]))
+                self.assertFalse(np.array_equal(observation["images"]["wrist"], raw["wrist"]))
+                self.assertIs(observation["states"], raw["states"])
+
+    def test_zero_severity_leaves_both_cameras_identical(self) -> None:
+        raw = self._raw()
+        benchmark = self.benchmark_type(image_perturbation={"kind": "noise", "severity": 0.0})
+        observation = benchmark.make_obs(raw, {"name": "t"})
+        np.testing.assert_array_equal(observation["images"]["agentview"], raw["agentview"])
+        np.testing.assert_array_equal(observation["images"]["wrist"], raw["wrist"])
+
+    def test_the_scalar_family_runs_before_the_occlusion(self) -> None:
+        raw = self._raw()
+        benchmark = self.benchmark_type(
+            agentview_occlusion={"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5},
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5},
+            image_perturbation={"kind": "noise", "severity": 1.0})
+
+        images = benchmark.make_obs(raw, {"name": "t"})["images"]
+
+        for camera in ("agentview", "wrist"):
+            self.assertTrue((images[camera][:4, :4] == 0).all(), camera)
+            self.assertFalse((images[camera][4:, 4:] == raw[camera][4:, 4:]).all(), camera)
+
+    def test_noise_is_deterministic_per_step_and_episode_and_seed(self) -> None:
+        task = {"name": "t", "task_id": 0}
+
+        def episode(benchmark, steps=3):
+            benchmark._begin_episode()
+            return [benchmark.make_obs(self._raw(), task)["images"] for _ in range(steps)]
+
+        spec = {"kind": "noise", "severity": 0.5}
+        first = self.benchmark_type(seed=7, image_perturbation=spec)
+        a = episode(first)
+        b = episode(first)  # second episode in the same process
+        replay = episode(self.benchmark_type(seed=7, image_perturbation=spec))
+        other_seed = episode(self.benchmark_type(seed=8, image_perturbation=spec))
+
+        for camera in ("agentview", "wrist"):
+            self.assertFalse(np.array_equal(a[0][camera], a[1][camera]), "steps differ")
+            self.assertFalse(np.array_equal(a[0][camera], b[0][camera]), "episodes differ")
+            for step in range(3):
+                np.testing.assert_array_equal(a[step][camera], replay[step][camera])
+                self.assertFalse(np.array_equal(a[step][camera], other_seed[step][camera]))
+
+    def test_cameras_get_independent_noise(self) -> None:
+        raw = self._raw(value_agent=100, value_wrist=100)
+        benchmark = self.benchmark_type(seed=7, image_perturbation={"kind": "noise", "severity": 0.5})
+        benchmark._begin_episode()
+        images = benchmark.make_obs(raw, {"name": "t"})["images"]
+        self.assertFalse(np.array_equal(images["agentview"], images["wrist"]))
+
+    def test_a_reset_restarts_the_step_counter(self) -> None:
+        benchmark = self.benchmark_type(seed=7, image_perturbation={"kind": "noise", "severity": 0.5})
+        benchmark._begin_episode()
+        first = benchmark.make_obs(self._raw(), {"name": "t"})["images"]["agentview"]
+        benchmark.make_obs(self._raw(), {"name": "t"})
+        # Rewind to the same episode index: the next first observation matches the first one.
+        benchmark._episode_index -= 1
+        benchmark._begin_episode()
+        again = benchmark.make_obs(self._raw(), {"name": "t"})["images"]["agentview"]
+        np.testing.assert_array_equal(first, again)
+
+    def test_reset_begins_a_new_episode_through_the_upstream_reset(self) -> None:
+        calls = []
+        FakeLIBEROBenchmark.reset = lambda self_, task: calls.append(task) or "obs"
+        self.addCleanup(delattr, FakeLIBEROBenchmark, "reset")
+        benchmark = self.benchmark_type(seed=7, image_perturbation={"kind": "noise", "severity": 0.5})
+        benchmark.make_obs(self._raw(), {"name": "t"})
+        self.assertEqual("obs", benchmark.reset({"task_id": 0}))
+        self.assertEqual(1, len(calls))
+        self.assertEqual(0, benchmark._episode_index)
+        self.assertEqual(0, benchmark._obs_step)
+
+    def test_recorded_frame_shows_the_perturbed_agentview_the_policy_saw(self) -> None:
+        for kind in ("darken", "noise", "blur", "contrast"):
+            benchmark = self.benchmark_type(
+                seed=7,
+                agentview_occlusion={"x": 0.0, "y": 0.0, "width": 0.25, "height": 0.25},
+                image_perturbation={"kind": kind, "severity": 0.7})
+            benchmark._begin_episode()
+            raw = self._raw()
+            raw["agentview"][::2] = 255
+            raw["frame"] = raw["agentview"].copy()
+            for step in range(3):
+                policy = benchmark.make_obs(raw, {"name": "t"})["images"]["agentview"]
+                frame = benchmark._extract_frame(raw)
+                with self.subTest(kind=kind, step=step):
+                    np.testing.assert_array_equal(policy, frame)
+                    self.assertFalse(np.array_equal(frame, raw["frame"]))
+            np.testing.assert_array_equal(raw["frame"][::2], np.full((4, 8, 3), 255, dtype=np.uint8))
+
+    def test_frames_are_unchanged_without_a_scalar_family(self) -> None:
+        benchmark = self.benchmark_type(wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0})
+        frame = np.full((4, 4, 3), 99, dtype=np.uint8)
+        np.testing.assert_array_equal(benchmark._extract_frame({"frame": frame}), frame)
+
+    def test_missing_wrist_image_with_a_scalar_family_fails_closed(self) -> None:
+        benchmark = self.benchmark_type(image_perturbation={"kind": "darken", "severity": 0.5})
+        self._without_wrist()
+        with self.assertRaisesRegex(ValueError, "wrist"):
+            benchmark.make_obs(self._raw(), {"name": "t"})
+
+    def test_perturbation_record_describes_the_replay_spec(self) -> None:
+        self.assertIsNone(self.benchmark_type(seed=7).perturbation_record())
+        benchmark = self.benchmark_type(
+            seed=7,
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+            image_perturbation={"kind": "contrast", "severity": 0.5})
+        record = benchmark.perturbation_record()
+        self.assertEqual({"kind": "contrast", "severity": 0.5,
+                          "physical": {"name": "contrast_factor", "value": 0.55}},
+                         record["image_perturbation"])
+        self.assertEqual(1.0, record["wrist_occlusion"]["width"])
+        self.assertEqual([0, 0, 0], record["wrist_occlusion"]["color"])
+        self.assertEqual(7, record["seed"])
+        import json
+        json.dumps(record)
+
+    def test_external_reset_sidecar_records_the_perturbation_only_when_configured(self) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from robot_debug import external_reset as kernel
+        from robot_debug.image_perturbation import ScalarPerturbation
+
+        def restore(env, candidate, resolved):
+            return {"observation": {"frame": np.zeros((4, 4, 3), dtype=np.uint8)},
+                    "reset_metadata": {"state_sha256": "abc"}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark, _env, _frames = self._external_benchmark(directory)
+            with patch.object(kernel, "validate_external_reset", side_effect=lambda value: value), \
+                    patch.object(kernel, "resolve_external_assets", return_value={}), \
+                    patch.object(kernel, "restore_external_reset", side_effect=restore):
+                task = {"task_id": 0, "task_obj": object(), "name": "task 0"}
+                benchmark.reset(task)
+                benchmark.image_perturbation = ScalarPerturbation("blur", 0.4)
+                benchmark.reset(task)
+            records = json.loads((Path(directory) / "external_reset.json").read_text(encoding="utf-8"))
+            self.assertEqual({"state_sha256": "abc"}, records[0])
+            self.assertEqual("blur", records[1]["perturbation"]["image_perturbation"]["kind"])
+
 
 if __name__ == "__main__":
     unittest.main()

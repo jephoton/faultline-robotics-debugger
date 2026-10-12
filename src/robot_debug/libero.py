@@ -6,11 +6,24 @@ from typing import Any, Mapping, Optional
 
 from vla_eval.benchmarks.libero.benchmark import LIBEROBenchmark
 
-from robot_debug.occlusion import RectOcclusion, apply_agentview_occlusion
+from robot_debug.image_perturbation import ScalarPerturbation, stable_seed
+from robot_debug.occlusion import (
+    RectOcclusion,
+    apply_agentview_occlusion,
+    apply_wrist_occlusion,
+)
+
+_CAMERAS = ("agentview", "wrist")
 
 
 class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
-    """A pinned LIBERO benchmark with controlled policy-view occlusion."""
+    """A pinned LIBERO benchmark with controlled policy-view perturbations.
+
+    Besides the agent-view rectangle, a ``wrist_occlusion`` rectangle and a
+    single-strength ``image_perturbation`` family (ADR 0026) can be applied.
+    The scalar family hits both cameras first, then any occlusion is drawn.
+    Without the new options every observation is exactly what it was before.
+    """
 
     def __init__(
         self,
@@ -19,6 +32,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         send_wrist_image: bool = False,
         send_state: bool = False,
         external_reset: Optional[Mapping[str, Any]] = None,
+        wrist_occlusion: Optional[Mapping[str, Any]] = None,
+        image_perturbation: Optional[Mapping[str, Any]] = None,
         **kwargs: Any
     ) -> None:
         if external_reset is not None:
@@ -29,6 +44,13 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 raise ValueError("external_reset needs candidate and metadata_out paths")
             external_reset = {key: external_reset[key] for key in ("candidate", "metadata_out")}
         self.external_reset = external_reset
+        # Noise is keyed by (seed, episode, step, camera, kind, severity); the
+        # observation and recorded-frame paths count their own steps from reset.
+        seed = kwargs.get("seed", 0)
+        self._perturbation_seed = seed if type(seed) is int else 0
+        self._episode_index = -1
+        self._obs_step = 0
+        self._frame_step = 0
         self._external_candidate = None
         self._external_resolved = None
         if task_id is not None and (
@@ -42,6 +64,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         )
         self.task_id = task_id
         self.agentview_occlusion = RectOcclusion.from_mapping(agentview_occlusion)
+        self.wrist_occlusion = RectOcclusion.from_mapping(wrist_occlusion)
+        self.image_perturbation = ScalarPerturbation.from_mapping(image_perturbation)
 
     def get_tasks(self) -> Any:
         tasks = super().get_tasks()
@@ -52,7 +76,36 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             raise ValueError("task_id {} did not identify exactly one task".format(self.task_id))
         return selected
 
+    def _begin_episode(self) -> None:
+        self._episode_index += 1
+        self._obs_step = 0
+        self._frame_step = 0
+
+    def _scalar_active(self) -> bool:
+        return self.image_perturbation is not None and self.image_perturbation.enabled
+
+    def _episode_seed(self) -> int:
+        return stable_seed(self._perturbation_seed, max(self._episode_index, 0))
+
+    def perturbation_record(self) -> Optional[dict]:
+        """The replay spec of the new options, or ``None`` when none is enabled."""
+
+        if not self._scalar_active() and not self.wrist_occlusion.enabled:
+            return None
+        record = {"seed": self._perturbation_seed}
+        if self._scalar_active():
+            record["image_perturbation"] = dict(
+                self.image_perturbation.to_mapping(), physical=self.image_perturbation.physical())
+        if self.wrist_occlusion.enabled:
+            record["wrist_occlusion"] = {
+                "x": self.wrist_occlusion.x, "y": self.wrist_occlusion.y,
+                "width": self.wrist_occlusion.width, "height": self.wrist_occlusion.height,
+                "color": list(self.wrist_occlusion.color), "opacity": self.wrist_occlusion.opacity,
+            }
+        return record
+
     def reset(self, task: Any) -> Any:
+        self._begin_episode()
         if self.external_reset is None:
             return super().reset(task)
         return self._reset_from_external_state(task)
@@ -121,7 +174,11 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 records = json.load(handle)
         except FileNotFoundError:
             records = []
-        records.append(result["reset_metadata"])
+        metadata = result["reset_metadata"]
+        perturbation = self.perturbation_record()
+        if perturbation is not None:
+            metadata = dict(metadata, perturbation=perturbation)
+        records.append(metadata)
         with open(sidecar, "w", encoding="utf-8") as handle:
             json.dump(records, handle, indent=2, sort_keys=True)
         observation = result["observation"]
@@ -130,10 +187,32 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
     def make_obs(self, raw_obs: Any, task: Any) -> Any:
         observation = super().make_obs(raw_obs, task)
-        return apply_agentview_occlusion(observation, self.agentview_occlusion)
+        step = self._obs_step
+        self._obs_step += 1
+        if self._scalar_active():
+            observation = self._perturb_cameras(observation, step)
+        observation = apply_agentview_occlusion(observation, self.agentview_occlusion)
+        if self.wrist_occlusion.enabled:
+            observation = apply_wrist_occlusion(observation, self.wrist_occlusion)
+        return observation
+
+    def _perturb_cameras(self, observation: Any, step: int) -> dict:
+        images = dict(observation["images"])
+        for camera in _CAMERAS:
+            if camera not in images:
+                raise ValueError("observation has no {!r} image to perturb".format(camera))
+            images[camera] = self.image_perturbation.apply(
+                images[camera], episode_seed=self._episode_seed(), step=step, camera=camera)
+        transformed = dict(observation)
+        transformed["images"] = images
+        return transformed
 
     def _extract_frame(self, raw_obs: Any) -> Any:
         frame = super()._extract_frame(raw_obs)
         if frame is None:
             return None
+        if self._scalar_active():
+            frame = self.image_perturbation.apply(
+                frame, episode_seed=self._episode_seed(), step=self._frame_step, camera="agentview")
+        self._frame_step += 1
         return self.agentview_occlusion.apply(frame)

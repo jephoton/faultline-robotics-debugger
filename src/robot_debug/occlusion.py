@@ -103,3 +103,29 @@ def apply_agentview_occlusion(
     images["agentview"] = spec.apply(images["agentview"])
     transformed["images"] = images
     return transformed
+
+
+def apply_camera_occlusion(
+    observation: Mapping[str, Any], camera: str, spec: RectOcclusion
+) -> dict:
+    """Copy an observation envelope and transform only one named camera image.
+
+    Fails closed when the camera is absent: a silent no-op would turn a
+    camera-specific experiment into an unperturbed run.
+    """
+
+    images = dict(observation["images"])
+    if camera not in images:
+        raise ValueError("observation has no {!r} image to occlude".format(camera))
+    transformed = dict(observation)
+    images[camera] = spec.apply(images[camera])
+    transformed["images"] = images
+    return transformed
+
+
+def apply_wrist_occlusion(
+    observation: Mapping[str, Any], spec: RectOcclusion
+) -> dict:
+    """Copy an observation envelope and transform only its wrist image."""
+
+    return apply_camera_occlusion(observation, "wrist", spec)

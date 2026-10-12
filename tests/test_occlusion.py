@@ -2,7 +2,12 @@ import unittest
 
 import numpy as np
 
-from robot_debug.occlusion import RectOcclusion, apply_agentview_occlusion
+from robot_debug.occlusion import (
+    RectOcclusion,
+    apply_agentview_occlusion,
+    apply_camera_occlusion,
+    apply_wrist_occlusion,
+)
 
 
 class RectOcclusionTests(unittest.TestCase):
@@ -103,6 +108,38 @@ class AgentViewObservationTests(unittest.TestCase):
         self.assertIs(observation["images"]["agentview"], agentview)
         np.testing.assert_array_equal(agentview, np.full((4, 4, 3), 255, dtype=np.uint8))
         self.assertEqual(int(transformed["images"]["agentview"][1, 1, 0]), 0)
+
+
+class WristObservationTests(unittest.TestCase):
+    def observation(self):
+        return {
+            "images": {
+                "agentview": np.full((4, 4, 3), 255, dtype=np.uint8),
+                "wrist": np.full((4, 4, 3), 200, dtype=np.uint8),
+            },
+            "states": np.array([1.0]),
+        }
+
+    def test_changes_only_the_wrist_image_and_preserves_the_original(self) -> None:
+        observation = self.observation()
+        agentview = observation["images"]["agentview"]
+        wrist = observation["images"]["wrist"]
+
+        transformed = apply_wrist_occlusion(
+            observation, RectOcclusion(x=0.0, y=0.0, width=1.0, height=1.0))
+
+        self.assertIs(transformed["images"]["agentview"], agentview)
+        self.assertIs(observation["images"]["wrist"], wrist)
+        self.assertTrue((transformed["images"]["wrist"] == 0).all())
+        self.assertTrue((wrist == 200).all())
+        self.assertIs(transformed["states"], observation["states"])
+
+    def test_a_missing_camera_fails_closed(self) -> None:
+        observation = {"images": {"agentview": np.zeros((4, 4, 3), dtype=np.uint8)}}
+        with self.assertRaisesRegex(ValueError, "wrist"):
+            apply_wrist_occlusion(observation, RectOcclusion())
+        with self.assertRaises(ValueError):
+            apply_camera_occlusion(self.observation(), "rear", RectOcclusion())
 
 
 if __name__ == "__main__":
