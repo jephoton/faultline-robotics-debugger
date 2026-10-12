@@ -349,8 +349,8 @@ Four L40S Jobs (about 57 minutes, about US$1.66 estimated): a smoke Job, a
 five-phase measurement, a failed rerun and a successful rerun. Strengths:
 consistent startup (image pull about 3 minutes, our model download 339–344 s
 every time), stable 16-vCPU/64 GB nodes that ran 12 simulator workers plus the
-GR00T server without memory pressure, and dry-run validation that caught
-nothing wrong because nothing was wrong with the Job specs. The one failure
+GR00T server without memory pressure, and dry-run validation that confirmed
+each Job spec before submission. The one failure
 was ours: a workload deadline too short for our own runtime's post-download
 reserve; Serverless behaved correctly. Friction: the status API timed out
 from the workstation for about a minute mid-run (the Job was unaffected), and
