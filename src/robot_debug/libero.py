@@ -1,4 +1,17 @@
-"""LIBERO adapter that injects replayable diagnostic perturbations."""
+"""LIBERO adapter that injects replayable diagnostic perturbations.
+
+Replay guarantee: the policy input is exact. Noise is a pure function of the
+configured seed, the episode, the observation step, the camera, the family and the
+severity, so replaying a configuration reproduces every policy-input frame.
+
+Recorded video caveat: the recorded agent-view frame is perturbed with its own step
+counter (one count per ``_extract_frame`` call), not the policy's. If the harness
+calls ``_extract_frame`` and ``make_obs`` at different cadences, the video shows a
+different noise realisation than the policy saw (same distribution, different
+pixels). Blur, darkening, contrast and occlusion are deterministic functions of the
+image, so for them the video always matches. The per-camera probe records statistics
+of the real policy input, not of the video.
+"""
 
 from __future__ import annotations
 
