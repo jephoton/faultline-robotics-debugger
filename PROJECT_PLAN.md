@@ -343,7 +343,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M3 alternative: batched inference — proposed optional stretch | Reuse the upstream batch dispatcher and assess a GR00T/LeRobot batch adapter instead of building another inference engine | Matched unbatched/batched workload; session isolation, outcome agreement, throughput, latency, memory and cost measurements |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
 | M5: diagnostic report and viewer — **complete (Oct 3–11)** | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
-| M5D: Tavily research context — proposed optional extension | Retrieve relevant public research/docs for a verified case and display source-linked context alongside the Nemotron interpretation | Meaningful runtime Tavily call; useful references, evidence/context separation, privacy and request-budget checks |
+| M5D: Tavily research context — **complete (Oct 11–12)** | Retrieve relevant public research/docs for a verified case and display source-linked context alongside the Nemotron interpretation | Meaningful runtime Tavily call; useful references, evidence/context separation, privacy and request-budget checks |
 | M6: stronger experiments | Assess LIBERO-Plus reuse for additional perturbation families; add related tasks and explore other LIBERO suites after within-suite validation | Pinned compatibility, parameterised replay/reduction for the selected family, held-out/cross-suite evaluation, budget-matched baselines and uncertainty |
 | M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
 
@@ -370,6 +370,18 @@ episode parallelism; compare the same workers with batching disabled/enabled.
   worker-throughput result separate from any new batching result. See the
   [pinned batch contract](https://github.com/allenai/vla-evaluation-harness/blob/35f1200eb15608aa898f727a3722f7eef889c6cd/src/vla_eval/model_servers/predict.py)
   and [LeRobot adapter](https://github.com/allenai/vla-evaluation-harness/blob/35f1200eb15608aa898f727a3722f7eef889c6cd/src/vla_eval/model_servers/lerobot.py).
+- **M6 wrist-camera lead (from M5D, October 12):** GR00T receives two images,
+  the third-person agent view and the gripper-mounted wrist view, and our
+  occlusion masks only the agent view. In the certified case the reduced mask
+  hides no object at the start; it covers the region the arm lifts the soup
+  through after grasping. All 5 nominal controls succeed in about 7 s, while
+  all 4 reduced-mask attempts grasp the soup but time out at the 280-step cap
+  (14.05 s). Hypothesis to test in M6, not a finding: GR00T relies on the
+  agent view to track the arm and held object during transport, and the
+  intact wrist view does not compensate. Candidate experiments (new
+  perturbation family, red decision): mask the wrist view instead, mask both,
+  or mask the agent-view region only during the lift phase. See
+  `docs/experiments/m5d-tavily-research.md`.
 - **M6 LIBERO-Plus reuse:** the current stack is original LIBERO Object, not
   LIBERO-Plus. Inspect and reuse the [existing perturbation implementations](https://github.com/sylvestf/LIBERO-plus)
   before writing camera, lighting, background, layout or other families from
