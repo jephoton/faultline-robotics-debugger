@@ -311,5 +311,39 @@ class PrepareJobTests(unittest.TestCase):
                 os.chdir(previous)
 
 
+    def _prepare(self, workload: dict) -> list:
+        previous = Path.cwd()
+        with tempfile.TemporaryDirectory() as temporary:
+            os.chdir(temporary)
+            try:
+                Path("workload.json").write_text(json.dumps(workload), encoding="utf-8")
+                return self.module.prepare({
+                    "run_id": workload["run_id"],
+                    "project_id": "project-example123",
+                    "image": "registry.example/robot-debug@sha256:" + "a" * 64,
+                    "platform": "gpu-l40s-a",
+                    "preset": "1gpu-16vcpu-64gb",
+                    "subnet_id": "vpcsubnet-example123",
+                    "bucket_id": "storagebucket-example123",
+                    "hf_secret": "mbsec-example123@mbsecver-version123",
+                    "workload_file": "workload.json",
+                })
+            finally:
+                os.chdir(previous)
+
+    def test_batch_deadline_must_cover_prefetch_and_reserve(self) -> None:
+        # October 12: a 690 s batch deadline left the model download 90 s after
+        # the runtime's 600 s post-prefetch reserve and the Job failed.
+        for mode in ("m3-batch", "m3-batch-smoke"):
+            base = dict(MEASUREMENT if mode == "m3-batch" else SMOKE)
+            with self.subTest(mode=mode):
+                with self.assertRaisesRegex(self.module.ConfigError, "deadline"):
+                    self._prepare(dict(base, deadline_seconds=690))
+                self.assertIn("--dry-run", self._prepare(dict(base, deadline_seconds=1000)))
+
+    def test_non_batch_deadlines_are_unchanged(self) -> None:
+        workload = {"schema_version": 1, "mode": "pilot", "run_id": "pilot-a", "deadline_seconds": 60}
+        self.assertIn("--dry-run", self._prepare(workload))
+
 if __name__ == "__main__":
     unittest.main()

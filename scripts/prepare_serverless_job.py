@@ -121,6 +121,7 @@ def _validate(config: object) -> dict[str, str]:
         if selector is not None and _SECRET_SELECTOR.fullmatch(selector) is None:
             raise ConfigError(field + " must be a Secret Stash selector, not a secret value")
     _validate_workload_file(values["workload_file"])
+    _validate_batch_deadline(values["workload_file"])
     if "external_reset_file" in values:
         # Same local-path and 64 KiB inject limits as the workload file.
         _validate_workload_file(values["external_reset_file"])
@@ -177,6 +178,30 @@ def _validate_registry(value: str) -> None:
         _REGISTRY_LABEL.fullmatch(label) is None for label in host.split(".")
     ):
         raise ConfigError("image contains an invalid registry host or port")
+
+
+# The runtime reserves 600 s after the one model download (about 345 s on an
+# L40S), so a batch workload needs at least this deadline or the download fails.
+_BATCH_MODES = {"m3-batch", "m3-batch-smoke"}
+MIN_BATCH_DEADLINE_SECONDS = 1000
+
+
+def _validate_batch_deadline(path: str) -> None:
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return  # existence and size were checked above; the runtime validates content
+    try:
+        workload = json.loads(text)
+    except ValueError as error:
+        raise ConfigError("workload_file must contain valid JSON") from error
+    if not isinstance(workload, dict) or workload.get("mode") not in _BATCH_MODES:
+        return
+    deadline = workload.get("deadline_seconds")
+    if type(deadline) not in (int, float) or deadline < MIN_BATCH_DEADLINE_SECONDS:
+        raise ConfigError(
+            "batch workload deadline_seconds must be at least %d to fit the model "
+            "download and the runtime's 600 s post-download reserve" % MIN_BATCH_DEADLINE_SECONDS)
 
 
 def _validate_workload_file(value: str) -> None:
