@@ -72,11 +72,15 @@ labels `outcome_drift`. Jethro chose one rerun of the 12-worker pair, with
 phase order reversed (batched first) and a 690 s workload deadline to stay
 inside the US$1.50 cap. Verdict rules, fixed before the rerun:
 
-- batched ≥ 1.15× unbatched again **and** no masked success in the rerun →
+- batched ≥ 1.15× unbatched again **and** no masked success in the rerun's
+  batched phase →
   `works at 12 workers (2 runs)`, reported with the first run's late success;
 - any masked success in the rerun's batched phase → investigate batching
   before any claim;
 - speedup below 1.15× → `no measurable gain` at 12 workers.
+- a masked success in the rerun's unbatched phase is recorded as evidence
+  that late successes occur without batching too; it does not block the
+  first rule.
 
 ## Claim boundary
 
