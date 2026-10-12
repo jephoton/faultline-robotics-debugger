@@ -49,6 +49,21 @@ the CPU was. Batching can only help once enough workers queue on that lock.
    GPU work (a smoke Job and a measurement Job), leaving about US$2.18 for M6
    and M7.
 
+## Amendments after independent review (October 12)
+
+Accepted by Jethro before any GPU Job:
+
+- **Parity is judged before gripper rounding.** The LIBERO decode rounds the
+  gripper to open/closed, so tiny bf16 batch differences near the threshold
+  could flip it. All action dimensions are compared within 0.05 after the
+  model call, unnormalisation and state-based decoding but before rounding;
+  per-dimension maxima and post-rounding gripper flips are recorded only.
+- **One untimed warm-up episode** runs before phase 1 so cold-start costs do
+  not favour either mode. Phase order stays as planned.
+- **Verdict per worker count.** Each worker count gets its own verdict
+  (`works`, `no_measurable_gain`, `outcome_drift`, `incomplete`); any claim
+  names the worker count it applies to.
+
 ## Claim boundary
 
 Any result is specific to GR00T N1.7 on LIBERO-Object task 0 with this harness
