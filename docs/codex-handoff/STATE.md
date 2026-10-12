@@ -13,8 +13,22 @@
   then M3 batched inference (3 days), portfolio fallback (2 days), M6, and M7
   from October 23 at the latest (ADR 0023 timeboxes accepted).
 - Commit history from October 9 was rewritten to drop AI co-author trailers
-  (`docs/history-rewrite-2026-10-11.md`); the force push to GitHub needs
-  Jethro. Local backup ref: `refs/backup/pre-trailer-rewrite`.
+  (`docs/history-rewrite-2026-10-11.md`) and force-pushed by Jethro. The three
+  local Codex branches were rewritten the same way on October 12. Local
+  backup refs: `refs/backup/pre-trailer-rewrite*`.
+- October 12: Jethro accepted M5D. A free frame check found the reduced mask
+  hides the arm's lift path, not an object; all reduced attempts time out
+  after grasping. The wrist-camera lead is recorded under M6 in
+  `PROJECT_PLAN.md`.
+- Buckets: `faultline-pilot-20261010` deleted October 12. The other three
+  (`faultline-m5b-20261010`, `-m5b-demo1-20261011`, `-m5b-demo1-tr-20261011`)
+  were refused as not empty while lifecycle expiry catches up (about 5 MB
+  each). Each run folder under `artifacts/` gets a `bucket-deleted` marker
+  once its bucket is gone; delete any without a marker with
+  `nebius storage bucket delete <recorded bucket-id>`.
+- Docker data disk is 34.8 GB. A read-only diskpart compaction freed nothing
+  (free blocks were not trimmed). Next time Docker Desktop is running: check
+  `docker system df`, prune build cache if large, then compact again.
 
 ## October 11 handover before M5D (Claude Code)
 
