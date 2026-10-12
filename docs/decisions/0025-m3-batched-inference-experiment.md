@@ -82,6 +82,15 @@ inside the US$1.50 cap. Verdict rules, fixed before the rerun:
   that late successes occur without batching too; it does not block the
   first rule.
 
+## Cap raise after a failed rerun (October 12)
+
+The first rerun used a 690 s workload deadline. The runtime reserves 600 s
+after the model download (`POST_PREFETCH_RESERVE_SECONDS`), so the download
+got only 90 s and failed (`prefetch_failed`, about US$0.22, coordinator's
+planning error). Jethro raised the M3 cap from US$1.50 to **US$1.85** for one
+correct rerun with a 1000 s deadline under the same replication rule. Batch
+workloads must use a deadline of at least about 1000 s.
+
 ## Claim boundary
 
 Any result is specific to GR00T N1.7 on LIBERO-Object task 0 with this harness
