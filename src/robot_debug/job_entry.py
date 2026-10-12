@@ -98,12 +98,62 @@ def child_environment(base: Mapping[str, str], **overrides: str) -> Dict[str, st
     return env
 
 
-def model_server_argv(layout: ImageLayout, port: int = MODEL_PORT) -> List[str]:
-    """Same server invocation as the historical ``model-launch.sh``."""
+SERVER_VARIANTS = ("upstream", "faultline")
 
+
+def faultline_server_script(layout: ImageLayout) -> Path:
+    """The batch-capable, instrumented server shipped with the project scripts."""
+
+    return layout.project_root / "scripts" / "model_servers" / "faultline_groot_server.py"
+
+
+def model_server_argv(
+    layout: ImageLayout,
+    port: int = MODEL_PORT,
+    *,
+    server: str = "upstream",
+    max_batch_size: int = 1,
+    timing_log: Optional[Path] = None,
+) -> List[str]:
+    """Same server invocation as the historical ``model-launch.sh``.
+
+    ``server="faultline"`` swaps in the instrumented batch server and appends
+    ``--args.max_batch_size`` (and ``--args.timing_log`` when given); the model
+    flags are shared. The default is byte-identical to the historical argv.
+    """
+
+    if server not in SERVER_VARIANTS:
+        raise ValueError("unknown model server variant")
+    if type(max_batch_size) is not int or not 1 <= max_batch_size <= 64:
+        raise ValueError("max_batch_size must be an integer from 1 to 64")
+    if server == "upstream" and (max_batch_size != 1 or timing_log is not None):
+        raise ValueError("batching and timing logs need the faultline server variant")
+    argv = _model_flags(layout, port, server)
+    if server == "faultline":
+        argv.append("--args.max_batch_size={}".format(max_batch_size))
+        if timing_log is not None:
+            text = Path(timing_log).as_posix()
+            if not text.startswith("/") or any(ord(ch) < 33 or ord(ch) == 127 for ch in text):
+                raise ValueError("timing_log must be an absolute path without spaces or control characters")
+            argv.append("--args.timing_log={}".format(text))
+    return argv
+
+
+def model_flags_for_scripts(layout: ImageLayout, max_batch_size: int = 1) -> List[str]:
+    """The ``--args.*`` flags of the faultline server, without interpreter, script or port."""
+
+    return model_server_argv(layout, server="faultline", max_batch_size=max_batch_size)[3:]
+
+
+def _model_flags(layout: ImageLayout, port: int, server: str) -> List[str]:
+    script = (
+        (layout.upstream_root / "src" / "vla_eval" / "model_servers" / "lerobot.py")
+        if server == "upstream"
+        else faultline_server_script(layout)
+    )
     return [
         layout.model_python.as_posix(),
-        (layout.upstream_root / "src" / "vla_eval" / "model_servers" / "lerobot.py").as_posix(),
+        script.as_posix(),
         "--port={}".format(port),
         "--args.device=cuda",
         "--args.policy_type=groot",
@@ -204,7 +254,12 @@ def _read_json(path: Path) -> Optional[Any]:
         return None
 
 
-def write_provenance(run_root: Path, layout: ImageLayout, resolution: Mapping[str, Any]) -> None:
+def write_provenance(
+    run_root: Path,
+    layout: ImageLayout,
+    resolution: Mapping[str, Any],
+    server_argv: Optional[Sequence[str]] = None,
+) -> None:
     provenance = {
         "schema_version": 1,
         "backend": "nebius-serverless",
@@ -213,7 +268,7 @@ def write_provenance(run_root: Path, layout: ImageLayout, resolution: Mapping[st
         "model_resolution": resolution,
         "simulator_packages": _read_json(layout.project_root / "simulator-packages.json"),
         "model_packages": _read_json(layout.project_root / "model-packages.json"),
-        "model_server_argv": model_server_argv(layout)[1:],
+        "model_server_argv": list(server_argv) if server_argv is not None else model_server_argv(layout)[1:],
         "python": sys.version.split()[0],
     }
     target = run_root / "provenance.json"
@@ -257,8 +312,40 @@ class ProductionModelFactory:
         self._deadline = deadline
         self._clock = clock
         self._progress = progress
+        self._prefetched = False
 
-    def __call__(self, *, log_root: Path) -> ModelProcess:
+    def __call__(
+        self,
+        *,
+        log_root: Path,
+        server: str = "upstream",
+        max_batch_size: int = 1,
+        timing_log: Optional[Path] = None,
+    ) -> ModelProcess:
+        """Describe one model server start; the first call prefetches, later calls reuse it.
+
+        The variant options are validated before any prefetch so a bad phase
+        description cannot spend time or write provenance.
+        """
+
+        argv = model_server_argv(
+            self._layout, server=server, max_batch_size=max_batch_size, timing_log=timing_log
+        )
+        log_root = Path(log_root)
+        self.ensure_prefetched(log_root, argv=argv)
+        return ModelProcess(
+            argv=argv,
+            cwd=self._layout.upstream_root,
+            env=model_environment(self._layout, self._base_env),
+            log_root=log_root,
+            port=MODEL_PORT,
+        )
+
+    def ensure_prefetched(self, log_root: Path, *, argv: Optional[Sequence[str]] = None) -> None:
+        """Prefetch the pinned inputs and write provenance, once per Job."""
+
+        if self._prefetched:
+            return
         log_root = Path(log_root)
         run_root = log_root.parent
         budget = self._deadline - self._clock() - POST_PREFETCH_RESERVE_SECONDS
@@ -278,14 +365,11 @@ class ProductionModelFactory:
             raise
         self._progress("prefetch_done", elapsed_seconds=round(self._clock() - started, 1),
                        repositories=resolution.get("repositories"))
-        write_provenance(run_root, self._layout, resolution)
-        return ModelProcess(
-            argv=model_server_argv(self._layout),
-            cwd=self._layout.upstream_root,
-            env=model_environment(self._layout, self._base_env),
-            log_root=log_root,
-            port=MODEL_PORT,
+        write_provenance(
+            run_root, self._layout, resolution,
+            server_argv=None if argv is None else list(argv)[1:],
         )
+        self._prefetched = True
 
 
 def evaluator_factory(

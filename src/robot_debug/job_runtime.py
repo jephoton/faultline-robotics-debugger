@@ -13,7 +13,13 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 
 _CONFIG_FIELDS = {"schema_version", "mode", "run_id", "deadline_seconds"}
-_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"}
+BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
+_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES
+_BATCH_FIELDS = {"phases", "repeats_per_kind"}
+_BATCH_WORKERS = (4, 8, 12)
+# Equal-work manifest sizes fixed by ADR 0025: repeats per kind (nominal, reduced mask).
+_BATCH_REPEATS = {"m3-batch-smoke": 2, "m3-batch": 12}
+_MAX_BATCH_PHASES = 6
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.ASCII)
 _ALLOWED_SUFFIXES = {".json", ".jsonl", ".mp4", ".sqlite", ".yaml", ".yml", ".txt", ".log"}
 _CREDENTIAL_NAME = re.compile(
@@ -35,7 +41,10 @@ def _fail(message: str) -> None:
 def validate_workload_config(config: object) -> Dict[str, Any]:
     """Validate and return a fresh, JSON-compatible workload configuration."""
 
-    if type(config) is not dict or set(config) != _CONFIG_FIELDS:
+    if type(config) is not dict:
+        _fail("workload configuration must contain exactly the required fields")
+    batch_mode = type(config.get("mode")) is str and config["mode"] in BATCH_MODES
+    if set(config) != (_CONFIG_FIELDS | _BATCH_FIELDS if batch_mode else _CONFIG_FIELDS):
         _fail("workload configuration must contain exactly the required fields")
     schema_version = config["schema_version"]
     mode = config["mode"]
@@ -49,12 +58,40 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         _fail("workload run identifier is invalid")
     if type(deadline) not in (int, float) or not (0 < deadline <= 3000) or not math.isfinite(deadline):
         _fail("workload deadline is invalid")
-    return {
+    validated = {
         "schema_version": schema_version,
         "mode": mode,
         "run_id": run_id,
         "deadline_seconds": deadline,
     }
+    if batch_mode:
+        validated["repeats_per_kind"], validated["phases"] = _validate_batch_fields(config, mode)
+    return validated
+
+
+def _validate_batch_fields(config: Dict[str, Any], mode: str) -> Tuple[int, List[List[int]]]:
+    """Phases are ``[workers, max_batch_size]`` pairs over a fixed equal-work manifest."""
+
+    repeats = config["repeats_per_kind"]
+    if type(repeats) is not int or repeats != _BATCH_REPEATS[mode]:
+        _fail("batch workload repeats_per_kind must match the frozen manifest for the mode")
+    phases = config["phases"]
+    if type(phases) is not list or not 1 <= len(phases) <= _MAX_BATCH_PHASES:
+        _fail("batch workload phases must be a short non-empty list")
+    items = 2 * repeats
+    normalized = []
+    for phase in phases:
+        if type(phase) is not list or len(phase) != 2:
+            _fail("each batch phase must be [workers, max_batch_size]")
+        workers, batch_size = phase
+        if type(workers) is not int or workers not in _BATCH_WORKERS or workers > items:
+            _fail("batch phase workers must be 4, 8 or 12 and no more than the manifest size")
+        if type(batch_size) is not int or batch_size not in (1, workers):
+            _fail("batch phase max_batch_size must be 1 or equal to the worker count")
+        if [workers, batch_size] in normalized:
+            _fail("batch phases must be unique")
+        normalized.append([workers, batch_size])
+    return repeats, normalized
 
 
 def _path(value: object, label: str) -> Path:
@@ -477,4 +514,4 @@ def export_closed_evidence(
     return manifest
 
 
-__all__ = ["JobRuntimeError", "export_closed_evidence", "validate_workload_config"]
+__all__ = ["BATCH_MODES", "JobRuntimeError", "export_closed_evidence", "validate_workload_config"]
