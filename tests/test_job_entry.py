@@ -130,6 +130,16 @@ class EnvironmentTests(unittest.TestCase):
         )
         self.assertNotIn("HF_TOKEN", env)
 
+    def test_single_threaded_blas_is_opt_in_and_overrides_inherited_values(self) -> None:
+        layout = ImageLayout()
+        plain = evaluator_environment(layout, dict(self.BASE, OMP_NUM_THREADS="16"))
+        self.assertEqual("16", plain["OMP_NUM_THREADS"])
+        single = evaluator_environment(layout, dict(self.BASE, OMP_NUM_THREADS="16"), single_thread_blas=True)
+        for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            self.assertEqual("1", single[name])
+        self.assertEqual(plain["PYTHONPATH"], single["PYTHONPATH"])
+        self.assertNotIn("HF_TOKEN", single)
+
 
 class ModelArgvTests(unittest.TestCase):
     def test_server_arguments_match_historical_launch_script(self) -> None:
@@ -1114,6 +1124,22 @@ class MainTests(unittest.TestCase):
         self.assertEqual(lines[-2]["event"], "export_preflight_failed")
         self.assertEqual(lines[-1]["status"], "error")
         self.assertEqual(self.calls, [])
+
+    def test_m6_modes_run_their_evaluators_with_single_threaded_blas(self) -> None:
+        m6_config = {"schema_version": 1, "mode": "m6-smoke", "run_id": "m6-smoke-1", "deadline_seconds": 1200}
+        self.config.write_text(json.dumps(m6_config), encoding="utf-8")
+        self._main(self._runner("complete"))
+        _config, kwargs = self.calls[0]
+        evaluator = kwargs["evaluator_factory"](timeout_seconds=5, log_root=self.root / "logs")
+        for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            self.assertEqual("1", evaluator.evaluator._env[name])
+
+    def test_other_modes_keep_the_evaluator_environment_unchanged(self) -> None:
+        self._main(self._runner("complete"))
+        _config, kwargs = self.calls[0]
+        evaluator = kwargs["evaluator_factory"](timeout_seconds=5, log_root=self.root / "logs")
+        for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            self.assertNotIn(name, evaluator.evaluator._env)
 
     def test_evaluator_wrapper_reports_start_and_failure(self) -> None:
         events = []

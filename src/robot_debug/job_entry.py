@@ -24,7 +24,7 @@ from .job_process import (
     InfrastructureError,
     close_owned_process_group,
 )
-from .job_runtime import JobRuntimeError, export_closed_evidence, validate_workload_config
+from .job_runtime import M6_MODES, JobRuntimeError, export_closed_evidence, validate_workload_config
 
 
 MAX_WORKLOAD_BYTES = 64 * 1024
@@ -192,9 +192,22 @@ def model_environment(layout: ImageLayout, base: Mapping[str, str]) -> Dict[str,
     return env
 
 
-def evaluator_environment(layout: ImageLayout, base: Mapping[str, str]) -> Dict[str, str]:
+SINGLE_THREAD_BLAS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
+
+
+def evaluator_environment(
+    layout: ImageLayout, base: Mapping[str, str], *, single_thread_blas: bool = False
+) -> Dict[str, str]:
+    """The evaluator child environment.
+
+    ``single_thread_blas`` pins the BLAS/OpenMP pools to one thread each, so twelve
+    concurrent evaluators (M6's blur uses matrix products) do not oversubscribe the
+    CPUs. It is opt-in: the older modes keep their historical environment.
+    """
+
     pythonpath = "{}:{}".format(layout.project_root / "src", layout.simulator_source)
-    return child_environment(base, PYTHONPATH=pythonpath)
+    overrides = {name: "1" for name in SINGLE_THREAD_BLAS} if single_thread_blas else {}
+    return child_environment(base, PYTHONPATH=pythonpath, **overrides)
 
 
 def prefetch_models(
@@ -461,9 +474,10 @@ class ProductionModelFactory:
 
 
 def evaluator_factory(
-    layout: ImageLayout, base_env: Mapping[str, str], progress: Progress = _no_progress
+    layout: ImageLayout, base_env: Mapping[str, str], progress: Progress = _no_progress,
+    *, single_thread_blas: bool = False,
 ) -> Callable[..., Any]:
-    env = evaluator_environment(layout, base_env)
+    env = evaluator_environment(layout, base_env, single_thread_blas=single_thread_blas)
 
     def build(*, timeout_seconds: float, log_root: Path, cancel: Optional[threading.Event] = None) -> Any:
         evaluator = DirectEvaluator(
@@ -808,7 +822,8 @@ def main(
                 export_root=layout.export_root,
             ),
             model_factory=model_factory,
-            evaluator_factory=evaluator_factory(layout, environ, progress),
+            evaluator_factory=evaluator_factory(
+                layout, environ, progress, single_thread_blas=config["mode"] in M6_MODES),
             exporter=exporter,
             clock=clock,
             absolute_deadline=deadline,
