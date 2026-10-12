@@ -1,5 +1,20 @@
 # Faultline current project state
 
+## October 12 M3 batched-inference status (Claude Code)
+
+- M3 batching complete (ADR 0025, `docs/experiments/m3-batched-inference.md`):
+  +18.0% and +18.7% throughput at 12 evaluator workers in two runs, none at
+  8; parity passed (max diff 0.0149). Image v10 `789a0faaae66`.
+- Spend ≈ US$1.66 of a US$1.85 cap (raised from US$1.50 after a failed rerun
+  with a too-short deadline). AI Cloud balance ≈ US$2.0 (estimate; reconcile
+  with billing). Batch workloads need `deadline_seconds` ≥ 1000; the prepare
+  script now enforces it.
+- Download identities revoked. Buckets `faultline-m3-{smoke,measure,rerun,rerun2}-20261012`
+  expire after one day; delete them once empty. The October 10–11 buckets
+  were deleted by Jethro.
+- Next (ADR 0023): portfolio fallback is not needed since batching worked;
+  move to M6 (wrist-camera lead and LIBERO-Plus family), then M7 by Oct 23.
+
 ## October 11 M5D status (Claude Code)
 
 - M5D built per ADR 0024 and its plan: `scripts/research_case.py`
