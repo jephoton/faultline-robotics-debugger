@@ -327,6 +327,8 @@ def _write_config(
     width: Optional[float] = None,
     height: Optional[float] = None,
     external_reset_candidate: Optional[Path] = None,
+    wrist_occlusion: Optional[Mapping[str, Any]] = None,
+    image_perturbation: Optional[Mapping[str, Any]] = None,
 ) -> None:
     for name, value in (("task_id", task_id), ("seed", seed)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -384,6 +386,10 @@ def _write_config(
                 "        opacity: 1.0",
             ]
         )
+    if wrist_occlusion is not None:
+        params.extend(_wrist_occlusion_lines(wrist_occlusion))
+    if image_perturbation is not None:
+        params.extend(_image_perturbation_lines(image_perturbation))
     if external_reset_candidate is not None:
         # Start from the accepted external demo state instead of the benchmark's
         # init state; restore hashes are written beside the stage outputs.
@@ -428,6 +434,50 @@ def _write_config(
         ]
     )
     config_path.write_text(text, encoding="utf-8")
+
+
+def _wrist_occlusion_lines(value: Any) -> list:
+    """The opaque wrist-image rectangle block (same schema and colour as the agent view)."""
+
+    if not isinstance(value, Mapping) or set(value) != {"x", "y", "width", "height"}:
+        raise ValueError("wrist_occlusion needs exactly x, y, width and height")
+    for name in ("x", "y", "width", "height"):
+        _validate_finite_number("wrist_occlusion " + name, value[name])
+    x, y, width, height = (value[name] for name in ("x", "y", "width", "height"))
+    if width <= 0 or height <= 0:
+        raise ValueError("wrist_occlusion width and height must be greater than zero")
+    if x < 0 or y < 0 or x + width > 1 or y + height > 1:
+        raise ValueError("wrist_occlusion must remain within image bounds")
+    return [
+        "      wrist_occlusion:",
+        "        enabled: true",
+        "        x: {:.6f}".format(x),
+        "        y: {:.6f}".format(y),
+        "        width: {:.6f}".format(width),
+        "        height: {:.6f}".format(height),
+        "        color: [0, 0, 0]",
+        "        opacity: 1.0",
+    ]
+
+
+def _image_perturbation_lines(value: Any) -> list:
+    """The single-strength image-family block; severities keep six decimals exactly."""
+
+    from robot_debug.image_perturbation import ScalarPerturbation
+
+    try:
+        spec = ScalarPerturbation.from_mapping(value)
+    except TypeError as error:
+        raise ValueError(str(error)) from error
+    if spec is None:
+        raise ValueError("image_perturbation must be a mapping")
+    if abs(round(spec.severity, 6) - spec.severity) > 1e-12:
+        raise ValueError("image_perturbation severity supports at most six decimals")
+    return [
+        "      image_perturbation:",
+        "        kind: {}".format(spec.kind),
+        "        severity: {:.6f}".format(spec.severity),
+    ]
 
 
 def _validate_finite_number(name: str, value: Any) -> None:

@@ -80,5 +80,116 @@ class WriteConfigTests(unittest.TestCase):
                 self.write_config(**{field: value})
 
 
+    # ---- M6: wrist occlusion and scalar image perturbation ---------------
+
+    def params_block(self, text):
+        return text[text.index("    params:"):].replace("\r\n", "\n")
+
+    def test_default_params_block_is_byte_identical_to_the_pre_m6_writer(self):
+        self.assertEqual(
+            "    params:\n      suite: libero_object\n      seed: 7\n      env_seed: 7\n"
+            "      num_steps_wait: 10\n",
+            self.params_block(self.write_config()))
+        self.assertEqual(
+            "    params:\n      suite: libero_object\n      seed: 7\n      env_seed: 7\n"
+            "      num_steps_wait: 10\n      agentview_occlusion:\n        enabled: true\n"
+            "        x: 0.625000\n        y: 0.000000\n        width: 0.375000\n"
+            "        height: 0.375000\n        color: [0, 0, 0]\n        opacity: 1.0\n",
+            self.params_block(self.write_config(x=.625, y=0, width=.375, height=.375)))
+
+    def test_explicit_none_options_change_nothing(self):
+        self.assertEqual(
+            self.write_config(x=.625, y=0, width=.375, height=.375),
+            self.write_config(x=.625, y=0, width=.375, height=.375,
+                              wrist_occlusion=None, image_perturbation=None))
+
+    def test_wrist_occlusion_is_written_after_the_agentview_block(self):
+        text = self.params_block(self.write_config(
+            x=.625, y=0, width=.375, height=.375,
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}))
+
+        self.assertTrue(text.endswith(
+            "      wrist_occlusion:\n        enabled: true\n        x: 0.000000\n"
+            "        y: 0.000000\n        width: 1.000000\n        height: 1.000000\n"
+            "        color: [0, 0, 0]\n        opacity: 1.0\n"))
+        self.assertLess(text.index("agentview_occlusion"), text.index("wrist_occlusion"))
+
+    def test_wrist_only_run_has_no_agentview_block(self):
+        text = self.write_config(wrist_occlusion={"x": .625, "y": 0, "width": .375, "height": .375})
+
+        self.assertNotIn("agentview_occlusion", text)
+        self.assertIn("      wrist_occlusion:", text)
+        self.assertIn("        x: 0.625000", text)
+
+    def test_image_perturbation_block(self):
+        text = self.params_block(self.write_config(image_perturbation={"kind": "noise", "severity": 0.0125}))
+
+        self.assertTrue(text.endswith(
+            "      image_perturbation:\n        kind: noise\n        severity: 0.012500\n"))
+
+    def test_blocks_parse_back_as_yaml_for_the_benchmark(self):
+        import yaml
+        text = self.write_config(
+            x=.625, y=0, width=.375, height=.375,
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+            image_perturbation={"kind": "blur", "severity": 0.6}, external_reset_candidate=self.root / "c.json")
+        params = yaml.safe_load(text)["benchmarks"][0]["params"]
+
+        self.assertEqual({"kind": "blur", "severity": 0.6}, params["image_perturbation"])
+        self.assertEqual(1.0, params["wrist_occlusion"]["width"])
+        self.assertTrue(params["wrist_occlusion"]["enabled"])
+        self.assertEqual(0.625, params["agentview_occlusion"]["x"])
+        self.assertIn("external_reset", params)
+
+    def test_the_benchmark_accepts_the_written_blocks(self):
+        # The YAML keys must be exactly the adapter's constructor options.
+        import yaml
+        from robot_debug.image_perturbation import ScalarPerturbation
+        from robot_debug.occlusion import RectOcclusion
+        text = self.write_config(
+            wrist_occlusion={"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+            image_perturbation={"kind": "darken", "severity": 0.2})
+        params = yaml.safe_load(text)["benchmarks"][0]["params"]
+
+        self.assertTrue(RectOcclusion.from_mapping(
+            dict(params["wrist_occlusion"], color=tuple(params["wrist_occlusion"]["color"]))).enabled)
+        self.assertEqual(0.2, ScalarPerturbation.from_mapping(params["image_perturbation"]).severity)
+
+    def test_rejects_invalid_wrist_occlusion(self):
+        good = {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}
+        bad = (
+            {"x": 0.0, "y": 0.0, "width": 0.5},
+            dict(good, color=[1, 1, 1]),
+            dict(good, width=0.0),
+            dict(good, width=-0.1),
+            dict(good, x=-0.1),
+            dict(good, x=0.75),
+            dict(good, height=float("nan")),
+            dict(good, y=True),
+            dict(good, y="0"),
+            [0, 0, 1, 1],
+            "full",
+        )
+        for value in bad:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.write_config(wrist_occlusion=value)
+
+    def test_rejects_invalid_image_perturbation(self):
+        bad = (
+            {"kind": "sepia", "severity": 0.5},
+            {"kind": "noise", "severity": -0.1},
+            {"kind": "noise", "severity": 1.1},
+            {"kind": "noise", "severity": float("nan")},
+            {"kind": "noise", "severity": True},
+            {"kind": "noise", "severity": 0.1234567},
+            {"kind": "noise"},
+            {"kind": "noise", "severity": 0.5, "extra": 1},
+            "noise",
+        )
+        for value in bad:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.write_config(image_perturbation=value)
+
+
 if __name__ == "__main__":
     unittest.main()
