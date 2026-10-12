@@ -14,8 +14,14 @@ from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import yaml
 
-from robot_debug.job_process import InfrastructureError
-from robot_debug.job_runtime import JobRuntimeError, export_closed_evidence, validate_workload_config
+from robot_debug import batch_experiment
+from robot_debug.job_process import EvaluatorCancelled, InfrastructureError, RunCancelled
+from robot_debug.job_runtime import (
+    BATCH_MODES,
+    JobRuntimeError,
+    export_closed_evidence,
+    validate_workload_config,
+)
 from robot_debug.viewer.catalog import ArtifactCatalog
 from scripts import run_failure_reduction, run_failure_search, run_position_grid_search
 
@@ -235,6 +241,49 @@ def _driver_reason(summary: object) -> Optional[str]:
     return None
 
 
+def _run_batch_mode(
+    *,
+    accepted: Mapping[str, Any],
+    run_root: Path,
+    roots: "WorkloadPaths",
+    model_factory: Callable[..., Any],
+    set_model: Callable[[Any], None],
+    bounded_runner: Callable[..., Any],
+    latch: Dict[str, Optional[str]],
+    remaining: Callable[[], float],
+    launch_deadline: float,
+    clock: Callable[[], float],
+    progress: Callable[..., None],
+    parity_runner: Optional[Callable[..., Mapping[str, Any]]],
+) -> Dict[str, Any]:
+    """Drive the M3 batching phases through the shared bounded evaluator runner."""
+
+    def run_item(command: Sequence[str], *, item_timeout: float, cancel: Any) -> Any:
+        return bounded_runner(
+            command, cwd=roots.upstream_root, check=False, item_timeout=item_timeout, cancel=cancel
+        )
+
+    return batch_experiment.run_phases(
+        mode=accepted["mode"],
+        phases=accepted["phases"],
+        repeats_per_kind=accepted["repeats_per_kind"],
+        batch_root=run_root / "m3-batch",
+        log_root=run_root / "logs",
+        project_root=roots.project_root,
+        model_factory=model_factory,
+        set_model=set_model,
+        run_item=run_item,
+        failure=lambda: latch["reason"],
+        remaining=remaining,
+        launch_deadline=launch_deadline,
+        clock=clock,
+        progress=progress,
+        parity_runner=parity_runner,
+        write_config=run_failure_search._write_config,
+        load_result=lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0],
+    )
+
+
 def run_workload(
     config: object,
     *,
@@ -245,6 +294,8 @@ def run_workload(
     clock: Callable[[], float] = time.monotonic,
     absolute_deadline: Optional[float] = None,
     external_reset_source: Optional[Path] = None,
+    parity_runner: Optional[Callable[..., Mapping[str, Any]]] = None,
+    progress: Callable[..., None] = lambda _event, **_fields: None,
 ) -> Dict[str, Any]:
     """Run one workload while keeping process and cloud mechanics injectable."""
 
@@ -291,6 +342,12 @@ def run_workload(
     external_candidate = None
     reduction_stop_reason = None
     grid_summary: Optional[Dict[str, Any]] = None
+    batch = accepted["mode"] in BATCH_MODES
+    batch_summary: Optional[Dict[str, Any]] = None
+
+    def set_model(new_model: Any) -> None:
+        nonlocal model
+        model = new_model
     try:
         if accepted["mode"] in ("m5b", "m5b-grid"):
             try:
@@ -303,11 +360,13 @@ def run_workload(
         elif remaining() <= 0:
             reason, status = "deadline_exhausted", "partial"
         else:
-            try:
-                model = model_factory(log_root=run_root / "logs")
-            except Exception:
-                reason, status = "model_start_failed", "partial"
-            if reason == "completed":
+            # Batch modes start their own model per phase inside the phase runner.
+            if not batch:
+                try:
+                    model = model_factory(log_root=run_root / "logs")
+                except Exception:
+                    reason, status = "model_start_failed", "partial"
+            if reason == "completed" and not batch:
                 if remaining() <= 0:
                     reason, status = "deadline_exhausted", "partial"
                 else:
@@ -315,12 +374,12 @@ def run_workload(
                         model.start()
                     except Exception:
                         reason, status = "model_start_failed", "partial"
-            if reason == "completed":
+            if reason == "completed" and not batch:
                 try:
                     model.wait_ready(deadline=launch_deadline)
                 except Exception:
                     reason, status = "readiness_failed", "partial"
-            if reason == "completed":
+            if reason == "completed" and not batch:
                 if remaining() <= 0:
                     reason, status = "deadline_exhausted", "partial"
                 else:
@@ -328,7 +387,14 @@ def run_workload(
                         model.check_alive()
                     except Exception:
                         reason, status = "model_died", "partial"
-            def bounded_runner(command: Sequence[str], *, cwd: object, check: bool = False) -> Any:
+            def bounded_runner(
+                command: Sequence[str],
+                *,
+                cwd: object,
+                check: bool = False,
+                item_timeout: Optional[float] = None,
+                cancel: Optional[Any] = None,
+            ) -> Any:
                 nonlocal cleanup_confirmed
                 if latch["reason"] is not None:
                     raise InfrastructureError("workload infrastructure failure is latched")
@@ -350,8 +416,12 @@ def run_workload(
                     raise InfrastructureError("launch deadline exhausted")
                 try:
                     command_runner = evaluator_factory(
-                        timeout_seconds=remaining_at_factory,
+                        timeout_seconds=(
+                            remaining_at_factory if item_timeout is None
+                            else min(remaining_at_factory, item_timeout)
+                        ),
                         log_root=run_root / "logs",
+                        **({} if cancel is None else {"cancel": cancel}),
                     )
                 except KeyboardInterrupt:
                     raise
@@ -373,6 +443,10 @@ def run_workload(
                 except subprocess.TimeoutExpired as error:
                     latch_failure("evaluator_failed")
                     raise InfrastructureError("evaluator timed out") from error
+                except EvaluatorCancelled as error:
+                    # The evaluator's process group was confirmed gone before this
+                    # was raised; nothing is latched for a deliberate cancellation.
+                    raise RunCancelled("evaluator cancelled") from error
                 except InfrastructureError as error:
                     cleanup_confirmed = False
                     latch_failure("cleanup_unconfirmed")
@@ -405,7 +479,25 @@ def run_workload(
 
             if reason == "completed":
                 mode = accepted["mode"]
-                if mode in ("pilot", "m5b"):
+                if batch:
+                    batch_summary = _run_batch_mode(
+                        accepted=accepted,
+                        run_root=run_root,
+                        roots=roots,
+                        model_factory=model_factory,
+                        set_model=set_model,
+                        bounded_runner=bounded_runner,
+                        latch=latch,
+                        remaining=remaining,
+                        launch_deadline=launch_deadline,
+                        clock=clock,
+                        progress=progress,
+                        parity_runner=parity_runner,
+                    )
+                    batch_reason = batch_summary.get("stop_reason")
+                    if batch_reason is not None:
+                        latch_failure(str(batch_reason))
+                elif mode in ("pilot", "m5b"):
                     configs = run_root / mode / "configs"
                     configs.mkdir(parents=True)
                     if mode == "pilot":
@@ -545,6 +637,11 @@ def run_workload(
         summary["pilot_outcomes"] = pilot_outcomes
     if accepted["mode"] in ("m5b", "m5b-grid"):
         summary["reduction_stop_reason"] = reduction_stop_reason
+    if batch_summary is not None:
+        summary["batch_verdict"] = batch_summary.get("verdict")
+        summary["batch_phases_complete"] = sum(
+            1 for phase in batch_summary.get("phases", ()) if phase.get("status") == "complete"
+        )
     if grid_summary is not None:
         summary["grid_stop_reason"] = grid_summary.get("stop_reason")
         found = grid_summary.get("confirmed_failure")

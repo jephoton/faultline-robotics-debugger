@@ -13,12 +13,20 @@ import signal
 import subprocess
 import threading
 import time
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 import uuid
 
 
 class InfrastructureError(RuntimeError):
     """The evaluator lifecycle could not be proven safely contained."""
+
+
+class EvaluatorCancelled(Exception):
+    """The session owner cancelled a running evaluator; its group is confirmed gone."""
+
+
+class RunCancelled(InfrastructureError):
+    """A cancelled evaluator run, reported through the bounded runner."""
 
 
 def direct_command(executable: os.PathLike[str] | str, command: Sequence[str]) -> list[str]:
@@ -53,7 +61,9 @@ class DirectEvaluator:
         log_root: os.PathLike[str] | str,
         term_grace_seconds: float = 5.0,
         kill_grace_seconds: float = 2.0,
+        cancel: Optional[threading.Event] = None,
     ) -> None:
+        self._cancel = cancel
         self._executable = _path_text(executable, "executable")
         self._timeout_seconds = _positive_finite(timeout_seconds, "timeout_seconds")
         self._term_grace_seconds = _nonnegative_finite(
@@ -102,7 +112,7 @@ class DirectEvaluator:
             process_group = process.pid
             try:
                 try:
-                    return_code = process.wait(timeout=self._timeout_seconds)
+                    return_code = self._wait(process)
                 except subprocess.TimeoutExpired:
                     self._terminate_and_confirm(process, process_group)
                     raise
@@ -127,6 +137,23 @@ class DirectEvaluator:
                 # ``wait`` and cleanup normally reap the leader.  This final poll
                 # also reaps a leader that exited during an exceptional path.
                 process.poll()
+
+    def _wait(self, process: subprocess.Popen[bytes]) -> int:
+        """Wait for exit; with a cancel event, poll it and raise once it is set."""
+
+        if self._cancel is None:
+            return process.wait(timeout=self._timeout_seconds)
+        deadline = time.monotonic() + self._timeout_seconds
+        while True:
+            if self._cancel.is_set():
+                raise EvaluatorCancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, self._timeout_seconds)
+            try:
+                return process.wait(timeout=min(remaining, 0.2))
+            except subprocess.TimeoutExpired:
+                continue
 
     def _new_log_paths(self) -> tuple[Path, Path]:
         if self._log_root.is_symlink():

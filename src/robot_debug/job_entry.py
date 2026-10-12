@@ -295,6 +295,11 @@ def progress_printer(stdout: Any) -> Progress:
     return emit
 
 
+def _require_posix(what: str) -> None:
+    if os.name != "posix":
+        raise InfrastructureError("{} requires POSIX process groups".format(what))
+
+
 class ProductionModelFactory:
     """Prefetch pinned inputs within the deadline, then describe the server."""
 
@@ -341,6 +346,65 @@ class ProductionModelFactory:
             port=MODEL_PORT,
         )
 
+    def run_parity(
+        self,
+        *,
+        output: Path,
+        log_root: Path,
+        max_batch_size: int,
+        timeout_seconds: float,
+    ) -> Dict[str, Any]:
+        """Run the batch parity check in the model environment; returns its verdict.
+
+        The check exits 0 (pass) or 1 (fail) after writing ``output``; any other
+        outcome, or a missing or unreadable verdict, is an infrastructure error.
+        """
+
+        _require_posix("parity check")
+        log_root = Path(log_root)
+        argv = model_server_argv(self._layout, server="faultline", max_batch_size=max_batch_size)
+        self.ensure_prefetched(log_root, argv=argv)
+        if not timeout_seconds > 0:
+            raise InfrastructureError("no time remains for the parity check")
+        command = [
+            str(self._layout.model_python),
+            str(self._layout.project_root / "scripts" / "model_servers" / "groot_batch_parity.py"),
+            *model_flags_for_scripts(self._layout, max_batch_size),
+            "--output={}".format(Path(output).as_posix()),
+        ]
+        log_root.mkdir(parents=True, exist_ok=True)
+        ident = "parity-" + uuid.uuid4().hex
+        with (log_root / (ident + ".stdout.log")).open("xb") as stdout, (
+            log_root / (ident + ".stderr.log")
+        ).open("xb") as stderr:
+            process = subprocess.Popen(
+                command,
+                cwd=str(self._layout.upstream_root),
+                env=model_environment(self._layout, self._base_env),
+                shell=False,
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            try:
+                return_code = process.wait(timeout=timeout_seconds)
+            except BaseException:
+                close_owned_process_group(process, process.pid)
+                raise
+            close_owned_process_group(process, process.pid)
+        if return_code not in (0, 1):
+            raise InfrastructureError("parity check crashed")
+        try:
+            verdict = json.loads(Path(output).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise InfrastructureError("parity verdict is unreadable") from error
+        if not isinstance(verdict, dict):
+            raise InfrastructureError("parity verdict is malformed")
+        if (return_code == 0) != (verdict.get("passed") is True):
+            raise InfrastructureError("parity verdict disagrees with the exit status")
+        return verdict
+
     def ensure_prefetched(self, log_root: Path, *, argv: Optional[Sequence[str]] = None) -> None:
         """Prefetch the pinned inputs and write provenance, once per Job."""
 
@@ -377,12 +441,13 @@ def evaluator_factory(
 ) -> Callable[..., Any]:
     env = evaluator_environment(layout, base_env)
 
-    def build(*, timeout_seconds: float, log_root: Path) -> Any:
+    def build(*, timeout_seconds: float, log_root: Path, cancel: Optional[threading.Event] = None) -> Any:
         evaluator = DirectEvaluator(
             executable=layout.evaluator,
             timeout_seconds=timeout_seconds,
             env=env,
             log_root=log_root,
+            **({} if cancel is None else {"cancel": cancel}),
         )
 
         def run(command: Sequence[str], **kwargs: Any) -> Any:
@@ -707,6 +772,9 @@ def main(
             print(json.dumps({"status": "error", "error": "export preflight failed"}), file=stdout)
             return EXIT_RUNTIME
         progress("export_preflight_ok")
+        model_factory = ProductionModelFactory(
+            layout, base_env=environ, deadline=deadline, clock=clock, progress=progress
+        )
         summary = runner(
             config,
             paths=WorkloadPaths(
@@ -715,14 +783,14 @@ def main(
                 work_root=layout.work_root,
                 export_root=layout.export_root,
             ),
-            model_factory=ProductionModelFactory(
-                layout, base_env=environ, deadline=deadline, clock=clock, progress=progress
-            ),
+            model_factory=model_factory,
             evaluator_factory=evaluator_factory(layout, environ, progress),
             exporter=exporter,
             clock=clock,
             absolute_deadline=deadline,
             external_reset_source=layout.external_reset_file,
+            parity_runner=model_factory.run_parity,
+            progress=progress,
         )
     except KeyboardInterrupt:
         print(json.dumps({"status": "interrupted", "run_id": config["run_id"]}), file=stdout)
