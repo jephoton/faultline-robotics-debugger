@@ -60,10 +60,14 @@ ASSUMED_OVERHEAD_SECONDS = {
     "warmup_episode": 60.0,
     "finalize_and_export": 90.0,
 }
-ASSUMED_EPISODES_PER_MINUTE = 16.3   # M3 12 workers unbatched; batched measured 19.2-19.4
-ASSUMED_LEVEL_SECONDS = 60.0         # one level of a family: the slowest of its attempts
-DEADLINE_MARGIN = 1.3
+# One wave: 12 evaluators each finish an episode. M3 measured 16.3 episodes/min unbatched with
+# 12 workers (12 x 60 / 16.3 = 44 s); batched it measured 19.2-19.4 (about 37 s).
+ASSUMED_EPISODE_WALL_SECONDS = 44.0
+# A family level competes with the other families' attempts for the same 12 workers, so it can
+# take two waves; the sequential chain of levels is bounded by this.
+ASSUMED_LEVEL_SECONDS = 90.0
 DEADLINE_ROUNDING_SECONDS = 60
+MAX_RECOMMENDED_DEADLINE_SECONDS = 2400
 
 
 def severity_token(severity: float) -> str:
@@ -215,25 +219,66 @@ def planned_episodes(mode: str, config: Optional[Mapping[str, Any]] = None) -> i
     return NOMINAL_CONTROLS + len(config["families"]) * levels * config["attempts"]
 
 
+def threshold_waves(families: int, levels: int, attempts: int, workers: int = M6_WORKERS) -> int:
+    """FIFO waves needed when ``families`` searches of ``levels`` levels share ``workers`` workers.
+
+    Each family's next level is queued when its previous level's attempts have all
+    finished; every wave runs up to ``workers`` queued attempts for one episode wall time.
+    """
+
+    queue_: List[List[int]] = [[family, attempts] for family in range(families)]
+    pending = {family: attempts for family in range(families)}
+    left = {family: levels for family in range(families)}
+    waves = 0
+    while queue_:
+        slots = workers
+        ran: Dict[int, int] = {}
+        while slots and queue_:
+            family, count = queue_[0]
+            take = min(count, slots)
+            ran[family] = ran.get(family, 0) + take
+            slots -= take
+            if take == count:
+                queue_.pop(0)
+            else:
+                queue_[0] = [family, count - take]
+        waves += 1
+        for family, count in ran.items():
+            pending[family] -= count
+            if pending[family] == 0:
+                left[family] -= 1
+                if left[family] > 0:
+                    pending[family] = attempts
+                    queue_.append([family, attempts])
+    return waves
+
+
 def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] = None) -> int:
     """A Job ``deadline_seconds`` from the documented timing assumptions.
 
-    One-off overheads plus the worst-case work at the conservative unbatched
-    12-worker rate (or the sequential level chain, whichever is longer), times a
-    margin, rounded up to whole minutes and never below the prepare script's
-    1000 s floor.
+    The one-off overheads, plus the worst-case work in whole waves of 12
+    episodes (the longer of the FIFO wave count and the sequential chain of
+    two-wave levels for the threshold mode), plus the no-start guard: an item is
+    never started with less than ``ITEM_TIMEOUT_SECONDS`` left, so the last item
+    needs that much time plus one episode wall time. Rounded up to whole minutes;
+    never below the prepare script's 1000 s floor, and refused above the
+    2400 s cap this milestone allows.
     """
 
-    episodes = planned_episodes(mode, config)
-    throughput_seconds = episodes / ASSUMED_EPISODES_PER_MINUTE * 60.0
-    chain_seconds = 0.0
-    if mode == "m6-threshold":
-        # controls, then the longest sequential chain of levels (sweep plus bisection)
-        chain_seconds = (1 + len(config["sweep"]) + config["bisection_steps"]) * ASSUMED_LEVEL_SECONDS
-    total = sum(ASSUMED_OVERHEAD_SECONDS.values()) + max(throughput_seconds, chain_seconds)
-    padded = total * DEADLINE_MARGIN
-    rounded = math.ceil(padded / DEADLINE_ROUNDING_SECONDS) * DEADLINE_ROUNDING_SECONDS
-    return int(max(1000, rounded))
+    wall = ASSUMED_EPISODE_WALL_SECONDS
+    if mode == "m6-smoke":
+        work = math.ceil(len(smoke_manifest()) / M6_WORKERS) * wall
+    else:
+        levels = len(config["sweep"]) + config["bisection_steps"]
+        waves = 1 + threshold_waves(len(config["families"]), levels, config["attempts"])  # 1: controls
+        chain = (1 + levels) * ASSUMED_LEVEL_SECONDS  # controls, then the longest sequential chain
+        work = max(waves * wall, chain)
+    total = sum(ASSUMED_OVERHEAD_SECONDS.values()) + work + be.ITEM_TIMEOUT_SECONDS + wall
+    rounded = int(max(1000, math.ceil(total / DEADLINE_ROUNDING_SECONDS) * DEADLINE_ROUNDING_SECONDS))
+    if rounded > MAX_RECOMMENDED_DEADLINE_SECONDS:
+        raise ValueError("this workload needs more than the {} s cap; shrink it".format(
+            MAX_RECOMMENDED_DEADLINE_SECONDS))
+    return rounded
 
 
 # ---------------------------------------------------------------------------

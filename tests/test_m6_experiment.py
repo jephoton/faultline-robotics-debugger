@@ -101,13 +101,52 @@ class ManifestTests(unittest.TestCase):
             self.assertRegex(item["case_id"], r"^[a-z0-9][a-z0-9-]*$")
 
     def test_recommended_deadlines_follow_the_documented_assumptions(self):
-        self.assertEqual(1080, m6.recommended_deadline_seconds("m6-smoke"))
         self.assertEqual(185, m6.planned_episodes("m6-threshold", THRESHOLD_CONFIG))
-        self.assertEqual(1740, m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG))
+        self.assertEqual(1200, m6.recommended_deadline_seconds("m6-smoke"))
+        self.assertEqual(1920, m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG))
         small = dict(THRESHOLD_CONFIG, families=["darken"], sweep=[1.0], attempts=1,
                      required_failures=1, bisection_steps=0)
-        self.assertEqual(1020, m6.recommended_deadline_seconds("m6-threshold", small))
-        self.assertGreaterEqual(m6.recommended_deadline_seconds("m6-smoke"), 1000)
+        self.assertEqual(1200, m6.recommended_deadline_seconds("m6-threshold", small))
+
+    def test_the_planned_workloads_stay_within_the_2400_second_cap(self):
+        self.assertLessEqual(m6.recommended_deadline_seconds("m6-smoke"), 2400)
+        self.assertLessEqual(m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG), 2400)
+        huge = dict(THRESHOLD_CONFIG, sweep=[0.1 * i for i in range(1, 9)], attempts=12,
+                    required_failures=10, bisection_steps=6)
+        with self.assertRaises(ValueError):
+            m6.recommended_deadline_seconds("m6-threshold", huge)
+
+    def test_the_estimate_includes_the_no_start_guard_and_one_episode_wall_time(self):
+        overhead = sum(m6.ASSUMED_OVERHEAD_SECONDS.values())
+        guard = m6.be.ITEM_TIMEOUT_SECONDS + m6.ASSUMED_EPISODE_WALL_SECONDS
+        smoke_work = 4 * m6.ASSUMED_EPISODE_WALL_SECONDS  # 38 items over 12 workers: four waves
+        needed = overhead + smoke_work + guard
+        self.assertGreaterEqual(m6.recommended_deadline_seconds("m6-smoke"), needed)
+        self.assertLess(m6.recommended_deadline_seconds("m6-smoke"), needed + m6.DEADLINE_ROUNDING_SECONDS)
+        self.assertEqual(300.0, m6.be.ITEM_TIMEOUT_SECONDS)
+
+    def test_a_level_is_assumed_to_take_at_least_two_waves(self):
+        self.assertGreaterEqual(m6.ASSUMED_LEVEL_SECONDS, 2 * m6.ASSUMED_EPISODE_WALL_SECONDS)
+
+    def test_fifo_waves_quantise_the_threshold_work(self):
+        # One family: five attempts fit one wave, so the nine levels are nine waves.
+        self.assertEqual(9, m6.threshold_waves(1, 9, 5, 12))
+        # Two families: ten attempts per round still fit one wave.
+        self.assertEqual(9, m6.threshold_waves(2, 9, 5, 12))
+        # Four families compete: 20 first-level attempts need two waves, and the slack is reused.
+        waves = m6.threshold_waves(4, 9, 5, 12)
+        self.assertEqual(15, waves)
+        self.assertGreaterEqual(waves, -(-4 * 9 * 5 // 12))
+        self.assertGreaterEqual(waves, 9)
+        # Single-attempt levels with one worker are strictly sequential.
+        self.assertEqual(4, m6.threshold_waves(2, 2, 1, 1))
+
+    def test_a_larger_search_never_gets_a_shorter_deadline(self):
+        base = m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG)
+        for changes in (dict(attempts=6), dict(bisection_steps=5), dict(sweep=[0.2, 0.4, 0.6, 0.8, 0.9, 1.0])):
+            with self.subTest(changes=changes):
+                self.assertGreaterEqual(
+                    m6.recommended_deadline_seconds("m6-threshold", dict(THRESHOLD_CONFIG, **changes)), base)
 
 
 class PoolTests(unittest.TestCase):
