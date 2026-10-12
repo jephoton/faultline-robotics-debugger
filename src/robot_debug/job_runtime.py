@@ -14,12 +14,21 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 _CONFIG_FIELDS = {"schema_version", "mode", "run_id", "deadline_seconds"}
 BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
-_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES
+# ADR 0026: the M6 smoke Job has fixed conditions; the threshold Job is bounded by these fields.
+M6_MODES = {"m6-smoke", "m6-threshold"}
+_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES
 _BATCH_FIELDS = {"phases", "repeats_per_kind"}
 _BATCH_WORKERS = (4, 8, 12)
 # Equal-work manifest sizes fixed by ADR 0025: repeats per kind (nominal, reduced mask).
 _BATCH_REPEATS = {"m3-batch-smoke": 2, "m3-batch": 12}
 _MAX_BATCH_PHASES = 6
+M6_FAMILIES = ("darken", "noise", "blur", "contrast")
+_M6_THRESHOLD_FIELDS = {"families", "sweep", "attempts", "required_failures", "bisection_steps"}
+_M6_MAX_SWEEP_LEVELS = 8
+_M6_MAX_ATTEMPTS = 12
+_M6_MAX_BISECTION_STEPS = 6
+_M6_MAX_TOTAL_ATTEMPTS = 400
+_M6_NOMINAL_CONTROLS = 5
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.ASCII)
 _ALLOWED_SUFFIXES = {".json", ".jsonl", ".mp4", ".sqlite", ".yaml", ".yml", ".txt", ".log"}
 _CREDENTIAL_NAME = re.compile(
@@ -43,8 +52,14 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
 
     if type(config) is not dict:
         _fail("workload configuration must contain exactly the required fields")
-    batch_mode = type(config.get("mode")) is str and config["mode"] in BATCH_MODES
-    if set(config) != (_CONFIG_FIELDS | _BATCH_FIELDS if batch_mode else _CONFIG_FIELDS):
+    mode_name = config.get("mode") if type(config.get("mode")) is str else None
+    batch_mode = mode_name in BATCH_MODES
+    expected_fields = _CONFIG_FIELDS
+    if batch_mode:
+        expected_fields = _CONFIG_FIELDS | _BATCH_FIELDS
+    elif mode_name == "m6-threshold":
+        expected_fields = _CONFIG_FIELDS | _M6_THRESHOLD_FIELDS
+    if set(config) != expected_fields:
         _fail("workload configuration must contain exactly the required fields")
     schema_version = config["schema_version"]
     mode = config["mode"]
@@ -66,7 +81,49 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
     }
     if batch_mode:
         validated["repeats_per_kind"], validated["phases"] = _validate_batch_fields(config, mode)
+    if mode == "m6-threshold":
+        validated.update(_validate_m6_threshold_fields(config))
     return validated
+
+
+def _validate_m6_threshold_fields(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Bounded M6 threshold-search fields: families, coarse sweep, gate and bisection depth."""
+
+    families = config["families"]
+    if (
+        type(families) is not list or not 1 <= len(families) <= len(M6_FAMILIES)
+        or any(type(name) is not str or name not in M6_FAMILIES for name in families)
+        or len(set(families)) != len(families)
+    ):
+        _fail("m6 families must be a non-empty list of distinct known families")
+    sweep = config["sweep"]
+    if type(sweep) is not list or not 1 <= len(sweep) <= _M6_MAX_SWEEP_LEVELS:
+        _fail("m6 sweep must be a short non-empty list of severities")
+    levels = []
+    previous = 0.0
+    for value in sweep:
+        if type(value) not in (int, float) or not math.isfinite(value) or not previous < value <= 1.0:
+            _fail("m6 sweep severities must increase strictly within (0, 1]")
+        if abs(round(value, 6) - value) > 1e-12:
+            _fail("m6 sweep severities support at most six decimals")
+        previous = float(value)
+        levels.append(float(value))
+    attempts = config["attempts"]
+    if type(attempts) is not int or not 1 <= attempts <= _M6_MAX_ATTEMPTS:
+        _fail("m6 attempts must be an integer from 1 to {}".format(_M6_MAX_ATTEMPTS))
+    required = config["required_failures"]
+    if type(required) is not int or not 1 <= required <= attempts:
+        _fail("m6 required_failures must be an integer from 1 to attempts")
+    steps = config["bisection_steps"]
+    if type(steps) is not int or not 0 <= steps <= _M6_MAX_BISECTION_STEPS:
+        _fail("m6 bisection_steps must be an integer from 0 to {}".format(_M6_MAX_BISECTION_STEPS))
+    worst_case = _M6_NOMINAL_CONTROLS + len(families) * (len(levels) + steps) * attempts
+    if worst_case > _M6_MAX_TOTAL_ATTEMPTS:
+        _fail("m6 threshold workload exceeds the episode bound")
+    return {
+        "families": list(families), "sweep": levels, "attempts": attempts,
+        "required_failures": required, "bisection_steps": steps,
+    }
 
 
 def _validate_batch_fields(config: Dict[str, Any], mode: str) -> Tuple[int, List[List[int]]]:
@@ -514,4 +571,11 @@ def export_closed_evidence(
     return manifest
 
 
-__all__ = ["BATCH_MODES", "JobRuntimeError", "export_closed_evidence", "validate_workload_config"]
+__all__ = [
+    "BATCH_MODES",
+    "JobRuntimeError",
+    "M6_FAMILIES",
+    "M6_MODES",
+    "export_closed_evidence",
+    "validate_workload_config",
+]

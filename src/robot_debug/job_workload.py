@@ -14,10 +14,11 @@ from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import yaml
 
-from robot_debug import batch_experiment
+from robot_debug import batch_experiment, m6_experiment
 from robot_debug.job_process import EvaluatorCancelled, InfrastructureError, RunCancelled
 from robot_debug.job_runtime import (
     BATCH_MODES,
+    M6_MODES,
     JobRuntimeError,
     export_closed_evidence,
     validate_workload_config,
@@ -287,6 +288,53 @@ def _run_batch_mode(
     )
 
 
+def _run_m6_mode(
+    *,
+    accepted: Mapping[str, Any],
+    run_root: Path,
+    roots: "WorkloadPaths",
+    model_factory: Callable[..., Any],
+    set_model: Callable[[Any], None],
+    bounded_runner: Callable[..., Any],
+    latch: Dict[str, Optional[str]],
+    remaining: Callable[[], float],
+    launch_deadline: float,
+    clock: Callable[[], float],
+    progress: Callable[..., None],
+) -> Dict[str, Any]:
+    """Drive an M6 mode (ADR 0026) through the same bounded evaluator runner as the M3 phases."""
+
+    def run_item(command: Sequence[str], *, item_timeout: float, cancel: Any) -> Any:
+        return bounded_runner(
+            command, cwd=roots.upstream_root, check=False, item_timeout=item_timeout, cancel=cancel
+        )
+
+    prefetch_hook = getattr(model_factory, "prefetch", None)
+    threshold_config = None
+    if accepted["mode"] == "m6-threshold":
+        threshold_config = {key: accepted[key] for key in (
+            "families", "sweep", "attempts", "required_failures", "bisection_steps")}
+
+    return m6_experiment.run_m6(
+        mode=accepted["mode"],
+        config=threshold_config,
+        batch_root=run_root / "m6",
+        log_root=run_root / "logs",
+        project_root=roots.project_root,
+        model_factory=model_factory,
+        set_model=set_model,
+        run_item=run_item,
+        failure=lambda: latch["reason"],
+        remaining=remaining,
+        launch_deadline=launch_deadline,
+        clock=clock,
+        progress=progress,
+        prefetch=None if prefetch_hook is None else (lambda: prefetch_hook(log_root=run_root / "logs")),
+        write_config=run_failure_search._write_config,
+        load_result=lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0],
+    )
+
+
 def run_workload(
     config: object,
     *,
@@ -346,7 +394,11 @@ def run_workload(
     reduction_stop_reason = None
     grid_summary: Optional[Dict[str, Any]] = None
     batch = accepted["mode"] in BATCH_MODES
+    m6 = accepted["mode"] in M6_MODES
     batch_summary: Optional[Dict[str, Any]] = None
+    m6_summary: Optional[Dict[str, Any]] = None
+    # Batch-style modes start their own model inside the experiment runner.
+    own_model = batch or m6
 
     def set_model(new_model: Any) -> None:
         nonlocal model
@@ -363,13 +415,13 @@ def run_workload(
         elif remaining() <= 0:
             reason, status = "deadline_exhausted", "partial"
         else:
-            # Batch modes start their own model per phase inside the phase runner.
-            if not batch:
+            # Batch-style modes start their own model inside the experiment runner.
+            if not own_model:
                 try:
                     model = model_factory(log_root=run_root / "logs")
                 except Exception:
                     reason, status = "model_start_failed", "partial"
-            if reason == "completed" and not batch:
+            if reason == "completed" and not own_model:
                 if remaining() <= 0:
                     reason, status = "deadline_exhausted", "partial"
                 else:
@@ -377,12 +429,12 @@ def run_workload(
                         model.start()
                     except Exception:
                         reason, status = "model_start_failed", "partial"
-            if reason == "completed" and not batch:
+            if reason == "completed" and not own_model:
                 try:
                     model.wait_ready(deadline=launch_deadline)
                 except Exception:
                     reason, status = "readiness_failed", "partial"
-            if reason == "completed" and not batch:
+            if reason == "completed" and not own_model:
                 if remaining() <= 0:
                     reason, status = "deadline_exhausted", "partial"
                 else:
@@ -508,6 +560,25 @@ def run_workload(
                     batch_reason = batch_summary.get("stop_reason")
                     if batch_reason is not None:
                         latch_failure(str(batch_reason))
+                elif m6:
+                    m6_summary = _run_m6_mode(
+                        accepted=accepted,
+                        run_root=run_root,
+                        roots=roots,
+                        model_factory=model_factory,
+                        set_model=set_model,
+                        bounded_runner=bounded_runner,
+                        latch=latch,
+                        remaining=remaining,
+                        launch_deadline=launch_deadline,
+                        clock=clock,
+                        progress=progress,
+                    )
+                    if m6_summary.get("cleanup_unconfirmed"):
+                        cleanup_confirmed = False
+                    m6_reason = m6_summary.get("stop_reason")
+                    if m6_reason is not None:
+                        latch_failure(str(m6_reason))
                 elif mode in ("pilot", "m5b"):
                     configs = run_root / mode / "configs"
                     configs.mkdir(parents=True)
@@ -654,6 +725,14 @@ def run_workload(
         summary["batch_phases_complete"] = sum(
             1 for phase in batch_summary.get("phases", ()) if phase.get("status") == "complete"
         )
+    if m6_summary is not None:
+        summary["m6_stop_reason"] = m6_summary.get("stop_reason")
+        summary["m6_complete"] = m6_summary.get("complete")
+        summary["m6_nominal_passed"] = (m6_summary.get("nominal_controls") or {}).get("passed")
+        summary["m6_thresholds"] = {
+            name: item.get("threshold_severity")
+            for name, item in (m6_summary.get("families") or {}).items()
+        }
     if grid_summary is not None:
         summary["grid_stop_reason"] = grid_summary.get("stop_reason")
         found = grid_summary.get("confirmed_failure")

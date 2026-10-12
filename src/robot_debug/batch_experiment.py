@@ -10,6 +10,7 @@ per-worker-count verdicts; process, deadline and evidence mechanics are injected
 from __future__ import annotations
 
 from collections import deque
+import contextlib
 import json
 import math
 import os
@@ -18,7 +19,7 @@ import shutil
 import subprocess
 import threading
 import time
-from typing import Any, Callable, Deque, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Deque, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from robot_debug.job_process import CleanupUnconfirmed, InfrastructureError, RunCancelled
 from robot_debug.parallel_eval import build_manifest, manifest_hash
@@ -375,6 +376,202 @@ class PhaseFailure(Exception):
         self.reason = reason
 
 
+def run_prefetch(
+    prefetch: Optional[Callable[[], Any]],
+    clock: Callable[[], float],
+    progress: Callable[..., None],
+    extra: Dict[str, Any],
+) -> bool:
+    """Run the once-per-Job prefetch, timed separately; True when it failed.
+
+    Shared by every batch-style experiment (M3 phases and the M6 modes).
+    """
+
+    if prefetch is None:
+        return False
+    started = clock()
+    progress("batch_prefetch_start")
+    failed = False
+    try:
+        prefetch()
+    except Exception as error:
+        failed = True
+        progress("batch_prefetch_failed", error=type(error).__name__)
+    extra["prefetch_seconds"] = _round(clock() - started)
+    if not failed:
+        progress("batch_prefetch_done", seconds=extra["prefetch_seconds"])
+    return failed
+
+
+@contextlib.contextmanager
+def started_server(
+    *,
+    model_factory: Callable[..., Any],
+    set_model: Callable[[Any], None],
+    log_root: Path,
+    max_batch_size: int,
+    timing_log: Path,
+    launch_deadline: float,
+) -> Iterator[Tuple[Any, Optional[List[str]]]]:
+    """One faultline model server for the duration of the block.
+
+    Yields ``(model, server_argv)`` once the server is started, ready and alive;
+    any start problem raises ``PhaseFailure`` with a safe code. The server is
+    always closed on the way out. If closing raises, the model stays registered
+    so the workload cleanup retries it and records the failure.
+    """
+
+    model: Any = None
+    try:
+        try:
+            model = model_factory(log_root=log_root, server="faultline",
+                                  max_batch_size=max_batch_size, timing_log=timing_log)
+        except Exception as error:
+            raise PhaseFailure("model_start_failed") from error
+        set_model(model)
+        argv = getattr(model, "argv", None)
+        server_argv = list(argv)[1:] if argv is not None else None
+        try:
+            model.start()
+        except Exception as error:
+            raise PhaseFailure("model_start_failed") from error
+        try:
+            model.wait_ready(deadline=launch_deadline)
+        except Exception as error:
+            raise PhaseFailure("readiness_failed") from error
+        try:
+            model.check_alive()
+        except Exception as error:
+            raise PhaseFailure("model_died") from error
+        yield model, server_argv
+    finally:
+        if model is not None:
+            model.close()
+            set_model(None)
+
+
+def make_evaluate(
+    *,
+    stage_prefix: str,
+    project_root: Path,
+    write_config: Callable[..., None],
+    load_result: Callable[[Path], Any],
+    run_item: Callable[..., Any],
+    cancel: threading.Event,
+    item_timeout: float,
+    clock: Callable[[], float],
+    ready_at: float,
+    configs_dir: Path,
+    runs_dir: Path,
+    config_kwargs: Callable[[Mapping[str, Any]], Mapping[str, Any]],
+) -> Callable[..., Dict[str, Any]]:
+    """Build the one-item evaluator shared by every batch-style experiment.
+
+    ``evaluate(item)`` writes the item config, runs the bounded evaluator and
+    classifies the evidence into a record whose ``status`` is ``valid`` only for
+    a completed policy result. ``config_kwargs(item)`` supplies the
+    ``write_config`` perturbation arguments; an optional ``meta`` mapping on the
+    item is copied into its record.
+    """
+
+    default_configs, default_runs = configs_dir, runs_dir
+
+    def evaluate(
+        item: Mapping[str, Any], *, case_id: Optional[str] = None,
+        configs_dir: Path = default_configs, runs_dir: Path = default_runs,
+    ) -> Dict[str, Any]:
+        case_id = str(item["case_id"]) if case_id is None else case_id
+        record: Dict[str, Any] = {
+            "case_id": case_id, "kind": item["kind"], "status": "infrastructure_error",
+            "outcome": None, "started_seconds": round(clock() - ready_at, 3),
+        }
+        if item.get("meta"):
+            record.update(item["meta"])
+        try:
+            config_path = configs_dir / (case_id + ".yaml")
+            output = runs_dir / case_id
+            write_config(
+                config_path=config_path, output_dir=output, project_root=project_root,
+                stage_name=stage_prefix + case_id, episode_indices=(0,), **dict(config_kwargs(item))
+            )
+            run_item(
+                ["vla-eval", "run", "--config", str(config_path)],
+                item_timeout=item_timeout, cancel=cancel,
+            )
+            result = load_result(output)
+            outcome = getattr(result, "outcome", None)
+            if outcome in VALID_OUTCOMES and getattr(result, "episode_index", 0) == 0:
+                record.update(status="valid", outcome=outcome,
+                              steps=getattr(result, "steps", None))
+            else:
+                record["status"] = "invalid_evidence"
+        except RunCancelled:
+            record["status"] = "cancelled"
+        except InfrastructureError as error:
+            timed_out = isinstance(error.__cause__, subprocess.TimeoutExpired)
+            record["status"] = "timed_out" if timed_out else "infrastructure_error"
+        except Exception:
+            record["status"] = "infrastructure_error"
+        record["ended_seconds"] = round(clock() - ready_at, 3)
+        return record
+
+    return evaluate
+
+
+def run_warmup(
+    *,
+    evaluate: Callable[..., Dict[str, Any]],
+    first: Mapping[str, Any],
+    batch_root: Path,
+    remaining: Callable[[], float],
+    item_timeout: float,
+    clock: Callable[[], float],
+    known_outcomes: Mapping[str, str],
+) -> Tuple[Dict[str, Any], float, bool]:
+    """One untimed episode on the first server: engine start-up, CUDA kernels and caches.
+
+    Returns ``(record, seconds, skipped_for_deadline)``. An interrupted warm-up
+    drops its possibly half-written run directory before re-raising.
+    """
+
+    warm_base = batch_root / "warmup"
+    warm_base.mkdir(parents=True, exist_ok=True)
+    (warm_base / "configs").mkdir(exist_ok=True)
+    (warm_base / "runs").mkdir(exist_ok=True)
+    warm_started = clock()
+    skipped = False
+    if remaining() < item_timeout:
+        outcome_record: Dict[str, Any] = {
+            "case_id": "warmup-" + str(first["case_id"]), "kind": first["kind"],
+            "status": "skipped_deadline", "outcome": None,
+        }
+        skipped = True
+    else:
+        try:
+            outcome_record = evaluate(
+                first, case_id="warmup-" + str(first["case_id"]),
+                configs_dir=warm_base / "configs", runs_dir=warm_base / "runs",
+            )
+        except BaseException:
+            # Interrupted mid-evaluator: its group was terminated, so its
+            # directory may be half-written; drop it before re-raising.
+            remove_tree_within(warm_base / "runs" / ("warmup-" + str(first["case_id"])), batch_root)
+            raise
+    seconds = clock() - warm_started
+    outcome_record.pop("started_seconds", None)
+    outcome_record.pop("ended_seconds", None)
+    outcome_record["duration_seconds"] = _round(seconds)
+    outcome_record["matches_known_outcome"] = (
+        None if outcome_record["outcome"] is None
+        else outcome_record["outcome"] == known_outcomes.get(str(first["kind"]))
+    )
+    if outcome_record["status"] in ("cancelled", "timed_out"):
+        outcome_record["run_dir_removed"] = remove_tree_within(
+            warm_base / "runs" / outcome_record["case_id"], batch_root
+        )
+    return outcome_record, seconds, skipped
+
+
 def run_phases(
     *,
     mode: str,
@@ -455,17 +652,8 @@ def run_phases(
 
     blocked = False
     try:
-        if prefetch is not None:
-            started = clock()
-            progress("batch_prefetch_start")
-            try:
-                prefetch()
-            except Exception as error:
-                stop_reason, blocked = "prefetch_failed", True
-                progress("batch_prefetch_failed", error=type(error).__name__)
-            extra["prefetch_seconds"] = _round(clock() - started)
-            if not blocked:
-                progress("batch_prefetch_done", seconds=extra["prefetch_seconds"])
+        if run_prefetch(prefetch, clock, progress, extra):
+            stop_reason, blocked = "prefetch_failed", True
         if mode == "m3-batch-smoke" and not blocked:
             parity = _run_parity(
                 parity_runner, batch_root, log_root, planned[0][1], remaining, progress, extra
@@ -643,73 +831,23 @@ def _run_phase(
     lock = threading.Lock()
     pending: Deque[Mapping[str, Any]] = deque(manifest)
     results: List[Dict[str, Any]] = []
-    model: Any = None
     server_argv: Optional[List[str]] = None
     warmup_seconds = 0.0
     launch_t: Optional[float] = None
 
     try:
-        try:
-            try:
-                model = model_factory(log_root=log_root, server="faultline", max_batch_size=size,
-                                      timing_log=timing_path)
-            except Exception as error:
-                raise PhaseFailure("model_start_failed") from error
-            set_model(model)
-            argv = getattr(model, "argv", None)
-            if argv is not None:
-                server_argv = list(argv)[1:]
-            try:
-                model.start()
-            except Exception as error:
-                raise PhaseFailure("model_start_failed") from error
-            try:
-                model.wait_ready(deadline=launch_deadline)
-            except Exception as error:
-                raise PhaseFailure("readiness_failed") from error
-            try:
-                model.check_alive()
-            except Exception as error:
-                raise PhaseFailure("model_died") from error
+        with started_server(
+            model_factory=model_factory, set_model=set_model, log_root=log_root,
+            max_batch_size=size, timing_log=timing_path, launch_deadline=launch_deadline,
+        ) as (_model, server_argv):
             ready_at = clock()
-
-            def evaluate(
-                item: Mapping[str, Any], *, case_id: Optional[str] = None,
-                configs_dir: Path = configs, runs_dir: Path = runs,
-            ) -> Dict[str, Any]:
-                case_id = str(item["case_id"]) if case_id is None else case_id
-                record: Dict[str, Any] = {
-                    "case_id": case_id, "kind": item["kind"], "status": "infrastructure_error",
-                    "outcome": None, "started_seconds": round(clock() - ready_at, 3),
-                }
-                try:
-                    config_path = configs_dir / (case_id + ".yaml")
-                    output = runs_dir / case_id
-                    rectangle = item["rectangle"] or {}
-                    write_config(
-                        config_path=config_path, output_dir=output, project_root=project_root,
-                        stage_name="m3-" + case_id, episode_indices=(0,), **rectangle
-                    )
-                    run_item(
-                        ["vla-eval", "run", "--config", str(config_path)],
-                        item_timeout=item_timeout, cancel=cancel,
-                    )
-                    result = load_result(output)
-                    outcome = getattr(result, "outcome", None)
-                    if outcome in VALID_OUTCOMES and getattr(result, "episode_index", 0) == 0:
-                        record.update(status="valid", outcome=outcome,
-                                      steps=getattr(result, "steps", None))
-                    else:
-                        record["status"] = "invalid_evidence"
-                except RunCancelled:
-                    record["status"] = "cancelled"
-                except InfrastructureError as error:
-                    timed_out = isinstance(error.__cause__, subprocess.TimeoutExpired)
-                    record["status"] = "timed_out" if timed_out else "infrastructure_error"
-                except Exception:
-                    record["status"] = "infrastructure_error"
-                record["ended_seconds"] = round(clock() - ready_at, 3)
-                return record
+            evaluate = make_evaluate(
+                stage_prefix="m3-", project_root=project_root, write_config=write_config,
+                load_result=load_result, run_item=run_item, cancel=cancel,
+                item_timeout=item_timeout, clock=clock, ready_at=ready_at,
+                configs_dir=configs, runs_dir=runs,
+                config_kwargs=lambda item: item["rectangle"] or {},
+            )
 
             def worker() -> None:
                 while not stop.is_set() and not cancel.is_set():
@@ -732,41 +870,13 @@ def _run_phase(
             if warmup is not None:
                 # One untimed episode on this first server: engine start-up, CUDA
                 # kernels and caches are warm before anything is measured.
-                first = manifest[0]
-                warm_base = batch_root / "warmup"
-                warm_base.mkdir(parents=True, exist_ok=True)
-                (warm_base / "configs").mkdir(exist_ok=True)
-                (warm_base / "runs").mkdir(exist_ok=True)
-                warm_started = clock()
-                if remaining() < item_timeout:
-                    outcome_record: Dict[str, Any] = {
-                        "case_id": "warmup-" + str(first["case_id"]), "kind": first["kind"],
-                        "status": "skipped_deadline", "outcome": None,
-                    }
-                    deadline_stop.set()
-                else:
-                    try:
-                        outcome_record = evaluate(
-                            first, case_id="warmup-" + str(first["case_id"]),
-                            configs_dir=warm_base / "configs", runs_dir=warm_base / "runs",
-                        )
-                    except BaseException:
-                        # Interrupted mid-evaluator: its group was terminated, so its
-                        # directory may be half-written; drop it before re-raising.
-                        remove_tree_within(warm_base / "runs" / ("warmup-" + str(first["case_id"])), batch_root)
-                        raise
-                warmup_seconds = clock() - warm_started
-                outcome_record.pop("started_seconds", None)
-                outcome_record.pop("ended_seconds", None)
-                outcome_record["duration_seconds"] = _round(warmup_seconds)
-                outcome_record["matches_known_outcome"] = (
-                    None if outcome_record["outcome"] is None
-                    else outcome_record["outcome"] == KNOWN_OUTCOMES.get(str(first["kind"]))
+                outcome_record, warmup_seconds, skipped = run_warmup(
+                    evaluate=evaluate, first=manifest[0], batch_root=batch_root,
+                    remaining=remaining, item_timeout=item_timeout, clock=clock,
+                    known_outcomes=KNOWN_OUTCOMES,
                 )
-                if outcome_record["status"] in ("cancelled", "timed_out"):
-                    outcome_record["run_dir_removed"] = remove_tree_within(
-                        warm_base / "runs" / outcome_record["case_id"], batch_root
-                    )
+                if skipped:
+                    deadline_stop.set()
                 warmup.update(outcome_record)
                 if outcome_record["status"] != "valid":
                     stop.set()
@@ -787,12 +897,6 @@ def _run_phase(
                     if thread.is_alive():
                         thread.join(30)
                 raise
-        finally:
-            if model is not None:
-                # If this raises, the model stays registered so the workload's own
-                # cleanup retries it and records the failure.
-                model.close()
-                set_model(None)
     finally:
         # Killed evaluators can leave SQLite companions (and half-written media)
         # behind; remove their run directories and any stray companions before

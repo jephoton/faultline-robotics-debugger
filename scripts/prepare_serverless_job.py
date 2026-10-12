@@ -181,8 +181,9 @@ def _validate_registry(value: str) -> None:
 
 
 # The runtime reserves 600 s after the one model download (about 345 s on an
-# L40S), so a batch workload needs at least this deadline or the download fails.
-_BATCH_MODES = {"m3-batch", "m3-batch-smoke"}
+# L40S), so a batch-style workload (the M3 batching modes and the M6 modes) needs
+# at least this deadline or the download fails.
+_BATCH_MODES = {"m3-batch", "m3-batch-smoke", "m6-smoke", "m6-threshold"}
 MIN_BATCH_DEADLINE_SECONDS = 1000
 
 
