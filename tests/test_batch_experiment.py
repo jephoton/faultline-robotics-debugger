@@ -125,24 +125,51 @@ class VerdictTests(unittest.TestCase):
         comparisons = be.compare_phases([phase(8, 1, 10.0), phase(12, 12, 9.0), phase(4, 1, 5.0)])
         self.assertEqual([], comparisons)
 
-    def test_verdict_precedence(self) -> None:
-        good = [phase(8, 1, 10.0), phase(8, 8, 13.0)]
-        comparisons = be.compare_phases(good)
-        self.assertEqual("works", be.overall_verdict(good, comparisons, None))
-        self.assertEqual("works", be.overall_verdict(good, comparisons, {"passed": True}))
-        self.assertEqual("parity_failed", be.overall_verdict(good, comparisons, {"passed": False}))
-        drifted = [phase(8, 1, 10.0), phase(8, 8, 13.0, drift=["mask-02"])]
-        self.assertEqual("outcome_drift", be.overall_verdict(drifted, be.compare_phases(drifted), None))
+    def test_each_worker_count_gets_its_own_verdict_and_there_is_no_overall_one(self) -> None:
+        phases = [
+            phase(4, 1, 10.0), phase(4, 4, 13.0, drift=["mask-02"]),   # drift outranks a big speedup
+            phase(8, 1, 10.0), phase(8, 8, 13.0),                       # works
+            phase(12, 1, 10.0), phase(12, 12, 10.4),                    # no measurable gain
+        ]
+        comparisons = be.compare_phases(phases)
         self.assertEqual(
-            "parity_failed", be.overall_verdict(drifted, be.compare_phases(drifted), {"passed": False})
+            {4: "outcome_drift", 8: "works", 12: "no_measurable_gain"},
+            {c["workers"]: c["verdict"] for c in comparisons},
         )
-        flat = [phase(8, 1, 10.0), phase(8, 8, 10.4), phase(12, 1, 10.0), phase(12, 12, 10.1)]
-        self.assertEqual("no_measurable_gain", be.overall_verdict(flat, be.compare_phases(flat), None))
-        self.assertEqual("incomplete", be.overall_verdict([phase(8, 1, 10.0)], [], None))
+        self.assertEqual(["mask-02"], comparisons[0]["drift_ids"])
+        self.assertEqual(1.3, comparisons[1]["speedup"])
+        summary = be.build_summary(
+            mode="m3-batch", repeats_per_kind=12, planned=[[p["workers"], p["max_batch_size"]] for p in phases],
+            phases=phases, parity=None, stop_reason=None,
+        )
+        self.assertNotIn("verdict", summary)
+        self.assertEqual([8], summary["passing_worker_counts"])
+        self.assertEqual("not_run", summary["parity_gate"])
 
-    def test_one_working_worker_count_is_enough_for_works(self) -> None:
-        phases = [phase(8, 1, 10.0), phase(8, 8, 10.2), phase(12, 1, 10.0), phase(12, 12, 12.0)]
-        self.assertEqual("works", be.overall_verdict(phases, be.compare_phases(phases), None))
+    def test_incomplete_pairs_are_incomplete_and_never_pass(self) -> None:
+        phases = [phase(8, 1, 10.0), phase(8, 8, None, status="not_run", valid=0)]
+        (entry,) = be.compare_phases(phases)
+        self.assertEqual(("incomplete", "incomplete", None), (entry["status"], entry["verdict"], entry["speedup"]))
+        self.assertEqual([], be.compare_phases([phase(8, 1, 10.0)]))
+
+    def test_drift_in_a_partial_phase_still_marks_the_worker_count(self) -> None:
+        phases = [phase(8, 1, 10.0), phase(8, 8, None, status="incomplete", valid=10, drift=["nominal-03"])]
+        self.assertEqual("outcome_drift", be.compare_phases(phases)[0]["verdict"])
+
+    def test_the_parity_gate_is_the_only_top_level_pass_fail(self) -> None:
+        self.assertEqual("not_run", be.parity_gate(None))
+        self.assertEqual("passed", be.parity_gate({"passed": True}))
+        self.assertEqual("failed", be.parity_gate({"passed": False}))
+        self.assertEqual("failed", be.parity_gate({}))
+
+    def test_two_passing_worker_counts_are_both_listed(self) -> None:
+        phases = [phase(8, 1, 10.0), phase(8, 8, 10.2), phase(12, 1, 10.0), phase(12, 12, 12.0),
+                  phase(4, 1, 10.0), phase(4, 4, 12.5)]
+        summary = be.build_summary(
+            mode="m3-batch", repeats_per_kind=12, planned=[[p["workers"], p["max_batch_size"]] for p in phases],
+            phases=phases, parity=None, stop_reason=None,
+        )
+        self.assertEqual([4, 12], summary["passing_worker_counts"])
 
     def test_summary_records_manifest_and_smoke_assessment(self) -> None:
         batched = phase(4, 4, 6.0, valid=4, timing={"max_batch_size_observed": 3})
@@ -155,7 +182,9 @@ class VerdictTests(unittest.TestCase):
         self.assertTrue(summary["smoke"]["passed"])
         self.assertTrue(summary["smoke"]["batching_engaged"])
         self.assertTrue(summary["all_phases_complete"])
-        self.assertEqual("incomplete", summary["verdict"])
+        self.assertEqual([], summary["comparisons"])
+        self.assertEqual([], summary["passing_worker_counts"])
+        self.assertEqual("passed", summary["parity_gate"])
         json.dumps(summary, allow_nan=False)
 
     def test_smoke_does_not_pass_without_parity_or_with_drift(self) -> None:
@@ -408,7 +437,8 @@ class RunPhasesTests(unittest.TestCase):
         summary = self.run_phases(world, [[4, 1], [4, 4]])
         self.assertEqual("complete", summary["phases"][0]["status"])
         self.assertEqual(["mask-01", "mask-02"], summary["phases"][0]["drift_ids"])
-        self.assertEqual("outcome_drift", summary["verdict"])
+        self.assertEqual("outcome_drift", summary["comparisons"][0]["verdict"])
+        self.assertEqual([], summary["passing_worker_counts"])
 
     def test_an_item_failure_cancels_the_phase_and_skips_the_rest(self) -> None:
         world = World(fail_case="nominal-02", item_seconds=0.05)
@@ -422,7 +452,7 @@ class RunPhasesTests(unittest.TestCase):
         self.assertEqual(1, len(world.models))
         statuses = {item["status"] for item in first["items"]}
         self.assertIn("infrastructure_error", statuses)
-        self.assertEqual("incomplete", summary["verdict"])
+        self.assertEqual([], summary["passing_worker_counts"])
 
     def test_invalid_evidence_is_never_counted_as_valid(self) -> None:
         world = World(outcome_for=lambda case: "success" if case.startswith("warmup") else "infrastructure_error")
@@ -515,7 +545,8 @@ class RunPhasesTests(unittest.TestCase):
         summary = self.run_phases(world, [[4, 4]], mode="m3-batch-smoke", parity_runner=parity)
         self.assertEqual([], world.events)
         self.assertEqual("parity_failed", summary["stop_reason"])
-        self.assertEqual("parity_failed", summary["verdict"])
+        self.assertEqual("failed", summary["parity_gate"])
+        self.assertEqual([], summary["comparisons"])
         self.assertEqual(["not_run"], [p["status"] for p in summary["phases"]])
         self.assertEqual(4, calls[0]["max_batch_size"])
         self.assertEqual(self.root / "m3-batch" / "parity.json", calls[0]["output"])

@@ -649,7 +649,8 @@ def run_workload(
     if accepted["mode"] in ("m5b", "m5b-grid"):
         summary["reduction_stop_reason"] = reduction_stop_reason
     if batch_summary is not None:
-        summary["batch_verdict"] = batch_summary.get("verdict")
+        summary["batch_passing_worker_counts"] = batch_summary.get("passing_worker_counts")
+        summary["batch_parity_gate"] = batch_summary.get("parity_gate")
         summary["batch_phases_complete"] = sum(
             1 for phase in batch_summary.get("phases", ()) if phase.get("status") == "complete"
         )

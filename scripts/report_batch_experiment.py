@@ -20,11 +20,10 @@ IDLE_SHARE = 0.50
 SCALING_SLACK = 0.80
 
 _VERDICT_TEXT = {
-    "works": "Batching works by the ADR 0025 bar: outcomes match, and at least one worker count gained 15% or more.",
-    "no_measurable_gain": "No measurable gain: batched throughput stayed under +15% at every compared worker count.",
-    "outcome_drift": "Outcome drift: a nominal run failed or a reduced-mask run succeeded, so throughput cannot be claimed.",
-    "parity_failed": "Parity failed: batched items did not match single-observation outputs, so no throughput claim.",
-    "incomplete": "Incomplete: no worker count has both an unbatched and a batched phase to compare.",
+    "works": "outcomes match and batched throughput is at least 15% above unbatched.",
+    "no_measurable_gain": "batched throughput stayed under +15% of unbatched.",
+    "outcome_drift": "a nominal run failed or a reduced-mask run succeeded, so throughput cannot be claimed.",
+    "incomplete": "the unbatched/batched pair did not both finish the full manifest.",
 }
 
 
@@ -39,7 +38,7 @@ def load_summary(path: Path) -> Dict[str, Any]:
         raise ReportError("summary could not be read: {}".format(type(error).__name__)) from error
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ReportError("summary has an unsupported schema")
-    for key in ("mode", "phases", "verdict", "comparisons"):
+    for key in ("mode", "phases", "passing_worker_counts", "comparisons"):
         if key not in data:
             raise ReportError("summary is missing {}".format(key))
     if not isinstance(data["phases"], list) or not isinstance(data["comparisons"], list):
@@ -66,7 +65,7 @@ def _timing(phase: Mapping[str, Any]) -> Mapping[str, Any]:
 def phase_table(phases: Sequence[Mapping[str, Any]]) -> List[str]:
     lines = [
         "| Phase | Workers | Batch | Status | Valid | Warm (s) | Episodes/min | Drift | Calls | Mean batch | p95 batch "
-        "| Inference p50/p95 (ms) | Wait p50/p95 (ms) | Server busy |",
+        "| Inference p50/p95 (ms) | Wait p50/p95 (ms) | Model-call busy |",
         "| --- | ---: | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | ---: |",
     ]
     for phase in phases:
@@ -182,6 +181,62 @@ def bottleneck_explanation(summary: Mapping[str, Any]) -> List[str]:
     return lines
 
 
+def verdict_lines(summary: Mapping[str, Any]) -> List[str]:
+    lines = []
+    for item in summary["comparisons"]:
+        verdict = item.get("verdict") or "incomplete"
+        speedup = item.get("speedup")
+        extra = "" if speedup is None else " ({:.3f}x)".format(speedup)
+        drift = item.get("drift_ids") or []
+        if drift:
+            extra += " [drift: {}]".format(", ".join(drift))
+        lines.append("- {} workers: `{}`{}: {}".format(
+            item.get("workers"), verdict, extra, _VERDICT_TEXT.get(verdict, "")))
+    if not lines:
+        lines.append("- No worker count has both an unbatched and a batched phase in this run.")
+    passing = summary.get("passing_worker_counts") or []
+    lines.append("")
+    lines.append("Worker counts that passed: {}.".format(", ".join(str(w) for w in passing) if passing else "none"))
+    lines.append("Parity gate: `{}`.".format(summary.get("parity_gate", "not_run")))
+    return lines
+
+
+def parity_lines(summary: Mapping[str, Any]) -> List[str]:
+    parity = summary.get("parity")
+    if parity is None:
+        return ["Parity: not run in this Job ({}).".format(summary.get("parity_note") or "see the smoke Job")]
+    lines = [
+        "Parity: **{}**; largest item difference {} against a tolerance of {}.{}".format(
+            "passed" if parity.get("passed") else "failed", _cell(parity.get("max_abs_diff"), 4),
+            _cell(parity.get("tolerance"), 3), " Error: {}".format(parity["error"]) if parity.get("error") else "")
+    ]
+    if parity.get("compared_before_gripper_rounding"):
+        per_dim = parity.get("per_dim_max_abs_diff") or []
+        lines.append(
+            "It was judged on every action dimension before the gripper rounding step (per-dimension maxima: {}); "
+            "{} gripper flips after rounding (information only, not part of the verdict).".format(
+                ", ".join("{:.3f}".format(value) for value in per_dim) or "-",
+                parity.get("gripper_flips_after_rounding", "-"))
+        )
+    return lines
+
+
+def setup_lines(summary: Mapping[str, Any]) -> List[str]:
+    lines = []
+    warmup = summary.get("warmup")
+    if warmup:
+        lines.append(
+            "Warm-up episode `{}`: {}, {} in {} s (excluded from every phase).".format(
+                warmup.get("case_id"), warmup.get("status"), warmup.get("outcome") or "no outcome",
+                _cell(warmup.get("duration_seconds"))))
+    if summary.get("prefetch_seconds") is not None:
+        lines.append("Prefetch took {} s (not part of any phase).".format(_cell(summary["prefetch_seconds"])))
+    removed = summary.get("sqlite_companions_removed")
+    if removed:
+        lines.append("{} stray SQLite companion files were removed before export.".format(removed))
+    return lines
+
+
 def render_report(summary: Mapping[str, Any]) -> str:
     bar = float(summary.get("speedup_bar", 1.15))
     lines = [
@@ -189,22 +244,13 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "",
         "Manifest `{}`: {} items per phase, task 0, nominal then reduced-mask repeats. Known outcomes: nominal "
         "succeeds, reduced mask fails.".format(summary.get("manifest_hash", "-"), summary.get("items_per_phase", "-")),
-        "",
-        "**Verdict:** `{}`. {}".format(summary["verdict"], _VERDICT_TEXT.get(summary["verdict"], "")),
     ]
     if summary.get("stop_reason"):
-        lines.append("")
-        lines.append("Stopped early: `{}`.".format(summary["stop_reason"]))
-    parity = summary.get("parity")
-    lines.append("")
-    if parity is None:
-        lines.append("Parity: not run in this Job ({}).".format(summary.get("parity_note") or "see the smoke Job"))
-    else:
-        lines.append(
-            "Parity: **{}**; largest item difference {} against a tolerance of {}.{}".format(
-                "passed" if parity.get("passed") else "failed", _cell(parity.get("max_abs_diff"), 4),
-                _cell(parity.get("tolerance"), 3), " Error: {}".format(parity["error"]) if parity.get("error") else "")
-        )
+        lines += ["", "Stopped early: `{}`.".format(summary["stop_reason"])]
+    lines += [""] + parity_lines(summary)
+    setup = setup_lines(summary)
+    if setup:
+        lines += [""] + setup
     smoke = summary.get("smoke")
     if smoke:
         lines += [
@@ -217,6 +263,7 @@ def render_report(summary: Mapping[str, Any]) -> str:
     lines += ["", "## Phases", ""] + phase_table(summary["phases"])
     if summary["comparisons"]:
         lines += ["", "## Batched against unbatched", ""] + comparison_table(summary["comparisons"], bar)
+    lines += ["", "## Verdict per worker count", ""] + verdict_lines(summary)
     lines += ["", "## Where the bottleneck sits", ""]
     lines += ["- " + sentence for sentence in bottleneck_explanation(summary)]
     lines += [

@@ -115,7 +115,8 @@ class BatchWorkloadTests(unittest.TestCase):
         summary, world, runner, factory_calls = self.invoke(SMOKE, parity=self.passing_parity)
         self.assertEqual(("complete", "completed"), (summary["status"], summary["stop_reason"]))
         self.assertEqual("m3-batch-smoke", summary["mode"])
-        self.assertEqual("incomplete", summary["batch_verdict"])  # one phase cannot make a comparison
+        self.assertEqual("passed", summary["batch_parity_gate"])
+        self.assertEqual([], summary["batch_passing_worker_counts"])  # one phase cannot make a comparison
         self.assertEqual(1, summary["batch_phases_complete"])
         self.assertEqual(
             [("start", 4), ("close", 4), "export"],
@@ -149,7 +150,7 @@ class BatchWorkloadTests(unittest.TestCase):
             SMOKE, parity=lambda **_k: {"passed": False, "max_abs_diff": 0.4, "error": None}
         )
         self.assertEqual(("partial", "parity_failed"), (summary["status"], summary["stop_reason"]))
-        self.assertEqual("parity_failed", summary["batch_verdict"])
+        self.assertEqual("failed", summary["batch_parity_gate"])
         self.assertEqual([], world.models)
         self.assertEqual([], runner.calls)
         self.assertEqual("partial", self.exports[0][2]["status"])
@@ -169,7 +170,9 @@ class BatchWorkloadTests(unittest.TestCase):
         detail = self.batch_summary(config)
         self.assertEqual(24, detail["items_per_phase"])
         self.assertEqual(["compared"], [c["status"] for c in detail["comparisons"]])
-        self.assertIn(detail["verdict"], ("works", "no_measurable_gain"))
+        self.assertIn(detail["comparisons"][0]["verdict"], ("works", "no_measurable_gain"))
+        self.assertNotIn("verdict", detail)
+        self.assertEqual("not_run", detail["parity_gate"])
         self.assertIsNone(detail["parity"])
         for phase in detail["phases"]:
             self.assertEqual(24, phase["valid_count"])
@@ -181,7 +184,8 @@ class BatchWorkloadTests(unittest.TestCase):
         config = dict(MEASUREMENT, run_id="m3-batch-measure-drift", phases=[[4, 1], [4, 4]])
         summary, _world, _runner, _calls = self.invoke(config, runner=OutcomeRunner(drift=True))
         self.assertEqual("complete", summary["status"])
-        self.assertEqual("outcome_drift", summary["batch_verdict"])
+        self.assertEqual([], summary["batch_passing_worker_counts"])
+        self.assertEqual("outcome_drift", self.batch_summary(config)["comparisons"][0]["verdict"])
         self.assertEqual(12, len(self.batch_summary(config)["phases"][0]["drift_ids"]))
 
     def test_nonzero_evaluator_latches_partial_cancels_and_skips_later_phases(self) -> None:

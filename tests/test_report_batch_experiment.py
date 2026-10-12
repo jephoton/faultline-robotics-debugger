@@ -45,13 +45,15 @@ class RenderTests(unittest.TestCase):
             phase(4, 1, 4.0, share=0.4), phase(8, 1, 5.0, share=0.9), phase(8, 8, 6.5, share=0.7, mean=3.2),
         ])
 
-    def test_report_has_every_section_and_the_verdict(self) -> None:
+    def test_report_has_every_section_and_a_verdict_per_worker_count(self) -> None:
         text = report.render_report(self.saturated())
         for heading in ("# M3 batched-inference results", "## Phases", "## Batched against unbatched",
-                        "## Where the bottleneck sits"):
+                        "## Verdict per worker count", "## Where the bottleneck sits"):
             self.assertIn(heading, text)
-        self.assertIn("**Verdict:** `works`", text)
+        self.assertIn("- 8 workers: `works`", text)
         self.assertIn("1.300x", text)
+        self.assertIn("Worker counts that passed: 8", text)
+        self.assertNotIn("**Verdict:**", text, "there is no single overall verdict")
         self.assertIn("phase-01-w08-b08", text)
         self.assertIn("GR00T N1.7 on LIBERO-Object task 0", text)
         self.assertTrue(text.endswith("\n"))
@@ -62,6 +64,20 @@ class RenderTests(unittest.TestCase):
         for table in (t for t in tables if t):
             widths = {line.count("|") for line in table}
             self.assertEqual(1, len(widths), table)
+
+    def test_mixed_worker_count_verdicts_are_each_stated(self) -> None:
+        phases = [phase(4, 1, 4.0), phase(4, 4, 4.1), phase(8, 1, 5.0), phase(8, 8, 6.5, drift=["mask-03"]),
+                  phase(12, 1, 6.0), phase(12, 12, 7.5)]
+        text = report.render_report(summary_for(phases))
+        self.assertIn("- 4 workers: `no_measurable_gain`", text)
+        self.assertIn("- 8 workers: `outcome_drift`", text)
+        self.assertIn("mask-03", text)
+        self.assertIn("- 12 workers: `works`", text)
+        self.assertIn("Worker counts that passed: 12", text)
+
+    def test_no_passing_worker_counts_are_stated_plainly(self) -> None:
+        text = report.render_report(summary_for([phase(8, 1, 5.0), phase(8, 8, 5.2)]))
+        self.assertIn("Worker counts that passed: none", text)
 
     def test_saturated_server_is_described_as_the_place_batching_can_help(self) -> None:
         text = report.render_report(self.saturated())
@@ -79,7 +95,7 @@ class RenderTests(unittest.TestCase):
         text = report.render_report(summary_for(phases))
         self.assertIn("had stopped paying off", text)
         self.assertIn("Batching barely engaged", text)
-        self.assertIn("**Verdict:** `no_measurable_gain`", text)
+        self.assertIn("- 12 workers: `no_measurable_gain`", text)
 
     def test_missing_timing_and_missing_unbatched_phases_degrade_gracefully(self) -> None:
         text = report.render_report(summary_for([phase(8, 1, 5.0, timing=False)]))
@@ -87,28 +103,44 @@ class RenderTests(unittest.TestCase):
         none = report.render_report(summary_for([phase(8, 8, 5.0)]))
         self.assertIn("no completed unbatched phase", none)
 
-    def test_drift_parity_and_early_stop_are_stated(self) -> None:
-        phases = [phase(8, 1, 5.0), phase(8, 8, 6.5, drift=["mask-03"])]
-        text = report.render_report(summary_for(phases, parity={"passed": True, "max_abs_diff": 0.012, "tolerance": 0.05},
-                                                stop_reason="deadline_exhausted"))
-        self.assertIn("**Verdict:** `outcome_drift`", text)
-        self.assertIn("mask-03", text)
+    def test_parity_early_stop_and_prerounding_details_are_stated(self) -> None:
+        phases = [phase(8, 1, 5.0), phase(8, 8, 6.5)]
+        parity = {"passed": True, "max_abs_diff": 0.012, "tolerance": 0.05, "compared_before_gripper_rounding": True,
+                  "per_dim_max_abs_diff": [0.01, 0.0, 0.002, 0.0, 0.0, 0.0, 0.012], "gripper_flips_after_rounding": 3}
+        text = report.render_report(summary_for(phases, parity=parity, stop_reason="deadline_exhausted"))
         self.assertIn("Parity: **passed**", text)
+        self.assertIn("before the gripper rounding", text)
+        self.assertIn("0.012", text)
+        self.assertIn("3 gripper flips after rounding (information only", text)
         self.assertIn("Stopped early: `deadline_exhausted`", text)
         failed = report.render_report(summary_for(phases, parity={"passed": False, "max_abs_diff": 0.4,
                                                                   "tolerance": 0.05, "error": None}))
         self.assertIn("Parity: **failed**", failed)
+        self.assertIn("Parity gate: `failed`", failed)
 
     def test_smoke_summary_reports_the_gate(self) -> None:
         smoke = summary_for([phase(4, 4, 6.0, mean=2.5)], parity={"passed": True, "max_abs_diff": 0.01,
                                                                   "tolerance": 0.05}, mode="m3-batch-smoke")
         text = report.render_report(smoke)
         self.assertIn("Smoke gate: **passed**", text)
-        self.assertIn("**Verdict:** `incomplete`", text)
+        self.assertIn("Parity gate: `passed`", text)
+        self.assertIn("Worker counts that passed: none", text)
 
     def test_parity_note_explains_where_it_is_checked_in_a_measurement_job(self) -> None:
         text = report.render_report(self.saturated())
         self.assertIn("Parity: not run in this Job", text)
+        self.assertIn("Parity gate: `not_run`", text)
+
+    def test_warmup_prefetch_and_scrub_facts_are_reported(self) -> None:
+        summary = summary_for([phase(8, 1, 5.0)])
+        summary["warmup"] = {"case_id": "warmup-nominal-01", "status": "valid", "outcome": "success",
+                             "duration_seconds": 41.2}
+        summary["prefetch_seconds"] = 310.5
+        summary["sqlite_companions_removed"] = 2
+        text = report.render_report(summary)
+        self.assertIn("Warm-up episode `warmup-nominal-01`: valid, success in 41.2 s (excluded from every phase)", text)
+        self.assertIn("Prefetch took 310.5 s (not part of any phase)", text)
+        self.assertIn("2 stray SQLite companion files were removed", text)
 
 
 class CommandLineTests(unittest.TestCase):
@@ -143,7 +175,8 @@ class CommandLineTests(unittest.TestCase):
             (root / "old.json").write_text(json.dumps({"schema_version": 2}), encoding="utf-8")
             (root / "thin.json").write_text(json.dumps({"schema_version": 1, "mode": "m"}), encoding="utf-8")
             (root / "lists.json").write_text(json.dumps(
-                {"schema_version": 1, "mode": "m", "phases": {}, "verdict": "x", "comparisons": []}), encoding="utf-8")
+                {"schema_version": 1, "mode": "m", "phases": {}, "passing_worker_counts": [], "comparisons": []}),
+                encoding="utf-8")
             for name in ("missing.json", "bad.json", "old.json", "thin.json", "lists.json"):
                 with self.subTest(name=name):
                     code, _out, err = self.run_main([str(root / name)])

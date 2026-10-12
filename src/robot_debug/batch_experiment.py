@@ -3,7 +3,7 @@
 A *phase* is one ``(workers, max_batch_size)`` pair run over the whole frozen
 equal-work manifest against a freshly started model server. This module owns the
 phase loop, the work-stealing worker threads, the server timing statistics and the
-verdict; process, deadline and evidence mechanics are injected by
+per-worker-count verdicts; process, deadline and evidence mechanics are injected by
 ``job_workload.run_workload`` so they stay the single, already-tested path.
 """
 
@@ -33,7 +33,7 @@ FIRST_PHASE_MINIMUM_SECONDS = 240.0
 PARITY_CAP_SECONDS = 420.0
 SUMMARY_NAME = "batch_summary.json"
 
-VERDICTS = ("works", "no_measurable_gain", "outcome_drift", "parity_failed", "incomplete")
+VERDICTS = ("works", "no_measurable_gain", "outcome_drift", "incomplete")
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +252,14 @@ def estimate_phase_seconds(completed: Sequence[Mapping[str, Any]], workers: int)
 
 
 def compare_phases(phases: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-    """One comparison per worker count that has an unbatched and a batched phase."""
+    """One verdict per worker count that has an unbatched and a batched phase.
+
+    Verdicts: ``outcome_drift`` (a valid outcome in either phase differs from the known
+    result, which takes precedence because throughput cannot then be claimed),
+    ``incomplete`` (a phase missing, unfinished or with unequal work), otherwise
+    ``works`` when batched throughput is at least the bar above unbatched, else
+    ``no_measurable_gain``. There is deliberately no single overall verdict.
+    """
 
     by_key = {(p["workers"], p["max_batch_size"]): p for p in phases}
     comparisons = []
@@ -268,37 +275,33 @@ def compare_phases(phases: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
             "speedup": None,
             "status": "compared",
             "verdict": None,
+            "drift_ids": sorted(set(unbatched.get("drift_ids") or []) | set(batched.get("drift_ids") or [])),
         }
-        if (
+        comparable = not (
             unbatched.get("status") != "complete" or batched.get("status") != "complete"
             or unbatched.get("valid_count") != batched.get("valid_count")
             or not unbatched.get("episodes_per_minute") or not batched.get("episodes_per_minute")
-        ):
-            entry["status"] = "incomplete"
-        else:
+        )
+        if comparable:
             entry["speedup"] = round(batched["episodes_per_minute"] / unbatched["episodes_per_minute"], 4)
+        else:
+            entry["status"] = "incomplete"
+        if entry["drift_ids"]:
+            entry["verdict"] = "outcome_drift"
+        elif not comparable:
+            entry["verdict"] = "incomplete"
+        else:
             entry["verdict"] = "works" if entry["speedup"] >= SPEEDUP_BAR else "no_measurable_gain"
         comparisons.append(entry)
     return comparisons
 
 
-def overall_verdict(
-    phases: Sequence[Mapping[str, Any]],
-    comparisons: Sequence[Mapping[str, Any]],
-    parity: Optional[Mapping[str, Any]],
-) -> str:
-    """ADR 0025 verdict; precedence parity, drift, then the 15% bar."""
+def parity_gate(parity: Optional[Mapping[str, Any]]) -> str:
+    """The smoke gate: ``passed``, ``failed`` or ``not_run`` (measurement Jobs)."""
 
-    if parity is not None and not parity.get("passed"):
-        return "parity_failed"
-    if any(phase.get("drift_ids") for phase in phases):
-        return "outcome_drift"
-    compared = [c for c in comparisons if c["status"] == "compared"]
-    if not compared:
-        return "incomplete"
-    if any(c["verdict"] == "works" for c in compared):
-        return "works"
-    return "no_measurable_gain"
+    if parity is None:
+        return "not_run"
+    return "passed" if parity.get("passed") else "failed"
 
 
 def build_summary(
@@ -327,7 +330,8 @@ def build_summary(
         "comparisons": comparisons,
         "all_phases_complete": len(phases) == len(planned) and all(p.get("status") == "complete" for p in phases),
         "stop_reason": stop_reason,
-        "verdict": overall_verdict(phases, comparisons, parity),
+        "parity_gate": parity_gate(parity),
+        "passing_worker_counts": [c["workers"] for c in comparisons if c["verdict"] == "works"],
     }
     if extra:
         summary.update(extra)
@@ -535,7 +539,8 @@ def run_phases(
         scrub["companions_removed"] += purge_sqlite_companions(batch_root)
         summary = save()
     progress(
-        "batch_summary", verdict=summary["verdict"], comparisons=summary["comparisons"],
+        "batch_summary", passing_worker_counts=summary["passing_worker_counts"],
+        parity_gate=summary["parity_gate"], comparisons=summary["comparisons"],
         all_phases_complete=summary["all_phases_complete"],
         sqlite_companions_removed=summary["sqlite_companions_removed"],
     )
