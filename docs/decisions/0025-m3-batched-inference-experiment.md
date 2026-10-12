@@ -1,6 +1,8 @@
 # ADR 0025: M3 batched-inference experiment
 
-**Status:** Accepted by Jethro on October 12, 2026. Timebox 3 working days
+**Status:** Accepted by Jethro on October 12, 2026. **Outcome (October 12):** works at 12
+workers in two runs (+18.0%, +18.7%); no gain at 8 workers. See
+`docs/experiments/m3-batched-inference.md`. Timebox 3 working days
 (ADR 0023); failure to meet the bar below moves M3 to the portfolio fallback.
 
 ## Problem
