@@ -51,6 +51,17 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(JobRuntimeError):
                 validate_workload_config(dict(SCREEN, **changes))
 
+    def test_task_ids_are_bounded_by_the_suite(self):
+        for suite in ("libero_10", "libero_object"):
+            validate_workload_config(dict(SMOKE, suite=suite, task_id=9))
+            validate_workload_config(dict(SCREEN, suite=suite, task_ids=[9]))
+            for task_id in (10, 50, 99):
+                with self.subTest(suite=suite, task_id=task_id):
+                    with self.assertRaises(JobRuntimeError):
+                        validate_workload_config(dict(SMOKE, suite=suite, task_id=task_id))
+                    with self.assertRaises(JobRuntimeError):
+                        validate_workload_config(dict(SCREEN, suite=suite, task_ids=[0, task_id]))
+
     def test_unknown_missing_and_extra_fields_are_rejected(self):
         with self.assertRaises(JobRuntimeError):
             validate_workload_config(dict(SMOKE, surprise=1))
@@ -105,6 +116,14 @@ class ReduceConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.workload(surprise=1)
 
+    def test_a_reduce_task_beyond_the_suite_is_rejected(self):
+        plan = self.plan
+        workload = se.build_reduce_workload(plan, run_id="scn-reduce-1")
+        workload["task_id"] = 10
+        workload["layout"]["task_id"] = 10
+        with self.assertRaises(JobRuntimeError):
+            validate_workload_config(workload)
+
     def test_every_plan_field_is_checked_fail_closed(self):
         def mutate(path, value):
             workload = self.workload()
@@ -141,6 +160,19 @@ class ReduceConfigTests(unittest.TestCase):
 
 
 class DeadlineTests(unittest.TestCase):
+    def test_planned_episodes_include_the_fallback_reference_gates(self):
+        # failing start + three references that may all be tried + the full hybrid, then the candidates
+        self.assertEqual((2 + 3) * 5 + 30 * 5, se.planned_episodes("scenario-reduce", {}))
+        self.assertEqual((2 + 1) * 5 + 8 * 5, se.planned_episodes(
+            "scenario-reduce", {"max_references": 1, "max_candidates": 8}))
+        self.assertEqual(6, se.planned_episodes("scenario-smoke", {}))
+        self.assertEqual(500, se.planned_episodes(
+            "scenario-screen", {"task_ids": list(range(10)), "start_indices": list(range(10))}))
+
+    def test_more_fallback_references_never_shorten_the_deadline(self):
+        base = se.recommended_deadline_seconds("scenario-reduce", {"max_references": 1})
+        self.assertGreaterEqual(se.recommended_deadline_seconds("scenario-reduce", {"max_references": 3}), base)
+
     def test_documented_assumptions(self):
         self.assertEqual(130.0, se.ASSUMED_FAILING_EPISODE_SECONDS)
         self.assertEqual(80.0, se.ASSUMED_SUCCESS_EPISODE_SECONDS)
@@ -150,7 +182,7 @@ class DeadlineTests(unittest.TestCase):
         everything = {"task_ids": list(range(10)), "start_indices": list(range(10))}
         self.assertEqual(1380, se.recommended_deadline_seconds("scenario-smoke", {"task_id": 0}))
         self.assertEqual(2940, se.recommended_deadline_seconds("scenario-screen", everything))
-        self.assertEqual(2640, se.recommended_deadline_seconds("scenario-reduce", {}))
+        self.assertEqual(2760, se.recommended_deadline_seconds("scenario-reduce", {}))
 
     def test_deadlines_respect_the_floor_and_the_cap(self):
         tiny = {"task_ids": [0], "start_indices": [0]}
@@ -480,6 +512,23 @@ class RunTestCase(unittest.TestCase):
 
 
 class SmokeRunTests(RunTestCase):
+    def test_the_summary_records_the_checkpoint_and_its_revision(self):
+        (self.root / "model-resolution.json").write_text(json.dumps({"schema_version": 1, "repositories": {
+            "nvidia/gr00t17-lerobot-libero_10-640": {"revision": "5ee08ab" + "0" * 33, "pinned": True},
+            "nvidia/GR00T-N1.7-3B": {"revision": "b" * 40, "pinned": True}}}), encoding="utf-8")
+        world = ScenarioWorld(item_seconds=0.0)
+        summary = self.run_mode(world, "scenario-smoke", SMOKE)
+        self.assertEqual({"id": "nvidia/gr00t17-lerobot-libero_10-640", "revision": "5ee08ab" + "0" * 33,
+                          "pinned": True}, summary["checkpoint"])
+
+    def test_without_a_prefetch_record_the_checkpoint_id_is_still_named(self):
+        summary = self.run_mode(ScenarioWorld(item_seconds=0.0), "scenario-smoke", SMOKE)
+        self.assertEqual({"id": "nvidia/gr00t17-lerobot-libero_10-640", "revision": None, "pinned": None},
+                         summary["checkpoint"])
+        object_run = self.run_mode(ScenarioWorld(item_seconds=0.0), "scenario-smoke", dict(SMOKE, suite="libero_object"),
+                                   batch_root=self.root / "other")
+        self.assertEqual("nvidia/gr00t17-lerobot-libero_object-640", object_run["checkpoint"]["id"])
+
     def test_every_check_passes_in_a_healthy_world(self):
         world = ScenarioWorld(item_seconds=0.0)
         summary = self.run_mode(world, "scenario-smoke", SMOKE)

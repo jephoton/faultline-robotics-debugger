@@ -78,12 +78,13 @@ ASSUMED_REDUCE_ROUND_SECONDS = 100.0
 ASSUMED_HELD_FIFTH_FACTOR = 1.2
 # The reduction's gate round (failing start, reference, full hybrid: up to 15 attempts).
 REDUCE_GATE_WAVES = 2
-REDUCE_REFERENCE_FALLBACK_ROUNDS = 1
+REDUCE_REFERENCE_FALLBACK_ROUNDS = 1       # per fallback reference (a reference gate is about one wave)
 MAX_DEADLINE_SECONDS = 3000       # the runtime's hard cap (validate_workload_config)
 MIN_DEADLINE_SECONDS = 1000       # the prepare script's floor for batch-style Jobs
 
 # ---- configuration bounds ---------------------------------------------------------------
-MAX_TASK_ID = 99
+# Both supported suites have ten tasks (ids 0 to 9).
+SUITE_TASK_COUNT = {"libero_10": 10, "libero_object": 10}
 MAX_SCREEN_TASKS = 10
 MAX_SCREEN_STARTS = 50
 MAX_START_INDEX = 49
@@ -169,9 +170,10 @@ def validate_mode_fields(mode: str, config: Mapping[str, Any]) -> Dict[str, Any]
         _fail("suite must be one of {}".format(", ".join(SCENARIO_SUITES)))
     fields = {"suite": suite}  # type: Dict[str, Any]
     if mode == "scenario-smoke":
-        fields["task_id"] = _int(config.get("task_id", 0), "task_id", 0, MAX_TASK_ID)
+        fields["task_id"] = _int(config.get("task_id", 0), "task_id", 0, SUITE_TASK_COUNT[suite] - 1)
     elif mode == "scenario-screen":
-        fields["task_ids"] = _index_list(config["task_ids"], "task_ids", MAX_SCREEN_TASKS, MAX_TASK_ID)
+        fields["task_ids"] = _index_list(
+            config["task_ids"], "task_ids", MAX_SCREEN_TASKS, SUITE_TASK_COUNT[suite] - 1)
         fields["start_indices"] = _index_list(
             config["start_indices"], "start_indices", MAX_SCREEN_STARTS, MAX_START_INDEX)
         fields["attempts"] = _int(config.get("attempts", 1), "attempts", 1, 1)
@@ -192,7 +194,7 @@ def validate_mode_fields(mode: str, config: Mapping[str, Any]) -> Dict[str, Any]
 
 def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, Any]:
     fields = {}  # type: Dict[str, Any]
-    fields["task_id"] = _int(config["task_id"], "task_id", 0, MAX_TASK_ID)
+    fields["task_id"] = _int(config["task_id"], "task_id", 0, SUITE_TASK_COUNT[suite] - 1)
     fields["instruction"] = _text(config["instruction"], "instruction", MAX_INSTRUCTION).strip()
     try:
         layout = ss.validate_layout(config["layout"])
@@ -312,7 +314,9 @@ def planned_episodes(mode: str, config: Mapping[str, Any]) -> int:
         total = config.get("attempts", 1) + config.get("confirm_attempts", 4)
         return len(config["task_ids"]) * len(config["start_indices"]) * total
     attempts = config.get("attempts", 5)
-    gates = 3 * attempts
+    # The failing start, every reference that may have to be tried before one passes, and the
+    # one full-hybrid check, then the candidate budget.
+    gates = (2 + int(config.get("max_references", MAX_REDUCE_REFERENCES))) * attempts
     return gates + int(config.get("max_candidates", MAX_REDUCE_CANDIDATES)) * attempts
 
 
@@ -338,7 +342,8 @@ def recommended_deadline_seconds(mode: str, config: Mapping[str, Any]) -> int:
     elif mode == "scenario-reduce":
         rounds = int(math.ceil(config.get("max_candidates", MAX_REDUCE_CANDIDATES)
                                / float(config.get("concurrency", DEFAULT_REDUCE_CONCURRENCY))))
-        work = ((REDUCE_GATE_WAVES + rounds + REDUCE_REFERENCE_FALLBACK_ROUNDS)
+        fallbacks = int(config.get("max_references", MAX_REDUCE_REFERENCES)) - 1
+        work = ((REDUCE_GATE_WAVES + rounds + fallbacks * REDUCE_REFERENCE_FALLBACK_ROUNDS)
                 * ASSUMED_REDUCE_ROUND_SECONDS * ASSUMED_HELD_FIFTH_FACTOR)
     else:
         raise ValueError("unsupported scenario mode")
@@ -1135,6 +1140,27 @@ DRIVERS = {"scenario-smoke": SmokeDriver, "scenario-screen": ScreenDriver, "scen
 # ---------------------------------------------------------------------------
 
 
+def checkpoint_record(suite: str, run_root: Path) -> Dict[str, Any]:
+    """The model checkpoint behind a run: repository id, the commit the prefetch resolved, pinned or not.
+
+    The revision comes from ``model-resolution.json`` beside the scenario folder (written by the
+    prefetch); ``None`` when the run had no prefetch record.
+    """
+
+    from robot_debug.job_entry import SUITE_CHECKPOINTS
+
+    identifier = SUITE_CHECKPOINTS[suite]
+    revision, pinned = None, None
+    try:
+        resolution = _load_json(Path(run_root) / "model-resolution.json")
+        entry = resolution["repositories"][identifier]
+        if isinstance(entry.get("revision"), str):
+            revision, pinned = entry["revision"], bool(entry.get("pinned"))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return {"id": identifier, "revision": revision, "pinned": pinned}
+
+
 def write_summary(root: Path, summary: Mapping[str, Any]) -> None:
     target = Path(root) / SUMMARY_NAME
     temporary = Path(root) / ("." + SUMMARY_NAME + ".tmp")
@@ -1212,7 +1238,7 @@ def run_scenario(
     state = {
         "stop_reason": None, "warmup": None, "server_argv": None, "memory_start": None,
         "memory_end": None, "timing": None, "startup_seconds": None, "total_seconds": None,
-        "warm_elapsed_seconds": None, "records": [], "not_started": {},
+        "warm_elapsed_seconds": None, "records": [], "not_started": {}, "checkpoint": None,
     }  # type: Dict[str, Any]
     started_at = clock()
     scrub = {"companions_removed": 0}
@@ -1221,6 +1247,7 @@ def run_scenario(
         records = sorted(state["records"], key=lambda r: r["case_id"])
         summary = {
             "schema_version": 1, "mode": mode, "suite": suite, "workers": workers,
+            "checkpoint": state["checkpoint"],
             "max_batch_size": SCENARIO_MAX_BATCH_SIZE, "config": _config_echo(config),
             "stop_reason": state["stop_reason"],
             "complete": driver.complete(state["stop_reason"]),
@@ -1314,6 +1341,7 @@ def run_scenario(
             state["warm_elapsed_seconds"] = be._round(max(warm_elapsed, 1e-6))
             if launch_t is not None:
                 state["timing"] = be.timing_stats(timing_path, state["warm_elapsed_seconds"], min_t=launch_t)
+        state["checkpoint"] = checkpoint_record(suite, batch_root.parent)
         if isinstance(driver, ScreenDriver):
             driver.finish(state["stop_reason"])
         elif isinstance(driver, ReduceDriver):
@@ -1446,6 +1474,7 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
         "kind": "scenario_reduction",
         "case_id": hashlib.sha256(identity.encode("utf-8")).hexdigest(),
         "suite": plan["suite"],
+        "checkpoint": copy.deepcopy(summary.get("checkpoint")),
         "task_id": plan["task_id"],
         "instruction": plan["instruction"],
         "failing_start": plan["failing_start"],

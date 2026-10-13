@@ -64,6 +64,9 @@ class ReportTests(RunTestCase):
         cls.script = load_script()
 
     def reduce_summary(self, **world_options):
+        (self.root / "model-resolution.json").write_text(json.dumps({"schema_version": 1, "repositories": {
+            "nvidia/gr00t17-lerobot-libero_10-640": {"revision": "5ee08ab" + "0" * 33, "pinned": True}}}),
+            encoding="utf-8")
         world = ScenarioWorld(item_seconds=0.0, **world_options)
         self.run_mode(world, "scenario-reduce", se.build_reduce_workload(make_plan(), run_id="scn-reduce-1"))
         return self.root / "scenario" / se.SUMMARY_NAME
@@ -121,6 +124,10 @@ class ReportTests(RunTestCase):
         self.assertEqual(case["replay"]["candidate"], load_scenario_candidate(summary.parent / "replay.json"))
         self.assertEqual("hybrid", case["replay"]["candidate"]["source"]["kind"])
         self.assertEqual({"attempts": 5, "required_failures": 4}, case["replay"]["gate"])
+        self.assertEqual("nvidia/gr00t17-lerobot-libero_10-640", case["checkpoint"]["id"])
+        self.assertEqual("5ee08ab" + "0" * 33, case["checkpoint"]["revision"])
+        text = (summary.parent / "scenario_reduction_report.md").read_text(encoding="utf-8")
+        self.assertIn("- Checkpoint: `nvidia/gr00t17-lerobot-libero_10-640` at revision `5ee08ab", text)
 
     def test_a_model_order_is_reported_with_its_verdict(self):
         plan = make_plan()

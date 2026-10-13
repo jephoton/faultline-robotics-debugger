@@ -63,6 +63,14 @@ def _table(header: Sequence[str], rows: Sequence[Sequence[Any]]) -> List[str]:
     return lines
 
 
+def _checkpoint_text(checkpoint: Any) -> str:
+    if not isinstance(checkpoint, dict) or not checkpoint.get("id"):
+        return "not recorded"
+    revision = checkpoint.get("revision")
+    return "`{}` at revision `{}`{}".format(
+        checkpoint["id"], revision or "unknown", "" if checkpoint.get("pinned") else " (not pinned or not recorded)")
+
+
 def _number(value: Any, digits: int = 1) -> str:
     return "-" if not isinstance(value, (int, float)) else "{:.{}f}".format(value, digits)
 
@@ -135,7 +143,8 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
              "- Failing start: {}; reference (nearest passing start): {}; candidate references tried: {}".format(
                  plan["failing_start"], reference,
                  ", ".join("{} ({})".format(r["id"], r["decision"]) for r in reduction.get("references_tried") or []) or "-"),
-             "- Entity-minimal: {}".format("yes" if reduction.get("entity_minimal") else "no"), "",
+             "- Entity-minimal: {}".format("yes" if reduction.get("entity_minimal") else "no"),
+             "- Checkpoint: {}".format(_checkpoint_text(summary.get("checkpoint"))), "",
              "### Minimal cause", ""]
     lines += [sentence if selection else "No minimal cause was established (stop reason `{}`).".format(
         reduction.get("stop_reason")), ""]
@@ -216,8 +225,9 @@ def build_report(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]]
                  hourly_rate: Optional[float] = None) -> str:
     if summary["mode"] == "scenario-screen":
         title = "# Scenario screen: {}".format(summary.get("suite"))
-        lines = [title, "", "Stop reason: `{}`; complete: {}; Job seconds: {}.".format(
-            summary.get("stop_reason"), summary.get("complete"), summary.get("total_seconds")), ""]
+        lines = [title, "", "Stop reason: `{}`; complete: {}; Job seconds: {}. Checkpoint: {}.".format(
+            summary.get("stop_reason"), summary.get("complete"), summary.get("total_seconds"),
+            _checkpoint_text(summary.get("checkpoint"))), ""]
         lines += screen_section(summary)
         return "\n".join(lines) + "\n"
     if summary["mode"] != "scenario-reduce":
