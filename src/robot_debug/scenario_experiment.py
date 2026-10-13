@@ -71,8 +71,11 @@ ASSUMED_FAILING_EPISODE_SECONDS = 130.0
 ASSUMED_SUCCESS_EPISODE_SECONDS = 80.0
 # The screen's planning figure for the share of starts whose first attempt fails.
 ASSUMED_SCREEN_FAILING_FRACTION = 0.2
-# One reduction round (two candidates of up to five attempts) is about one wave.
+# One reduction round (three candidates, four first-wave attempts each) is about one wave; about
+# one round in five has a candidate with exactly three failures that needs its held fifth attempt,
+# a second short wave.
 ASSUMED_REDUCE_ROUND_SECONDS = 100.0
+ASSUMED_HELD_FIFTH_FACTOR = 1.2
 # The reduction's gate round (failing start, reference, full hybrid: up to 15 attempts).
 REDUCE_GATE_WAVES = 2
 REDUCE_REFERENCE_FALLBACK_ROUNDS = 1
@@ -90,6 +93,9 @@ MAX_REDUCE_ATTEMPTS = 8
 MAX_REDUCE_BISECTION = 6
 MAX_REDUCE_CANDIDATES = 30
 MAX_REDUCE_CONCURRENCY = 3
+# Three candidates of four first-wave attempts fill the 12 workers exactly (ADR 0029: the fifth
+# attempt of a failure gate is held back until the first four are back).
+DEFAULT_REDUCE_CONCURRENCY = 3
 MAX_REDUCE_REFERENCES = 3
 MAX_REFERENCES_IN_PLAN = 5
 MAX_ORDER = 64
@@ -108,7 +114,7 @@ MODE_OPTIONAL = {
     "scenario-smoke": {"task_id"},
     "scenario-screen": {"attempts", "confirm_attempts", "required_failures"},
     "scenario-reduce": {"attempts", "required_failures", "bisection_steps", "max_candidates",
-                        "concurrency", "max_references"},
+                        "concurrency", "max_references", "speculative_bisection"},
 }
 _HYPOTHESIS_KEYS = {"text", "ranking", "source", "model", "tier", "fallback_reason", "completed",
                     "provenance", "raw_content"}
@@ -277,7 +283,12 @@ def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, 
                                      MAX_REDUCE_BISECTION)
     fields["max_candidates"] = _int(config.get("max_candidates", MAX_REDUCE_CANDIDATES),
                                     "max_candidates", 1, MAX_REDUCE_CANDIDATES)
-    fields["concurrency"] = _int(config.get("concurrency", 2), "concurrency", 1, MAX_REDUCE_CONCURRENCY)
+    fields["concurrency"] = _int(config.get("concurrency", DEFAULT_REDUCE_CONCURRENCY), "concurrency", 1,
+                                 MAX_REDUCE_CONCURRENCY)
+    speculative = config.get("speculative_bisection", True)
+    if type(speculative) is not bool:
+        _fail("speculative_bisection must be true or false")
+    fields["speculative_bisection"] = speculative
     fields["max_references"] = _int(config.get("max_references", MAX_REDUCE_REFERENCES),
                                     "max_references", 1, MAX_REDUCE_REFERENCES)
     return fields
@@ -326,8 +337,9 @@ def recommended_deadline_seconds(mode: str, config: Mapping[str, Any]) -> int:
                 + ASSUMED_FAILING_EPISODE_SECONDS)             # the last term: the top-up wave
     elif mode == "scenario-reduce":
         rounds = int(math.ceil(config.get("max_candidates", MAX_REDUCE_CANDIDATES)
-                               / float(config.get("concurrency", 2))))
-        work = (REDUCE_GATE_WAVES + rounds + REDUCE_REFERENCE_FALLBACK_ROUNDS) * ASSUMED_REDUCE_ROUND_SECONDS
+                               / float(config.get("concurrency", DEFAULT_REDUCE_CONCURRENCY))))
+        work = ((REDUCE_GATE_WAVES + rounds + REDUCE_REFERENCE_FALLBACK_ROUNDS)
+                * ASSUMED_REDUCE_ROUND_SECONDS * ASSUMED_HELD_FIFTH_FACTOR)
     else:
         raise ValueError("unsupported scenario mode")
     total = (sum(ASSUMED_OVERHEAD_SECONDS.values()) + work + be.ITEM_TIMEOUT_SECONDS
@@ -1054,6 +1066,7 @@ class ReduceDriver:
             attempts=self.config["attempts"], required_failures=self.config["required_failures"],
             bisection_steps=self.config["bisection_steps"], max_candidates=self.config["max_candidates"],
             concurrency=self.config["concurrency"], max_references=self.config["max_references"],
+            speculative_bisection=self.config["speculative_bisection"],
             max_in_flight=ctx.workers, remaining=ctx.remaining)
         self.body["reduction"] = result
         ctx.progress("scenario_reduce_done", stop_reason=result["stop_reason"],
@@ -1471,11 +1484,11 @@ def build_reduce_workload(plan: Mapping[str, Any], *, run_id: str, deadline_seco
     """The ``scenario-reduce`` workload JSON for a plan written by ``plan_scenario_reduction.py``.
 
     ``options`` may set attempts, required_failures, bisection_steps, max_candidates,
-    concurrency and max_references. The deadline defaults to the recommended one.
+    concurrency, max_references and speculative_bisection (on by default). The deadline defaults to the recommended one.
     """
 
     allowed = {"attempts", "required_failures", "bisection_steps", "max_candidates", "concurrency",
-               "max_references"}
+               "max_references", "speculative_bisection"}
     if set(options) - allowed:
         raise ValueError("unknown reduce option")
     keys = ("suite", "task_id", "instruction", "layout", "failing", "references", "order", "order_source",

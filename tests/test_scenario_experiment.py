@@ -89,13 +89,19 @@ class ReduceConfigTests(unittest.TestCase):
         config = validate_workload_config(workload)
         self.assertEqual("scenario-reduce", config["mode"])
         self.assertEqual(se.recommended_deadline_seconds("scenario-reduce", {}), config["deadline_seconds"])
-        self.assertEqual((2, 30, 5, 4), (config["concurrency"], config["max_candidates"],
+        self.assertEqual((3, 30, 5, 4), (config["concurrency"], config["max_candidates"],
                                          config["attempts"], config["required_failures"]))
+        self.assertIs(True, config["speculative_bisection"])
         self.assertLessEqual(len(json.dumps(workload)), 64 * 1024)
 
     def test_options_override_the_defaults(self):
-        config = validate_workload_config(self.workload(max_candidates=12, concurrency=3, bisection_steps=2))
-        self.assertEqual((12, 3, 2), (config["max_candidates"], config["concurrency"], config["bisection_steps"]))
+        config = validate_workload_config(self.workload(
+            max_candidates=12, concurrency=2, bisection_steps=2, speculative_bisection=False))
+        self.assertEqual((12, 2, 2, False), (config["max_candidates"], config["concurrency"],
+                                             config["bisection_steps"], config["speculative_bisection"]))
+        for bad in (1, "yes", None, 0):
+            with self.assertRaises((JobRuntimeError, ValueError)):
+                validate_workload_config(self.workload(speculative_bisection=bad))
         with self.assertRaises(ValueError):
             self.workload(surprise=1)
 
@@ -144,7 +150,7 @@ class DeadlineTests(unittest.TestCase):
         everything = {"task_ids": list(range(10)), "start_indices": list(range(10))}
         self.assertEqual(1380, se.recommended_deadline_seconds("scenario-smoke", {"task_id": 0}))
         self.assertEqual(2940, se.recommended_deadline_seconds("scenario-screen", everything))
-        self.assertEqual(2880, se.recommended_deadline_seconds("scenario-reduce", {}))
+        self.assertEqual(2640, se.recommended_deadline_seconds("scenario-reduce", {}))
 
     def test_deadlines_respect_the_floor_and_the_cap(self):
         tiny = {"task_ids": [0], "start_indices": [0]}
@@ -633,7 +639,8 @@ class ScreenRunTests(RunTestCase):
         self.assertEqual("reproduces", starts["9"]["decision"])
         self.assertEqual([[0, 9]], [[f["task_id"], f["start_index"]] for f in summary["reproducible_failures"]])
         self.assertEqual("policy_failure", starts["6"]["outcomes"][0])
-        self.assertEqual(["policy_failure"] + ["success"] * 4, starts["6"]["outcomes"])
+        # three confirmation attempts in flight; two non-failures fix the gate, the fourth is held back
+        self.assertEqual(["policy_failure"] + ["success"] * 3, starts["6"]["outcomes"])
 
     def test_the_summary_records_each_starts_validity(self):
         world = ScenarioWorld(FakeSimulation(invalid_starts={2, 9}), item_seconds=0.0)
@@ -720,6 +727,21 @@ class ReduceRunTests(RunTestCase):
         self.assertEqual("fixed_order", summary["plan"]["order_source"])
         self.assertEqual(["robot", "alphabet_soup_1"], [row["entity"] for row in summary["differences"]])
         self.assertTrue(summary["differences_match_plan"])
+
+    def test_the_held_fifth_attempt_saves_episodes_even_with_twelve_workers(self):
+        # Before the hold, 12 workers started all five attempts of every candidate at once: 40
+        # episodes and no saving for this fake world. Now every reproducing candidate stops at four.
+        world = ScenarioWorld(item_seconds=0.02)
+        summary = self.run_mode(world, "scenario-reduce", self.workload())
+        reduction = summary["reduction"]
+        reproducing = [c for c in reduction["candidates"] if c["decision"] == "reproduces"]
+        self.assertGreaterEqual(len(reproducing), 4)
+        for candidate in reproducing:
+            self.assertEqual(4, len(candidate["outcomes"]) + len(candidate["late_outcomes"]), candidate["index"])
+        self.assertGreaterEqual(reduction["attempts_skipped"], len(reproducing))
+        real = [case for case in world.ran if not case.startswith("warmup")]
+        self.assertLessEqual(len(real), 40 - len(reproducing))
+        self.assertLessEqual(world.max_running, 12)
 
     def test_early_decisions_skip_attempts_when_attempts_outnumber_workers(self):
         world = ScenarioWorld(item_seconds=0.01)

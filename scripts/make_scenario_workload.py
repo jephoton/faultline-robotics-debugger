@@ -61,7 +61,8 @@ def build(args: argparse.Namespace) -> Dict[str, Any]:
             raise UsageError("the plan is unreadable") from None
         options = {key: value for key, value in (
             ("max_candidates", args.max_candidates), ("concurrency", args.concurrency),
-            ("bisection_steps", args.bisection_steps)) if value is not None}
+            ("bisection_steps", args.bisection_steps),
+            ("speculative_bisection", False if args.no_speculative_bisection else None)) if value is not None}
         try:
             config = se.build_reduce_workload(plan, run_id=args.run_id, deadline_seconds=args.deadline, **options)
         except (KeyError, TypeError, ValueError):
@@ -92,6 +93,8 @@ def _parser() -> argparse.ArgumentParser:
     reduce.add_argument("--max-candidates", type=int, default=None)
     reduce.add_argument("--concurrency", type=int, default=None)
     reduce.add_argument("--bisection-steps", type=int, default=None)
+    reduce.add_argument("--no-speculative-bisection", action="store_true",
+                        help="test one bisection point per round (the default tests two)")
     return parser
 
 

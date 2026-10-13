@@ -195,6 +195,11 @@ def run_gates(
     round robin across the undecided candidates, so a decided candidate's later
     attempts are simply never submitted. Both count as skipped.
 
+    A failure-gate candidate holds its last attempt back: it has at most
+    ``required_failures`` tickets in flight until those are all back, and gets the
+    remaining ones only if the gate is still undecided (with 4 of 5 that means exactly
+    three failures among the first four). Pass gates submit all attempts.
+
     ``remaining()`` is the seconds left (``None`` = unlimited); at zero the
     batch stops with ``deadline_exhausted``. Any record that is neither valid nor
     ``decided_skipped`` stops the batch (``deadline_skipped`` as
@@ -235,11 +240,28 @@ def run_gates(
             return decide_pass(candidate.outcomes, attempts)
         return decide(candidate.outcomes, required_failures, attempts)
 
+    def limit(candidate: _Candidate) -> int:
+        """How many attempts of ``candidate`` may be submitted now.
+
+        A failure gate is fixed by its ``required_failures``-th failure or its second
+        non-failure, and with ``required_failures`` attempts back the only open case is
+        exactly one non-failure. So it gets at most ``required_failures`` tickets until
+        those are all back, and the last attempt only if the gate is still undecided
+        ("hold the fifth attempt"). A pass gate needs all of its attempts anyway.
+        """
+
+        if candidate.kind != "failure" or required_failures >= attempts:
+            return attempts
+        if len(candidate.tickets) >= required_failures and not any(
+                owner is candidate for owner, _ in pending.values()):
+            return attempts
+        return required_failures
+
     def submit_more() -> None:
         while state["stop"] is None:
             if max_in_flight is not None and len(pending) >= max_in_flight:
                 return
-            choices = [c for c in pool if c.decision is None and len(c.tickets) < attempts]
+            choices = [c for c in pool if c.decision is None and len(c.tickets) < limit(c)]
             if not choices:
                 return
             candidate = min(choices, key=lambda c: len(c.tickets))   # stable: first in order wins ties
@@ -306,7 +328,7 @@ def run_gates(
         undecided = [c for c in pool if c.decision is None]
         if not undecided:
             break
-        if not pending and not any(len(c.tickets) < attempts for c in undecided):
+        if not pending and not any(len(c.tickets) < limit(c) for c in undecided):
             stop("infrastructure_error", "undecided")
             break
         if out_of_time():

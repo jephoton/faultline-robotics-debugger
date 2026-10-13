@@ -120,6 +120,18 @@ class MakeWorkloadTests(unittest.TestCase):
         self.assertEqual("scenario-reduce", printed["mode"])
         self.assertLess(workload["deadline_seconds"], se.recommended_deadline_seconds("scenario-reduce", {}) + 1)
 
+    def test_reduce_defaults_to_three_candidates_and_speculative_bisection(self):
+        plan = self.root / "plan.json"
+        plan.write_text(json.dumps(make_plan()), encoding="utf-8")
+        out = self.root / "reduce.json"
+        self.run_cli("reduce", "--run-id", "scn-reduce-1", "--out", out, "--plan", plan)
+        workload = validate_workload_config(json.loads(out.read_text(encoding="utf-8")))
+        self.assertEqual((3, True), (workload["concurrency"], workload["speculative_bisection"]))
+        out2 = self.root / "reduce2.json"
+        self.run_cli("reduce", "--run-id", "scn-reduce-2", "--out", out2, "--plan", plan,
+                     "--no-speculative-bisection")
+        self.assertIs(False, json.loads(out2.read_text(encoding="utf-8"))["speculative_bisection"])
+
     def test_bad_input_is_refused_without_writing(self):
         out = self.root / "bad.json"
         code, printed = self.run_cli("screen", "--run-id", "scn-screen-1", "--out", out, "--tasks", "0", "--starts", "0-99")

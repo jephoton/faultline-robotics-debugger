@@ -307,7 +307,7 @@ def run_scenario_reduction(
     required_failures: int = 4,
     bisection_steps: int = 4,
     max_candidates: int = 30,
-    concurrency: int = 2,
+    concurrency: int = 3,
     max_references: int = 3,
     max_in_flight: Optional[int] = None,
     speculative_bisection: bool = False,

@@ -123,17 +123,79 @@ class RunGatesTests(unittest.TestCase):
                 self.assertEqual(run.late, [])
 
     def test_upfront_submission_loses_at_most_the_attempt_already_started(self):
-        # A freed worker takes the next queued attempt before the gate can withdraw it.
+        # Only the first wave of four is submitted up front; a freed worker takes the next queued
+        # attempt of that wave before the gate can withdraw it. The fifth is held back.
         for sequence in ALL_SEQUENCES:
             with self.subTest(sequence=sequence):
                 executor = sequence_executor({"c": sequence}, workers=1)
                 run = dg.run_gates(executor, [candidate("c")], drain=True)
                 needed, expected = first_decision(dg.decide, sequence)
                 self.assertEqual(run.decisions["c"], expected)
-                self.assertEqual(len(executor.executed), min(5, needed + 1))
+                self.assertEqual(len(executor.executed), 5 if needed == 5 else min(4, needed + 1))
                 self.assertEqual(run.skipped_total, 5 - len(executor.executed))
-                self.assertEqual(len(executor.withdrawn), run.skipped_total)
+                self.assertEqual(len(executor.withdrawn), len(executor.submitted) - len(executor.executed))
                 self.assertEqual(run.outcomes["c"][:needed], list(sequence[:needed]))
+
+    def test_the_fifth_attempt_is_held_until_the_first_four_are_back_and_only_run_if_needed(self):
+        for sequence in ALL_SEQUENCES:
+            for workers in (1, 2, 4, 12):
+                for in_flight in (None, 12):
+                    with self.subTest(sequence=sequence, workers=workers, in_flight=in_flight):
+                        executor = sequence_executor({"c": sequence}, workers=workers)
+                        back_at_submit = []
+                        original = executor.submit
+
+                        def watching(item, original=original, executor=executor, back=back_at_submit):
+                            back.append(sum(1 for t in executor.submitted if t.done()))
+                            return original(item)
+
+                        executor.submit = watching
+                        run = dg.run_gates(executor, [candidate("c")], max_in_flight=in_flight, drain=True)
+                        self.assertEqual(run.decisions["c"], dg.decide(list(sequence)),
+                                         "same decision as running all five")
+                        needs_fifth = sequence[:4].count(F) == 3
+                        self.assertEqual(list(range(5 if needs_fifth else 4)),
+                                         [t.item["attempt"] for t in executor.submitted])
+                        if needs_fifth:
+                            self.assertEqual(4, back_at_submit[4], "the fifth waited for the first four")
+                        self.assertEqual(run.skipped_total, 5 - len(executor.executed))
+
+    def test_a_pass_gate_keeps_all_five_in_flight(self):
+        executor = sequence_executor({"r": (S,) * 5}, workers=5)
+        run = dg.run_gates(executor, [candidate("r", "pass")], drain=True)
+        self.assertEqual(5, len(executor.submitted))
+        self.assertEqual("passes", run.decisions["r"])
+
+    def test_only_required_failures_tickets_are_in_flight_until_they_are_back(self):
+        executor = sequence_executor({"c": (F, F, F, S, F)}, workers=12)
+        peaks = []
+        original = executor.submit
+
+        def watching(item):
+            ticket = original(item)
+            peaks.append(sum(1 for t in executor.submitted if not t.done()))
+            return ticket
+
+        executor.submit = watching
+        dg.run_gates(executor, [candidate("c")], max_in_flight=12, drain=True)
+        self.assertEqual(4, max(peaks[:4]))
+        self.assertEqual(1, peaks[4], "the fifth is alone in flight")
+
+    def test_the_cap_of_in_flight_tickets_still_holds(self):
+        sequences = {k: (F, F, F, S, F) for k in "abcde"}
+        executor = sequence_executor(sequences, workers=12)
+        peaks = []
+        original = executor.submit
+
+        def watching(item):
+            ticket = original(item)
+            peaks.append(sum(1 for t in executor.submitted if not t.done()))
+            return ticket
+
+        executor.submit = watching
+        run = dg.run_gates(executor, [candidate(k) for k in "abcde"], max_in_flight=6, drain=True)
+        self.assertLessEqual(max(peaks), 6)
+        self.assertEqual({k: "reproduces" for k in "abcde"}, run.decisions)
 
     def test_pass_gate_stops_at_the_first_failure(self):
         for sequence in ALL_SEQUENCES:
@@ -150,9 +212,9 @@ class RunGatesTests(unittest.TestCase):
         executor = sequence_executor({"c": sequence}, workers=5)
         run = dg.run_gates(executor, [candidate("c")], drain=True)
         self.assertEqual(run.decisions["c"], "does_not_reproduce")
-        self.assertEqual(run.skipped_total, 0)           # all five had started
-        self.assertEqual(len(executor.executed), 5)
-        self.assertEqual(run.outcomes["c"], list(sequence))
+        self.assertEqual(run.skipped_total, 1)           # the first wave of four had all started
+        self.assertEqual(len(executor.executed), 4)
+        self.assertEqual(run.outcomes["c"], list(sequence[:4]))
         self.assertEqual(run.decisions["c"], dg.decide(list(sequence)))
 
     def test_freed_workers_take_attempts_of_other_candidates(self):
@@ -172,11 +234,11 @@ class RunGatesTests(unittest.TestCase):
         executor = sequence_executor(sequences, workers=2)
         run = dg.run_gates(executor, [candidate("a"), candidate("b")], max_in_flight=2, drain=True)
         self.assertEqual(run.decisions, {"a": "does_not_reproduce", "b": "reproduces"})
-        # a decides after 2 attempts and its other three are never submitted; b keeps the
-        # pipe full, so its fifth attempt had already started when the fourth decided it
-        self.assertEqual(len(executor.submitted), 7)
+        # a decides after 2 attempts and its other three are never submitted; b's first four are
+        # in flight together and decide it, so its fifth is never submitted either
+        self.assertEqual(len(executor.submitted), 6)
         self.assertEqual(run.skipped["a"], 3)
-        self.assertEqual(run.skipped["b"], 0)
+        self.assertEqual(run.skipped["b"], 1)
         self.assertEqual(executor.withdrawn, [])
         # attempt-major round robin over candidates
         self.assertEqual([(t.item["key"], t.item["attempt"]) for t in executor.submitted][:4],
@@ -184,7 +246,7 @@ class RunGatesTests(unittest.TestCase):
 
     def test_items_get_an_attempt_index_without_mutating_the_candidate(self):
         base = {"key": "c", "payload": {"x": 1}}
-        executor = sequence_executor({"c": (F,) * 5})
+        executor = sequence_executor({"c": (F, F, F, S, F)})
         dg.run_gates(executor, [{"key": "c", "item": base, "kind": "failure"}])
         self.assertEqual(base, {"key": "c", "payload": {"x": 1}})
         self.assertEqual([t.item["attempt"] for t in executor.submitted], [0, 1, 2, 3, 4])
@@ -248,9 +310,9 @@ class RunGatesTests(unittest.TestCase):
         executor = sequence_executor(sequences, workers=5)
         run = dg.run_gates(executor, [candidate("a")], drain=False)
         self.assertEqual(run.decisions["a"], "does_not_reproduce")
-        self.assertEqual(len(run.late), 3)
+        self.assertEqual(len(run.late), 2, "the first wave of four was in flight; two were still running")
         collected = dg.collect_late(executor, run.late)
-        self.assertEqual([record["outcome"] for _, record in collected], [F, F, F])
+        self.assertEqual([record["outcome"] for _, record in collected], [F, F])
         self.assertTrue(all(key == "a" for key, _ in collected))
 
     def test_mixed_kinds_in_one_batch(self):
@@ -265,8 +327,8 @@ class RunGatesTests(unittest.TestCase):
         run = dg.run_gates(executor, [candidate("a"), candidate("b")], drain=True)
         statuses = [record["status"] for record in run.records["b"]]
         self.assertEqual(statuses.count("valid"), 2)
-        self.assertEqual(statuses.count("decided_skipped"), 3)
-        self.assertEqual(run.skipped["b"], 3)
+        self.assertEqual(statuses.count("decided_skipped"), 2, "two submitted attempts were withdrawn")
+        self.assertEqual(run.skipped["b"], 3, "and the held fifth was never submitted")
 
     def test_validation(self):
         executor = sequence_executor({})

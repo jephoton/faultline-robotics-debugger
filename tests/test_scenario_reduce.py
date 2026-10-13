@@ -114,8 +114,15 @@ class SingleCulpritTests(unittest.TestCase):
         self.assertEqual(result["candidates"][result["final_candidate"]]["selection"],
                          result["final_selection"])
 
-    def test_exact_candidate_sequence_for_a_fixed_order(self):
+    def test_three_candidates_share_a_round_by_default(self):
         result, _ = reduce(self.world)
+        self.assertEqual(3, result["concurrency"], "3 candidates x 4 first-wave attempts fill 12 workers")
+        probes = [c for c in result["candidates"] if c["phase"] == "probe"]
+        self.assertEqual(["soup_1"], list(probes[0]["selection"]))
+        self.assertGreaterEqual(len(probes), 2)
+
+    def test_exact_candidate_sequence_for_a_fixed_order(self):
+        result, _ = reduce(self.world, concurrency=2)
         full = {"robot": {"joints": 1.0}, "soup_1": {"position": 1.0, "rotation": 1.0},
                 "microwave_1": {"joints": 1.0}, "bowl_1": {"position": 1.0}}
         soup = {"soup_1": {"position": 1.0, "rotation": 1.0}}
