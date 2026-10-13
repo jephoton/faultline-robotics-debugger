@@ -92,7 +92,8 @@ class ReportTests(RunTestCase):
             self.assertIn(heading, text)
         self.assertIn("Moving alphabet_soup_1 by 6.2 cm (of the original 50 cm) is enough to make the policy fail "
                       "from the passing start 4 (at least 4 of 5 attempts)", text)
-        self.assertIn("Verdict (top-ranked entity against the surviving entities): **confirmed**", text)
+        self.assertIn("Verdict (top-ranked entity against the surviving entities): **not applicable (the fixed "
+                      "order is a search order, not a model hypothesis)**", text)
         self.assertIn("fixed order", text)
         self.assertIn("local minimum", text)
         self.assertIn("| alphabet_soup_1 | 50.0 | - |", text)
@@ -113,12 +114,27 @@ class ReportTests(RunTestCase):
                                                  case["reference_start"]))
         self.assertEqual({"alphabet_soup_1": {"position": 0.125}}, case["minimal"]["selection"])
         self.assertEqual({"original", "minimal", "reference"}, set(case["videos"]))
-        self.assertEqual("confirmed", case["hypothesis"]["verdict"])
+        self.assertIsNone(case["hypothesis"]["verdict"])
         self.assertEqual("fixed_order", case["hypothesis"]["source"])
         self.assertIsNone(case["explanation"])
         self.assertEqual(case["replay"]["candidate"], load_scenario_candidate(summary.parent / "replay.json"))
         self.assertEqual("hybrid", case["replay"]["candidate"]["source"]["kind"])
         self.assertEqual({"attempts": 5, "required_failures": 4}, case["replay"]["gate"])
+
+    def test_a_model_order_is_reported_with_its_verdict(self):
+        plan = make_plan()
+        plan["order_source"] = "model"
+        plan["hypothesis"].update(source="model", model="test/model", tier="ultra", text="The soup matters.",
+                                  fallback_reason=None)
+        world = ScenarioWorld(item_seconds=0.0)
+        self.run_mode(world, "scenario-reduce", se.build_reduce_workload(plan, run_id="scn-reduce-1"))
+        summary = self.root / "scenario" / se.SUMMARY_NAME
+        code, printed = self.run_cli(summary, "--force")
+        text = (summary.parent / "scenario_reduction_report.md").read_text(encoding="utf-8")
+        self.assertIn("Verdict (top-ranked entity against the surviving entities): **confirmed**", text)
+        self.assertIn("Model: test/model", text)
+        case = json.loads((summary.parent / printed["case"]).read_text(encoding="utf-8"))
+        self.assertEqual("confirmed", case["hypothesis"]["verdict"])
 
     def test_the_case_id_is_stable_for_the_same_result(self):
         first = se.build_case(json.loads(self.reduce_summary().read_text(encoding="utf-8")))
@@ -136,7 +152,7 @@ class ReportTests(RunTestCase):
         self.assertEqual(0, code)
         text = (summary.parent / "scenario_reduction_report.md").read_text(encoding="utf-8")
         self.assertIn("No minimal cause was established (stop reason `failing_not_reproducible`)", text)
-        self.assertIn("**not available**", text)
+        self.assertIn("**not applicable (the fixed order", text)
         case = json.loads((summary.parent / printed["case"]).read_text(encoding="utf-8"))
         self.assertFalse(case["reduced"])
         self.assertIsNone(case["replay"]["candidate"])

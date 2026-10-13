@@ -29,7 +29,6 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from robot_debug import scenario_experiment as se
-from robot_debug.scenario_hypothesis import hypothesis_verdict
 from robot_debug.scenario_import import ScenarioImportError, validate_scenario_candidate, write_scenario_candidate
 
 LETTERS = {"success": "S", "policy_failure": "F", "invalid_scene": "I"}
@@ -155,12 +154,11 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
     lines += ["", "Score is centimetres plus degrees / 10, summed over the changed parts.", ""]
     hypothesis = plan["hypothesis"]
     ranking = hypothesis.get("ranking") or plan.get("order") or []
-    verdict = None
-    if reduction.get("reduced") and selection and ranking:
-        try:
-            verdict = hypothesis_verdict(ranking, selection)
-        except ValueError:
-            verdict = None
+    verdict = se.verdict_for(plan, reduction)
+    if plan.get("order_source") != "model":
+        verdict_text = "not applicable (the fixed order is a search order, not a model hypothesis)"
+    else:
+        verdict_text = verdict or "not available"
     lines += ["## Hypothesis", "",
               "- Order source: `{}`{}".format(
                   plan.get("order_source"), "" if plan.get("order_source") == "model" else
@@ -168,7 +166,7 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
                       hypothesis.get("fallback_reason") or "no reason recorded")),
               "- Model: {} (tier {})".format(hypothesis.get("model") or "none", hypothesis.get("tier") or "-"),
               "- Ranking: {}".format(", ".join(ranking) or "-"),
-              "- Verdict (top-ranked entity against the surviving entities): **{}**".format(verdict or "not available"),
+              "- Verdict (top-ranked entity against the surviving entities): **{}**".format(verdict_text),
               ""]
     if summary.get("hypothesis_verdict") not in (None, verdict):
         lines += ["Warning: the Job recorded verdict `{}`, which differs from this recomputation.".format(

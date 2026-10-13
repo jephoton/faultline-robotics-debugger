@@ -722,11 +722,24 @@ class ReduceRunTests(RunTestCase):
                          candidate["source"]["applied"][0])
         expected_x = 0.4 + 0.125 * (0.9 - 0.4)
         self.assertAlmostEqual(expected_x, candidate["state"][4])
-        self.assertEqual("confirmed", summary["hypothesis_verdict"], "fixed order ranks the soup first")
+        self.assertIsNone(summary["hypothesis_verdict"], "a fixed order is not a hypothesis")
         self.assertEqual(self.plan["order"], summary["plan"]["order"])
         self.assertEqual("fixed_order", summary["plan"]["order_source"])
         self.assertEqual(["robot", "alphabet_soup_1"], [row["entity"] for row in summary["differences"]])
         self.assertTrue(summary["differences_match_plan"])
+
+    def test_a_model_order_gets_a_mechanical_verdict(self):
+        for ranking, expected in ((["alphabet_soup_1", "robot"], "confirmed"), (["robot", "alphabet_soup_1"], "refuted")):
+            with self.subTest(ranking=ranking):
+                plan = make_plan()
+                plan["order_source"] = "model"
+                plan["order"] = list(ranking)
+                plan["hypothesis"].update(source="model", model="test/model", tier="ultra", ranking=list(ranking),
+                                          text="The soup matters.", fallback_reason=None)
+                world = ScenarioWorld(item_seconds=0.0)
+                summary = self.run_mode(world, "scenario-reduce", se.build_reduce_workload(plan, run_id="scn-reduce-1"))
+                self.assertEqual(expected, summary["hypothesis_verdict"])
+                self.assertEqual(expected, se.build_case(summary)["hypothesis"]["verdict"])
 
     def test_the_held_fifth_attempt_saves_episodes_even_with_twelve_workers(self):
         # Before the hold, 12 workers started all five attempts of every candidate at once: 40

@@ -1119,13 +1119,7 @@ class ReduceDriver:
                     self.body["minimal_candidate"] = load_scenario_candidate(record_path)
                 except (OSError, ValueError):
                     self.body["minimal_candidate"] = None
-        selection = result.get("final_selection")
-        ranking = self.config["hypothesis"]["ranking"] or self.config["order"]
-        if result.get("reduced") and selection and ranking:
-            try:
-                self.body["hypothesis_verdict"] = hypothesis_verdict(ranking, selection)
-            except ValueError:
-                self.body["hypothesis_verdict"] = None
+        self.body["hypothesis_verdict"] = verdict_for(plan, result)
 
     def complete(self, stop_reason: Optional[str]) -> bool:
         result = self.body.get("reduction") or {}
@@ -1344,6 +1338,26 @@ def _count_outcomes(records: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
 CASE_SCHEMA_VERSION = 1
 
 
+def verdict_for(plan: Mapping[str, Any], reduction: Mapping[str, Any]) -> Optional[str]:
+    """``confirmed`` / ``partly`` / ``refuted`` for a *model* hypothesis, else ``None``.
+
+    The fixed order (largest difference first) is a search order, not a hypothesis, so
+    comparing its top entity with the survivors would present a heuristic as a prediction.
+    """
+
+    if plan.get("order_source") != "model" or not reduction.get("reduced"):
+        return None
+    selection = reduction.get("final_selection")
+    hypothesis = plan.get("hypothesis") or {}
+    ranking = hypothesis.get("ranking") or plan.get("order") or []
+    if not selection or not ranking:
+        return None
+    try:
+        return hypothesis_verdict(ranking, selection)
+    except ValueError:
+        return None
+
+
 def _fmt(value: float, digits: int = 1) -> str:
     text = "{:.{}f}".format(value, digits)
     return text[:-2] if text.endswith(".0") and digits == 1 else text
@@ -1420,12 +1434,7 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
     selection = reduction.get("final_selection")
     reference = reduction.get("reference")
     ranking = (plan["hypothesis"].get("ranking") or plan.get("order") or [])
-    verdict = None
-    if reduction.get("reduced") and selection and ranking:
-        try:
-            verdict = hypothesis_verdict(ranking, selection)
-        except ValueError:
-            verdict = None
+    verdict = verdict_for(plan, reduction)
     identity = json.dumps(
         {"suite": plan["suite"], "task_id": plan["task_id"], "failing": plan["failing_start"],
          "reference": reference, "selection": selection}, sort_keys=True, separators=(",", ":"))
@@ -1514,6 +1523,7 @@ __all__ = [
     "build_case",
     "build_reduce_workload",
     "describe_minimal_cause",
+    "verdict_for",
     "make_scenario_evaluate",
     "planned_episodes",
     "read_evidence",
