@@ -144,9 +144,14 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
     lines += ["Final selection: {}. This is a local minimum found by reruns, not proof of the globally "
               "smallest cause.".format(_selection_text(selection)), ""]
     if reduction.get("parts"):
-        lines += _table(["entity", "part", "fraction t", "lower bound tested", "resolution"],
+        lines += _table(["entity", "part", "fraction t", "lower bound tested", "resolution", "invalid midpoints"],
                         [[p["entity"], p["component"], p["t"], p["lower"] if p.get("lower_tested") else "-",
-                          p["resolution"]] for p in reduction["parts"]]) + [""]
+                          p["resolution"], ", ".join(str(v) for v in p.get("invalid_points") or []) or "-"]
+                         for p in reduction["parts"]]) + [""]
+        if any(p.get("invalid_points") for p in reduction["parts"]):
+            lines += ["Invalid midpoints were interpenetrating scenes: they say nothing about the policy, so "
+                      "the size stays at the smallest verified reproducing value and no lower bound is claimed "
+                      "from them.", ""]
     lines += ["## Differences between the failing start and the reference", ""]
     table = summary.get("differences") or []
     lines += (_table(["entity", "position (cm)", "rotation (deg)", "joints", "score"], difference_rows(table))

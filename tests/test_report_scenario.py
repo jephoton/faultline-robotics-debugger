@@ -97,6 +97,7 @@ class ReportTests(RunTestCase):
         self.assertIn("fixed order", text)
         self.assertIn("local minimum", text)
         self.assertIn("| alphabet_soup_1 | 50.0 | - |", text)
+        self.assertIn("| alphabet_soup_1 | position | 0.125 | 0.0625 | 0.0625 | - |", text)
         # Four failures fix the decision; a fifth, already running attempt may or may not be
         # recorded in time, so the exact outcome string depends on thread timing.
         self.assertRegex(text, r"\| 0 \| gate \| failing \| - \| (F ){3}F( F)? \| reproduces \| True \|")

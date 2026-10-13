@@ -378,9 +378,10 @@ def _run(reducer: _Reducer, references: List[Dict[str, Any]], order: Optional[Se
             result["references_tried"].append({"id": reference["id"], "decision": "no_differences"})
             continue
         full = {row["entity"]: {c: 1.0 for c in _components(row)} for row in rows}
+        # The failing start and the reference gate together; the full-hybrid check is only spent
+        # on a reference that passes 5 of 5 (a failing reference is replaced by the next nearest).
         specs = [] if failing_checked else [failing_spec]
-        specs += [{"role": "reference", "reference": reference["id"]},
-                  {"role": "hybrid", "reference": reference["id"], "selection": full}]
+        specs += [{"role": "reference", "reference": reference["id"]}]
         records = reducer.evaluate(specs, batch=len(specs))
         if any(record is None for record in records):
             raise _Stop("budget_exhausted")
@@ -389,11 +390,15 @@ def _run(reducer: _Reducer, references: List[Dict[str, Any]], order: Optional[Se
             failing_checked = True
             if not failing_record["gate_met"]:
                 raise _Stop("failing_not_reproducible", "failing_start_" + str(failing_record["decision"]))
-        reference_record, full_record = records
+        (reference_record,) = records
         result["references_tried"].append({
             "id": reference["id"], "decision": reference_record["decision"],
             "outcomes": list(reference_record["outcomes"])})
         if reference_record["gate_met"]:       # the pass gate: passes 5 of 5
+            (full_record,) = reducer.evaluate(
+                [{"role": "hybrid", "reference": reference["id"], "selection": full}], batch=1)
+            if full_record is None:
+                raise _Stop("budget_exhausted")
             chosen = reference
             if not full_record["gate_met"]:
                 state.update(reference=reference["id"], table=rows)
@@ -510,6 +515,18 @@ def _bisect(reducer: _Reducer, parts: Dict[str, Dict[str, float]], entity: str, 
         return part_spec({**parts, entity: {**parts[entity], component: value}})
 
     low_tested = False
+    invalid_points = []   # midpoints that were interpenetrating scenes: no information about the policy
+
+    def judge(record: Mapping[str, Any], value: float) -> str:
+        """``yes`` (reproduces), ``no`` (a tested non-reproducing point) or ``invalid``."""
+
+        if record["gate_met"]:
+            return "yes"
+        if record["decision"] == "invalid_scene":
+            invalid_points.append(value)
+            return "invalid"
+        return "no"
+
     while done < steps:
         middle = round((low + high) / 2.0, _DECIMALS)
         if not low < middle < high:
@@ -520,30 +537,35 @@ def _bisect(reducer: _Reducer, parts: Dict[str, Dict[str, float]], entity: str, 
                 middle_record, quarter_record = reducer.evaluate([with_t(middle), with_t(quarter)])
                 if middle_record is None or quarter_record is None:
                     raise _Stop("budget_exhausted")
-                if middle_record["gate_met"]:
-                    if quarter_record["gate_met"]:
+                middle_verdict = judge(middle_record, middle)
+                quarter_verdict = judge(quarter_record, quarter)
+                if middle_verdict == "yes":
+                    if quarter_verdict == "yes":
                         high = quarter
                     else:
-                        low, high, low_tested = quarter, middle, True
+                        low, high, low_tested = quarter, middle, quarter_verdict == "no"
                     done += 2
                 else:
-                    low, low_tested = middle, True
+                    low, low_tested = middle, middle_verdict == "no"
                     done += 1
                 parts[entity][component] = high
                 continue
         (record,) = reducer.evaluate([with_t(middle)])
         if record is None:
             raise _Stop("budget_exhausted")
-        if record["gate_met"]:
+        verdict = judge(record, middle)
+        if verdict == "yes":
             high = middle
         else:
-            low, low_tested = middle, True
+            # An invalid midpoint says nothing about the policy: keep the search conservative (the
+            # size stays at the smallest verified reproducing value) and do not call it tested.
+            low, low_tested = middle, verdict == "no"
         done += 1
         parts[entity][component] = high
     parts[entity][component] = high
     return {"entity": entity, "component": component, "t": high, "lower": low,
-            "lower_tested": low_tested, "resolution": round(high - low, _DECIMALS),
-            "steps_done": done}
+            "lower_tested": low_tested, "invalid_points": invalid_points,
+            "resolution": round(high - low, _DECIMALS), "steps_done": done}
 
 
 def _modelled_ddmin(ranking: Sequence[str], culprit: str, concurrency: int) -> int:

@@ -208,6 +208,42 @@ class PairAndSplitTests(unittest.TestCase):
         self.assertEqual(parts[("soup_1", "rotation")]["t"], 0.5)
         self.assertEqual(parts[("bowl_1", "position")]["t"], 0.25)
 
+    def test_an_invalid_midpoint_is_recorded_and_never_called_a_tested_lower_bound(self):
+        world = World(lambda sel: comp(sel, "soup_1", "rotation") >= 0.4,
+                      invalid=lambda sel: comp(sel, "soup_1", "rotation") == 0.4375)
+        result, _ = reduce(world)
+        self.assertEqual("reduced", result["stop_reason"])
+        (part,) = result["parts"]
+        self.assertEqual(0.5, part["t"], "the smallest verified reproducing size is kept")
+        self.assertEqual([0.4375], part["invalid_points"])
+        self.assertFalse(part["lower_tested"], "the last non-reproducing point was invalid, not tested")
+        self.assertEqual(0.4375, part["lower"])
+        invalid = [c for c in result["candidates"] if c["decision"] == "invalid_scene"]
+        self.assertEqual(1, len(invalid))
+        self.assertEqual(result["invalid_scenes"], [invalid[0]["index"]])
+
+    def test_a_genuine_lower_bound_after_an_invalid_point_is_tested(self):
+        world = World(lambda sel: comp(sel, "soup_1", "rotation") >= 0.4,
+                      invalid=lambda sel: comp(sel, "soup_1", "rotation") == 0.25)
+        result, _ = reduce(world)
+        (part,) = result["parts"]
+        self.assertEqual((0.4375, 0.375, True), (part["t"], part["lower"], part["lower_tested"]))
+        self.assertEqual([0.25], part["invalid_points"])
+
+    def test_valid_bisections_report_no_invalid_points(self):
+        result, _ = reduce(self.world)
+        self.assertEqual([], result["parts"][0]["invalid_points"])
+
+    def test_speculative_bisection_also_keeps_invalid_points_apart(self):
+        world = World(lambda sel: comp(sel, "soup_1", "rotation") >= 0.4,
+                      invalid=lambda sel: comp(sel, "soup_1", "rotation") == 0.25)
+        result, _ = reduce(world, speculative_bisection=True)
+        (part,) = result["parts"]
+        self.assertIn(0.25, part["invalid_points"])
+        self.assertGreaterEqual(part["t"], 0.4)
+        if part["lower_tested"]:
+            self.assertNotIn(part["lower"], part["invalid_points"])
+
     def test_both_parts_are_kept_when_neither_alone_reproduces(self):
         world = World(lambda sel: comp(sel, "soup_1", "rotation") > 0 and comp(sel, "soup_1", "position") > 0)
         result, _ = reduce(world, bisection_steps=0)
@@ -233,7 +269,7 @@ class GateAndStopTests(unittest.TestCase):
         world = World(lambda sel: True, failing_fails=False)
         result, executor = reduce(world)
         self.assertEqual(result["stop_reason"], "failing_not_reproducible")
-        self.assertEqual(result["candidates_tested"], 1)          # only the full-hybrid gate ran
+        self.assertEqual(result["candidates_tested"], 0, "the full hybrid is not run for a failing start that does not fail")
         self.assertIsNone(result["final_selection"])
         self.assertFalse(result["reduced"])
 
@@ -262,10 +298,20 @@ class GateAndStopTests(unittest.TestCase):
         self.assertEqual(result["references_tried"][0]["decision"], "fails")
         self.assertEqual(result["references_tried"][1]["decision"], "passes")
         hybrids = [c for c in result["candidates"] if c["role"] == "hybrid"]
-        self.assertTrue(all(c["reference"] in ("r0", "r1") for c in hybrids))
-        self.assertTrue(all(c["reference"] == "r1" for c in hybrids if c["phase"] != "gate"))
+        self.assertTrue(all(c["reference"] == "r1" for c in hybrids),
+                        "no full-hybrid check is spent on a reference that fails its own 5-of-5 gate")
         self.assertEqual(result["order"], ["soup_1", "bowl_1"])
         self.assertEqual(list(result["final_selection"]), ["soup_1"])
+
+    def test_each_reference_is_gated_before_its_full_hybrid_is_run(self):
+        world = World(lambda sel: comp(sel, "soup_1", "rotation") >= 0.4, reference_fail={"r0": 0, "r1": 0})
+        refs = [{"id": "r{}".format(i), "differences": standard_table()} for i in range(3)]
+        result, _ = reduce(world, references=refs)
+        self.assertEqual("reduced", result["stop_reason"])
+        self.assertEqual("r2", result["reference"])
+        gate = [(c["role"], c.get("reference")) for c in result["candidates"] if c["phase"] == "gate"]
+        self.assertEqual([("failing", None), ("reference", "r0"), ("reference", "r1"), ("reference", "r2"),
+                          ("hybrid", "r2")], gate)
 
     def test_no_passing_reference_stops_with_reference_not_passing(self):
         world = World(lambda sel: True, reference_fail={"r0": 0, "r1": 4, "r2": 1, "r3": 0})
