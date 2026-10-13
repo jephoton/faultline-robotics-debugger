@@ -345,7 +345,8 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M5: diagnostic report and viewer — **complete (Oct 3–11)** | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
 | M5D: Tavily research context — **complete (Oct 11–12)** | Retrieve relevant public research/docs for a verified case and display source-linked context alongside the Nemotron interpretation | Meaningful runtime Tavily call; useful references, evidence/context separation, privacy and request-budget checks |
 | M6: stronger experiments | Assess LIBERO-Plus reuse for additional perturbation families; add related tasks and explore other LIBERO suites after within-suite validation | Pinned compatibility, parameterised replay/reduction for the selected family, held-out/cross-suite evaluation, budget-matched baselines and uncertainty |
-| M7: submission | Package reproducible cloud run, public release, video and feedback | Fresh setup succeeds; submitted artifact versions are frozen |
+| M7a: product consolidation | `faultline diagnose <spec>` owning the full cloud lifecycle, one spec-driven job mode, automatic viewer cases with `faultline replay`, optional service-account auth; access via (A) public gallery of finished cases, (B) local GPU backend, (C) Nebius backend in the user's own project (ADR 0027) | A fresh user runs one diagnosis from the README with their own account or GPU and sees the reduced case in the viewer |
+| M7b: submission | Demo video, write-up and feedback showing the M7a flow end to end | Fresh setup succeeds; submitted artifact versions are frozen |
 
 ### Roadmap additions — October 8: reuse before rebuilding
 

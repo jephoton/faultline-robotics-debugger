@@ -31,3 +31,9 @@ Jethro chose a tighter M3 window than the first proposal (4 and 3 days).
 M5D comes first because it extends the just-completed explanation path and has
 a defined prize rule (functional runtime Tavily use). Each stage still needs its
 own design checkpoint, provider/spend caps and plan before paid work.
+
+## Amendment (October 13)
+
+M3 batching succeeded (ADR 0025), so the portfolio fallback is dropped. M6 ran
+as ADR 0026. M7 is split into M7a product consolidation and M7b submission
+(ADR 0027).
