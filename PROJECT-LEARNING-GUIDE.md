@@ -1,8 +1,8 @@
 # Two robot projects: what you would learn and build
 
-**October 8 update:** the selected failure-diagnosis project is now named
-**Faultline**. This guide preserves the original two-option discussion below;
-additional HPC work is optional stretch and may move to another project.
+**October 13 update:** Idea B (failure diagnosis) became **Faultline**.
+Sections 1–7 are the original September 12 decision guide. **Section 8** is
+new: the main ideas learned while building Faultline, in plain language.
 
 Written September 12, 2026. This is a beginner-oriented decision guide, not a finalized architecture.
 
@@ -433,3 +433,69 @@ Choose **failure diagnosis** if you are most curious about:
 > How do I systematically discover where a robot breaks, explain the conditions, and help someone fix it?
 
 You can choose either without committing to the other. My suggested next step is a small hands-on example of each before selecting the final project.
+
+## 8. What building Faultline taught (September–October 2026)
+
+### Randomness: a failure must repeat to count
+
+GR00T samples its actions, so the same situation can succeed one time and
+fail the next. Faultline therefore counts a failure only when it happens in
+at least 4 of 5 attempts while unperturbed control runs succeed. Near a
+boundary, failure rates rise through a **flaky band**: in M6, blur failed 3/5,
+then 1/5, then 4/5 at nearly identical strengths. A threshold therefore marks
+where failure becomes reliable, within the budget spent, not an exact number.
+
+### Reduction: shrink the trigger while it still fails
+
+Reducing a failure means repeatedly making the trigger smaller and keeping a
+change only if the failure still repeats. For a rectangle that meant cutting
+edges (25% → 14% of the image). For a single strength number it is a coarse
+sweep followed by **bisection**: halve the gap between the last passing and
+the first failing strength. This is the same idea as delta debugging in
+software: the minimal input that still reproduces the bug.
+
+### Amdahl's law: speed up the actual bottleneck
+
+Running more simulator workers in parallel sped things up almost linearly
+(four workers gave 3.7× the speed of one) until the single GPU model server
+became the bottleneck: going from 4 to 8 workers gave 1.6×, but 8 to 12 only
+1.1×. At 12 workers, requests waited about
+0.8 s each for the GPU. **Batching** (answering several workers' requests in
+one GPU call) cut that wait about tenfold and gave +18%, but did nothing at
+8 workers, where there was no queue to group. Optimising a part that is not
+the bottleneck barely helps.
+
+### Cloud execution: pay only while the GPU runs
+
+Each experiment ran as a Serverless Job: about 3 minutes to pull the
+container image and 6 minutes to download the model, then the actual work,
+then results exported to private storage with a one-day expiry. Fixed startup
+dominates short jobs, so it pays to group many experiments into one job.
+Signing in to the CLI is free; billing happens only while a job runs, and
+each user's jobs bill to their own account.
+
+### What an LLM can and cannot do in a debugger
+
+Nemotron (on Token Factory) explains a case and can suggest what to test
+first; Tavily finds related public research. Neither can prove a cause: only
+rerunning the robot with one thing changed shows what matters. The rule used
+throughout is "the model proposes, the simulator verifies", with explanations
+kept visibly separate from measured evidence.
+
+### Image changes versus world changes
+
+Blur, noise, darkening and occlusion edit the camera picture after the
+simulator renders it. They are cheap, deterministic and easy to shrink, but
+only approximate real effects. Moving the camera, changing the lights or
+moving objects changes the simulated world itself; that is more realistic and
+is the next step (M7), alongside reducing the starting scenario of a failing
+run that a user brings.
+
+### A real finding: the two cameras do different jobs
+
+Covering the upper-right of GR00T's third-person camera made it grasp the
+soup but fail to carry it; also blacking out its wrist camera stopped the
+grasp entirely; covering the same patch on the wrist camera alone did
+nothing. The working hypothesis is that the wrist view drives grasping and
+the third-person view drives transport. It is a hypothesis because only one
+task and seed were tested.

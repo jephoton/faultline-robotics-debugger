@@ -1,127 +1,32 @@
-<!-- Root copy of the detailed startup plan. Keep the milestone/status sections in sync with docs/superpowers/plans/2026-09-12-robot-debugging-startup.md. -->
+<!-- Current status lives at the top of this file. The original startup plan copy in docs/superpowers/plans/2026-09-12-robot-debugging-startup.md is historical. -->
 
 # Faultline Project Roadmap
 
-**Naming/scope update — October 8:** Faultline is the official product name.
-All further M3/HPC work is optional stretch; deeper HPC exploration may move
-to a separate project. Preserve the measured base M3 result without making
-batching, portfolio scheduling or scale-out a core release gate. See
-[ADR 0019](docs/decisions/0019-faultline-name-and-hpc-scope.md).
+## Current status — October 13, 2026
 
-## Latest submission alignment — October 6
+Faultline finds a robot-policy failure, confirms that it repeats, reduces it to
+a minimal trigger and saves it as a replayable regression case. The
+[README](README.md) gives the pitch, results and how it runs; the
+[handoff state](docs/codex-handoff/STATE.md) has the latest operational detail.
 
-**October 9 execution update:** reviewed direct-evaluator containment and
-prepare-only Job configuration are integrated; Docker recovered and the pinned
-simulator base image passed local CPU checks. Final model/runtime packaging and
-live pilot remain; M5 is not complete. See the
-[current handoff](docs/codex-handoff/STATE.md) for evidence and remaining gates.
+| Milestone | Status |
+| --- | --- |
+| M1 reproducible runner, M2 first failure | Complete (September) |
+| M3 parallel replay | Complete: 3.715× with four workers (September 29) |
+| M3 batched inference | Complete: +18% at 12 workers, none at 8 ([ADR 0025](docs/decisions/0025-m3-batched-inference-experiment.md)) |
+| M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
+| M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
+| M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
+| **M7a product consolidation** | **Next:** scenario reduction of imported failures, `faultline diagnose`, automatic cases, breadth pack, UI overhaul, access options ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)) |
+| M7b submission | Due October 30, 10:00 PT (target October 29) |
 
-**Newest priority:** Jethro approved moving future evaluations to a single-GPU
-Serverless Job and private Object Storage export; preserve historical VM results
-without rerunning them. See [ADR 0018](docs/decisions/0018-serverless-jobs-for-future-runs.md)
-and the [migration plan](docs/superpowers/plans/2026-10-06-serverless-job-migration.md).
-Local implementation is approved, followed by one US$3 / one-hour single-L40S
-validation and 24-hour private output retention. Local image validation still
-precedes provision/start. Actual balance/expiry remain unknown; Jethro asserted
-sufficient funds and asked to proceed without the console check. This does not reopen expanded M3,
-external replay or Nemotron retries. Older priority statements below are historical.
+Spend so far is tracked per experiment note; the Nebius AI Cloud balance was
+about US$5.3 on October 13 (estimate pending billing). Roadmap order and
+timeboxes: [ADR 0023](docs/decisions/0023-post-m5-roadmap-order.md).
 
-**Immediate priority:** review the actual Nemotron report with Jethro.
-He explicitly deferred external replay and its next identity/design plan.
-Do not begin M5B wiring or GPU execution. M5C integration works, but the
-current shallow interpretation is not accepted as demo-ready diagnosis.
-
-M5 continuation: A is complete. B's reviewed local restoration kernel is now
-integrated and reads the real sample, but actual simulator/case wiring and
-fresh policy replay remain. C's client/store/CLI/viewer are integrated; the
-first real Nemotron attempt returned no valid interpretation under600output
-tokens. The separately approved4096-token attempt now supplies a real report
-in the viewer, but it is shallow and needs human review (one caveat's episode
-citations do not substantiate it). See the [pilot results](docs/experiments/m5-nemotron-pilot.md).
-Do not mark M5 complete, retry either consumed reservation, or start GPU compute.
-Fresh main tests:581OK/four platform skips. New-panel real browser QA is pending
-because browser automation cannot initialise in this session.
-
-See the [current rules and judging review](docs/research/2026-10-06-submission-alignment.md).
-Faultline is now the official product name. Local directory/GitHub repository
-renames remain separate decisions. External replay is deferred pending the report review.
-Simulation-only Physical AI is explicitly permitted by current rules.
-Do not assume VM-only runtime eligibility: finish genuine Token Factory
-inference and seek clarification on the track's Serverless Jobs wording before
-deciding whether any infrastructure migration is necessary. Expanded M3 stays
-frozen; submission readiness, not extra HPC work, is the priority.
-
-## Current scope decision — October 2
-
-Expanded M3 is **frozen and optional stretch work**, accepted by Jethro in
-[ADR 0011](docs/decisions/0011-freeze-expanded-m3.md). Keep the completed
-fixed-replay parallelism result and implemented scheduler; do not resume the
-unfinished host launcher or paid portfolio comparison automatically. The core
-product remains reproducible robot failure discovery, confirmation, reduction,
-inspection and replay. Portfolio scheduling, its viewer overview and live
-end-to-end speedup validation are not prerequisites for that product or M7.
-A formal-methods component is under consideration, not yet designed/approved.
-This scope decision overrides older next-step instructions below.
-
-**Next scoped milestone:** [M5 case workbench plan](docs/superpowers/plans/2026-10-03-m5-case-workbench.md)
-has its scope and CLI-first boundary approved: offline existing-case import/inspection/export, then
-one verified external replay adapter and a separately approved grounded
-Nemotron explanation pilot. The independent task-local media fix is integrated
-and reviewed; the [exact case contract](docs/superpowers/specs/2026-10-03-m5-case-contract-design.md)
-is accepted. Its schema kernel is implemented and independently reviewed;
-source reconciliation and CLI import/export are integrated and independently
-reviewed. Real saved M4 metadata exported/reimported with unchanged core source
-hashes; missing runtime/checkpoint pins remain explicit. **M5A is complete:**
-the read-only case journey is integrated, independently reviewed and checked
-against real saved media. See the [operator walkthrough](docs/setup/case-workbench.md).
-M5B external replay and M5C real Nemotron explanations remain pending their
-sample, model/data-transfer and spending gates. No M5 paid execution has
-started. Expanded M3 remains frozen.
-
-October 4 follow-up: sample acquisition and the $0.02 text-only Nemotron pilot
-are approved in [ADR 0014](docs/decisions/0014-m5-bounded-sample-and-nemotron-pilot.md).
-The actual external sample's hash/size and demo_0 metadata are verified; it has
-states/XML but requires external BDDL/assets and runtime restore validation.
-See [sample findings](docs/research/2026-10-04-m5-external-sample.md).
-October 5: the locally configured inference key authenticated a read-only
-global model catalog check, returning the exact approved Nemotron model ID.
-Generation and credit expiry remain unverified. Immutable evidence-bound
-sidecars and the narrow task-0/demo_0/state-0 restore adapter are accepted in
-[ADR 0015](docs/decisions/0015-m5-evidence-bound-interpretations.md) and
-[ADR 0016](docs/decisions/0016-m5-narrow-external-state-restore.md).
-Next: execute the [bounded Nemotron integration plan](docs/superpowers/plans/2026-10-05-m5-nemotron-integration.md)
-and independently the [local reset-kernel plan](docs/superpowers/plans/2026-10-05-m5-external-reset-kernel.md).
-Neither catalog access nor local fixtures completes M5B/C. No paid GPU start
-is approved; M5B needs actual runtime/case wiring and fresh bounded live validation.
-
-The approved [offline explanation kernel](docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md)
-is integrated and independently spec/quality reviewed through `557eb36`.
-It allowlists evidence packets, preserves deterministic raw/gate counts and
-validates optional interpretation structure/citations without certifying truth.
-Fresh main suite: 485 tests, four platform skips. Real M4 acceptance preserves
-22 episodes and 14.0625% mask area across absent/valid/rejected interpretations;
-all 116 original source-file hashes are unchanged. No provider call or viewer
-explanation integration is included. M5C remains pending the bounded provider
-client/artifact binding, viewer read path and real approved pilot; M5B still
-requires a designed and exercised restore adapter.
-
-> **For agentic workers:** Follow the current scoped execution plan and the human-guided multi-agent workflow in `AGENTS.md`. Use parallel agents only for substantial independent work; retain one owner for cloud spending and Git integration. Steps use checkboxes for tracking.
-
-**Goal:** Reproduce a working simulated robot policy, discover and replay one meaningful failure, and establish the measurements needed to build an efficient parallel debugging system.
-
-**Architecture:** An existing model server chooses robot actions; simulation workers run independent task attempts. Our application records attempts, selects controlled perturbations, reduces failures, and produces replayable reports. Start with one worker and retain the upstream runner until there is evidence that custom infrastructure is necessary.
-
-**Tech stack:** Python, Linux, Docker, a candidate GR00T checkpoint through LeRobot and the AllenAI VLA evaluation harness, LIBERO/MuJoCo, Nebius GPU compute, JSON/JSONL artifacts, and lightweight reports. Formal verification is optional and outside the critical path.
-
-**Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's two-episode live pilot and equal-work 1/2/4-worker comparison completed September 29: all 48 comparison episodes were valid with no outcome drift, and four workers achieved 3.715× warm replay throughput versus one on the same VM. The adaptive find → confirm → reduce loop and three-job portfolio are locally implemented and tested. The October 1 H100 screen passed one nominal episode each for three tasks with recovered media. The full diagnostic portfolio comparison, end-to-end speedup, and billing reconciliation remain pending.
-
-**Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](docs/superpowers/plans/2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
-
-**Proposed product/submission plan:** [Replayable case import, Nemotron, and license](docs/superpowers/plans/2026-09-15-case-import-nemotron-submission.md) scopes the post-grid product experience and remaining submission requirements. Jethro prioritized a replay-feasible LIBERO/robomimic-style external episode as the first import direction; exact implementation/model designs remain proposed. Apache-2.0 was selected under Jethro's delegation and added locally. [Production-artifact and Nemotron research](docs/research/2026-09-15-production-artifacts-and-nemotron.md) explains the format alternatives and capability checks.
-
-**User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
-
-**Budget and account update (September 13):** The total intended Nebius-credit envelope is US$75: use the initial account's US$25 for the first baseline/integration work without deliberately wasting it, then use US$50 on the main account (US$25 initial balance plus US$25 promo) for perturbation, reduction, parallel-evaluation, and demo work. Nebius projects cannot move between tenants or regions, so this is an account/profile handoff using the same Git repository, not a project migration. The initial CLI-authenticated account is active and currently shows suitable `eu-north1` L40S capacity; its billing, live complete-VM price, quota, capacity, and balance/expiry must still be verified immediately before provisioning. Keep US$5--10 of the combined plan in reserve and treat the US$75 total as a hard ceiling unless Jethro explicitly changes it.
+**Everything below is the original September 12 startup plan, kept for
+history.** Its milestone table (section 6) is maintained; dated status notes
+inside it are historical and superseded by the table above.
 
 ---
 
