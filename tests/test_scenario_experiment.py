@@ -148,7 +148,7 @@ class ReduceConfigTests(unittest.TestCase):
             (("hypothesis", "extra"), 1), (("hypothesis", "ranking"), "robot"),
             (("hypothesis", "raw_content"), "x" * 9000), (("hypothesis", "text"), "x" * 5000),
             (("hypothesis",), []), (("attempts",), 9), (("required_failures",), 6),
-            (("concurrency",), 4), (("max_candidates",), 31), (("max_references",), 4),
+            (("concurrency",), 4), (("max_candidates",), 61), (("max_references",), 4),
             (("bisection_steps",), 7), (("hypothesis", "text"), "bad\x00text"),
         ]
         for path, value in bad:

@@ -92,7 +92,10 @@ MAX_SCREEN_EPISODES = 600
 MAX_CONFIRM_ATTEMPTS = 8
 MAX_REDUCE_ATTEMPTS = 8
 MAX_REDUCE_BISECTION = 6
-MAX_REDUCE_CANDIDATES = 30
+DEFAULT_REDUCE_CANDIDATES = 30
+# A failure that needs a combination of differences (October 13: 6 of 9 objects) spends far
+# more candidates on delta debugging and shrinking than a single culprit does.
+MAX_REDUCE_CANDIDATES = 60
 MAX_REDUCE_CONCURRENCY = 3
 # Three candidates of four first-wave attempts fill the 12 workers exactly (ADR 0029: the fifth
 # attempt of a failure gate is held back until the first four are back).
@@ -283,7 +286,7 @@ def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, 
         fields["attempts"])
     fields["bisection_steps"] = _int(config.get("bisection_steps", 4), "bisection_steps", 0,
                                      MAX_REDUCE_BISECTION)
-    fields["max_candidates"] = _int(config.get("max_candidates", MAX_REDUCE_CANDIDATES),
+    fields["max_candidates"] = _int(config.get("max_candidates", DEFAULT_REDUCE_CANDIDATES),
                                     "max_candidates", 1, MAX_REDUCE_CANDIDATES)
     fields["concurrency"] = _int(config.get("concurrency", DEFAULT_REDUCE_CONCURRENCY), "concurrency", 1,
                                  MAX_REDUCE_CONCURRENCY)
@@ -317,7 +320,7 @@ def planned_episodes(mode: str, config: Mapping[str, Any]) -> int:
     # The failing start, every reference that may have to be tried before one passes, and the
     # one full-hybrid check, then the candidate budget.
     gates = (2 + int(config.get("max_references", MAX_REDUCE_REFERENCES))) * attempts
-    return gates + int(config.get("max_candidates", MAX_REDUCE_CANDIDATES)) * attempts
+    return gates + int(config.get("max_candidates", DEFAULT_REDUCE_CANDIDATES)) * attempts
 
 
 def recommended_deadline_seconds(mode: str, config: Mapping[str, Any]) -> int:
@@ -340,7 +343,7 @@ def recommended_deadline_seconds(mode: str, config: Mapping[str, Any]) -> int:
         work = (_waves(first) * mixed + _waves(confirm) * ASSUMED_FAILING_EPISODE_SECONDS
                 + ASSUMED_FAILING_EPISODE_SECONDS)             # the last term: the top-up wave
     elif mode == "scenario-reduce":
-        rounds = int(math.ceil(config.get("max_candidates", MAX_REDUCE_CANDIDATES)
+        rounds = int(math.ceil(config.get("max_candidates", DEFAULT_REDUCE_CANDIDATES)
                                / float(config.get("concurrency", DEFAULT_REDUCE_CONCURRENCY))))
         fallbacks = int(config.get("max_references", MAX_REDUCE_REFERENCES)) - 1
         work = ((REDUCE_GATE_WAVES + rounds + fallbacks * REDUCE_REFERENCE_FALLBACK_ROUNDS)
