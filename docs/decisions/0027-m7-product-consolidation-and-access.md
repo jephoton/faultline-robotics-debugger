@@ -99,6 +99,16 @@ automatic cases) → breadth pack → UI overhaul → M7b demo and submission.
 Rejected: **D. hosted run service on Jethro's account** (needs auth, quotas
 and abuse protection; Jethro would pay for others' runs).
 
+**Deployment (added October 13): try deploying Faultline as a website,
+likely on Vercel.** Vercel cannot run MuJoCo or a GPU policy, so the site is
+the deployed form of access option A: a landing page plus a static export of
+finished cases (videos, minimal triggers, evidence, explanation, research)
+generated from the case store. It also serves as the submission's demo URL
+(optional for the Physical AI track, but useful to judges). Video hosting,
+any live Token Factory feature on the site, and the export command are
+decided at the M7 checkpoint; publishing needs Jethro's explicit go at the
+time. This is the last M7a item, after the UI overhaul.
+
 **M7b — submission:** demo video, write-up and FEEDBACK reconciliation,
 showing the M7a flow end to end with the M6 wrist and blur findings as the
 example story. Deadline October 30, 10:00 PT; target October 29; M7 starts no
