@@ -5,7 +5,8 @@ LIBERO-10 task without any perturbation. (2) Reduce the differences between
 that start and the nearest passing start to a minimal cause, with Nemotron
 proposing the order and a hypothesis, and save it as a replayable case.
 
-**Design:** ADR 0028 (accepted October 13), inside ADR 0027. **Spend cap:**
+**Design:** ADR 0028 (accepted October 13), inside ADR 0027; early-decided
+gates from ADR 0029 (labelled M3). **Spend cap:**
 US$4.00 for this phase (image smoke, screen, reduction smoke, reduction, one
 retry). No GPU Job runs before Jethro approves this plan.
 
@@ -31,6 +32,7 @@ The Token Factory call stays on the workstation; no key enters a Job.
 | B. Scenario start and validity | `src/robot_debug/libero.py`, new `src/robot_debug/scenario_import.py`, `src/robot_debug/external_reset.py` (generalise, no behaviour change for accepted demos), tests | agent S |
 | C. Scenario state model | new `src/robot_debug/scenario_state.py`, tests | agent P (pure side) |
 | D. Scenario reducer | new `src/robot_debug/scenario_reduce.py`, tests | agent P |
+| D2. Early-decided gates (M3) | new `src/robot_debug/decided_gate.py`, used by `scenario_reduce.py`, tests | agent P |
 | E. Reference choice and Nemotron hypothesis | new `src/robot_debug/scenario_hypothesis.py`, `src/robot_debug/token_factory.py` (additive), new `scripts/plan_scenario_reduction.py`, tests | agent P |
 | F. Job modes | `src/robot_debug/job_runtime.py`, `job_workload.py`, `job_entry.py`, new `src/robot_debug/scenario_experiment.py`, `scripts/prepare_serverless_job.py`, tests | agent S after A–E merge |
 | G. Report and case | new `scripts/report_scenario_reduction.py`, case writer in `src/robot_debug/scenario_experiment.py`, tests | agent S |
@@ -138,6 +140,16 @@ records every candidate, its outcomes, the final selection, the number of
 reruns, and how many candidates the ranked probe saved compared with starting
 straight at step 3 (counted, not claimed as a measured speedup).
 
+**Early-decided gates (D2, ADR 0029, labelled M3).** `decided_gate.py`
+decides a 4-of-5 gate at 4 failures or 2 successes, and the reference's
+5-of-5 pass gate at its first failure. The reducer submits attempts through
+it: once a candidate is decided, its not-yet-started attempts are skipped as
+`decided_skipped`; started attempts finish and are recorded without changing
+the decision. Workers freed this way take attempts of other independent
+candidates (a ddmin round, or two bisection points at once). Tests assert
+that every decision equals the all-five-attempts decision for all 32 outcome
+sequences, and count the skipped attempts.
+
 Tests: synthetic evaluators with a known culprit (single entity, a pair,
 rotation-only, threshold at t = 0.4), stochastic evaluators, invalid scenes,
 reference fallback, budget and deadline, and the exact candidate sequence
@@ -181,7 +193,7 @@ wrap them later.
   state vector and layout per task, and the list of starts failing at least
   4 of 5.
 - `scenario-reduce`: config from E. Runs D with the pool. Summary: the full
-  reduction result plus videos of the failing start, the minimal hybrid and
+  reduction result, attempts skipped by early decisions plus videos of the failing start, the minimal hybrid and
   the reference.
 - The prepare script's deadline guard covers all three modes (at least
   1000 s). Config validation bounds every field.
@@ -205,17 +217,19 @@ subset before each Job. Commits:
 2. `feat(m7): select LIBERO suite and benchmark start per stage`
 3. `feat(m7): start episodes from validated scenario states`
 4. `feat(m7): model scenario differences and hybrid start states`
-5. `feat(m7): add ranked delta-debugging scenario reducer`
-6. `feat(m7): choose reference starts and request Nemotron hypotheses`
-7. `feat(m7): run scenario smoke, screen and reduce workloads`
-8. `feat(m7): report reduced scenarios as cases`
-9. `docs(m7): record scenario screen and reduction results`
+5. `feat(m3): decide repeatability gates as soon as the outcome is fixed`
+6. `feat(m7): add ranked delta-debugging scenario reducer`
+7. `feat(m7): choose reference starts and request Nemotron hypotheses`
+8. `feat(m7): run scenario smoke, screen and reduce workloads`
+9. `feat(m7): report reduced scenarios as cases`
+10. `docs(m7): record scenario screen and reduction results`
 
 ## Review and cloud gates
 
 1. Independent review of A–G (state layout and slicing, slerp and
    interpolation, validity threshold, ddmin correctness and 1-minimality,
-   concurrency and cleanup, Nemotron fallback, backward compatibility).
+   concurrency and cleanup, early-decided gate equivalence, Nemotron
+   fallback, backward compatibility).
 2. Coordinator builds image v12 (adds the LIBERO-10 checkpoint prefetch),
    runs the in-image subset and a no-network check that LIBERO-10 starts
    load and the state length matches, pushes, verifies tag to digest.

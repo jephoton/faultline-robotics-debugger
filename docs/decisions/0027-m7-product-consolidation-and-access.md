@@ -121,7 +121,12 @@ which is encouraged, not required. Concerns: it bills Jethro's account while
 active (scale-to-zero unconfirmed; an always-on L40S is about US$1.75/h),
 needs token auth and rate limits, and adds a network round trip per action
 chunk. Only acceptable, if at all, as a short, Jethro-started window with a
-spend cap; it does not replace options A to C.
+spend cap; it does not replace options A to C. **Update (October 13):** made
+a stretch goal for Jethro to try closer to the judging period (ADR 0029).
+
+**Startup cut (October 13, labelled M3, ADR 0029):** `faultline diagnose`
+(step 4) includes measuring and cutting Job startup (in-region weight
+storage, slimmer image), because about 12 minutes of every Job is startup.
 
 **M7b — submission:** demo video, write-up and FEEDBACK reconciliation,
 showing the M7a flow end to end with the M6 wrist and blur findings as the

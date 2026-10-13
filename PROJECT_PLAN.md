@@ -14,6 +14,7 @@ a minimal trigger and saves it as a replayable regression case. The
 | M1 reproducible runner, M2 first failure | Complete (September) |
 | M3 parallel replay | Complete: 3.715× with four workers (September 29) |
 | M3 batched inference | Complete: +18% at 12 workers, none at 8 ([ADR 0025](docs/decisions/0025-m3-batched-inference-experiment.md)) |
+| M3 latency | Accepted: early-decided gates (with mode 1), Job startup cut from about 12 minutes (with `diagnose`); warm Endpoint as a stretch near judging ([ADR 0029](docs/decisions/0029-m3-latency-startup-and-early-decided-gates.md)) |
 | M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
