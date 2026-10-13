@@ -54,6 +54,35 @@ pass centred on the user journey: import → diagnose → reduced case →
 replay, with clear status, original-versus-minimal comparison and the
 explanation and research panels.
 
+**Breadth pack (added October 13; details at the M7 checkpoint):** so the
+product covers real ground without LIBERO-Plus's licence and reducibility
+problems.
+
+- **All four LIBERO suites** (spatial, object, goal, LIBERO-10): NVIDIA
+  publishes `nvidia/gr00t17-lerobot-libero_{spatial,object,goal,10}-640`
+  checkpoints, so suite and task become spec parameters.
+- **Simulator-level, reducible families:** camera viewpoint (move the
+  simulated camera by a shrinkable offset) and scene lighting (renderer
+  lights), complementing the image-space families.
+- **Instruction paraphrasing (language family):** Nemotron on Token Factory
+  generates paraphrases of the task instruction; Faultline finds the smallest
+  rewording that reproducibly breaks the policy.
+- **Family catalog:** a few more curated image-space families as spec options.
+
+**Two modes, one engine:** mode 1 "debug your failure" (scenario reduction,
+the centrepiece) and mode 2 "audit your policy" (families across visual,
+physical-scene and language layers). Both stay in the product and the demo;
+the demo leads with mode 1.
+
+**LIBERO-Plus:** still a post-M7 stretch. Its value is simulator-level
+variety (real camera/lighting/backgrounds/distractors, language variants) and
+comparability with a published benchmark; its costs are predefined variants
+that cannot be reduced, no stated licence, and replacing the LIBERO package.
+Revisit only if there is slack after about October 25.
+
+**Order:** core story (scenario reduction, broader import, `diagnose`,
+automatic cases) → breadth pack → UI overhaul → M7b demo and submission.
+
 **Access options (all three):**
 
 - **A. Public gallery of finished cases:** a read-only published page of the
