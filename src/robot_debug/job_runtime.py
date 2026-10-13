@@ -16,7 +16,9 @@ _CONFIG_FIELDS = {"schema_version", "mode", "run_id", "deadline_seconds"}
 BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
 # ADR 0026: the M6 smoke Job has fixed conditions; the threshold Job is bounded by these fields.
 M6_MODES = {"m6-smoke", "m6-threshold"}
-_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES
+# ADR 0028: LIBERO-10 scenario screening and reduction. Their fields live in scenario_experiment.
+SCENARIO_MODES = {"scenario-smoke", "scenario-screen", "scenario-reduce"}
+_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES | SCENARIO_MODES
 _BATCH_FIELDS = {"phases", "repeats_per_kind"}
 _BATCH_WORKERS = (4, 8, 12)
 # Equal-work manifest sizes fixed by ADR 0025: repeats per kind (nominal, reduced mask).
@@ -59,6 +61,14 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         expected_fields = _CONFIG_FIELDS | _BATCH_FIELDS
     elif mode_name == "m6-threshold":
         expected_fields = _CONFIG_FIELDS | _M6_THRESHOLD_FIELDS
+    elif mode_name in SCENARIO_MODES:
+        from robot_debug import scenario_experiment as scenario
+
+        required = _CONFIG_FIELDS | scenario.MODE_REQUIRED[mode_name]
+        allowed = required | scenario.COMMON_OPTIONAL | scenario.MODE_OPTIONAL[mode_name]
+        if not required <= set(config) <= allowed:
+            _fail("workload configuration must contain exactly the required fields")
+        expected_fields = set(config)
     if set(config) != expected_fields:
         _fail("workload configuration must contain exactly the required fields")
     schema_version = config["schema_version"]
@@ -83,6 +93,13 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         validated["repeats_per_kind"], validated["phases"] = _validate_batch_fields(config, mode)
     if mode == "m6-threshold":
         validated.update(_validate_m6_threshold_fields(config))
+    if mode in SCENARIO_MODES:
+        from robot_debug import scenario_experiment as scenario
+
+        try:
+            validated.update(scenario.validate_mode_fields(mode, config))
+        except scenario.ScenarioConfigError as error:
+            raise JobRuntimeError(str(error)) from error
     return validated
 
 
@@ -576,6 +593,7 @@ __all__ = [
     "JobRuntimeError",
     "M6_FAMILIES",
     "M6_MODES",
+    "SCENARIO_MODES",
     "export_closed_evidence",
     "validate_workload_config",
 ]

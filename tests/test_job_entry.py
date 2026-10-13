@@ -1025,6 +1025,18 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self._main(self._runner("complete"))[0], 0)
         self.assertEqual(self._main(self._runner("partial"))[0], 1)
 
+    def test_scenario_workloads_pick_the_suite_checkpoint_and_other_modes_keep_the_default(self) -> None:
+        self._main(self._runner("complete"))
+        self.assertEqual("libero_object", self.calls[-1][1]["model_factory"]._suite)
+        scenario = {"schema_version": 1, "mode": "scenario-smoke", "run_id": "scn-smoke-1",
+                    "deadline_seconds": 1500}
+        self.config.write_text(json.dumps(scenario), encoding="utf-8")
+        self._main(self._runner("complete"))
+        self.assertEqual("libero_10", self.calls[-1][1]["model_factory"]._suite)
+        self.config.write_text(json.dumps(dict(scenario, suite="libero_object")), encoding="utf-8")
+        self._main(self._runner("complete"))
+        self.assertEqual("libero_object", self.calls[-1][1]["model_factory"]._suite)
+
     def test_repeated_preflights_use_unique_directories(self) -> None:
         self._main(self._runner("complete"))
         self._main(self._runner("complete"))

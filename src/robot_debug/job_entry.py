@@ -24,7 +24,13 @@ from .job_process import (
     InfrastructureError,
     close_owned_process_group,
 )
-from .job_runtime import M6_MODES, JobRuntimeError, export_closed_evidence, validate_workload_config
+from .job_runtime import (
+    M6_MODES,
+    SCENARIO_MODES,
+    JobRuntimeError,
+    export_closed_evidence,
+    validate_workload_config,
+)
 
 
 MAX_WORKLOAD_BYTES = 64 * 1024
@@ -848,7 +854,8 @@ def main(
             return EXIT_RUNTIME
         progress("export_preflight_ok")
         model_factory = ProductionModelFactory(
-            layout, base_env=environ, deadline=deadline, clock=clock, progress=progress
+            layout, base_env=environ, deadline=deadline, clock=clock, progress=progress,
+            suite=config.get("suite", DEFAULT_SUITE),
         )
         summary = runner(
             config,
@@ -860,7 +867,7 @@ def main(
             ),
             model_factory=model_factory,
             evaluator_factory=evaluator_factory(
-                layout, environ, progress, single_thread_blas=config["mode"] in M6_MODES),
+                layout, environ, progress, single_thread_blas=config["mode"] in M6_MODES | SCENARIO_MODES),
             exporter=exporter,
             clock=clock,
             absolute_deadline=deadline,
