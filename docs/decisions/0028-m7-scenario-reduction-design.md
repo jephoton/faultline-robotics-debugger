@@ -1,8 +1,8 @@
 # ADR 0028: Scenario reduction (mode 1) design
 
-**Status:** Accepted by Jethro on October 13, 2026 (M7 design checkpoint).
-Screening scope, spend cap and the remaining M7a items are decided
-separately.
+**Status:** Accepted by Jethro on October 13, 2026 (M7 design checkpoint),
+including the screen size, spend cap and Nemotron model below. The remaining
+M7a items are decided at their own checkpoints.
 
 ## Problem
 
@@ -54,6 +54,18 @@ is enough") with original, minimal and nominal videos.
 - Import generalises the fail-closed external reset kernel (ADR 0016/0021)
   from two pinned demos to validated LIBERO files for any supported suite and
   task, keeping its size, XML and asset checks.
+
+**Screen, spend and model (accepted the same day):**
+
+- Screen: LIBERO-10, 10 tasks x 10 benchmark starts, one unperturbed
+  attempt each, then 4 more attempts on every start that failed.
+- Spend cap for the mode 1 phase (image smoke, screen, reduction smoke,
+  reduction, one retry): US$4.00 within the current balance; top up before
+  later phases.
+- Nemotron 3 Ultra for the hypothesis and ordering call (Super if Ultra is
+  not in the Token Factory catalog); Nano stays for explanations. The call
+  runs locally between the screen and reduction Jobs, so no Token Factory
+  key enters a Job.
 
 ## Rationale
 
