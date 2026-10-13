@@ -43,6 +43,7 @@ h1 { margin: var(--space-1) 0 0; font-size: clamp(1.5rem, 3vw, 2.4rem); }
 [data-outcome="task_failure"] { --outcome: var(--failure); }
 [data-outcome="episode_timeout"] { --outcome: var(--amber); }
 [data-outcome="infrastructure_error"] { --outcome: var(--infrastructure); }
+[data-outcome="invalid_scene"] { --outcome: var(--amber); }
 main { min-width: 0; padding: var(--space-3); }
 #demo-guide, #comparison-conclusion { border: 1px solid var(--line); background: var(--panel); }
 #case-workbench { border: 1px solid var(--line); border-left: 3px solid var(--cyan); background: var(--panel); padding: var(--space-2); margin-top: var(--space-2); }

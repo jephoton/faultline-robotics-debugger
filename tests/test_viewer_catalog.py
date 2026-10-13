@@ -111,6 +111,19 @@ class ArtifactCatalogTests(unittest.TestCase):
         self.assertEqual(outcomes["infra"], "infrastructure_error")
         self.assertEqual(outcomes["failure"], "task_failure")
 
+    def test_catalog_labels_an_invalid_scene_start_instead_of_calling_it_a_task_failure(self):
+        run = write_episode(self.root, "invalid-scene", success=False)
+        aggregate_path = run / "libero-object_aggregate.json"
+        aggregate = json.loads(aggregate_path.read_text(encoding="utf-8"))
+        aggregate["tasks"][0]["episodes"][0]["metrics"]["invalid_scene"] = True
+        aggregate_path.write_text(json.dumps(aggregate), encoding="utf-8")
+        write_episode(self.root, "plain-failure", success=False)
+
+        outcomes = {item.run_name: item.outcome for item in ArtifactCatalog(self.root).list_episodes()}
+
+        self.assertEqual(outcomes["invalid-scene"], "invalid_scene")
+        self.assertEqual(outcomes["plain-failure"], "task_failure")
+
     def test_catalog_preserves_explicit_null_occlusion(self):
         write_episode(self.root, "null-occlusion", success=True, occlusion=None)
 

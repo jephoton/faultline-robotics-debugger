@@ -11,7 +11,7 @@ const state = {
 
 const outcomeLabels = {
   success: "SUCCESS", task_failure: "TASK FAILURE", episode_timeout: "TIMEOUT",
-  infrastructure_error: "INFRA ERROR",
+  infrastructure_error: "INFRA ERROR", invalid_scene: "INVALID SCENE",
 };
 const byId = (id) => document.getElementById(id);
 const episodeById = (id) => state.episodes.find((episode) => episode.episode_id === id);

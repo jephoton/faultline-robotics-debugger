@@ -199,6 +199,9 @@ class ArtifactCatalog:
                             outcome = "infrastructure_error"
                         elif raw.get("metrics", {}).get("success") is True:
                             outcome = "success"
+                        elif raw.get("metrics", {}).get("invalid_scene") is True:
+                            # A scenario start whose bodies interpenetrate: not a policy failure.
+                            outcome = "invalid_scene"
                         elif reason == "timeout":
                             outcome = "episode_timeout"
                         else:
