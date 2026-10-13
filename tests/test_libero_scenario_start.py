@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import tempfile
 import types
 import unittest
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from robot_debug import external_reset, scenario_import
+from robot_debug import external_reset, scenario_import, scene_inspect
 from tests.scene_fakes import GEOM, FakeContact, FakeEnv, FakeHarnessCase, FakeTaskSuite
 
 
@@ -311,6 +312,171 @@ class ScenarioStartTests(FakeHarnessCase):
         self.assertEqual({"suite": "libero_10", "seed": 7, "send_wrist_image": False, "send_state": False},
                          benchmark.upstream_kwargs)
         self.assertIsNone(self.benchmark_type().scenario_start)
+
+
+class ExportTests(FakeHarnessCase):
+    """layout_out and state_out: what the pure side needs to name and rebuild starts."""
+
+    def setUp(self):
+        super().setUp()
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.env = FakeEnv()
+        self.length = self.env.model.state_length
+        self.layout_path = self.root / "out" / "layout.json"
+        self.state_path = self.root / "out" / "state.json"
+
+    def make(self, **options):
+        benchmark = self.benchmark_type(suite="libero_10", num_steps_wait=2, **options)
+        benchmark._make_env = lambda task: self.env
+        benchmark._task_suite = FakeTaskSuite({0: _states(self.length), 1: _states(self.length)})
+        return benchmark
+
+    @staticmethod
+    def task(task_id=0, episode_idx=0):
+        return {"task_id": task_id, "task_obj": object(), "name": "task {}".format(task_id),
+                "episode_idx": episode_idx}
+
+    def expected_layout(self, task_id=0):
+        return scene_inspect.build_layout("libero_10", task_id, self.env.model, self.length)
+
+    def read(self, path):
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    # ---- layout ----------------------------------------------------------
+
+    def test_layout_is_written_after_a_benchmark_reset(self):
+        self.make(layout_out=str(self.layout_path)).reset(self.task())
+        self.assertEqual(self.expected_layout(), self.read(self.layout_path))
+        self.assertEqual(35, self.read(self.layout_path)["state_length"])
+
+    def test_layout_is_written_with_init_state_index_and_with_scenario_starts(self):
+        self.make(layout_out=str(self.layout_path), init_state_index=2).reset(self.task())
+        self.assertEqual(self.expected_layout(), self.read(self.layout_path))
+        self.layout_path.unlink()
+        candidate = self.root / "candidate.json"
+        scenario_import.write_scenario_candidate(
+            candidate, scenario_import.candidate_from_benchmark("libero_10", 0, 1, np.zeros(self.length)))
+        benchmark = self.make(
+            layout_out=str(self.layout_path),
+            scenario_start={"candidate": str(candidate), "metadata_out": str(self.root / "sidecar.json")})
+        benchmark.reset(self.task())
+        self.assertEqual(self.expected_layout(), self.read(self.layout_path))
+
+    def test_layout_is_written_once_per_task_and_replaced_by_the_next_task(self):
+        benchmark = self.make(layout_out=str(self.layout_path))
+        benchmark.reset(self.task())
+        self.layout_path.unlink()
+        benchmark.reset(self.task())
+        self.assertFalse(self.layout_path.exists())
+        benchmark.reset(self.task(task_id=1))
+        self.assertEqual(1, self.read(self.layout_path)["task_id"])
+
+    def test_layout_writes_are_atomic_and_leave_no_partial_file(self):
+        self.make(layout_out=str(self.layout_path)).reset(self.task())
+        self.assertEqual(["layout.json"], os.listdir(self.layout_path.parent))
+
+    def test_a_state_that_is_not_time_qpos_qvel_fails_the_export(self):
+        benchmark = self.make(layout_out=str(self.layout_path))
+        original = self.env.set_init_state
+
+        def odd(state):
+            observation = original(state)
+            self.env.state = np.zeros(self.length + 3)
+            self.env.drift = np.zeros(self.length + 3)
+            return observation
+
+        self.env.set_init_state = odd
+        with self.assertRaises(scene_inspect.SceneInspectError):
+            benchmark.reset(self.task())
+
+    def test_no_layout_or_state_files_without_the_options(self):
+        self.make().reset(self.task())
+        self.assertEqual([], list(self.root.iterdir()))
+
+    # ---- start state -----------------------------------------------------
+
+    def test_state_out_is_a_scenario_candidate_for_the_selected_init_state(self):
+        self.make(state_out=str(self.state_path), init_state_index=3).reset(self.task(episode_idx=9))
+        candidate = scenario_import.load_scenario_candidate(self.state_path)
+        self.assertEqual({"kind": "benchmark", "init_state_index": 3}, candidate["source"])
+        self.assertEqual(("libero_10", 0), (candidate["suite"], candidate["task_id"]))
+        self.assertEqual([3.0] * self.length, candidate["state"])
+        self.assertEqual(external_reset.state_sha256(candidate["state"]), candidate["state_sha256"])
+
+    def test_state_out_without_init_state_index_uses_the_harness_episode_index(self):
+        self.make(state_out=str(self.state_path)).reset(self.task(episode_idx=4))
+        candidate = scenario_import.load_scenario_candidate(self.state_path)
+        self.assertEqual({"kind": "benchmark", "init_state_index": 4}, candidate["source"])
+        self.assertEqual([4.0] * self.length, candidate["state"])
+
+    def test_state_out_is_written_before_settling_changes_the_state(self):
+        self.env.drift = np.ones(self.length)
+        self.make(state_out=str(self.state_path), init_state_index=1).reset(self.task())
+        self.assertEqual([1.0] * self.length, self.read(self.state_path)["state"])
+
+    def test_state_out_is_written_once_per_task(self):
+        benchmark = self.make(state_out=str(self.state_path), init_state_index=1)
+        benchmark.reset(self.task())
+        self.state_path.unlink()
+        benchmark.reset(self.task())
+        self.assertFalse(self.state_path.exists())
+
+    def test_state_of_the_wrong_length_is_not_exported(self):
+        benchmark = self.make(state_out=str(self.state_path), init_state_index=1)
+
+        class ShrinkingSuite:
+            calls = 0
+
+            def get_task_init_states(self_, task_id):
+                self_.calls += 1  # the reset reads a good state; the export then reads a longer one
+                return _states(self.length + (self_.calls > 1))
+
+        benchmark._task_suite = ShrinkingSuite()
+        with self.assertRaises(scenario_import.ScenarioImportError):
+            benchmark.reset(self.task())
+        self.assertFalse(self.state_path.exists())
+
+    # ---- options ---------------------------------------------------------
+
+    def test_options_are_validated_and_not_forwarded_upstream(self):
+        for name in ("layout_out", "state_out"):
+            for bad in ("", 3, ["x"], True):
+                with self.subTest(name=name, bad=bad), self.assertRaises(ValueError):
+                    self.benchmark_type(**{name: bad})
+        benchmark = self.make(layout_out="a.json", state_out="b.json")
+        self.assertEqual({"suite": "libero_10", "seed": 7, "send_wrist_image": False, "send_state": False},
+                         benchmark.upstream_kwargs)
+
+    def test_exports_are_not_available_with_the_external_demo_start(self):
+        external = {"candidate": "a", "metadata_out": "b"}
+        for option in ({"layout_out": "x.json"}, {"state_out": "x.json"}):
+            with self.subTest(option=option), self.assertRaises(ValueError):
+                self.benchmark_type(external_reset=external, **option)
+
+    def test_state_out_is_not_available_with_a_scenario_start(self):
+        with self.assertRaises(ValueError):
+            self.benchmark_type(scenario_start={"candidate": "a", "metadata_out": "b"}, state_out="x.json")
+
+    def test_every_written_config_key_is_a_constructor_option(self):
+        import importlib.util
+        import yaml
+        script = Path(__file__).parents[1] / "scripts" / "run_failure_search.py"
+        spec = importlib.util.spec_from_file_location("run_failure_search_for_options", script)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        self.addCleanup(sys.modules.pop, spec.name, None)
+        spec.loader.exec_module(module)
+        for options in (dict(init_state_index=3, layout_out=self.layout_path, state_out=self.state_path),
+                        dict(scenario_start=self.root / "c.json", layout_out=self.layout_path)):
+            config = self.root / "stage.yaml"
+            module._write_config(config_path=config, output_dir=self.root / "run", project_root=self.root,
+                                 stage_name="s", episode_indices=(0,), suite="libero_10", task_id=1, **options)
+            params = yaml.safe_load(config.read_text(encoding="utf-8"))["benchmarks"][0]["params"]
+            benchmark = self.benchmark_type(**params)
+            self.assertEqual("libero_10", benchmark.upstream_kwargs["suite"])
+            self.assertEqual(1, benchmark.task_id)
 
 
 if __name__ == "__main__":

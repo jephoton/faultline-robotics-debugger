@@ -334,6 +334,8 @@ def _write_config(
     suite: str = "libero_object",
     init_state_index: Optional[int] = None,
     scenario_start: Optional[Path] = None,
+    layout_out: Optional[Path] = None,
+    state_out: Optional[Path] = None,
 ) -> None:
     for name, value in (("task_id", task_id), ("seed", seed)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -346,6 +348,10 @@ def _write_config(
         raise ValueError("init_state_index must be a nonnegative integer")
     if scenario_start is not None and (external_reset_candidate is not None or init_state_index is not None):
         raise ValueError("scenario_start cannot be combined with external_reset_candidate or init_state_index")
+    if external_reset_candidate is not None and (layout_out is not None or state_out is not None):
+        raise ValueError("layout_out and state_out are not available with an external reset")
+    if scenario_start is not None and state_out is not None:
+        raise ValueError("state_out exports benchmark starts; a scenario_start is already a start state")
     params = [
         "      suite: {}".format(suite),
         "      seed: {}".format(seed),
@@ -431,6 +437,12 @@ def _write_config(
                 "        metadata_out: {}".format(_yaml_scalar(Path(output_dir) / "scenario_start.json")),
             ]
         )
+    if layout_out is not None:
+        # The joint layout of the task's scene (first reset), for naming start differences.
+        params.append("      layout_out: {}".format(_yaml_scalar(layout_out)))
+    if state_out is not None:
+        # The benchmark start state of the first reset, as a scenario candidate file.
+        params.append("      state_out: {}".format(_yaml_scalar(state_out)))
     text = "\n".join(
         [
             "# Generated bounded failure-search stage: {}".format(stage_name),

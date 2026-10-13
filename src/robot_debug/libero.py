@@ -80,6 +80,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         camera_probe: Optional[str] = None,
         init_state_index: Optional[int] = None,
         scenario_start: Optional[Mapping[str, Any]] = None,
+        layout_out: Optional[str] = None,
+        state_out: Optional[str] = None,
         **kwargs: Any
     ) -> None:
         if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
@@ -99,6 +101,16 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         scenario_start = self._candidate_paths("scenario_start", scenario_start)
         if scenario_start is not None and (external_reset is not None or init_state_index is not None):
             raise ValueError("scenario_start cannot be combined with external_reset or init_state_index")
+        for name, path in (("layout_out", layout_out), ("state_out", state_out)):
+            if path is not None and (not isinstance(path, str) or not path):
+                raise ValueError("{} must be a non-empty path".format(name))
+        if external_reset is not None and (layout_out is not None or state_out is not None):
+            raise ValueError("layout_out and state_out are not available with external_reset")
+        if scenario_start is not None and state_out is not None:
+            raise ValueError("state_out exports benchmark starts; a scenario_start is already a start state")
+        self.layout_out = layout_out
+        self.state_out = state_out
+        self._exported = set()  # type: set
         self.external_reset = external_reset
         self.scenario_start = scenario_start
         self._scenario_candidate = None  # type: Optional[Dict[str, Any]]
@@ -188,7 +200,10 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         if self.init_state_index is not None:
             # The pinned upstream reset starts from ``init_states[task["episode_idx"]]``.
             task = dict(task, episode_idx=self.init_state_index)
-        return super().reset(task)
+        observation = super().reset(task)
+        if self.layout_out is not None or self.state_out is not None:
+            self._export_benchmark_start(task)
+        return observation
 
     def _make_env(self, task: Any) -> Any:
         """Create (or reuse) the task environment exactly as the pinned upstream does."""
@@ -284,6 +299,48 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             self._scene_cache[key] = context
         return context
 
+    @staticmethod
+    def _write_json_atomically(target: str, document: Any) -> None:
+        directory = os.path.dirname(target)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temporary = target + ".partial.json"  # an allowed evidence suffix, in case a kill leaves it
+        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(document, handle, indent=2, sort_keys=True, allow_nan=False)
+        os.replace(temporary, target)
+
+    def _export_layout(self, task: Any, context: Mapping[str, Any]) -> None:
+        """Write ``layout_out`` on the first reset of each task (a later task replaces the file)."""
+
+        key = ("layout", self._suite_name(), task["task_id"])
+        if self.layout_out is not None and key not in self._exported:
+            self._write_json_atomically(self.layout_out, context["layout"])
+            self._exported.add(key)
+
+    def _export_benchmark_start(self, task: Any) -> None:
+        """After an upstream reset: export the layout and the init state it started from."""
+
+        from robot_debug import scene_inspect
+        from robot_debug.scenario_import import (
+            ScenarioImportError, candidate_from_benchmark, write_scenario_candidate)
+
+        env = self._env
+        sim = scene_inspect.sim_of(env)
+        length = int(np.asarray(env.get_sim_state()).size)
+        context = self._scene_context(task, sim, length)
+        self._export_layout(task, context)
+        key = ("state", self._suite_name(), task["task_id"])
+        if self.state_out is not None and key not in self._exported:
+            index = task.get("episode_idx", 0)
+            state = np.asarray(
+                self._task_suite.get_task_init_states(task["task_id"])[index], dtype=np.float64).reshape(-1)
+            if state.size != length:
+                raise ScenarioImportError("benchmark start state length does not match the environment's")
+            write_scenario_candidate(
+                self.state_out,
+                candidate_from_benchmark(self._suite_name(), task["task_id"], index, state))
+            self._exported.add(key)
+
     def _reset_from_scenario(self, task: Any) -> Any:
         """Start the episode from the validated scenario state (ADR 0028).
 
@@ -313,6 +370,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         check_scenario_target(
             candidate, suite=self._suite_name(), task_id=task["task_id"], state_length=length)
         context = self._scene_context(task, sim, length)
+        self._export_layout(task, context)
         observation = env.set_init_state(np.asarray(candidate["state"], dtype=np.float64))
         forward = getattr(sim, "forward", None)
         if callable(forward):
@@ -371,13 +429,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         except FileNotFoundError:
             records = []
         records.append(record)
-        directory = os.path.dirname(target)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        temporary = target + ".partial.json"  # an allowed evidence suffix, in case a kill leaves it
-        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(records, handle, indent=2, sort_keys=True, allow_nan=False)
-        os.replace(temporary, target)
+        self._write_json_atomically(target, records)
 
     def step(self, action: Any) -> Any:
         """Upstream step, except that an invalid scenario start ends the episode unscored."""

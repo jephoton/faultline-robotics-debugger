@@ -288,6 +288,25 @@ class SuiteAndStartConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.write_config(scenario_start=start, init_state_index=2)
 
+    def test_layout_and_state_exports_are_written_as_paths(self):
+        import yaml
+        text = self.write_config(init_state_index=1, layout_out=self.root / "layout.json",
+                                 state_out=self.root / "state.json")
+        params = yaml.safe_load(text)["benchmarks"][0]["params"]
+        self.assertEqual(str(self.root / "layout.json"), params["layout_out"])
+        self.assertEqual(str(self.root / "state.json"), params["state_out"])
+        plain = yaml.safe_load(self.write_config(init_state_index=1))["benchmarks"][0]["params"]
+        self.assertNotIn("layout_out", plain)
+        self.assertNotIn("state_out", plain)
+
+    def test_state_out_cannot_be_combined_with_a_scenario_or_external_start(self):
+        with self.assertRaises(ValueError):
+            self.write_config(scenario_start=self.root / "s.json", state_out=self.root / "state.json")
+        with self.assertRaises(ValueError):
+            self.write_config(external_reset_candidate=self.root / "c.json", state_out=self.root / "state.json")
+        with self.assertRaises(ValueError):
+            self.write_config(external_reset_candidate=self.root / "c.json", layout_out=self.root / "l.json")
+
     def test_absent_scenario_start_changes_nothing(self):
         self.assertEqual(self.write_config(), self.write_config(scenario_start=None))
         self.assertNotIn("scenario_start", self.write_config(suite="libero_10", init_state_index=1))
