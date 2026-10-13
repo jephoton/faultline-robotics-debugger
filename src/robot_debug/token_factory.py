@@ -710,11 +710,11 @@ def request_research_summary(context: dict, api_key: str,
 
 # --- M7: scenario hypothesis (additive; nothing above is changed) -----------------
 
-# TODO(coordinator): the exact Token Factory ids of Nemotron 3 Ultra and Super could not
-# be determined offline (only the Nano id above is pinned in this repository). They are
-# found at run time: the first catalog id containing the pattern wins, Ultra before Super,
-# ties broken alphabetically. After the first live catalog read, pin the exact ids here and
-# in the experiment note, then pass them as ``model=`` if a pin is wanted.
+# Exact ids from the live Token Factory catalog (read October 13, 2026). They win when
+# listed; otherwise the first catalog id containing the pattern wins, Ultra before Super,
+# ties broken alphabetically.
+SCENARIO_MODEL_IDS = (("ultra", "nvidia/Nemotron-3-Ultra-550b-a55b"),
+                      ("super", "nvidia/nemotron-3-super-120b-a12b"))
 SCENARIO_MODEL_PREFERENCE = (("ultra", "nemotron-3-ultra"), ("super", "nemotron-3-super"))
 _MAX_REQUEST_BYTES_SCENARIO = 16_000
 _MAX_TOKENS_SCENARIO = 2048
@@ -729,11 +729,15 @@ _SCENARIO_FALLBACK_CODES = {
 def select_scenario_model(identifiers) -> tuple:
     """(model id, tier) for the hypothesis call from a catalog listing, else (None, None).
 
-    Nemotron 3 Ultra is preferred, then Super; matching is a case-insensitive
-    substring test on the catalog id and the alphabetically first match wins.
+    Nemotron 3 Ultra is preferred, then Super. The pinned exact ids win; failing
+    those, matching is a case-insensitive substring test on the catalog id and
+    the alphabetically first match wins.
     """
 
     ids = sorted(item for item in identifiers if type(item) is str)
+    for tier, exact in SCENARIO_MODEL_IDS:
+        if exact in ids:
+            return exact, tier
     for tier, pattern in SCENARIO_MODEL_PREFERENCE:
         for identifier in ids:
             if pattern in identifier.lower():

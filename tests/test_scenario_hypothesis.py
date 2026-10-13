@@ -208,6 +208,13 @@ class SelectModelTests(unittest.TestCase):
         self.assertEqual(tf.select_scenario_model(["b/NEMOTRON-3-ULTRA-b", "a/nemotron-3-ultra-a"]),
                          ("a/nemotron-3-ultra-a", "ultra"))
 
+    def test_pinned_exact_ids_win_over_pattern_matches(self):
+        pinned_ultra = tf.SCENARIO_MODEL_IDS[0][1]
+        pinned_super = tf.SCENARIO_MODEL_IDS[1][1]
+        self.assertEqual(tf.select_scenario_model(["a/nemotron-3-ultra-a", pinned_ultra]),
+                         (pinned_ultra, "ultra"))
+        self.assertEqual(tf.select_scenario_model([NANO, pinned_super]), (pinned_super, "super"))
+
 
 class RequestHypothesisTests(unittest.TestCase):
     def setUp(self):
