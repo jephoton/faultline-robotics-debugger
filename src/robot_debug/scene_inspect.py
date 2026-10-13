@@ -20,6 +20,7 @@ so a joint's qpos starts at flat index ``1 + qpos_adr`` and its qvel at
 from __future__ import annotations
 
 import math
+import os
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -34,6 +35,12 @@ _MAIN_SUFFIX = "_main"
 
 class SceneInspectError(ValueError):
     """The scene does not have the shape the reduction relies on."""
+
+
+def validity_companion(state_out: str) -> str:
+    """The validity record that sits beside an exported benchmark start (``x.json`` -> ``x.validity.json``)."""
+
+    return os.path.splitext(state_out)[0] + ".validity.json"
 
 
 def sim_of(env: Any) -> Any:

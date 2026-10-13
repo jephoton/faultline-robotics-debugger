@@ -138,13 +138,16 @@ def build_plan(
     failing = _get(task["starts"], start_index)
     if type(failing) is not dict:
         raise PlanError("the failing start is not in the screen summary")
+    if failing.get("validity") == "invalid_scene":
+        raise PlanError("the failing start is an interpenetrating scene, not a policy failure")
     outcomes = failing.get("outcomes")
     if not isinstance(outcomes, list) or len(outcomes) < SCREEN_ATTEMPTS \
             or outcomes[:SCREEN_ATTEMPTS].count("policy_failure") < REQUIRED_FAILURES:
         raise PlanError("the start did not fail at least 4 of 5 screen attempts")
 
+    # A start whose recorded contact scan found interpenetrating bodies cannot be a reference.
     results = {task_id: {k: v.get("outcomes") for k, v in task["starts"].items()
-                         if isinstance(v, dict)}}
+                         if isinstance(v, dict) and v.get("validity") != "invalid_scene"}}
     states = {task_id: {k: v.get("state") for k, v in task["starts"].items()
                         if isinstance(v, dict)}}
     try:

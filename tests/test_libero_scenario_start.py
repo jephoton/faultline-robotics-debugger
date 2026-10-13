@@ -416,6 +416,44 @@ class ExportTests(FakeHarnessCase):
         self.make(state_out=str(self.state_path), init_state_index=1).reset(self.task())
         self.assertEqual([1.0] * self.length, self.read(self.state_path)["state"])
 
+    def test_the_benchmark_start_is_scanned_before_settling_and_the_episode_runs_on(self):
+        self.env.after_set = lambda env: _contact(env, "finger", "soup", -0.02)
+        benchmark = self.make(state_out=str(self.state_path), init_state_index=2)
+        observation = benchmark.reset(self.task())
+        self.assertEqual("step", observation["from"], "a benchmark start is never cut short")
+        self.assertEqual(["reset", "set_init_state", "step", "step"], self.env.calls)
+        self.assertEqual([], benchmark.upstream_reset_tasks, "the upstream reset is replayed to scan in between")
+        self.assertFalse(benchmark._invalid_scene)
+        validity = self.read(self.root / "out" / "state.validity.json")
+        self.assertEqual("invalid_scene", validity["validity"])
+        self.assertAlmostEqual(0.02, validity["deepest_penetration_m"])
+        self.assertEqual(["alphabet_soup_1", "robot"], validity["deepest_pair"])
+        self.assertEqual((2, 0, "libero_10"), (validity["init_state_index"], validity["task_id"], validity["suite"]))
+        self.assertEqual(1, len(benchmark._recorder.frames))
+
+    def test_a_clean_benchmark_start_is_valid(self):
+        self.make(state_out=str(self.state_path), init_state_index=2).reset(self.task())
+        validity = self.read(self.root / "out" / "state.validity.json")
+        self.assertEqual(("valid", 0.0, None, 0), (validity["validity"], validity["deepest_penetration_m"],
+                                                  validity["deepest_pair"], validity["invalid_contacts"]))
+        self.assertEqual(0.005, validity["penetration_limit_m"])
+
+    def test_the_replayed_reset_matches_the_upstream_order_and_absolute_mode(self):
+        controller = types.SimpleNamespace(use_delta=True)
+        self.env.robots = [types.SimpleNamespace(controller=controller)]
+        benchmark = self.make(state_out=str(self.state_path), init_state_index=1)
+        benchmark.absolute_action = True
+        benchmark.reset(self.task())
+        self.assertEqual(["reset", "set_init_state", "step", "step"], self.env.calls)
+        self.assertFalse(controller.use_delta)
+        self.assertEqual([1.0] * self.length, list(self.env.state), "the benchmark state, then zero drift")
+
+    def test_without_state_out_the_upstream_reset_is_used_unchanged(self):
+        benchmark = self.make(layout_out=str(self.layout_path), init_state_index=1)
+        benchmark.reset(self.task())
+        self.assertEqual(1, len(benchmark.upstream_reset_tasks))
+        self.assertFalse((self.root / "out" / "state.validity.json").exists())
+
     def test_state_out_is_written_once_per_task(self):
         benchmark = self.make(state_out=str(self.state_path), init_state_index=1)
         benchmark.reset(self.task())
@@ -425,18 +463,11 @@ class ExportTests(FakeHarnessCase):
 
     def test_state_of_the_wrong_length_is_not_exported(self):
         benchmark = self.make(state_out=str(self.state_path), init_state_index=1)
-
-        class ShrinkingSuite:
-            calls = 0
-
-            def get_task_init_states(self_, task_id):
-                self_.calls += 1  # the reset reads a good state; the export then reads a longer one
-                return _states(self.length + (self_.calls > 1))
-
-        benchmark._task_suite = ShrinkingSuite()
+        benchmark._task_suite = FakeTaskSuite({0: _states(self.length + 1)})
         with self.assertRaises(scenario_import.ScenarioImportError):
             benchmark.reset(self.task())
         self.assertFalse(self.state_path.exists())
+        self.assertNotIn("set_init_state", self.env.calls)
 
     # ---- options ---------------------------------------------------------
 

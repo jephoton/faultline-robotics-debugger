@@ -41,6 +41,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from robot_debug import batch_experiment as be
 from robot_debug import scenario_state as ss
+from robot_debug.scene_inspect import validity_companion
 from robot_debug.decided_gate import run_gates
 from robot_debug.job_process import InfrastructureError, RunCancelled
 from robot_debug.m6_experiment import ASSUMED_OVERHEAD_SECONDS, DEADLINE_ROUNDING_SECONDS, EvaluatorPool
@@ -504,6 +505,18 @@ def read_evidence(output_dir: Path, batch_root: Path) -> Dict[str, Any]:
     }
 
 
+_START_VALIDITY_KEYS = ("validity", "deepest_penetration_m", "deepest_pair", "invalid_contacts")
+
+
+def _read_start_validity(state_file: Path) -> Dict[str, Any]:
+    """The contact scan recorded beside an exported benchmark start; refuses a missing or odd record."""
+
+    document = _load_json(Path(validity_companion(str(state_file))))
+    if not isinstance(document, dict) or document.get("validity") not in ("valid", "invalid_scene"):
+        raise ValueError("the start validity record is malformed")
+    return {key: document.get(key) for key in _START_VALIDITY_KEYS}
+
+
 _RESTORE_KEYS = (
     "validity", "candidate_state_sha256", "pre_settle_state_sha256", "post_settle_state_sha256",
     "settling_steps", "deepest_penetration_m", "deepest_pair", "invalid_contacts",
@@ -588,6 +601,10 @@ def make_scenario_evaluate(
                     artifacts = {"video": evidence["video"]}
                     if exports.get("state_out"):
                         artifacts["state"] = _relative(output / STATE_FILE, batch_root)
+                        try:
+                            record["start_validity"] = _read_start_validity(output / STATE_FILE)
+                        except (OSError, ValueError):
+                            record.update(status="invalid_evidence", outcome=None)
                     if exports.get("layout_out"):
                         artifacts["layout"] = _relative(output / LAYOUT_FILE, batch_root)
                     record["artifacts"] = artifacts
@@ -783,7 +800,7 @@ class SmokeDriver:
 
     @staticmethod
     def _scene(record: Mapping[str, Any]) -> Dict[str, Any]:
-        keys = ("case_id", "kind", "status", "outcome", "steps", "restore", "artifacts",
+        keys = ("case_id", "kind", "status", "outcome", "steps", "restore", "artifacts", "start_validity",
                 "started_seconds", "ended_seconds")
         return {key: record.get(key) for key in keys if key in record}
 
@@ -922,8 +939,12 @@ class ScreenDriver:
                     except (OSError, ValueError):
                         entry["layout"] = None
             outcomes = [r["outcome"] for r in ordered]
+            scan = (first or {}).get("start_validity") or {}
             entry["starts"][str(start)] = {
                 "outcomes": outcomes,
+                "validity": scan.get("validity"),
+                "deepest_penetration_m": scan.get("deepest_penetration_m"),
+                "deepest_pair": scan.get("deepest_pair"),
                 "steps": [r.get("steps") for r in ordered],
                 "state": state,
                 "decision": data["decision"],

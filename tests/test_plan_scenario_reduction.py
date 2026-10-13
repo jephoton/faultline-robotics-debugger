@@ -52,6 +52,32 @@ def make_summary():
         "instruction": INSTRUCTION, "layout": layout, "starts": starts}}}
 
 
+class StartValidityTests(unittest.TestCase):
+    def setUp(self):
+        self.script = load_script()
+
+    def plan(self, **validity):
+        summary = make_summary()
+        for index, value in validity.items():
+            summary["tasks"]["3"]["starts"][index.lstrip("s")]["validity"] = value
+        return self.script.build_plan(summary, 3, 0, use_llm=False)
+
+    def test_records_without_validity_are_still_accepted(self):
+        self.assertEqual([1, 2, 5], [r["start_index"] for r in self.plan()["references"]])
+
+    def test_a_failing_start_recorded_as_an_invalid_scene_is_rejected(self):
+        with self.assertRaisesRegex(self.script.PlanError, "interpenetrating"):
+            self.plan(s0="invalid_scene")
+        self.assertEqual(0, self.plan(s0="valid")["failing"]["start_index"])
+
+    def test_references_recorded_as_invalid_scenes_are_skipped(self):
+        references = [r["start_index"] for r in self.plan(s1="invalid_scene")["references"]]
+        self.assertEqual([2, 5], references)
+
+    def test_valid_records_change_nothing(self):
+        self.assertEqual(self.plan(), self.plan(s0="valid", s1="valid", s2="valid", s5="valid"))
+
+
 class PlanTests(unittest.TestCase):
     def setUp(self):
         self.script = load_script()

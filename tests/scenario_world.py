@@ -29,7 +29,8 @@ ROBOT_JOINT = 1 + 0
 
 class FakeSimulation:
     def __init__(self, suite="libero_10", instruction=INSTRUCTION, flaky=None, invalid_rule=None,
-                 detect_overlap=True):
+                 detect_overlap=True, invalid_starts=()):
+        self.invalid_starts = set(invalid_starts)   # benchmark starts whose bodies interpenetrate
         self.invalid_rule = invalid_rule or (lambda state: False)   # extra scenes that interpenetrate
         self.detect_overlap = detect_overlap
         self.suite = suite
@@ -109,6 +110,13 @@ class FakeSimulation:
             index = int(params.get("init_state_index", 0))
             write_scenario_candidate(Path(params["state_out"]), candidate_from_benchmark(
                 self.suite, task_id, index, self.state_for(index)))
+            bad = index in self.invalid_starts
+            Path(scene_inspect.validity_companion(str(params["state_out"]))).write_text(json.dumps({
+                "schema_version": 1, "suite": self.suite, "task_id": task_id, "init_state_index": index,
+                "validity": "invalid_scene" if bad else "valid", "penetration_limit_m": 0.005,
+                "deepest_penetration_m": 0.012 if bad else 0.0,
+                "deepest_pair": ["alphabet_soup_1", "basket_1"] if bad else None,
+                "invalid_contacts": 1 if bad else 0}), encoding="utf-8")
         return types.SimpleNamespace(
             outcome="success" if outcome == "success" else "policy_failure", episode_index=0, steps=steps)
 

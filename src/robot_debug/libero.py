@@ -200,9 +200,11 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         if self.init_state_index is not None:
             # The pinned upstream reset starts from ``init_states[task["episode_idx"]]``.
             task = dict(task, episode_idx=self.init_state_index)
+        if self.state_out is not None:
+            return self._reset_benchmark_start(task)
         observation = super().reset(task)
-        if self.layout_out is not None or self.state_out is not None:
-            self._export_benchmark_start(task)
+        if self.layout_out is not None:
+            self._export_benchmark_layout(task)
         return observation
 
     def _make_env(self, task: Any) -> Any:
@@ -317,29 +319,71 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             self._write_json_atomically(self.layout_out, context["layout"])
             self._exported.add(key)
 
-    def _export_benchmark_start(self, task: Any) -> None:
-        """After an upstream reset: export the layout and the init state it started from."""
+    def _export_benchmark_layout(self, task: Any) -> None:
+        """After an upstream reset: export the task's joint layout."""
 
         from robot_debug import scene_inspect
-        from robot_debug.scenario_import import (
-            ScenarioImportError, candidate_from_benchmark, write_scenario_candidate)
 
         env = self._env
         sim = scene_inspect.sim_of(env)
         length = int(np.asarray(env.get_sim_state()).size)
+        self._export_layout(task, self._scene_context(task, sim, length))
+
+    def _reset_benchmark_start(self, task: Any) -> Any:
+        """Upstream's reset, replayed step for step so the start can be scanned before it settles.
+
+        The pinned upstream does ``env.reset()``, ``set_init_state(init_states[episode_idx])``,
+        ``num_steps_wait`` dummy steps, then (optionally) absolute action mode and the first
+        video frame. A benchmark start is never cut short: the contact scan only records
+        ``validity`` (and the deepest penetration) beside ``state_out``, so a screen can
+        refuse an interpenetrating start without changing any episode.
+        """
+
+        from robot_debug import scene_inspect
+        from robot_debug.scenario_import import (
+            ScenarioImportError, candidate_from_benchmark, write_scenario_candidate)
+        from vla_eval.benchmarks.libero import benchmark as upstream
+
+        env = self._make_env(task)
+        self._env = env
+        self._current_task_id = task["task_id"]
+        env.reset()
+        sim = scene_inspect.sim_of(env)
+        length = int(np.asarray(env.get_sim_state()).size)
         context = self._scene_context(task, sim, length)
         self._export_layout(task, context)
+        index = task.get("episode_idx", 0)
+        state = np.asarray(
+            self._task_suite.get_task_init_states(task["task_id"])[index], dtype=np.float64).reshape(-1)
+        if state.size != length:
+            raise ScenarioImportError("benchmark start state length does not match the environment's")
+        observation = env.set_init_state(state)
+        forward = getattr(sim, "forward", None)
+        if callable(forward):
+            forward()
         key = ("state", self._suite_name(), task["task_id"])
-        if self.state_out is not None and key not in self._exported:
-            index = task.get("episode_idx", 0)
-            state = np.asarray(
-                self._task_suite.get_task_init_states(task["task_id"])[index], dtype=np.float64).reshape(-1)
-            if state.size != length:
-                raise ScenarioImportError("benchmark start state length does not match the environment's")
+        if key not in self._exported:
+            scan = scene_inspect.scan_contacts(
+                sim.model, sim.data, scene_inspect.PENETRATION_LIMIT_M, body_entity=context["body_entity"])
             write_scenario_candidate(
-                self.state_out,
-                candidate_from_benchmark(self._suite_name(), task["task_id"], index, state))
+                self.state_out, candidate_from_benchmark(self._suite_name(), task["task_id"], index, state))
+            self._write_json_atomically(scene_inspect.validity_companion(self.state_out), {
+                "schema_version": 1, "suite": self._suite_name(), "task_id": task["task_id"],
+                "init_state_index": index,
+                "validity": "valid" if scan["valid"] else "invalid_scene",
+                "penetration_limit_m": scene_inspect.PENETRATION_LIMIT_M,
+                "deepest_penetration_m": scan["deepest_penetration_m"],
+                "deepest_pair": scan["deepest_pair"], "invalid_contacts": scan["invalid_contacts"],
+            })
             self._exported.add(key)
+        dummy_action = getattr(upstream, "LIBERO_DUMMY_ACTION", [0.0] * 6 + [-1.0])
+        for _ in range(self.num_steps_wait):
+            observation, _reward, _done, _info = env.step(dummy_action)
+        if getattr(self, "absolute_action", False):
+            for robot in env.robots:
+                robot.controller.use_delta = False
+        self._recorder.record_video(self._extract_frame(observation))
+        return observation
 
     def _reset_from_scenario(self, task: Any) -> Any:
         """Start the episode from the validated scenario state (ADR 0028).

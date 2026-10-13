@@ -387,6 +387,30 @@ class EvaluateTests(unittest.TestCase):
             se.read_evidence(output, root), metric_invalid_scene=True))(self.item("a", init_state_index=1))
         self.assertEqual("invalid_evidence", record["status"])
 
+    def test_an_exported_start_carries_its_contact_scan(self):
+        evaluate = self.evaluator()
+        item = dict(self.item("a", init_state_index=2), exports={"state_out": True})
+        record = evaluate(item)
+        self.assertEqual({"validity": "valid", "deepest_penetration_m": 0.0, "deepest_pair": None,
+                          "invalid_contacts": 0}, record["start_validity"])
+        self.world.simulation.invalid_starts = {3}
+        bad = evaluate(dict(self.item("b", init_state_index=3), exports={"state_out": True}))
+        self.assertEqual(("valid", "invalid_scene"), (bad["status"], bad["start_validity"]["validity"]))
+        self.assertEqual(["alphabet_soup_1", "basket_1"], bad["start_validity"]["deepest_pair"])
+
+    def test_an_exported_start_without_its_scan_is_invalid_evidence(self):
+        class NoScan(ScenarioWorld):
+            def run_item(self_, command, *, item_timeout, cancel):
+                ScenarioWorld.run_item(self_, command, item_timeout=item_timeout, cancel=cancel)
+                case = Path(command[-1]).stem
+                (Path(command[-1]).parent.parent / "runs" / case / "start_state.validity.json").unlink()
+
+        self.world = NoScan(item_seconds=0.0)
+        evaluate = self.evaluator(write_config=self.world.write_config, load_result=self.world.load_result,
+                                  run_item=self.world.run_item)
+        record = evaluate(dict(self.item("a", init_state_index=2), exports={"state_out": True}))
+        self.assertEqual(("invalid_evidence", None), (record["status"], record["outcome"]))
+
     def test_exports_are_requested_as_files_in_the_stage_output(self):
         evaluate = self.evaluator()
         item = dict(self.item("a", init_state_index=2), exports={"state_out": True, "layout_out": True})
@@ -610,6 +634,16 @@ class ScreenRunTests(RunTestCase):
         self.assertEqual([[0, 9]], [[f["task_id"], f["start_index"]] for f in summary["reproducible_failures"]])
         self.assertEqual("policy_failure", starts["6"]["outcomes"][0])
         self.assertEqual(["policy_failure"] + ["success"] * 4, starts["6"]["outcomes"])
+
+    def test_the_summary_records_each_starts_validity(self):
+        world = ScenarioWorld(FakeSimulation(invalid_starts={2, 9}), item_seconds=0.0)
+        summary = self.run_mode(world, "scenario-screen", SCREEN)
+        starts = summary["tasks"]["0"]["starts"]
+        self.assertEqual("valid", starts["1"]["validity"])
+        self.assertEqual(("invalid_scene", 0.012, ["alphabet_soup_1", "basket_1"]), (
+            starts["2"]["validity"], starts["2"]["deepest_penetration_m"], starts["2"]["deepest_pair"]))
+        self.assertEqual("invalid_scene", starts["9"]["validity"])
+        self.assertTrue(all(start["validity"] is not None for start in starts.values()))
 
     def test_layout_is_exported_once_per_task_and_states_for_every_start(self):
         world = ScenarioWorld(item_seconds=0.0)
