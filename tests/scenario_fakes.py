@@ -82,11 +82,11 @@ class FakeTicket:
     def done(self) -> bool:
         return self.record is not None
 
-    def withdraw(self) -> bool:
+    def withdraw(self, reason: str = "decided_skipped") -> bool:
         if self.started or self.record is not None:
             return False
         self._owner.queue.remove(self)
-        self.record = {"status": "decided_skipped", "item": self.item}
+        self.record = {"status": reason, "item": self.item}
         self._owner.withdrawn.append(self)
         return True
 

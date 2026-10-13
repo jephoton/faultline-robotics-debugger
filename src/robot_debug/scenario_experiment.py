@@ -379,14 +379,15 @@ class ScenarioTicket:
                 return True
             return False
 
-    def withdraw(self) -> bool:
-        """Cancel an attempt that has not started; its record becomes ``decided_skipped``."""
+    def withdraw(self, reason: str = "decided_skipped") -> bool:
+        """Cancel an attempt that has not started; its record's status becomes ``reason``
+        (``decided_skipped`` for an early decision, ``stop_withdrawn`` when the batch stopped)."""
 
         with self._lock:
             if self._state != "queued":
                 return False
             self._state = "withdrawn"
-            self._pool._skipped(self, "decided_skipped")
+            self._pool._skipped(self, reason)
             self.event.set()
         self._pool.notify()
         return True
@@ -654,7 +655,7 @@ class _Context:
     def stop_reason(self, records: Sequence[Mapping[str, Any]]) -> Optional[str]:
         """The stop reason if any record is neither valid nor withdrawn, else ``None``."""
 
-        bad = [r for r in records if r.get("status") not in ("valid", "decided_skipped")]
+        bad = [r for r in records if r.get("status") not in ("valid", "decided_skipped", "stop_withdrawn")]
         if not bad:
             return None
         return self.failure() or (

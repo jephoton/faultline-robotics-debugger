@@ -230,7 +230,7 @@ class _Reducer:
                 "index": len(self.candidates), "phase": self.phase, "role": spec["role"],
                 "reference": spec.get("reference"), "selection": copy.deepcopy(spec.get("selection")),
                 "key": key, "kind": kind, "decision": None, "gate_met": None, "outcomes": [],
-                "late_outcomes": [], "skipped": 0, "complete": False,
+                "late_outcomes": [], "skipped": 0, "stop_withdrawn": 0, "complete": False,
             }
             self.candidates.append(record)
             self.cache[cache_key] = record
@@ -258,6 +258,7 @@ class _Reducer:
             record["decision"] = run.decisions[name]
             record["outcomes"] = list(run.outcomes[name])
             record["skipped"] = run.skipped[name]
+            record["stop_withdrawn"] = run.stop_withdrawn[name]
             record["complete"] = record["decision"] is not None
             good = "passes" if record["kind"] == "pass" else "reproduces"
             record["gate_met"] = None if record["decision"] is None else record["decision"] == good
@@ -591,6 +592,7 @@ def _finalise(reducer: _Reducer, result: Dict[str, Any], state: Dict[str, Any]) 
     result["attempts_run_hybrid"] = run_count(hybrids)
     result["attempts_run"] = result["attempts_run_gates"] + result["attempts_run_hybrid"]
     result["attempts_skipped"] = sum(c["skipped"] for c in reducer.candidates)
+    result["attempts_stop_withdrawn"] = sum(c["stop_withdrawn"] for c in reducer.candidates)
     result["invalid_scenes"] = [c["index"] for c in reducer.candidates if c["decision"] == "invalid_scene"]
 
 

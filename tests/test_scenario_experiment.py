@@ -199,6 +199,13 @@ class PoolTests(unittest.TestCase):
         self.assertFalse(ticket.withdraw())
         self.assertEqual({"decided_skipped": 1}, pool.not_started_counts())
 
+    def test_a_ticket_withdrawn_because_the_batch_stopped_says_so(self):
+        pool = self.pool(lambda item: self.record(item))
+        ticket = pool.submit({"case_id": "a", "kind": "k"})
+        self.assertTrue(ticket.withdraw("stop_withdrawn"))
+        self.assertEqual("stop_withdrawn", ticket.record["status"])
+        self.assertEqual({"stop_withdrawn": 1}, pool.not_started_counts())
+
     def test_a_withdrawn_ticket_is_never_evaluated(self):
         seen = []
         pool = self.pool(lambda item: seen.append(item["case_id"]) or self.record(item), workers=1)

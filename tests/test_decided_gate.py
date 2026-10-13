@@ -277,6 +277,39 @@ class RunGatesTests(unittest.TestCase):
         self.assertIsNone(run.decisions["good"])
         self.assertEqual(executor.queue, [])           # nothing left waiting in the pool
 
+    def test_attempts_withdrawn_because_the_batch_stopped_are_not_early_decision_savings(self):
+        def outcome(item):
+            if item["key"] == "bad" and item["attempt"] == 0:
+                return {"status": "infrastructure_error", "error": "worker_lost"}
+            return F
+
+        executor = FakeExecutor(outcome, workers=1)
+        run = dg.run_gates(executor, [candidate("bad"), candidate("good")])
+        self.assertEqual("infrastructure_error", run.stop)
+        self.assertGreater(run.stop_withdrawn_total, 0)
+        self.assertEqual(0, run.skipped_total, "nothing was decided, so nothing was saved")
+        self.assertEqual(len(executor.withdrawn), run.stop_withdrawn_total + 0)
+        for key in ("bad", "good"):
+            withdrawn = [r for r in run.records[key] if r.get("status") == "stop_withdrawn"]
+            self.assertEqual(run.stop_withdrawn[key], len(withdrawn))
+        self.assertEqual(run.stop_withdrawn_total, run.to_dict()["stop_withdrawn_total"])
+
+    def test_a_stop_after_a_decision_keeps_the_decided_savings_separate(self):
+        def outcome(item):
+            # submission is attempt-major round robin: done0 late0 done1 late1 ...
+            if item["key"] == "late" and item["attempt"] == 1:
+                return {"status": "infrastructure_error"}
+            return S if item["key"] == "done" else F
+
+        executor = FakeExecutor(outcome, workers=1)
+        run = dg.run_gates(executor, [candidate("done"), candidate("late")])
+        self.assertEqual("infrastructure_error", run.stop)
+        self.assertEqual("does_not_reproduce", run.decisions["done"])
+        self.assertGreater(run.skipped["done"], 0)
+        self.assertEqual(0, run.skipped["late"])
+        self.assertGreater(run.stop_withdrawn["late"], 0)
+        self.assertEqual(0, run.stop_withdrawn["done"])
+
     def test_cancelled_records_are_infrastructure_errors(self):
         executor = FakeExecutor(lambda item: {"status": "cancelled"}, workers=1)
         run = dg.run_gates(executor, [candidate("c")])

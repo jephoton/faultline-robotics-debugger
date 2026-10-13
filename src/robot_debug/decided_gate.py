@@ -27,8 +27,9 @@ Executor protocol (adapt the real ``EvaluatorPool`` to it; tests use fakes)::
         # least one ticket is done, or after ``timeout`` seconds
     ticket.done() -> bool
     ticket.record -> dict | None        # None until done
-    ticket.withdraw() -> bool           # True iff it had not started; its
-        # record then becomes {"status": "decided_skipped", ...}
+    ticket.withdraw(reason="decided_skipped") -> bool   # True iff it had not started;
+        # its record then becomes {"status": reason, ...}; ``stop_withdrawn`` is used for
+        # attempts withdrawn because the whole batch stopped, never for early decisions
 
 A record has ``status`` in {"valid", "infrastructure_error", "cancelled",
 "deadline_skipped", "decided_skipped", ...} and, when valid, ``outcome`` in
@@ -57,7 +58,7 @@ class Ticket(Protocol):
 
     def done(self) -> bool: ...
 
-    def withdraw(self) -> bool: ...
+    def withdraw(self, reason: str = "decided_skipped") -> bool: ...
 
 
 class Executor(Protocol):
@@ -127,7 +128,8 @@ class GateRun:
     decisions: Dict[str, Optional[str]] = field(default_factory=dict)
     outcomes: Dict[str, List[str]] = field(default_factory=dict)
     records: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
-    skipped: Dict[str, int] = field(default_factory=dict)
+    skipped: Dict[str, int] = field(default_factory=dict)            # early-decision savings only
+    stop_withdrawn: Dict[str, int] = field(default_factory=dict)     # withdrawn because the batch stopped
     stop: Optional[str] = None           # None, "infrastructure_error" or "deadline_exhausted"
     detail: Optional[str] = None         # the record status or problem that caused the stop
     late: List[Tuple[str, Ticket]] = field(default_factory=list)
@@ -136,11 +138,16 @@ class GateRun:
     def skipped_total(self) -> int:
         return sum(self.skipped.values())
 
+    @property
+    def stop_withdrawn_total(self) -> int:
+        return sum(self.stop_withdrawn.values())
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "decisions": dict(self.decisions), "outcomes": {k: list(v) for k, v in self.outcomes.items()},
             "records": {k: list(v) for k, v in self.records.items()}, "skipped": dict(self.skipped),
-            "skipped_total": self.skipped_total, "stop": self.stop, "detail": self.detail,
+            "skipped_total": self.skipped_total, "stop_withdrawn": dict(self.stop_withdrawn),
+            "stop_withdrawn_total": self.stop_withdrawn_total, "stop": self.stop, "detail": self.detail,
             "late": len(self.late),
         }
 
@@ -152,6 +159,7 @@ class _Candidate:
         self.outcomes: List[str] = []
         self.records: List[Dict[str, Any]] = []
         self.skipped = 0
+        self.stop_withdrawn = 0
         self.decision: Optional[str] = None
 
 
@@ -303,8 +311,14 @@ def run_gates(
         for ident, (candidate, ticket) in list(pending.items()):
             if only_decided and candidate.decision is None:
                 continue
-            if not ticket.done() and ticket.withdraw():
-                candidate.skipped += 1
+            # An attempt of a decided candidate is an early-decision saving; one withdrawn only
+            # because the batch stopped is not.
+            decided = candidate.decision is not None
+            if not ticket.done() and ticket.withdraw("decided_skipped" if decided else "stop_withdrawn"):
+                if decided:
+                    candidate.skipped += 1
+                else:
+                    candidate.stop_withdrawn += 1
                 del pending[ident]
                 if isinstance(ticket.record, dict):
                     candidate.records.append(ticket.record)
@@ -355,6 +369,7 @@ def run_gates(
         run.outcomes[candidate.key] = list(candidate.outcomes)
         run.records[candidate.key] = candidate.records
         run.skipped[candidate.key] = candidate.skipped
+        run.stop_withdrawn[candidate.key] = candidate.stop_withdrawn
     run.stop, run.detail = state["stop"], state["detail"]
     run.late = [(candidate.key, ticket) for candidate, ticket in pending.values()]
     return run
