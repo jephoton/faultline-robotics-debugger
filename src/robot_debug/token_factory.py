@@ -706,3 +706,183 @@ def request_research_summary(context: dict, api_key: str,
     return {"response_json": content, "summary": summary,
             "provenance": _research_provenance("completed", None, latency,
                                                prompt, completion)}
+
+
+# --- M7: scenario hypothesis (additive; nothing above is changed) -----------------
+
+# TODO(coordinator): the exact Token Factory ids of Nemotron 3 Ultra and Super could not
+# be determined offline (only the Nano id above is pinned in this repository). They are
+# found at run time: the first catalog id containing the pattern wins, Ultra before Super,
+# ties broken alphabetically. After the first live catalog read, pin the exact ids here and
+# in the experiment note, then pass them as ``model=`` if a pin is wanted.
+SCENARIO_MODEL_PREFERENCE = (("ultra", "nemotron-3-ultra"), ("super", "nemotron-3-super"))
+_MAX_REQUEST_BYTES_SCENARIO = 16_000
+_MAX_TOKENS_SCENARIO = 2048
+_SCENARIO_FALLBACK_CODES = {
+    "invalid_api_key", "authentication_failed", "timeout", "http_error", "invalid_response",
+    "model_unavailable", "model_mismatch", "output_limit", "request_too_large",
+    "unsafe_response", "invalid_json", "invalid_shape", "unknown_entity", "duplicate_entity",
+    "invalid_hypothesis",
+}
+
+
+def select_scenario_model(identifiers) -> tuple:
+    """(model id, tier) for the hypothesis call from a catalog listing, else (None, None).
+
+    Nemotron 3 Ultra is preferred, then Super; matching is a case-insensitive
+    substring test on the catalog id and the alphabetically first match wins.
+    """
+
+    ids = sorted(item for item in identifiers if type(item) is str)
+    for tier, pattern in SCENARIO_MODEL_PREFERENCE:
+        for identifier in ids:
+            if pattern in identifier.lower():
+                return identifier, tier
+    return None, None
+
+
+def _scenario_provenance(status: str, error_code: str | None, latency: float,
+                         model: str | None, prompt_tokens: int | None = None,
+                         completion_tokens: int | None = None) -> dict:
+    return {
+        "source": "live",
+        "provider": "nebius-token-factory",
+        "model": model,
+        "endpoint": ENDPOINT,
+        "created_at": _created_at(),
+        "request_status": status,
+        "error_code": error_code,
+        "latency_seconds": max(0.0, float(latency)),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        # No price is recorded for the larger models; reconcile with billing instead.
+        "estimated_cost_usd": None,
+        "billed_cost_usd": None,
+    }
+
+
+def request_scenario_hypothesis(instruction: str, differences: list, api_key: str,
+                                transport: Transport | None = None, *,
+                                fixed_order: list | None = None,
+                                model: str | None = None) -> dict:
+    """Ask Nemotron (Ultra, else Super) to rank scenario differences and state a hypothesis.
+
+    One catalog read and at most one bounded POST. The message carries only the
+    task instruction and the difference table. The reply is advisory: any
+    problem (missing key or model, transport error, invalid or unexpected JSON,
+    an unknown entity, a response containing the key) returns the fixed order
+    with a ``fallback_reason`` code instead of raising. A malformed
+    ``instruction`` or ``differences`` raises ``ValueError`` before any call.
+
+    Returns ``source`` ("model" or "fixed_order"), ``ranking``, ``hypothesis``,
+    ``completed`` (entities the model left out, appended in fixed order),
+    ``model``, ``tier``, ``fallback_reason``, ``provenance`` and ``raw_content``
+    (the model text, never one containing the key).
+    """
+
+    from .scenario_hypothesis import (
+        HypothesisError, build_hypothesis_prompt, parse_hypothesis_reply)
+    from .scenario_state import fixed_order as default_fixed_order
+
+    prompt = build_hypothesis_prompt(instruction, differences)
+    order = list(fixed_order) if fixed_order is not None else default_fixed_order(differences)
+    result = {"source": "fixed_order", "ranking": order, "hypothesis": None, "completed": [],
+              "model": None, "tier": None, "fallback_reason": None, "provenance": None,
+              "raw_content": None}
+
+    def fall_back(reason: str, **extra) -> dict:
+        result["fallback_reason"] = reason if reason in _SCENARIO_FALLBACK_CODES else "http_error"
+        result.update(extra)
+        return result
+
+    if not _valid_key(api_key):
+        return fall_back("invalid_api_key")
+    call = _default_transport if transport is None else transport
+    started = time.monotonic()
+    try:
+        catalog = call("GET", "models", None, api_key)
+    except Exception as exc:  # noqa: BLE001 - mapped to a fixed code
+        return fall_back(_http_code(exc))
+    try:
+        data = catalog["data"]
+        if type(data) is not list:
+            raise ValueError
+        identifiers = [item["id"] for item in data
+                       if type(item) is dict and type(item.get("id")) is str]
+    except (KeyError, TypeError, ValueError):
+        return fall_back("invalid_response")
+    if model is not None:
+        selected, tier = (model, "pinned") if model in identifiers else (None, None)
+    else:
+        selected, tier = select_scenario_model(identifiers)
+    if selected is None:
+        return fall_back("model_unavailable")
+    result["model"], result["tier"] = selected, tier
+
+    payload = {
+        "model": selected,
+        "messages": [{"role": "system", "content": prompt["system"]},
+                     {"role": "user", "content": prompt["user"]}],
+        "max_tokens": _MAX_TOKENS_SCENARIO,
+        "temperature": 0,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    if len(encoded) > _MAX_REQUEST_BYTES_SCENARIO:
+        return fall_back("request_too_large")
+
+    try:
+        response = call("POST", "chat/completions", payload, api_key)
+    except Exception as exc:  # noqa: BLE001 - mapped to a fixed code
+        code = _post_error_code(exc)
+        status = "transport_error" if code == "timeout" else (
+            "invalid_response" if code == "invalid_response" else "http_error")
+        return fall_back(code, provenance=_scenario_provenance(
+            status, code, time.monotonic() - started, selected))
+    latency = time.monotonic() - started
+    try:
+        if type(response) is not dict or response.get("model") != selected:
+            raise ValueError
+        prompt_tokens, completion_tokens = _usage(response)
+    except Exception:  # noqa: BLE001
+        mismatch = type(response) is dict and response.get("model") != selected
+        code = "model_mismatch" if mismatch else "invalid_response"
+        return fall_back(code, provenance=_scenario_provenance(
+            "invalid_response", code, latency, selected))
+    provenance = _scenario_provenance("completed", None, latency, selected,
+                                      prompt_tokens, completion_tokens)
+    try:
+        choice = response["choices"][0]
+        if type(response["choices"]) is not list or len(response["choices"]) != 1 \
+                or type(choice) is not dict:
+            raise ValueError
+        finish = choice.get("finish_reason")
+        content = choice["message"]["content"]
+    except (KeyError, IndexError, TypeError, ValueError):
+        provenance.update(request_status="invalid_response", error_code="invalid_response")
+        return fall_back("invalid_response", provenance=provenance)
+    if finish == "length":
+        provenance.update(request_status="invalid_response", error_code="output_limit")
+        return fall_back("output_limit", provenance=provenance)
+    if finish != "stop" or type(content) is not str:
+        provenance.update(request_status="invalid_response", error_code="invalid_response")
+        return fall_back("invalid_response", provenance=provenance)
+    if _research_leaks_key(content, api_key):
+        provenance.update(request_status="invalid_response", error_code="unsafe_response")
+        return fall_back("unsafe_response", provenance=provenance)
+    names = [row["entity"] for row in differences]
+    known = [name for name in order if name in names] + [name for name in names if name not in order]
+    try:
+        parsed = parse_hypothesis_reply(content, known)
+    except HypothesisError as exc:
+        provenance.update(request_status="invalid_response", error_code=str(exc))
+        return fall_back(str(exc), provenance=provenance, raw_content=content)
+    if _contains_secret(parsed, api_key):
+        provenance.update(request_status="invalid_response", error_code="unsafe_response")
+        return fall_back("unsafe_response", provenance=provenance)
+    result.update(source="model", ranking=parsed["ranking"], hypothesis=parsed["hypothesis"],
+                  completed=parsed["completed"], provenance=provenance, raw_content=content)
+    return result
