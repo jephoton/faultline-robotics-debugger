@@ -1297,6 +1297,143 @@ def _count_outcomes(records: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
+# The reduced scenario as a case
+# ---------------------------------------------------------------------------
+
+CASE_SCHEMA_VERSION = 1
+
+
+def _fmt(value: float, digits: int = 1) -> str:
+    text = "{:.{}f}".format(value, digits)
+    return text[:-2] if text.endswith(".0") and digits == 1 else text
+
+
+def describe_minimal_cause(
+    final_selection: Mapping[str, Mapping[str, float]],
+    differences: Sequence[Mapping[str, Any]],
+    *,
+    reference: Any = None,
+    bisection_steps: Optional[int] = None,
+    reduced: bool = True,
+    required_failures: int = 4,
+    attempts: int = 5,
+) -> str:
+    """The minimal cause in one plain sentence.
+
+    Sizes are the final fraction ``t`` of each part's original difference between the
+    failing start and the reference, so "of the original" is the measured size.
+    """
+
+    rows = {row["entity"]: row for row in differences}
+    pieces = []
+    for entity, parts in final_selection.items():
+        row = rows.get(entity) or {}
+        for component, fraction in parts.items():
+            if component == "position":
+                full = ((row.get("position") or {}).get("distance_m") or 0.0) * 100.0
+                pieces.append("moving {} by {} cm (of the original {} cm)".format(
+                    entity, _fmt(full * fraction), _fmt(full)))
+            elif component == "rotation":
+                full = (row.get("rotation") or {}).get("angle_deg") or 0.0
+                pieces.append("rotating {} by {} degrees (of the original {})".format(
+                    entity, _fmt(full * fraction, 0), _fmt(full, 0)))
+            else:
+                count = len(row.get("joints") or ())
+                pieces.append("moving {} joint{} of {} {}% of the way to their failing values".format(
+                    count or "its", "" if count == 1 else "s", entity, _fmt(fraction * 100.0, 0)))
+    if not pieces:
+        return "No smaller cause than the whole arrangement was established."
+    if len(pieces) > 1:
+        body = ", ".join(pieces[:-1]) + " and " + pieces[-1]
+    else:
+        body = pieces[0]
+    body = body[0].upper() + body[1:]
+    verb = "is" if len(pieces) == 1 else "are"
+    sentence = "{} {} enough to make the policy fail".format(body, verb)
+    if reference is not None:
+        sentence += " from the passing start {}".format(reference)
+    sentence += " (at least {} of {} attempts)".format(required_failures, attempts)
+    if bisection_steps:
+        sentence += "; sizes are resolved to within 1/{} of the original difference".format(2 ** bisection_steps)
+    if not reduced:
+        sentence += "; the reduction stopped early, so this is the smallest cause found so far"
+    return sentence + "."
+
+
+def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
+    """A portable case record for a ``scenario-reduce`` summary.
+
+    Holds what the later UI step renders: the suite, task and instruction, the failing
+    start and reference, the minimal selection and its sentence, the replay recipe (a
+    scenario candidate file, restorable with ``scenario_start``), the original, minimal
+    and reference videos, the hypothesis with its mechanical verdict, and an empty
+    explanation slot. Raises ``ValueError`` for anything but a ``scenario-reduce`` summary.
+    """
+
+    import hashlib
+
+    if not isinstance(summary, Mapping) or summary.get("mode") != "scenario-reduce" \
+            or not isinstance(summary.get("plan"), Mapping):
+        raise ValueError("a scenario-reduce summary is required")
+    plan, reduction = summary["plan"], summary.get("reduction") or {}
+    selection = reduction.get("final_selection")
+    reference = reduction.get("reference")
+    ranking = (plan["hypothesis"].get("ranking") or plan.get("order") or [])
+    verdict = None
+    if reduction.get("reduced") and selection and ranking:
+        try:
+            verdict = hypothesis_verdict(ranking, selection)
+        except ValueError:
+            verdict = None
+    identity = json.dumps(
+        {"suite": plan["suite"], "task_id": plan["task_id"], "failing": plan["failing_start"],
+         "reference": reference, "selection": selection}, sort_keys=True, separators=(",", ":"))
+    candidate = summary.get("minimal_candidate")
+    hypothesis = plan["hypothesis"]
+    return {
+        "schema_version": CASE_SCHEMA_VERSION,
+        "kind": "scenario_reduction",
+        "case_id": hashlib.sha256(identity.encode("utf-8")).hexdigest(),
+        "suite": plan["suite"],
+        "task_id": plan["task_id"],
+        "instruction": plan["instruction"],
+        "failing_start": plan["failing_start"],
+        "reference_start": reference,
+        "stop_reason": reduction.get("stop_reason"),
+        "reduced": bool(reduction.get("reduced")),
+        "minimal": {
+            "selection": selection,
+            "sentence": describe_minimal_cause(
+                selection or {}, summary.get("differences") or [], reference=reference,
+                bisection_steps=reduction.get("bisection_steps"), reduced=bool(reduction.get("reduced")),
+                required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5)),
+            "parts": reduction.get("parts"),
+            "entity_minimal": reduction.get("entity_minimal"),
+        },
+        "replay": {
+            "candidate": candidate,
+            "config": {"suite": plan["suite"], "task_id": plan["task_id"],
+                       "scenario_start": {"candidate": "<path of the candidate file>"}},
+            "gate": {"attempts": reduction.get("attempts", 5),
+                     "required_failures": reduction.get("required_failures", 4)},
+        },
+        "videos": copy.deepcopy(summary.get("videos") or {}),
+        "hypothesis": {
+            "text": hypothesis.get("text"), "ranking": list(ranking), "source": hypothesis.get("source"),
+            "model": hypothesis.get("model"), "fallback_reason": hypothesis.get("fallback_reason"),
+            "verdict": verdict,
+        },
+        "explanation": None,
+        "measurements": {
+            "candidates_tested": reduction.get("candidates_tested"),
+            "attempts_run": reduction.get("attempts_run"),
+            "attempts_skipped": reduction.get("attempts_skipped"),
+            "total_seconds": summary.get("total_seconds"),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Building workloads
 # ---------------------------------------------------------------------------
 
@@ -1333,7 +1470,9 @@ __all__ = [
     "ScenarioConfigError",
     "ScenarioPool",
     "SUMMARY_NAME",
+    "build_case",
     "build_reduce_workload",
+    "describe_minimal_cause",
     "make_scenario_evaluate",
     "planned_episodes",
     "read_evidence",
