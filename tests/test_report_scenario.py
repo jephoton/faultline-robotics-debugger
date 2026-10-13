@@ -96,7 +96,9 @@ class ReportTests(RunTestCase):
         self.assertIn("fixed order", text)
         self.assertIn("local minimum", text)
         self.assertIn("| alphabet_soup_1 | 50.0 | - |", text)
-        self.assertIn("| 0 | gate | failing | - | F F F F F | reproduces | True |", text)
+        # Four failures fix the decision; a fifth, already running attempt may or may not be
+        # recorded in time, so the exact outcome string depends on thread timing.
+        self.assertRegex(text, r"\| 0 \| gate \| failing \| - \| (F ){3}F( F)? \| reproduces \| True \|")
         self.assertIn("Invalid scenes (never counted as failures): none", text)
         self.assertIn("a modelled count, not a measured saving", text)
 
