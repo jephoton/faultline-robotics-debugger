@@ -333,6 +333,7 @@ def _write_config(
     image_perturbation: Optional[Mapping[str, Any]] = None,
     suite: str = "libero_object",
     init_state_index: Optional[int] = None,
+    scenario_start: Optional[Path] = None,
 ) -> None:
     for name, value in (("task_id", task_id), ("seed", seed)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -343,6 +344,8 @@ def _write_config(
         isinstance(init_state_index, bool) or not isinstance(init_state_index, int) or init_state_index < 0
     ):
         raise ValueError("init_state_index must be a nonnegative integer")
+    if scenario_start is not None and (external_reset_candidate is not None or init_state_index is not None):
+        raise ValueError("scenario_start cannot be combined with external_reset_candidate or init_state_index")
     params = [
         "      suite: {}".format(suite),
         "      seed: {}".format(seed),
@@ -416,6 +419,16 @@ def _write_config(
                 "      external_reset:",
                 "        candidate: {}".format(_yaml_scalar(external_reset_candidate)),
                 "        metadata_out: {}".format(_yaml_scalar(Path(output_dir) / "external_reset.json")),
+            ]
+        )
+    if scenario_start is not None:
+        # Start from a validated scenario state (ADR 0028); the validity and settling
+        # record is written beside the stage outputs.
+        params.extend(
+            [
+                "      scenario_start:",
+                "        candidate: {}".format(_yaml_scalar(scenario_start)),
+                "        metadata_out: {}".format(_yaml_scalar(Path(output_dir) / "scenario_start.json")),
             ]
         )
     text = "\n".join(

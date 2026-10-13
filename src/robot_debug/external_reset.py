@@ -94,6 +94,11 @@ def _state_sha256(values) -> str:
     return _sha256(payload)
 
 
+def state_sha256(values) -> str:
+    """SHA-256 of a state vector packed as little-endian doubles (shared with scenario candidates)."""
+    return _state_sha256(values)
+
+
 def _has_control(value: str) -> bool:
     return any(unicodedata.category(character) == "Cc" for character in value)
 

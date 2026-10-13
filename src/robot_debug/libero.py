@@ -49,6 +49,17 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     (the upstream reset otherwise uses the episode index), so a stage can repeat one
     chosen start.
 
+    With ``scenario_start`` (``{"candidate": path, "metadata_out": path}``) every
+    episode starts from one validated scenario state (``scenario_import``): the
+    task's environment is reset, the state restored and checked, and then
+    settled as upstream does. A start whose bodies of different entities
+    interpenetrate by more than 5 mm is ``invalid_scene``: it is not settled,
+    the next ``step`` ends the episode at once with ``success`` false and
+    ``invalid_scene`` true in the episode metrics, and the sidecar record says
+    so, so it is never mistaken for a policy failure. The sidecar also records
+    state hashes before and after settling, the deepest penetration and each
+    object's settle displacement.
+
     With ``camera_probe`` (a JSON path) and a wrist occlusion or scalar family
     configured, a small sidecar records, per camera, the mean and standard
     deviation of the policy-input image before and after the perturbation at the
@@ -68,6 +79,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         image_perturbation: Optional[Mapping[str, Any]] = None,
         camera_probe: Optional[str] = None,
         init_state_index: Optional[int] = None,
+        scenario_start: Optional[Mapping[str, Any]] = None,
         **kwargs: Any
     ) -> None:
         if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
@@ -83,14 +95,16 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self.camera_probe = camera_probe
         self._probe_episodes: List[Dict[str, Any]] = []
         self._probe_truncated = False
-        if external_reset is not None:
-            if (not isinstance(external_reset, Mapping)
-                    or set(external_reset) != {"candidate", "metadata_out"}
-                    or not all(isinstance(external_reset[key], str) and external_reset[key]
-                               for key in ("candidate", "metadata_out"))):
-                raise ValueError("external_reset needs candidate and metadata_out paths")
-            external_reset = {key: external_reset[key] for key in ("candidate", "metadata_out")}
+        external_reset = self._candidate_paths("external_reset", external_reset)
+        scenario_start = self._candidate_paths("scenario_start", scenario_start)
+        if scenario_start is not None and (external_reset is not None or init_state_index is not None):
+            raise ValueError("scenario_start cannot be combined with external_reset or init_state_index")
         self.external_reset = external_reset
+        self.scenario_start = scenario_start
+        self._scenario_candidate = None  # type: Optional[Dict[str, Any]]
+        self._scene_cache = {}  # type: Dict[Any, Dict[str, Any]]
+        self._invalid_scene = False
+        self._invalid_obs = None  # type: Any
         # Noise is keyed by (seed, episode, step, camera, kind, severity); the
         # observation and recorded-frame paths count their own steps from reset.
         seed = kwargs.get("seed", 0)
@@ -113,6 +127,18 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self.agentview_occlusion = RectOcclusion.from_mapping(agentview_occlusion)
         self.wrist_occlusion = RectOcclusion.from_mapping(wrist_occlusion)
         self.image_perturbation = ScalarPerturbation.from_mapping(image_perturbation)
+
+    @staticmethod
+    def _candidate_paths(name: str, value: Optional[Mapping[str, Any]]) -> Optional[Dict[str, str]]:
+        """Validate a ``{"candidate", "metadata_out"}`` path pair; ``None`` stays ``None``."""
+
+        if value is None:
+            return None
+        if (not isinstance(value, Mapping)
+                or set(value) != {"candidate", "metadata_out"}
+                or not all(isinstance(value[key], str) and value[key] for key in ("candidate", "metadata_out"))):
+            raise ValueError("{} needs candidate and metadata_out paths".format(name))
+        return {key: value[key] for key in ("candidate", "metadata_out")}
 
     def get_tasks(self) -> Any:
         tasks = super().get_tasks()
@@ -153,6 +179,10 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
     def reset(self, task: Any) -> Any:
         self._begin_episode()
+        self._invalid_scene = False
+        self._invalid_obs = None
+        if self.scenario_start is not None:
+            return self._reset_from_scenario(task)
         if self.external_reset is not None:
             return self._reset_from_external_state(task)
         if self.init_state_index is not None:
@@ -234,6 +264,135 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         observation = result["observation"]
         self._recorder.record_video(self._extract_frame(observation))
         return observation
+
+    def _suite_name(self) -> Optional[str]:
+        return getattr(self, "suite", None)
+
+    def _scene_context(self, task: Any, sim: Any, state_length: int) -> Dict[str, Any]:
+        """The task's joint layout and body-entity table (built once per task)."""
+
+        from robot_debug import scene_inspect
+
+        key = (self._suite_name(), task["task_id"])
+        context = self._scene_cache.get(key)
+        if context is None:
+            context = {
+                "layout": scene_inspect.build_layout(
+                    self._suite_name(), task["task_id"], sim.model, state_length),
+                "body_entity": scene_inspect.body_entity_table(sim.model),
+            }
+            self._scene_cache[key] = context
+        return context
+
+    def _reset_from_scenario(self, task: Any) -> Any:
+        """Start the episode from the validated scenario state (ADR 0028).
+
+        Order: reset the task environment as upstream does, restore the state and
+        check it restored exactly, check the start for interpenetrating entities,
+        and only then settle it. An invalid start is not settled; ``step`` ends the
+        episode at once and the sidecar record carries ``validity: invalid_scene``.
+        """
+
+        from robot_debug import scene_inspect
+        from robot_debug.external_reset import state_sha256
+        from robot_debug.scenario_import import (
+            ScenarioImportError, ScenarioStartError, check_scenario_target, load_scenario_candidate)
+
+        if self._scenario_candidate is None:
+            self._scenario_candidate = load_scenario_candidate(self.scenario_start["candidate"])
+        candidate = self._scenario_candidate
+        if candidate["suite"] != self._suite_name() or candidate["task_id"] != task["task_id"]:
+            raise ScenarioImportError(
+                "scenario candidate does not match the evaluated suite, task or state length")
+        env = self._make_env(task)
+        self._env = env
+        self._current_task_id = task["task_id"]
+        env.reset()
+        sim = scene_inspect.sim_of(env)
+        length = int(np.asarray(env.get_sim_state()).size)
+        check_scenario_target(
+            candidate, suite=self._suite_name(), task_id=task["task_id"], state_length=length)
+        context = self._scene_context(task, sim, length)
+        observation = env.set_init_state(np.asarray(candidate["state"], dtype=np.float64))
+        forward = getattr(sim, "forward", None)
+        if callable(forward):
+            forward()  # contacts must belong to the restored state, whatever set_init_state does
+        before = scene_inspect.state_vector(env, length)
+        before_hash = state_sha256(before.tolist())
+        if before_hash != candidate["state_sha256"]:
+            raise ScenarioStartError("the simulator did not restore the scenario state exactly")
+        scan = scene_inspect.scan_contacts(
+            sim.model, sim.data, scene_inspect.PENETRATION_LIMIT_M, body_entity=context["body_entity"])
+        record = {
+            "schema_version": 1,
+            "episode_index": self._episode_index,
+            "suite": candidate["suite"],
+            "task_id": candidate["task_id"],
+            "source": candidate["source"],
+            "candidate_state_sha256": candidate["state_sha256"],
+            "pre_settle_state_sha256": before_hash,
+            "penetration_limit_m": scene_inspect.PENETRATION_LIMIT_M,
+            "deepest_penetration_m": scan["deepest_penetration_m"],
+            "deepest_pair": scan["deepest_pair"],
+            "invalid_contacts": scan["invalid_contacts"],
+        }
+        if not scan["valid"]:
+            self._invalid_scene = True
+            self._invalid_obs = observation
+            record.update(validity="invalid_scene", post_settle_state_sha256=None, settling_steps=0,
+                          settle_displacement_m={})
+        else:
+            from vla_eval.benchmarks.libero import benchmark as upstream
+
+            dummy_action = getattr(upstream, "LIBERO_DUMMY_ACTION", [0.0] * 6 + [-1.0])
+            for _ in range(self.num_steps_wait):
+                observation, _reward, _done, _info = env.step(dummy_action)
+            if getattr(self, "absolute_action", False):
+                for robot in env.robots:
+                    robot.controller.use_delta = False
+            after = scene_inspect.state_vector(env, length)
+            record.update(
+                validity="valid",
+                post_settle_state_sha256=state_sha256(after.tolist()),
+                settling_steps=int(self.num_steps_wait),
+                settle_displacement_m=scene_inspect.settle_displacement(context["layout"], before, after))
+        perturbation = self.perturbation_record()
+        if perturbation is not None:
+            record["perturbation"] = perturbation
+        self._append_scenario_record(record)
+        self._recorder.record_video(self._extract_frame(observation))
+        return observation
+
+    def _append_scenario_record(self, record: Dict[str, Any]) -> None:
+        target = self.scenario_start["metadata_out"]
+        try:
+            with open(target, "r", encoding="utf-8") as handle:
+                records = json.load(handle)
+        except FileNotFoundError:
+            records = []
+        records.append(record)
+        directory = os.path.dirname(target)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temporary = target + ".partial.json"  # an allowed evidence suffix, in case a kill leaves it
+        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(records, handle, indent=2, sort_keys=True, allow_nan=False)
+        os.replace(temporary, target)
+
+    def step(self, action: Any) -> Any:
+        """Upstream step, except that an invalid scenario start ends the episode unscored."""
+
+        if not self._invalid_scene:
+            return super().step(action)
+        from vla_eval.benchmarks.base import StepResult
+
+        self._recorder.record_step(reward=0.0, done=True, success=False)
+        return StepResult(obs=self._invalid_obs, reward=0.0, done=True, info={"invalid_scene": True})
+
+    def get_step_result(self, step_result: Any) -> Any:
+        if self._invalid_scene:
+            return {"success": False, "invalid_scene": True}
+        return super().get_step_result(step_result)
 
     def make_obs(self, raw_obs: Any, task: Any) -> Any:
         observation = super().make_obs(raw_obs, task)

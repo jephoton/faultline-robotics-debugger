@@ -265,6 +265,33 @@ class SuiteAndStartConfigTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.write_config(init_state_index=value)
 
+    def test_scenario_start_block_names_the_candidate_and_a_sidecar_in_the_output(self):
+        import yaml
+        candidate = self.root / "start.json"
+        text = self.write_config(suite="libero_10", task_id=3, scenario_start=candidate)
+        params = yaml.safe_load(text)["benchmarks"][0]["params"]
+        self.assertEqual({"candidate": str(candidate),
+                          "metadata_out": str(self.root / "output" / "scenario_start.json")},
+                         params["scenario_start"])
+        self.assertNotIn("init_state_index", params)
+        self.assertNotIn("external_reset", params)
+
+    def test_scenario_start_follows_the_camera_probe_like_the_external_reset(self):
+        text = self.write_config(image_perturbation={"kind": "blur", "severity": 0.4},
+                                 scenario_start=self.root / "start.json")
+        self.assertLess(text.index("camera_probe"), text.index("scenario_start"))
+
+    def test_scenario_start_is_exclusive_with_the_other_start_selectors(self):
+        start = self.root / "start.json"
+        with self.assertRaises(ValueError):
+            self.write_config(scenario_start=start, external_reset_candidate=self.root / "c.json")
+        with self.assertRaises(ValueError):
+            self.write_config(scenario_start=start, init_state_index=2)
+
+    def test_absent_scenario_start_changes_nothing(self):
+        self.assertEqual(self.write_config(), self.write_config(scenario_start=None))
+        self.assertNotIn("scenario_start", self.write_config(suite="libero_10", init_state_index=1))
+
 
 if __name__ == "__main__":
     unittest.main()

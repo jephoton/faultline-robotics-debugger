@@ -1,11 +1,16 @@
 """M7: choosing the benchmark start (A) and starting from validated scenario states (B)."""
 
+import json
+import os
+import tempfile
 import types
 import unittest
+from pathlib import Path
 
 import numpy as np
 
-from tests.scene_fakes import FakeEnv, FakeHarnessCase, FakeTaskSuite
+from robot_debug import external_reset, scenario_import
+from tests.scene_fakes import GEOM, FakeContact, FakeEnv, FakeHarnessCase, FakeTaskSuite
 
 
 def _states(model_length, count=6):
@@ -65,6 +70,247 @@ class InitStateIndexTests(FakeHarnessCase):
         with self.assertRaises(ValueError):
             self.benchmark_type(init_state_index=1,
                                 external_reset={"candidate": "a", "metadata_out": "b"})
+
+
+def _contact(env, first, second, dist):
+    env.sim.data.contacts = [FakeContact(GEOM[first], GEOM[second], dist)]
+
+
+class ScenarioStartTests(FakeHarnessCase):
+    """The scenario_start option: validated state, validity before settling, sidecar."""
+
+    WAIT = 3
+
+    def setUp(self):
+        super().setUp()
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.env = FakeEnv()
+        self.length = self.env.model.state_length
+        self.state = np.linspace(-0.5, 0.5, self.length)
+        self.candidate_path = self.root / "candidate.json"
+        self.sidecar = self.root / "scenario_start.json"
+        self.write_candidate()
+
+    def write_candidate(self, **changes):
+        candidate = scenario_import.candidate_from_benchmark("libero_10", 0, 4, self.state)
+        candidate.update(changes)
+        self.candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+
+    def make(self, **options):
+        benchmark = self.benchmark_type(
+            suite="libero_10", num_steps_wait=self.WAIT,
+            scenario_start={"candidate": str(self.candidate_path), "metadata_out": str(self.sidecar)},
+            **options)
+        benchmark._make_env = lambda task: self.env
+        return benchmark
+
+    @staticmethod
+    def task(task_id=0):
+        return {"task_id": task_id, "task_obj": object(), "name": "task {}".format(task_id), "episode_idx": 0}
+
+    def records(self):
+        return json.loads(self.sidecar.read_text(encoding="utf-8"))
+
+    # ---- valid scenes ----------------------------------------------------
+
+    def test_a_valid_scenario_is_restored_then_settled_like_upstream(self):
+        benchmark = self.make()
+        observation = benchmark.reset(self.task())
+        self.assertEqual([], benchmark.upstream_reset_tasks)
+        self.assertEqual(["reset", "set_init_state"] + ["step"] * self.WAIT, self.env.calls)
+        self.assertEqual("step", observation["from"])
+        self.assertEqual(1, len(benchmark._recorder.frames))
+        self.assertFalse(benchmark._invalid_scene)
+        self.assertGreaterEqual(self.env.sim.forwards, 1)
+
+    def test_the_restored_state_is_the_candidates_exactly(self):
+        benchmark = self.make()
+        self.env.drift = np.zeros(self.length)
+        benchmark.reset(self.task())
+        np.testing.assert_array_equal(self.state, self.env.state)
+
+    def test_sidecar_records_hashes_validity_and_settling(self):
+        self.env.drift = np.zeros(self.length)
+        self.env.drift[1 + 3 + 2] = 0.001  # the soup falls 1 mm per settling step
+        benchmark = self.make()
+        benchmark.reset(self.task())
+        (record,) = self.records()
+        self.assertEqual(1, record["schema_version"])
+        self.assertEqual(0, record["episode_index"])
+        self.assertEqual(("libero_10", 0), (record["suite"], record["task_id"]))
+        self.assertEqual({"kind": "benchmark", "init_state_index": 4}, record["source"])
+        candidate_hash = external_reset.state_sha256(self.state.tolist())
+        self.assertEqual(candidate_hash, record["candidate_state_sha256"])
+        self.assertEqual(candidate_hash, record["pre_settle_state_sha256"])
+        self.assertEqual(external_reset.state_sha256(self.env.state.tolist()), record["post_settle_state_sha256"])
+        self.assertNotEqual(record["pre_settle_state_sha256"], record["post_settle_state_sha256"])
+        self.assertEqual(self.WAIT, record["settling_steps"])
+        self.assertEqual("valid", record["validity"])
+        self.assertEqual(0.005, record["penetration_limit_m"])
+        self.assertEqual((0.0, None, 0), (record["deepest_penetration_m"], record["deepest_pair"],
+                                         record["invalid_contacts"]))
+        self.assertAlmostEqual(0.003, record["settle_displacement_m"]["alphabet_soup_1"])
+        self.assertAlmostEqual(0.0, record["settle_displacement_m"]["basket_1"])
+        self.assertNotIn("robot", record["settle_displacement_m"])
+        self.assertNotIn("perturbation", record)
+
+    def test_a_shallow_overlap_is_recorded_but_the_scene_stays_valid(self):
+        self.env.after_set = lambda env: _contact(env, "soup", "basket", -0.003)
+        benchmark = self.make()
+        benchmark.reset(self.task())
+        (record,) = self.records()
+        self.assertEqual("valid", record["validity"])
+        self.assertAlmostEqual(0.003, record["deepest_penetration_m"])
+        self.assertEqual(["alphabet_soup_1", "basket_1"], record["deepest_pair"])
+        self.assertEqual(self.WAIT, self.env.calls.count("step"))
+
+    def test_each_episode_appends_a_record_atomically(self):
+        benchmark = self.make()
+        for _ in range(3):
+            benchmark.reset(self.task())
+        self.assertEqual([0, 1, 2], [record["episode_index"] for record in self.records()])
+        self.assertEqual([], [name for name in os.listdir(self.root) if "partial" in name])
+
+    def test_perturbation_spec_is_recorded_only_when_configured(self):
+        benchmark = self.make(seed=7, image_perturbation={"kind": "blur", "severity": 0.4})
+        benchmark.reset(self.task())
+        (record,) = self.records()
+        self.assertEqual("blur", record["perturbation"]["image_perturbation"]["kind"])
+
+    def test_absolute_action_mode_switches_after_settling_like_upstream(self):
+        controller = types.SimpleNamespace(use_delta=True)
+        self.env.robots = [types.SimpleNamespace(controller=controller)]
+        benchmark = self.make()
+        benchmark.absolute_action = True
+        benchmark.reset(self.task())
+        self.assertFalse(controller.use_delta)
+
+    def test_the_candidate_is_read_once(self):
+        benchmark = self.make()
+        benchmark.reset(self.task())
+        self.candidate_path.write_text("{", encoding="utf-8")
+        benchmark.reset(self.task())
+        self.assertEqual(2, len(self.records()))
+
+    # ---- fail closed -----------------------------------------------------
+
+    def test_wrong_state_length_is_rejected_before_anything_is_set(self):
+        self.state = np.zeros(self.length + 2)
+        self.write_candidate()
+        benchmark = self.make()
+        with self.assertRaisesRegex(scenario_import.ScenarioImportError, "state length"):
+            benchmark.reset(self.task())
+        self.assertNotIn("set_init_state", self.env.calls)
+
+    def test_task_or_suite_mismatch_is_rejected(self):
+        benchmark = self.make()
+        with self.assertRaises(scenario_import.ScenarioImportError):
+            benchmark.reset(self.task(task_id=1))
+        self.write_candidate(suite="libero_object")
+        self.candidate_path.write_text(json.dumps(scenario_import.candidate_from_benchmark(
+            "libero_object", 0, 4, self.state)), encoding="utf-8")
+        with self.assertRaises(scenario_import.ScenarioImportError):
+            self.make().reset(self.task())
+
+    def test_an_invalid_candidate_file_is_rejected(self):
+        self.candidate_path.write_text(json.dumps(dict(
+            scenario_import.candidate_from_benchmark("libero_10", 0, 4, self.state), state_sha256="0" * 64)),
+            encoding="utf-8")
+        with self.assertRaises(scenario_import.ScenarioImportError):
+            self.make().reset(self.task())
+        self.assertEqual([], self.env.calls)
+
+    def test_a_state_that_does_not_restore_exactly_is_an_error(self):
+        def corrupt(env):
+            env.state[3] += 1e-9
+        self.env.after_set = corrupt
+        with self.assertRaises(scenario_import.ScenarioStartError):
+            self.make().reset(self.task())
+        self.assertFalse(self.sidecar.exists())
+
+    # ---- invalid scenes --------------------------------------------------
+
+    def invalid_benchmark(self, dist=-0.01):
+        self.env.after_set = lambda env: _contact(env, "finger", "soup", dist)
+        return self.make()
+
+    def test_a_penetrating_scene_is_not_settled(self):
+        benchmark = self.invalid_benchmark()
+        observation = benchmark.reset(self.task())
+        self.assertEqual(["reset", "set_init_state"], self.env.calls)
+        self.assertEqual("set_init_state", observation["from"])
+        self.assertTrue(benchmark._invalid_scene)
+        self.assertEqual(1, len(benchmark._recorder.frames))
+
+    def test_the_sidecar_marks_the_episode_invalid_scene(self):
+        self.invalid_benchmark().reset(self.task())
+        (record,) = self.records()
+        self.assertEqual("invalid_scene", record["validity"])
+        self.assertAlmostEqual(0.01, record["deepest_penetration_m"])
+        self.assertEqual(["alphabet_soup_1", "robot"], record["deepest_pair"])
+        self.assertEqual(1, record["invalid_contacts"])
+        self.assertIsNone(record["post_settle_state_sha256"])
+        self.assertEqual(0, record["settling_steps"])
+        self.assertEqual({}, record["settle_displacement_m"])
+        self.assertEqual(record["candidate_state_sha256"], record["pre_settle_state_sha256"])
+
+    def test_the_threshold_edge_decides_validity(self):
+        for dist, expected in ((-0.005, "valid"), (-0.0050001, "invalid_scene")):
+            self.sidecar.unlink() if self.sidecar.exists() else None
+            self.invalid_benchmark(dist).reset(self.task())
+            self.assertEqual(expected, self.records()[-1]["validity"], dist)
+
+    def test_the_next_step_ends_the_episode_without_success_or_a_simulator_step(self):
+        benchmark = self.invalid_benchmark()
+        benchmark.reset(self.task())
+        result = benchmark.step({"actions": [0.0] * 7})
+        self.assertTrue(result.done)
+        self.assertTrue(benchmark.check_done(result))
+        self.assertEqual({"success": False, "invalid_scene": True}, benchmark.get_step_result(result))
+        self.assertEqual(["reset", "set_init_state"], self.env.calls)
+        self.assertEqual([{"reward": 0.0, "done": True, "success": False}], benchmark._recorder.steps)
+
+    def test_valid_scenes_step_and_score_exactly_as_upstream(self):
+        benchmark = self.make()
+        benchmark.reset(self.task())
+        result = benchmark.step({"actions": [0.0] * 7})
+        self.assertFalse(result.done)
+        self.assertEqual({"success": False}, benchmark.get_step_result(result))
+        self.assertEqual("step", self.env.calls[-1])
+
+    def test_the_invalid_flag_clears_on_the_next_reset(self):
+        benchmark = self.invalid_benchmark()
+        benchmark.reset(self.task())
+        self.assertTrue(benchmark._invalid_scene)
+        self.env.after_set = None
+        self.env.sim.data.contacts = []
+        benchmark.reset(self.task())
+        self.assertFalse(benchmark._invalid_scene)
+        self.assertEqual(["invalid_scene", "valid"], [record["validity"] for record in self.records()])
+
+    # ---- configuration ---------------------------------------------------
+
+    def test_option_shape_is_validated_like_external_reset(self):
+        for bad in ({"candidate": "a"}, {"candidate": "", "metadata_out": "b"}, "path", 3,
+                    {"candidate": "a", "metadata_out": "b", "extra": "c"},
+                    {"candidate": "a", "metadata_out": 3}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                self.benchmark_type(suite="libero_10", scenario_start=bad)
+
+    def test_it_is_exclusive_with_external_reset_and_init_state_index(self):
+        good = {"candidate": "a", "metadata_out": "b"}
+        with self.assertRaises(ValueError):
+            self.benchmark_type(scenario_start=good, external_reset=good)
+        with self.assertRaises(ValueError):
+            self.benchmark_type(scenario_start=good, init_state_index=1)
+
+    def test_option_is_not_forwarded_upstream(self):
+        benchmark = self.make()
+        self.assertEqual({"suite": "libero_10", "seed": 7, "send_wrist_image": False, "send_state": False},
+                         benchmark.upstream_kwargs)
+        self.assertIsNone(self.benchmark_type().scenario_start)
 
 
 if __name__ == "__main__":
