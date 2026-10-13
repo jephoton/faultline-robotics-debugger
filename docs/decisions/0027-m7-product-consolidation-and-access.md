@@ -109,6 +109,20 @@ any live Token Factory feature on the site, and the export command are
 decided at the M7 checkpoint; publishing needs Jethro's explicit go at the
 time. This is the last M7a item, after the UI overhaul.
 
+**Submission track (accepted October 13):** Physical AI. Its text names
+GR00T, robot-policy evaluation on Serverless Jobs, and exempts the demo URL;
+the video still needs at least one minute of the key modules in action.
+
+**To consider at the M7 checkpoint (October 13):** a demo-only Nebius
+Serverless Endpoint serving GR00T, with the simulator running on the
+user's CPU and calling it per action chunk (a variant of option B). It
+matches the Physical AI track's "Endpoints for real-time inference" line,
+which is encouraged, not required. Concerns: it bills Jethro's account while
+active (scale-to-zero unconfirmed; an always-on L40S is about US$1.75/h),
+needs token auth and rate limits, and adds a network round trip per action
+chunk. Only acceptable, if at all, as a short, Jethro-started window with a
+spend cap; it does not replace options A to C.
+
 **M7b — submission:** demo video, write-up and FEEDBACK reconciliation,
 showing the M7a flow end to end with the M6 wrist and blur findings as the
 example story. Deadline October 30, 10:00 PT; target October 29; M7 starts no
