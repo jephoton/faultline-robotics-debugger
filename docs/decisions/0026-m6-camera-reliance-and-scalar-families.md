@@ -1,7 +1,9 @@
 # ADR 0026: M6 camera reliance and scalar image families
 
-**Status:** Accepted by Jethro on October 12, 2026. GPU work waits for a
-balance top-up and Jethro's go.
+**Status:** Accepted by Jethro on October 12, 2026. **Outcome (October 13):**
+wrist + agent-view masking stops the grasp; blur fails reliably from sigma
+3.9 px, noise from sigma 95; darkening and contrast never fail in range. See
+`docs/experiments/m6-camera-and-scalar-families.md`.
 
 ## Problem
 
