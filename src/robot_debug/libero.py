@@ -45,6 +45,10 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     The scalar family hits both cameras first, then any occlusion is drawn.
     Without the new options every observation is exactly what it was before.
 
+    With ``init_state_index`` every episode starts from that benchmark init state
+    (the upstream reset otherwise uses the episode index), so a stage can repeat one
+    chosen start.
+
     With ``camera_probe`` (a JSON path) and a wrist occlusion or scalar family
     configured, a small sidecar records, per camera, the mean and standard
     deviation of the policy-input image before and after the perturbation at the
@@ -63,10 +67,19 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         wrist_occlusion: Optional[Mapping[str, Any]] = None,
         image_perturbation: Optional[Mapping[str, Any]] = None,
         camera_probe: Optional[str] = None,
+        init_state_index: Optional[int] = None,
         **kwargs: Any
     ) -> None:
         if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
             raise ValueError("camera_probe must be a non-empty path")
+        if init_state_index is not None and (
+            isinstance(init_state_index, bool) or not isinstance(init_state_index, int)
+            or init_state_index < 0
+        ):
+            raise ValueError("init_state_index must be a nonnegative integer")
+        if init_state_index is not None and external_reset is not None:
+            raise ValueError("init_state_index cannot be combined with external_reset")
+        self.init_state_index = init_state_index
         self.camera_probe = camera_probe
         self._probe_episodes: List[Dict[str, Any]] = []
         self._probe_truncated = False
@@ -140,9 +153,12 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
     def reset(self, task: Any) -> Any:
         self._begin_episode()
-        if self.external_reset is None:
-            return super().reset(task)
-        return self._reset_from_external_state(task)
+        if self.external_reset is not None:
+            return self._reset_from_external_state(task)
+        if self.init_state_index is not None:
+            # The pinned upstream reset starts from ``init_states[task["episode_idx"]]``.
+            task = dict(task, episode_idx=self.init_state_index)
+        return super().reset(task)
 
     def _make_env(self, task: Any) -> Any:
         """Create (or reuse) the task environment exactly as the pinned upstream does."""

@@ -215,5 +215,56 @@ class WriteConfigTests(unittest.TestCase):
                 self.write_config(image_perturbation=value)
 
 
+class SuiteAndStartConfigTests(unittest.TestCase):
+    """M7: the suite and the benchmark start are selectable per stage."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def write_config(self, **options):
+        config_path = self.root / "stage.yaml"
+        failure_search._write_config(
+            config_path=config_path,
+            output_dir=self.root / "output",
+            project_root=self.root / "project",
+            stage_name="stage",
+            episode_indices=(0,),
+            **options,
+        )
+        return config_path.read_text(encoding="utf-8")
+
+    def test_default_suite_line_is_unchanged(self):
+        self.assertIn("      suite: libero_object\n", self.write_config())
+        self.assertEqual(self.write_config(), self.write_config(suite="libero_object", init_state_index=None))
+
+    def test_libero_10_suite_is_written(self):
+        text = self.write_config(suite="libero_10", task_id=3)
+        self.assertIn("      suite: libero_10\n", text)
+        self.assertNotIn("libero_object", text.split("params:")[1])
+
+    def test_only_the_supported_suites_are_accepted(self):
+        for suite in ("libero_spatial", "libero_goal", "libero_90", "libero_object ", "", None, 10, "x\n"):
+            with self.subTest(suite=suite), self.assertRaises(ValueError):
+                self.write_config(suite=suite)
+
+    def test_init_state_index_is_written_after_the_task(self):
+        import yaml
+        text = self.write_config(suite="libero_10", task_id=2, init_state_index=7)
+        params = yaml.safe_load(text)["benchmarks"][0]["params"]
+        self.assertEqual(7, params["init_state_index"])
+        self.assertEqual(2, params["task_id"])
+        self.assertLess(text.index("task_id: 2"), text.index("init_state_index: 7"))
+        self.assertIn("      init_state_index: 0\n", self.write_config(init_state_index=0))
+
+    def test_rejects_invalid_init_state_index(self):
+        for value in (-1, True, 1.5, "3", float("nan")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.write_config(init_state_index=value)
+
+
 if __name__ == "__main__":
     unittest.main()

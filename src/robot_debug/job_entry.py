@@ -105,6 +105,21 @@ def child_environment(base: Mapping[str, str], **overrides: str) -> Dict[str, st
 
 SERVER_VARIANTS = ("upstream", "faultline")
 
+# One suite (one model server) per Job; the checkpoint follows the suite. The
+# default is the historical checkpoint. ``scripts/serverless_prefetch.py`` holds
+# the pinned revisions and must list the same repositories (a test enforces it).
+DEFAULT_SUITE = "libero_object"
+SUITE_CHECKPOINTS = {
+    "libero_object": "nvidia/gr00t17-lerobot-libero_object-640",
+    "libero_10": "nvidia/gr00t17-lerobot-libero_10-640",
+}
+
+
+def _checkpoint_for(suite: Any) -> str:
+    if type(suite) is not str or suite not in SUITE_CHECKPOINTS:
+        raise ValueError("unknown suite for the model checkpoint")
+    return SUITE_CHECKPOINTS[suite]
+
 
 def faultline_server_script(layout: ImageLayout) -> Path:
     """The batch-capable, instrumented server shipped with the project scripts."""
@@ -119,6 +134,7 @@ def model_server_argv(
     server: str = "upstream",
     max_batch_size: int = 1,
     timing_log: Optional[Path] = None,
+    suite: str = DEFAULT_SUITE,
 ) -> List[str]:
     """Same server invocation as the historical ``model-launch.sh``.
 
@@ -133,7 +149,7 @@ def model_server_argv(
         raise ValueError("max_batch_size must be an integer from 1 to 64")
     if server == "upstream" and (max_batch_size != 1 or timing_log is not None):
         raise ValueError("batching and timing logs need the faultline server variant")
-    argv = _model_flags(layout, port, server)
+    argv = _model_flags(layout, port, server, suite)
     if server == "faultline":
         argv.append("--args.max_batch_size={}".format(max_batch_size))
         if timing_log is not None:
@@ -144,13 +160,16 @@ def model_server_argv(
     return argv
 
 
-def model_flags_for_scripts(layout: ImageLayout, max_batch_size: int = 1) -> List[str]:
+def model_flags_for_scripts(
+    layout: ImageLayout, max_batch_size: int = 1, suite: str = DEFAULT_SUITE
+) -> List[str]:
     """The ``--args.*`` flags of the faultline server, without interpreter, script or port."""
 
-    return model_server_argv(layout, server="faultline", max_batch_size=max_batch_size)[3:]
+    return model_server_argv(layout, server="faultline", max_batch_size=max_batch_size, suite=suite)[3:]
 
 
-def _model_flags(layout: ImageLayout, port: int, server: str) -> List[str]:
+def _model_flags(layout: ImageLayout, port: int, server: str, suite: str = DEFAULT_SUITE) -> List[str]:
+    checkpoint = _checkpoint_for(suite)
     script = (
         (layout.upstream_root / "src" / "vla_eval" / "model_servers" / "lerobot.py")
         if server == "upstream"
@@ -162,7 +181,7 @@ def _model_flags(layout: ImageLayout, port: int, server: str) -> List[str]:
         "--port={}".format(port),
         "--args.device=cuda",
         "--args.policy_type=groot",
-        "--args.checkpoint=nvidia/gr00t17-lerobot-libero_object-640",
+        "--args.checkpoint={}".format(checkpoint),
         "--args.state_key=observation.state",
         "--args.chunk_size=null",
         '--args.image_keys={"agentview":"observation.images.image","wrist":"observation.images.wrist_image"}',
@@ -210,6 +229,22 @@ def evaluator_environment(
     return child_environment(base, PYTHONPATH=pythonpath, **overrides)
 
 
+def prefetch_command(layout: ImageLayout, output: Path, *, suite: str = DEFAULT_SUITE) -> List[str]:
+    """The prefetch argv; the suite is named only when it is not the historical default."""
+
+    _checkpoint_for(suite)
+    argv = [
+        str(layout.model_python),
+        "-I",
+        str(layout.project_root / "scripts" / "serverless_prefetch.py"),
+        "--output",
+        str(output),
+    ]
+    if suite != DEFAULT_SUITE:
+        argv.extend(["--suite", suite])
+    return argv
+
+
 def prefetch_models(
     layout: ImageLayout,
     *,
@@ -217,6 +252,7 @@ def prefetch_models(
     output: Path,
     log_root: Path,
     timeout_seconds: float,
+    suite: str = DEFAULT_SUITE,
 ) -> Dict[str, Any]:
     """Run the pinned prefetch as one owned process group with a hard timeout."""
 
@@ -228,13 +264,7 @@ def prefetch_models(
     token = hf_token(base_env)
     if token:
         env[TOKEN_VARIABLE] = token
-    argv = [
-        str(layout.model_python),
-        "-I",
-        str(layout.project_root / "scripts" / "serverless_prefetch.py"),
-        "--output",
-        str(output),
-    ]
+    argv = prefetch_command(layout, output, suite=suite)
     log_root.mkdir(parents=True, exist_ok=True)
     ident = "prefetch-" + uuid.uuid4().hex
     with (log_root / (ident + ".stdout.log")).open("xb") as stdout, (
@@ -336,7 +366,10 @@ class ProductionModelFactory:
         deadline: float,
         clock: Callable[[], float] = time.monotonic,
         progress: Progress = _no_progress,
+        suite: str = DEFAULT_SUITE,
     ) -> None:
+        _checkpoint_for(suite)
+        self._suite = suite
         self._layout = layout
         self._base_env = dict(base_env)
         self._deadline = deadline
@@ -359,7 +392,8 @@ class ProductionModelFactory:
         """
 
         argv = model_server_argv(
-            self._layout, server=server, max_batch_size=max_batch_size, timing_log=timing_log
+            self._layout, server=server, max_batch_size=max_batch_size, timing_log=timing_log,
+            suite=self._suite,
         )
         log_root = Path(log_root)
         self.ensure_prefetched(log_root, argv=argv)
@@ -387,7 +421,8 @@ class ProductionModelFactory:
 
         _require_posix("parity check")
         log_root = Path(log_root)
-        argv = model_server_argv(self._layout, server="faultline", max_batch_size=max_batch_size)
+        argv = model_server_argv(
+            self._layout, server="faultline", max_batch_size=max_batch_size, suite=self._suite)
         try:
             self.ensure_prefetched(log_root, argv=argv)
         except subprocess.TimeoutExpired as error:
@@ -397,7 +432,7 @@ class ProductionModelFactory:
         command = [
             str(self._layout.model_python),
             str(self._layout.project_root / "scripts" / "model_servers" / "groot_batch_parity.py"),
-            *model_flags_for_scripts(self._layout, max_batch_size),
+            *model_flags_for_scripts(self._layout, max_batch_size, self._suite),
             "--output={}".format(Path(output).as_posix()),
         ]
         log_root.mkdir(parents=True, exist_ok=True)
@@ -439,7 +474,8 @@ class ProductionModelFactory:
         """Prefetch before any phase, so download time never lands in a phase."""
 
         self.ensure_prefetched(
-            Path(log_root), argv=model_server_argv(self._layout, server="faultline", max_batch_size=1)
+            Path(log_root),
+            argv=model_server_argv(self._layout, server="faultline", max_batch_size=1, suite=self._suite),
         )
 
     def ensure_prefetched(self, log_root: Path, *, argv: Optional[Sequence[str]] = None) -> None:
@@ -459,6 +495,7 @@ class ProductionModelFactory:
                 output=run_root / "model-resolution.json",
                 log_root=log_root,
                 timeout_seconds=min(PREFETCH_CAP_SECONDS, budget),
+                **({} if self._suite == DEFAULT_SUITE else {"suite": self._suite}),
             )
         except BaseException as error:
             self._progress("prefetch_failed", error=type(error).__name__,

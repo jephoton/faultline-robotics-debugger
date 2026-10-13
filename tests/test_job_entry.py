@@ -156,8 +156,55 @@ class ModelArgvTests(unittest.TestCase):
         checkpoint = serverless_prefetch.PINNED_REVISIONS["nvidia/gr00t17-lerobot-libero_object-640"]
         self.assertIn(checkpoint, script)
         design = (ROOT / "docs" / "superpowers" / "specs" / "2026-10-06-serverless-job-migration-design.md").read_text(encoding="utf-8")
-        for revision in serverless_prefetch.PINNED_REVISIONS.values():
+        for revision in serverless_prefetch.pinned_for_suite("libero_object").values():
             self.assertIn(revision, design)
+
+    def test_suite_checkpoints_default_to_libero_object_and_cover_libero_10(self) -> None:
+        self.assertEqual("libero_object", job_entry.DEFAULT_SUITE)
+        self.assertEqual(
+            {"libero_object": "nvidia/gr00t17-lerobot-libero_object-640",
+             "libero_10": "nvidia/gr00t17-lerobot-libero_10-640"},
+            job_entry.SUITE_CHECKPOINTS)
+        self.assertEqual(job_entry.SUITE_CHECKPOINTS, serverless_prefetch.SUITE_CHECKPOINTS)
+
+    def test_other_suite_changes_only_the_checkpoint_flag(self) -> None:
+        default = model_server_argv(ImageLayout(), server="faultline", max_batch_size=12)
+        other = model_server_argv(ImageLayout(), server="faultline", max_batch_size=12, suite="libero_10")
+        self.assertEqual(model_server_argv(ImageLayout(), server="faultline", max_batch_size=12,
+                                           suite="libero_object"), default)
+        changed = [(a, b) for a, b in zip(default, other) if a != b]
+        self.assertEqual([("--args.checkpoint=nvidia/gr00t17-lerobot-libero_object-640",
+                           "--args.checkpoint=nvidia/gr00t17-lerobot-libero_10-640")], changed)
+        self.assertEqual(len(default), len(other))
+        self.assertIn("--args.checkpoint=nvidia/gr00t17-lerobot-libero_10-640",
+                      job_entry.model_flags_for_scripts(ImageLayout(), 12, suite="libero_10"))
+        self.assertIn("--args.checkpoint=nvidia/gr00t17-lerobot-libero_object-640",
+                      job_entry.model_flags_for_scripts(ImageLayout(), 12))
+
+    def test_unknown_suite_is_rejected(self) -> None:
+        for suite in ("libero_spatial", "", None, 3, "libero_10 "):
+            with self.subTest(suite=suite), self.assertRaises(ValueError):
+                model_server_argv(ImageLayout(), suite=suite)
+
+    def test_prefetch_command_names_a_suite_only_when_it_is_not_the_default(self) -> None:
+        layout = ImageLayout()
+        base = job_entry.prefetch_command(layout, Path("/tmp/out.json"))
+        self.assertNotIn("--suite", base)
+        self.assertEqual(base, job_entry.prefetch_command(layout, Path("/tmp/out.json"), suite="libero_object"))
+        other = job_entry.prefetch_command(layout, Path("/tmp/out.json"), suite="libero_10")
+        self.assertEqual(base + ["--suite", "libero_10"], other)
+        with self.assertRaises(ValueError):
+            job_entry.prefetch_command(layout, Path("/tmp/out.json"), suite="libero_goal")
+
+    def test_factory_uses_its_suite_for_the_server_description(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            factory = ProductionModelFactory(
+                _layout(Path(temp)), base_env={}, deadline=time.monotonic() + 2400, suite="libero_10")
+            factory.ensure_prefetched = lambda *args, **kwargs: None
+            model = factory(log_root=Path(temp) / "work" / "run" / "logs", server="faultline", max_batch_size=4)
+        self.assertIn("--args.checkpoint=nvidia/gr00t17-lerobot-libero_10-640", model._argv)
+        with self.assertRaises(ValueError):
+            ProductionModelFactory(ImageLayout(), base_env={}, deadline=1.0, suite="libero_spatial")
 
 
 class _FakeHub:
@@ -199,12 +246,46 @@ class PrefetchScriptTests(unittest.TestCase):
             output = root / "resolution.json"
             self.assertEqual(serverless_prefetch.main(["--output", str(output)], hub=hub), 0)
             repositories = json.loads(output.read_text(encoding="utf-8"))["repositories"]
-            for repo, revision in serverless_prefetch.PINNED_REVISIONS.items():
+            self.assertEqual(
+                {"nvidia/gr00t17-lerobot-libero_object-640", "nvidia/GR00T-N1.7-3B", "nvidia/Cosmos-Reason2-2B"},
+                set(repositories))
+            for repo, revision in serverless_prefetch.pinned_for_suite("libero_object").items():
                 self.assertEqual(repositories[repo], {"revision": revision, "pinned": True})
                 self.assertEqual(Path(hub.snapshot_download(repo_id=repo, local_files_only=True)).name, revision)
             self.assertEqual(repositories["nvidia/Cosmos-Reason2-2B"], {"revision": cosmos, "pinned": False})
             with self.assertRaises(FileExistsError):
                 serverless_prefetch.main(["--output", str(output)], hub=hub)
+
+    def test_libero_10_prefetch_fetches_only_its_checkpoint_and_the_shared_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            hub = _FakeHub(root / "hub", {"nvidia/Cosmos-Reason2-2B": "c" * 40})
+            output = root / "resolution.json"
+            self.assertEqual(
+                serverless_prefetch.main(["--output", str(output), "--suite", "libero_10"], hub=hub), 0)
+            repositories = json.loads(output.read_text(encoding="utf-8"))["repositories"]
+            self.assertEqual(
+                {"nvidia/gr00t17-lerobot-libero_10-640", "nvidia/GR00T-N1.7-3B", "nvidia/Cosmos-Reason2-2B"},
+                set(repositories))
+            self.assertEqual({"revision": "5ee08ab09fac5c5ef2388a14c882ea825ac861db", "pinned": True},
+                             repositories["nvidia/gr00t17-lerobot-libero_10-640"])
+
+    def test_all_suites_option_fetches_every_pinned_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            hub = _FakeHub(root / "hub", {"nvidia/Cosmos-Reason2-2B": "c" * 40})
+            output = root / "resolution.json"
+            serverless_prefetch.main(["--output", str(output), "--suite", "all"], hub=hub)
+            repositories = json.loads(output.read_text(encoding="utf-8"))["repositories"]
+            self.assertEqual(set(serverless_prefetch.PINNED_REVISIONS) | {"nvidia/Cosmos-Reason2-2B"},
+                             set(repositories))
+
+    def test_unknown_prefetch_suite_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            hub = _FakeHub(Path(temp) / "hub", {})
+            with self.assertRaises(SystemExit), mock.patch.object(sys, "stderr", io.StringIO()):
+                serverless_prefetch.main(["--output", str(Path(temp) / "r.json"), "--suite", "libero_goal"],
+                                         hub=hub)
 
     def test_real_hub_resolves_pinned_main_offline(self) -> None:
         try:
@@ -226,7 +307,7 @@ class PrefetchScriptTests(unittest.TestCase):
 
             fake.snapshot_download = download
             resolution = serverless_prefetch.fetch(fake, cache)
-            for repo, revision in serverless_prefetch.PINNED_REVISIONS.items():
+            for repo, revision in serverless_prefetch.pinned_for_suite("libero_object").items():
                 self.assertEqual(resolution[repo]["revision"], revision)
                 resolved = real(repo_id=repo, local_files_only=True, cache_dir=str(cache))
                 self.assertEqual(Path(resolved).name, revision)

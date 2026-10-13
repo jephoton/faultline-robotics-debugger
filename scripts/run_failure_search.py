@@ -24,6 +24,8 @@ from robot_debug.session import EpisodeResult, classify_aggregate, is_reproducib
 SESSION_DIRECTORY_NAME = "first-failure-search"
 SWEEP_SIDES = (0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
 NOMINAL_EPISODE_INDICES = tuple(range(20))
+# M7: LIBERO-10 joins the original suite; one suite (one model server) per Job.
+SUPPORTED_SUITES = ("libero_object", "libero_10")
 
 
 def _resolve_evaluator_command(interpreter: Path) -> str:
@@ -329,18 +331,29 @@ def _write_config(
     external_reset_candidate: Optional[Path] = None,
     wrist_occlusion: Optional[Mapping[str, Any]] = None,
     image_perturbation: Optional[Mapping[str, Any]] = None,
+    suite: str = "libero_object",
+    init_state_index: Optional[int] = None,
 ) -> None:
     for name, value in (("task_id", task_id), ("seed", seed)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError("{} must be a nonnegative integer".format(name))
+    if type(suite) is not str or suite not in SUPPORTED_SUITES:
+        raise ValueError("suite must be one of {}".format(", ".join(SUPPORTED_SUITES)))
+    if init_state_index is not None and (
+        isinstance(init_state_index, bool) or not isinstance(init_state_index, int) or init_state_index < 0
+    ):
+        raise ValueError("init_state_index must be a nonnegative integer")
     params = [
-        "      suite: libero_object",
+        "      suite: {}".format(suite),
         "      seed: {}".format(seed),
         "      env_seed: {}".format(seed),
         "      num_steps_wait: 10",
     ]
     if task_id != 0:
         params.append("      task_id: {}".format(task_id))
+    if init_state_index is not None:
+        # Every episode of the stage starts from this benchmark init state.
+        params.append("      init_state_index: {}".format(init_state_index))
     if side is not None:
         if width is not None or height is not None:
             raise ValueError("side cannot be combined with width or height")
