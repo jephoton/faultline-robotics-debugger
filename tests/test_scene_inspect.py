@@ -135,28 +135,30 @@ class ContactTests(unittest.TestCase):
     def test_static_bodies_against_each_other_are_ignored(self):
         self.assertTrue(self.scan(("table", "floor", -0.3), ("stove", "table", -0.3))["valid"])
 
-    def test_an_object_pushed_into_a_static_scene_body_counts_with_the_same_threshold(self):
+    def test_static_scene_contacts_are_recorded_but_never_decide_validity(self):
+        # Real LIBERO-10 starts rest an object 14.6 mm inside the table's collision geometry.
         for geom, label in (("table", "scene:main_table"), ("stove", "scene:flat_stove_1_main"),
                             ("floor", "scene:world")):
             with self.subTest(geom=geom):
                 result = self.scan(("soup", geom, -0.02))
-                self.assertFalse(result["valid"])
-                self.assertAlmostEqual(0.02, result["deepest_penetration_m"])
-                self.assertEqual(sorted(["alphabet_soup_1", label]), result["deepest_pair"])
-                self.assertEqual(1, result["invalid_contacts"])
-                self.assertTrue(self.scan(("soup", geom, -0.005))["valid"], "exactly the limit is valid")
-                self.assertFalse(self.scan(("soup", geom, -0.0050001))["valid"])
-                self.assertTrue(self.scan(("soup", geom, -0.003))["valid"])
-                self.assertAlmostEqual(0.003, self.scan(("soup", geom, -0.003))["deepest_penetration_m"])
+                self.assertTrue(result["valid"])
+                self.assertEqual(0.0, result["deepest_penetration_m"])
+                self.assertIsNone(result["deepest_pair"])
+                self.assertEqual(0, result["invalid_contacts"])
+                self.assertAlmostEqual(0.02, result["deepest_static_penetration_m"])
+                self.assertEqual(sorted(["alphabet_soup_1", label]), result["deepest_static_pair"])
 
-    def test_an_articulated_fixture_pushed_into_the_table_counts_too(self):
-        self.assertFalse(self.scan(("microwave", "table", -0.01))["valid"])
-        self.assertFalse(self.scan(("microwave_door", "stove", -0.01))["valid"])
+    def test_an_articulated_fixture_against_the_table_is_recorded_only(self):
+        result = self.scan(("microwave", "table", -0.01))
+        self.assertTrue(result["valid"])
+        self.assertAlmostEqual(0.01, result["deepest_static_penetration_m"])
 
     def test_static_contacts_do_not_hide_a_deeper_entity_contact(self):
-        result = self.scan(("soup", "table", -0.01), ("finger", "soup", -0.03))
+        result = self.scan(("soup", "table", -0.04), ("finger", "soup", -0.03))
         self.assertEqual(["alphabet_soup_1", "robot"], result["deepest_pair"])
-        self.assertEqual(2, result["invalid_contacts"])
+        self.assertAlmostEqual(0.03, result["deepest_penetration_m"])
+        self.assertEqual(1, result["invalid_contacts"])
+        self.assertAlmostEqual(0.04, result["deepest_static_penetration_m"])
 
     def test_contacts_inside_one_entity_are_ignored(self):
         for pair in (("robot_link", "finger"), ("robot_base", "finger"), ("basket", "basket_lid"),

@@ -374,6 +374,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 "penetration_limit_m": scene_inspect.PENETRATION_LIMIT_M,
                 "deepest_penetration_m": scan["deepest_penetration_m"],
                 "deepest_pair": scan["deepest_pair"], "invalid_contacts": scan["invalid_contacts"],
+                "deepest_static_penetration_m": scan.get("deepest_static_penetration_m"),
+                "deepest_static_pair": scan.get("deepest_static_pair"),
             })
             self._exported.add(key)
         dummy_action = getattr(upstream, "LIBERO_DUMMY_ACTION", [0.0] * 6 + [-1.0])
@@ -437,6 +439,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             "deepest_penetration_m": scan["deepest_penetration_m"],
             "deepest_pair": scan["deepest_pair"],
             "invalid_contacts": scan["invalid_contacts"],
+            "deepest_static_penetration_m": scan.get("deepest_static_penetration_m"),
+            "deepest_static_pair": scan.get("deepest_static_pair"),
         }
         if not scan["valid"]:
             self._invalid_scene = True

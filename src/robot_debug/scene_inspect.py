@@ -177,11 +177,14 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
     """Classify the current contacts for the start-validity check.
 
     Counted: contacts between two different entities (robot against object, object
-    against object) and an object or articulated fixture against a static scene body
-    (table, floor, static fixture). Ignored: contacts inside one entity, the robot against
-    static scene bodies (it legitimately touches its mount and the table surface while
-    reaching) and static bodies against each other. A start is invalid when any counted
-    contact penetrates deeper than ``limit`` (``dist < -limit``; exactly ``limit`` is valid).
+    against object). A start is invalid when any counted contact penetrates deeper than
+    ``limit`` (``dist < -limit``; exactly ``limit`` is valid). An object or articulated
+    fixture against a static scene body (table, floor, static fixture) is recorded as
+    ``deepest_static_*`` but never decides validity: on real LIBERO-10 benchmark starts
+    (October 13 calibration) ``ketchup_1`` rests 14.6 mm inside ``living_room_table``'s
+    collision geometry in every start of tasks 0, 1 and 7, so an absolute threshold
+    would reject untouched benchmark scenes. Ignored entirely: contacts inside one entity,
+    the robot against static bodies and static bodies against each other.
     """
 
     if body_entity is None:
@@ -189,6 +192,8 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
     geom_body = model.geom_bodyid
     deepest = 0.0
     pair = None
+    static_deepest = 0.0
+    static_pair = None
     invalid = 0
     checked = 0
     for index in range(int(data.ncon)):
@@ -204,6 +209,11 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
         distance = float(contact.dist)
         if not math.isfinite(distance):
             raise SceneInspectError("a contact has a non-finite distance")
+        if first_static or second_static:
+            if -distance > static_deepest:
+                static_deepest = -distance
+                static_pair = sorted([first, second])
+            continue
         checked += 1
         if distance < -limit:
             invalid += 1
@@ -217,6 +227,8 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
         "deepest_pair": pair,
         "invalid_contacts": invalid,
         "contacts_checked": checked,
+        "deepest_static_penetration_m": float(static_deepest),
+        "deepest_static_pair": static_pair,
     }
 
 
