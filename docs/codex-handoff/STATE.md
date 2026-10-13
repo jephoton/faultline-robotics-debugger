@@ -1,5 +1,21 @@
 # Faultline current project state
 
+## October 13 M6 status and M7 direction (Claude Code)
+
+- M6 complete (ADR 0026, `docs/experiments/m6-camera-and-scalar-families.md`):
+  agent-view mask + black wrist never grasps (12/12 fail); blur fails
+  reliably from sigma 3.9 px, noise from sigma 95; darkening and contrast
+  never fail in range. Image v11 `8af6806c24d0`. Spend ≈ US$0.99; balance
+  ≈ US$5.28 after Jethro's top-up to US$6.27 (estimate; reconcile).
+- M7 direction accepted (ADR 0027): M7a product consolidation
+  (`faultline diagnose <spec>`, spec-driven job mode, automatic viewer cases,
+  `faultline replay`, optional service-account auth; access via public
+  gallery, local GPU backend, and the user's own Nebius project), then M7b
+  submission. Next: M7 design checkpoint.
+- Buckets `faultline-m6-{smoke,threshold}-20261013` expire after one day;
+  delete once empty (and the four M3 buckets from October 12). Download
+  identities are revoked.
+
 ## October 12 M3 batched-inference status (Claude Code)
 
 - M3 batching complete (ADR 0025, `docs/experiments/m3-batched-inference.md`):
