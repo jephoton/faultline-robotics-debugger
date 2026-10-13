@@ -125,12 +125,38 @@ class ContactTests(unittest.TestCase):
         self.assertTrue(self.scan(("soup", "basket", -0.006), limit=0.01)["valid"])
         self.assertFalse(self.scan(("soup", "basket", -0.006), limit=0.001)["valid"])
 
-    def test_static_scene_bodies_are_ignored(self):
+    def test_the_robot_against_static_scene_bodies_is_ignored(self):
         for geom in ("table", "stove", "floor"):
-            result = self.scan(("soup", geom, -0.2), ("robot_link", geom, -0.2))
+            result = self.scan(("robot_link", geom, -0.2), ("finger", geom, -0.2))
             self.assertTrue(result["valid"], geom)
             self.assertEqual(0.0, result["deepest_penetration_m"])
             self.assertEqual(0, result["invalid_contacts"])
+
+    def test_static_bodies_against_each_other_are_ignored(self):
+        self.assertTrue(self.scan(("table", "floor", -0.3), ("stove", "table", -0.3))["valid"])
+
+    def test_an_object_pushed_into_a_static_scene_body_counts_with_the_same_threshold(self):
+        for geom, label in (("table", "scene:main_table"), ("stove", "scene:flat_stove_1_main"),
+                            ("floor", "scene:world")):
+            with self.subTest(geom=geom):
+                result = self.scan(("soup", geom, -0.02))
+                self.assertFalse(result["valid"])
+                self.assertAlmostEqual(0.02, result["deepest_penetration_m"])
+                self.assertEqual(sorted(["alphabet_soup_1", label]), result["deepest_pair"])
+                self.assertEqual(1, result["invalid_contacts"])
+                self.assertTrue(self.scan(("soup", geom, -0.005))["valid"], "exactly the limit is valid")
+                self.assertFalse(self.scan(("soup", geom, -0.0050001))["valid"])
+                self.assertTrue(self.scan(("soup", geom, -0.003))["valid"])
+                self.assertAlmostEqual(0.003, self.scan(("soup", geom, -0.003))["deepest_penetration_m"])
+
+    def test_an_articulated_fixture_pushed_into_the_table_counts_too(self):
+        self.assertFalse(self.scan(("microwave", "table", -0.01))["valid"])
+        self.assertFalse(self.scan(("microwave_door", "stove", -0.01))["valid"])
+
+    def test_static_contacts_do_not_hide_a_deeper_entity_contact(self):
+        result = self.scan(("soup", "table", -0.01), ("finger", "soup", -0.03))
+        self.assertEqual(["alphabet_soup_1", "robot"], result["deepest_pair"])
+        self.assertEqual(2, result["invalid_contacts"])
 
     def test_contacts_inside_one_entity_are_ignored(self):
         for pair in (("robot_link", "finger"), ("robot_base", "finger"), ("basket", "basket_lid"),
@@ -145,7 +171,7 @@ class ContactTests(unittest.TestCase):
 
     def test_deepest_pair_is_reported_across_several_contacts(self):
         result = self.scan(("soup", "basket", -0.007), ("finger", "soup", -0.02), ("basket", "microwave", -0.001),
-                           ("soup", "table", -0.5))
+                           ("finger", "table", -0.5))   # the robot against the table is ignored
         self.assertFalse(result["valid"])
         self.assertAlmostEqual(0.02, result["deepest_penetration_m"])
         self.assertEqual(["alphabet_soup_1", "robot"], result["deepest_pair"])

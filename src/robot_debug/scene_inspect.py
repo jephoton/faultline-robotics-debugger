@@ -31,6 +31,7 @@ ROBOT_PREFIXES = ("robot0_", "gripper0_", "mount0_")
 PENETRATION_LIMIT_M = 0.005
 _JOINT_TYPES = {0: "free", 1: "ball", 2: "slide", 3: "hinge"}
 _MAIN_SUFFIX = "_main"
+STATIC_PREFIX = "scene:"      # body table label of a static scene body: "scene:main_table"
 
 
 class SceneInspectError(ValueError):
@@ -105,7 +106,7 @@ def _is_robot_name(name: str) -> bool:
 
 
 def _entity_tables(model: Any):
-    """``(body_entity, joint_entity)``: the entity name (or ``None`` for static) per body and joint."""
+    """``(body_entity, joint_entity)``: the entity name per body (``scene:<name>`` if static) and per joint."""
 
     top = _top_bodies(model)
     joint_bodies = [int(model.jnt_bodyid[j]) for j in range(int(model.njnt))]
@@ -127,7 +128,14 @@ def _entity_tables(model: Any):
     names = {body: (short[body] if counts[short[body]] == 1 else raw[body]) for body in objects}
     for body in robot:
         names[body] = ROBOT_ENTITY
-    body_entity = [names.get(top[body]) if top[body] != 0 else None for body in range(int(model.nbody))]
+    body_entity = []
+    for body in range(int(model.nbody)):
+        if top[body] == 0:
+            body_entity.append(STATIC_PREFIX + "world")
+        elif top[body] in names:
+            body_entity.append(names[top[body]])
+        else:
+            body_entity.append(STATIC_PREFIX + _name(model, "body", top[body]))
     joint_entity = [body_entity[body] for body in joint_bodies]
     return body_entity, joint_entity
 
@@ -165,13 +173,15 @@ def build_layout(suite: str, task_id: int, model: Any, state_length: int) -> Dic
 
 
 def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
-                  body_entity: Optional[List[Optional[str]]] = None) -> Dict[str, Any]:
+                  body_entity: Optional[List[str]] = None) -> Dict[str, Any]:
     """Classify the current contacts for the start-validity check.
 
-    Only contacts between two different entities count (robot against object,
-    object against object); contacts with static scene bodies and contacts inside
-    one entity are ignored. A start is invalid when any counted contact
-    penetrates deeper than ``limit`` (``dist < -limit``; exactly ``limit`` is valid).
+    Counted: contacts between two different entities (robot against object, object
+    against object) and an object or articulated fixture against a static scene body
+    (table, floor, static fixture). Ignored: contacts inside one entity, the robot against
+    static scene bodies (it legitimately touches its mount and the table surface while
+    reaching) and static bodies against each other. A start is invalid when any counted
+    contact penetrates deeper than ``limit`` (``dist < -limit``; exactly ``limit`` is valid).
     """
 
     if body_entity is None:
@@ -185,7 +195,11 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
         contact = data.contact[index]
         first = body_entity[int(geom_body[int(contact.geom1)])]
         second = body_entity[int(geom_body[int(contact.geom2)])]
-        if first is None or second is None or first == second:
+        if first == second:
+            continue
+        first_static, second_static = first.startswith(STATIC_PREFIX), second.startswith(STATIC_PREFIX)
+        if (first_static and second_static) or (first_static and second == ROBOT_ENTITY) or (
+                second_static and first == ROBOT_ENTITY):
             continue
         distance = float(contact.dist)
         if not math.isfinite(distance):
@@ -206,8 +220,8 @@ def scan_contacts(model: Any, data: Any, limit: float = PENETRATION_LIMIT_M,
     }
 
 
-def body_entity_table(model: Any) -> List[Optional[str]]:
-    """The entity name (``None`` for static bodies) of every body, for repeated scans."""
+def body_entity_table(model: Any) -> List[str]:
+    """The entity name (``scene:<name>`` for static bodies) of every body, for repeated scans."""
 
     return _entity_tables(model)[0]
 
