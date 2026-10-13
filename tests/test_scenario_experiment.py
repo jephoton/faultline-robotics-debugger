@@ -451,7 +451,8 @@ class SmokeRunTests(RunTestCase):
         self.assertEqual({True}, set(summary["checks"].values()))
         self.assertEqual({"state_export_repeatable", "state_length_matches_layout", "restore_hash_matches",
                           "hybrid_restored_and_valid", "overlap_marked_invalid_scene",
-                          "invalid_scene_not_a_policy_failure"}, set(summary["checks"]))
+                          "invalid_scene_not_a_policy_failure", "nominal_success_seen",
+                          "benchmark_start_at_rest"}, set(summary["checks"]))
         self.assertEqual(35, summary["state_length"])
         self.assertEqual(world.simulation.layout(0), summary["layout"])
         self.assertEqual(["alphabet_soup_1", "basket_1"], summary["overlap_pair"])
@@ -496,6 +497,38 @@ class SmokeRunTests(RunTestCase):
         self.assertIsNone(summary["stop_reason"])
         self.assertFalse(summary["checks"]["overlap_marked_invalid_scene"])
         self.assertFalse(summary["complete"], "the smoke only passes when validity detection works")
+
+    def test_a_broken_checkpoint_is_caught_by_the_unperturbed_start_zero_attempts(self):
+        # Every unperturbed attempt of start 0 fails: the policy cannot do the task at all.
+        sim = FakeSimulation(flaky=lambda state, params, count: "policy_failure"
+                             if "scenario_start" not in params and params.get("init_state_index") == 0 else None)
+        summary = self.run_mode(ScenarioWorld(sim, item_seconds=0.0), "scenario-smoke", SMOKE)
+        self.assertFalse(summary["checks"]["nominal_success_seen"])
+        self.assertFalse(summary["complete"])
+        self.assertIsNone(summary["stop_reason"])
+
+    def test_one_success_among_the_start_zero_attempts_is_enough(self):
+        sim = FakeSimulation(flaky=lambda state, params, count: "policy_failure"
+                             if "scenario_start" not in params and params.get("init_state_index") == 0
+                             and count == 2 else None)
+        summary = self.run_mode(ScenarioWorld(sim, item_seconds=0.0), "scenario-smoke", SMOKE)
+        self.assertTrue(summary["checks"]["nominal_success_seen"])
+
+    def test_benchmark_starts_that_are_moving_fail_the_at_rest_check(self):
+        for index, label in ((1 + 18, "velocity"), (0, "time")):
+            with self.subTest(label):
+                sim = FakeSimulation()
+                original = sim.state_for
+
+                def moving(start, original=original, index=index):
+                    state = original(start)
+                    state[index] = 0.25
+                    return state
+
+                sim.state_for = moving
+                summary = self.run_mode(ScenarioWorld(sim, item_seconds=0.0), "scenario-smoke", SMOKE)
+                self.assertFalse(summary["checks"]["benchmark_start_at_rest"])
+                self.assertFalse(summary["complete"])
 
     def test_a_failed_item_stops_with_a_reason_and_still_writes_a_summary(self):
         world = ScenarioWorld(item_seconds=0.0, fail_case="init1")

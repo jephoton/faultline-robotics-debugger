@@ -771,6 +771,13 @@ class SmokeDriver:
             (overlapped or {}).get("outcome") == "invalid_scene" and validity(overlapped) == "invalid_scene")
         checks["invalid_scene_not_a_policy_failure"] = (
             (overlapped or {}).get("status") == "valid" and (overlapped or {}).get("outcome") != "policy_failure")
+        # A broken checkpoint (or a moved benchmark) must not look like a healthy smoke: at least one
+        # unperturbed attempt of start 0 succeeds, and the exported benchmark starts are at rest.
+        checks["nominal_success_seen"] = any(
+            (by_case.get(name) or {}).get("outcome") == "success" for name in ("init0-a", "init0-b"))
+        nq = layout["nq"]
+        checks["benchmark_start_at_rest"] = all(
+            state[0] == 0.0 and all(value == 0.0 for value in state[1 + nq:]) for state in (s0, s0_again, s1))
         ctx.progress("scenario_smoke_done", checks=dict(checks))
         return ctx.stop_reason(more)
 
