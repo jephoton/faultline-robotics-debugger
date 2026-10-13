@@ -34,6 +34,26 @@ After the M6 threshold Job, stop new experiments. M7 becomes two parts.
    interactive sign-in (key kept local, scoped to one project, never
    committed).
 
+**Centrepiece (added October 13): reduce a failure you bring.** A robotics
+team imports a failing simulation run (a LIBERO-format episode or start
+state); Faultline confirms the failure repeats, then reduces the *scenario*:
+it delta-debugs the differences between the failing start state and the
+task's normal passing start state (object poses, robot pose), rerunning the
+policy with the existing 4-of-5 repeatability gate, until only the
+differences needed for the failure remain. Output: a minimal cause ("the soup
+rotated 30 degrees is enough") as a replayable regression case. Nemotron may
+propose the order in which differences are tried and explains the result;
+only reruns establish the reduced case. This needs broader import (any
+original LIBERO demo, task and suite, including failing runs) and state
+interpolation in the simulator. Image-space families remain as the
+stress-test mode ("smallest disturbance that breaks the policy"), with a
+small curated catalog added as spec options.
+
+**UI polish/overhaul (added October 13):** the viewer gets a product-grade
+pass centred on the user journey: import → diagnose → reduced case →
+replay, with clear status, original-versus-minimal comparison and the
+explanation and research panels.
+
 **Access options (all three):**
 
 - **A. Public gallery of finished cases:** a read-only published page of the
