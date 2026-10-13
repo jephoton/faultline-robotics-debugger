@@ -356,3 +356,11 @@ reserve; Serverless behaved correctly. Friction: the status API timed out
 from the workstation for about a minute mid-run (the Job was unaffected), and
 `job create --async` sometimes returned non-JSON, so we recovered the Job ID
 by name. Verdict: well suited to short, repeatable measurement Jobs.
+
+### October 13: Serverless Jobs for M6
+
+Two L40S Jobs (about 34 minutes, about US$0.99 estimated) ran 173 policy
+episodes with a batched 12-worker setup at about 21–23 episodes per minute,
+including four concurrent threshold searches. Startup was again consistent
+(model download 337–341 s). No provider issues; the only friction was the
+daily CLI re-authentication before pushing the image.
