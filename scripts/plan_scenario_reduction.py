@@ -68,6 +68,8 @@ from robot_debug.token_factory import (
 SCHEMA_VERSION = 1
 REQUIRED_FAILURES = 4
 SCREEN_ATTEMPTS = 5
+RAW_LIMIT = 8000       # the reduce workload accepts at most this many characters of the model reply
+TRUNCATION_MARKER = "\n[truncated; the full reply is in the .hypothesis-raw.txt file beside the plan]"
 
 
 class PlanError(ValueError):
@@ -90,6 +92,30 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--references", type=int, default=3, help="nearest passing starts to keep (1-5)")
     parser.add_argument("--force", action="store_true", help="overwrite an existing config")
     return parser
+
+
+def _printable(text: str) -> str:
+    """Unix newlines, and no control characters other than newline and tab."""
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return "".join(" " if (ord(ch) < 32 and ch not in "\n\t") or ord(ch) == 127 else ch for ch in text)
+
+
+def sanitise_reply(value: Any):
+    """``(workload copy, full text)`` of a model reply.
+
+    The workload copy has Unix newlines and no control characters, is ``None`` when empty and
+    is cut to ``RAW_LIMIT`` characters ending in a marker; the full reply is kept for a sidecar.
+    """
+
+    if not isinstance(value, str):
+        return None, None
+    clean = _printable(value)
+    if not clean.strip():
+        return None, value
+    if len(clean) > RAW_LIMIT:
+        clean = clean[:RAW_LIMIT - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+    return clean, value
 
 
 def _get(mapping: Mapping[Any, Any], key: int) -> Any:
@@ -122,6 +148,23 @@ def build_plan(
     load_key: Callable[[Optional[Path]], str] = load_api_key,
 ) -> Dict[str, Any]:
     """The reduce config for one failing start (see the module docstring)."""
+
+    return build_plan_with_reply(summary, task_id, start_index, use_llm=use_llm, env_file=env_file,
+                                 references=references, request=request, load_key=load_key)[0]
+
+
+def build_plan_with_reply(
+    summary: Mapping[str, Any],
+    task_id: int,
+    start_index: int,
+    *,
+    use_llm: bool = True,
+    env_file: Optional[Path] = None,
+    references: int = 3,
+    request: Callable[..., dict] = request_scenario_hypothesis,
+    load_key: Callable[[Optional[Path]], str] = load_api_key,
+):
+    """``(config, full model reply or None)``; the config carries only the sanitised reply."""
 
     if not 1 <= references <= 5:
         raise PlanError("references must be between 1 and 5")
@@ -180,7 +223,9 @@ def build_plan(
         else:
             hypothesis = request(instruction, primary, api_key, fixed_order=fixed)
 
-    return {
+    raw_for_workload, raw_full = sanitise_reply(hypothesis.get("raw_content"))
+    text = hypothesis["hypothesis"]
+    config = {
         "schema_version": SCHEMA_VERSION,
         "suite": summary["suite"],
         "task_id": task_id,
@@ -192,13 +237,14 @@ def build_plan(
         "order": list(hypothesis["ranking"]),
         "order_source": hypothesis["source"],
         "hypothesis": {
-            "text": hypothesis["hypothesis"], "ranking": list(hypothesis["ranking"]),
+            "text": _printable(text) if isinstance(text, str) else text, "ranking": list(hypothesis["ranking"]),
             "source": hypothesis["source"], "model": hypothesis.get("model"),
             "tier": hypothesis.get("tier"), "fallback_reason": hypothesis.get("fallback_reason"),
             "completed": list(hypothesis.get("completed", [])),
-            "provenance": hypothesis.get("provenance"), "raw_content": hypothesis.get("raw_content"),
+            "provenance": hypothesis.get("provenance"), "raw_content": raw_for_workload,
         },
     }
+    return config, raw_full
 
 
 def _fixed_hypothesis(order, reason: str) -> Dict[str, Any]:
@@ -220,15 +266,30 @@ def write_config(config: Mapping[str, Any], out: Path, *, force: bool = False) -
         raise PlanError("the config could not be written") from None
 
 
+def write_raw_reply(reply: str, out: Path, *, force: bool = False) -> None:
+    """Keep the untruncated model reply beside the plan (never in the workload)."""
+
+    target = Path(out).with_name(Path(out).name + ".hypothesis-raw.txt")
+    try:
+        with target.open("w" if force else "x", encoding="utf-8", newline="") as handle:
+            handle.write(reply)
+    except FileExistsError:
+        raise PlanError("the raw reply file exists (use --force to replace it)") from None
+    except OSError:
+        raise PlanError("the raw reply could not be written") from None
+
+
 def main(argv=None, *, request: Callable[..., dict] = request_scenario_hypothesis,
          load_key: Callable[[Optional[Path]], str] = load_api_key) -> int:
     try:
         args = _parser().parse_args(argv)
         summary = load_summary(args.summary)
-        config = build_plan(summary, args.task, args.start, use_llm=not args.no_llm,
-                            env_file=args.env_file, references=args.references,
-                            request=request, load_key=load_key)
+        config, full_reply = build_plan_with_reply(
+            summary, args.task, args.start, use_llm=not args.no_llm, env_file=args.env_file,
+            references=args.references, request=request, load_key=load_key)
         write_config(config, args.out, force=args.force)
+        if full_reply:
+            write_raw_reply(full_reply, args.out, force=args.force)
         print(json.dumps({
             "task_id": config["task_id"], "failing_start": args.start,
             "references": [r["start_index"] for r in config["references"]],

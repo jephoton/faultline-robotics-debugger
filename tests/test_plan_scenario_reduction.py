@@ -52,6 +52,43 @@ def make_summary():
         "instruction": INSTRUCTION, "layout": layout, "starts": starts}}}
 
 
+class ReplySanitisingTests(unittest.TestCase):
+    def setUp(self):
+        self.script = load_script()
+
+    def test_line_endings_and_control_characters_are_normalised(self):
+        clean, full = self.script.sanitise_reply("{\r\n \"a\": 1\r}\x00\x1b[0m\ttab\n")
+        self.assertEqual("{\n \"a\": 1\n}  [0m\ttab\n", clean)
+        self.assertEqual("{\r\n \"a\": 1\r}\x00\x1b[0m\ttab\n", full)
+
+    def test_empty_replies_become_none(self):
+        for value in (None, "", "   \r\n\t "):
+            self.assertEqual((None, None) if value is None else (None, value), self.script.sanitise_reply(value))
+
+    def test_long_replies_are_truncated_with_a_marker_and_within_the_limit(self):
+        long = "x" * 20000
+        clean, full = self.script.sanitise_reply(long)
+        self.assertEqual(long, full)
+        self.assertEqual(8000, len(clean))
+        self.assertTrue(clean.endswith(self.script.TRUNCATION_MARKER))
+        exact = "y" * 8000
+        self.assertEqual((exact, exact), self.script.sanitise_reply(exact))
+
+    def test_the_plan_text_is_normalised_too(self):
+        summary = make_summary()
+        calls = []
+
+        def request(instruction, differences, api_key, **kwargs):
+            order = [row["entity"] for row in differences]
+            return {"source": "model", "ranking": order, "hypothesis": "Line one.\r\nLine two.",
+                    "completed": [], "model": "test/model", "tier": "ultra", "fallback_reason": None,
+                    "provenance": {"model": "test/model"}, "raw_content": "a\r\nb"}
+
+        plan = self.script.build_plan(summary, 3, 0, request=request, load_key=lambda env: "k")
+        self.assertEqual("Line one.\nLine two.", plan["hypothesis"]["text"])
+        self.assertEqual("a\nb", plan["hypothesis"]["raw_content"])
+
+
 class StartValidityTests(unittest.TestCase):
     def setUp(self):
         self.script = load_script()
@@ -109,6 +146,32 @@ class PlanTests(unittest.TestCase):
                     "completed": [], "model": "test/model", "tier": "ultra", "fallback_reason": None,
                     "provenance": {"model": "test/model"}, "raw_content": "{}"}
         return request
+
+    def test_a_long_windows_style_reply_stays_out_of_the_workload_but_is_kept_beside_the_plan(self):
+        from robot_debug import scenario_experiment as se
+        from robot_debug.job_runtime import validate_workload_config
+
+        reply = "{\r\n" + ("word " * 3000) + "\r\n}"
+
+        def request(instruction, differences, api_key, **kwargs):
+            order = [row["entity"] for row in differences]
+            return {"source": "model", "ranking": order, "hypothesis": "The soup turn matters.",
+                    "completed": [], "model": "test/model", "tier": "ultra", "fallback_reason": None,
+                    "provenance": {"model": "test/model"}, "raw_content": reply}
+
+        code, _, _ = self.run_main(request=request, load_key=lambda env: "k")
+        self.assertEqual(0, code)
+        config = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertLessEqual(len(config["hypothesis"]["raw_content"]), 8000)
+        self.assertNotIn("\r", config["hypothesis"]["raw_content"])
+        sidecar = self.out.with_name(self.out.name + ".hypothesis-raw.txt")
+        self.assertEqual(reply, sidecar.read_bytes().decode("utf-8"))
+        workload = se.build_reduce_workload(config, run_id="scn-reduce-1")
+        self.assertEqual("scenario-reduce", validate_workload_config(workload)["mode"])
+
+    def test_no_sidecar_without_a_model_reply(self):
+        self.run_main("--no-llm")
+        self.assertFalse(self.out.with_name(self.out.name + ".hypothesis-raw.txt").exists())
 
     def test_no_llm_plan_uses_the_fixed_order_and_nearest_references(self):
         code, report, _ = self.run_main("--no-llm")
