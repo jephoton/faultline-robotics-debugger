@@ -1,117 +1,132 @@
 # Faultline — turn robot failures into replayable tests
 
-Built for the Nebius × NVIDIA hackathon. Faultline is the official product
-name, and its canonical GitHub repository is
+Built for the Nebius × NVIDIA hackathon. Faultline is a debugger for
+simulated robot-manipulation policies (vision-language-action models such as
+NVIDIA GR00T). It finds a failure, confirms that it repeats, reduces it to
+its minimal trigger, and saves it as a replayable regression test, with the
+evidence, an explanation and related research beside it.
+
+The repository is
 [`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).
-The existing local checkout folder and `robot_debug` Python imports remain
-unchanged for compatibility.
+The local checkout folder and the `robot_debug` Python package keep their
+original names for compatibility.
 
-Current direction: discover failures in simulated robot manipulation policies
-and reduce them into reproducible regression cases. Measured parallel replay
-throughput is a supporting capability, not the core product requirement.
+## Two modes, one engine
 
-Expanded multi-task HPC (M3) is frozen as an optional stretch goal, not a
-prerequisite for the core failure-to-regression product. The completed
-fixed-replay throughput result is retained; the unfinished host launcher is
-not ready for paid use. See [the scope decision](docs/decisions/0011-freeze-expanded-m3.md).
-Further HPC exploration, including batching and adaptive portfolio scheduling,
-is optional stretch work. Jethro may pursue deeper HPC learning in a separate
-project; Faultline's core is robotics failure diagnosis and regression evidence.
+| Mode | Question it answers | Status |
+| --- | --- | --- |
+| **1. Debug a failure you bring** | "My policy failed in this simulation run. What is the minimal cause?" | Import, replay and confirm work for verified LIBERO-Object demonstrations. **Reducing the imported scenario itself is being built in M7.** |
+| **2. Audit a policy** | "What is the smallest disturbance that breaks this policy?" | **Works end to end** on Nebius Serverless: occlusion (either camera), blur, noise, darkening and contrast. |
+
+Both modes share the same loop: a fixed compute budget, a repeatability gate
+(a failure must reproduce in at least 4 of 5 attempts while unperturbed
+controls succeed), a reducer, and a saved case that can be replayed against
+a changed policy.
+
+## What it has found so far
+
+All results are for GR00T N1.7 on LIBERO-Object task 0 ("pick up the
+alphabet soup and place it in the basket"), one seed, on single Nebius L40S
+GPUs. Each is budget-local evidence, not a general claim.
+
+- **Minimal occlusion:** a black rectangle over the upper-right 14% of the
+  third-person camera reproducibly breaks the task (reduced from 25%). The
+  robot still grasps the soup but times out carrying it
+  ([M4](docs/experiments/m4-reducer.md)). The same reduction was reproduced
+  from an imported external demonstration
+  ([M5B](docs/experiments/m5b-external-replay.md)).
+- **Camera roles (hypothesis):** blacking out the wrist camera as well stops
+  the grasp entirely, while the same rectangle on the wrist camera alone is
+  harmless. The wrist view appears to drive grasping and the third-person
+  view the carry ([M6](docs/experiments/m6-camera-and-scalar-families.md)).
+- **Thresholds:** the policy fails reliably from a blur of sigma 3.9 px and
+  from Gaussian noise of sigma 95 (of 255), but never under darkening down to
+  5% brightness or contrast down to 10% (M6).
+- **Cheaper runs:** batching concurrent inference requests on one GR00T server
+  gave +18% throughput at 12 parallel workers in two runs, and no gain at 8,
+  where the GPU was not yet the bottleneck
+  ([M3 batching](docs/experiments/m3-batched-inference.md)).
+
+Each case in the viewer can carry a Nemotron explanation (NVIDIA Nemotron on
+Nebius Token Factory, [M5C](docs/experiments/m5-nemotron-pilot.md)) and
+source-linked public research found with Tavily
+([M5D](docs/experiments/m5d-tavily-research.md)), both kept separate from the
+measured evidence.
+
+## How it runs
+
+- **Simulator and policy:** LIBERO on robosuite/MuJoCo, through the
+  [vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness),
+  with GR00T N1.7 served by the harness's LeRobot server plus Faultline's
+  batching server.
+- **Cloud:** each diagnosis is one Nebius AI Cloud Serverless Job (one L40S,
+  roughly US$0.4–0.6 per run), exporting evidence to private Object Storage
+  ([Serverless setup](docs/setup/serverless-jobs.md)).
+- **Locally:** the case store, the read-only viewer, Nemotron explanations and
+  Tavily research run on the workstation.
+
+## Roadmap
+
+M1–M6 are complete. **M7a (in progress)** turns the engine into a product
+([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)):
+
+- **Scenario reduction (centrepiece):** import a failing LIBERO run and reduce
+  the differences between its start state and the normal one to the minimal
+  cause.
+- **One command:** `faultline diagnose <spec.yaml>` that owns the whole cloud
+  lifecycle, with automatic viewer cases and `faultline replay <case>`.
+- **Breadth:** all four LIBERO suites, camera-viewpoint and lighting
+  families, and Nemotron-generated instruction paraphrases.
+- **Access:** a public gallery of finished cases, a local-GPU backend, and
+  runs in your own Nebius project.
+- **UI overhaul** around import → diagnose → reduced case → replay.
+
+M7b is the submission (demo video and write-up). LIBERO-Plus integration is a
+post-M7 stretch goal.
+
+## Local checks
+
+```bash
+PYTHONPATH=src python -B -m unittest discover -s tests
+```
+
+The suite (1371 tests, 60 platform skips on Windows) uses fakes for the
+simulator, model and cloud; it does not start paid work.
+
+## Viewer
+
+```powershell
+$env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
+python -m robot_debug.viewer.server --artifacts artifacts --port 8765
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). After installing the
+package, `faultline-viewer` does the same. The viewer is read-only, binds to
+loopback by default, and labels infrastructure errors separately from robot
+task failures. Evidence must first be downloaded into `artifacts/`.
+
+## Documentation
+
+- [Project plan and milestones](PROJECT_PLAN.md) and the
+  [current handoff state](docs/codex-handoff/STATE.md).
+- [Decision records](docs/decisions/) (ADRs) for every accepted design choice.
+- [Experiment notes](docs/experiments/) with exact evidence, spend and claim
+  limits for each run.
+- [Hackathon tool feedback](FEEDBACK.md) on Nebius AI Cloud, Token Factory and
+  NVIDIA models.
+- [Learning guide](PROJECT-LEARNING-GUIDE.md) in plain language.
+
+## Scope and claims
+
+Faultline builds on existing VLA evaluation, perturbation testing and
+parallel execution; its contribution is the integrated path from controlled
+search to a small, reproducible, replayable counterexample, with time and GPU
+cost measured. Results cover the tested policy, tasks, seeds and perturbation
+families only. Image-space perturbations approximate, not simulate, physical
+effects. Model training and formal verification are out of scope.
 
 ## License
 
 Original project code is licensed under the [MIT License](LICENSE).
-External models, datasets, and other third-party assets retain their own terms;
+External models, datasets and other third-party assets keep their own terms;
 this repository does not relicense model weights or assets.
-
-The project has reproduced NVIDIA GR00T on LIBERO using Nebius GPU compute,
-added a controlled agent-view occlusion, and implemented replayable experiment
-records plus a local evidence viewer. The September 27 bounded run reduced a
-reproducible 25%-area occlusion to a 14.0625%-area case while matched nominal
-controls succeeded. This is a tested, budget-local reduction, not a proven
-minimum. The September 29 M3 comparison completed 48/48 valid fixed-work
-episodes without outcome drift; four evaluator workers delivered 3.715× warm
-throughput versus one on the same Nebius VM. That is a narrow replay-throughput
-result, not a claim of faster adaptive discovery or finalized billed cost.
-
-Collaboration: cloud compute is an available main resource; architectural and design choices are discussed with Jethro before adoption, with explanations to support learning. Work is committed frequently using Conventional Commits. See [project instructions](AGENTS.md).
-
-- [Main project plan](PROJECT_PLAN.md): proposed stack, local hardware findings, first experiments, implementation milestones, HPC measurements, and submission checklist. The detailed planning copy remains in [docs/superpowers/plans](docs/superpowers/plans/2026-09-12-robot-debugging-startup.md).
-- [Technology learning guide](PROJECT-LEARNING-GUIDE.md): plain-language explanations of robot assurance and failure diagnosis. Failure diagnosis is the selected direction.
-- [Baseline stack selection](docs/experiments/stack-selection.md): the pinned GR00T/LIBERO pairing and one-episode pilot scope.
-- [Diagnostic trace decision](docs/decisions/0001-diagnostic-trace-and-first-fault.md): why the debugger preserves the upstream evaluator and starts with perception faults.
-- [Attempt-record decision](docs/decisions/0002-attempt-record-boundary.md): the portable record shared by future runners, reducers, and reports.
-- [Cloud-pilot preflight](docs/setup/cloud-pilot.md): credential-safe resource, cost, and cleanup checklist.
-- [M4 reduction evidence](docs/experiments/m4-reducer.md): exact candidate outcomes, budget, replay manifest, and claim limits.
-- [M3 parallel evidence](docs/experiments/m3-parallel.md): fixed-work 1/2/4-worker results, local evidence, cost boundary, and claim limits.
-- [Hackathon tool feedback](FEEDBACK.md): observed Nebius and NVIDIA strengths and friction, with Token Factory clearly marked untested.
-- [Offline case workbench](docs/setup/case-workbench.md): register saved M4 evidence, inspect readiness in the viewer, export metadata, and rebind it without changing recordings. External replay and actual Nemotron explanations remain separately gated.
-
-Model training and formal verification are outside the initial scope.
-
-## Differentiator
-
-Most robustness benchmarks answer: **how often does a policy fail under a
-predefined set of conditions?** This project aims to turn that measurement into
-an actionable debugging workflow:
-
-> Find a robot-policy failure within a fixed compute budget, check that it
-> repeats, reduce the condition that triggers it, and save it as a regression
-> test for future policy versions.
-
-The project builds on existing VLA evaluation, perturbation testing, and
-parallel execution rather than claiming those techniques as new. Its intended
-contribution is the integrated path from controlled search to a small,
-reproducible counterexample, with time-to-failure and GPU cost measured along
-the way. The MVP begins with visual occlusion in simulated manipulation; later
-perturbation families can reuse the same search, confirmation, reduction, and
-replay contract.
-
-Success therefore means more than producing a robustness score. The final demo
-should show nominal success, a discovered failure, repeated confirmation, a
-reduced trigger, and replay against a policy version. The existing fixed-replay
-parallel throughput comparison is supporting evidence, not a requirement to
-complete the expanded portfolio benchmark. Until those experiments exist, describe
-the system as a working diagnostic foundation rather than a completed novel
-failure-discovery method.
-
-## Local checks
-
-The current core uses only the Python standard library. From Ubuntu in WSL,
-run:
-
-```bash
-cd "$(git rev-parse --show-toplevel)"
-PYTHONPATH=src python3 -B -m unittest discover -s tests -v
-```
-
-This runs the complete local suite; the current verified Python 3.11 run passes
-126 tests. It does not repeat the paid cloud experiment.
-
-## Viewer
-
-After installing the package, `faultline-viewer` starts the viewer;
-`robot-debug-viewer` remains a compatibility alias. Direct module commands
-below continue to work without changing imports.
-
-The read-only viewer turns copied experiment artifacts into a paired demo of a
-nominal robot-policy episode and a fault-injected episode. It never changes an
-artifact and labels infrastructure errors separately from robot task failures.
-
-Cloud evidence must first be copied or synchronized into the local `artifacts/`
-directory. Then launch the viewer from PowerShell:
-
-```powershell
-$workspacePython = 'python'
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
-& $workspacePython -m robot_debug.viewer.server --artifacts artifacts --port 8765
-```
-
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Compare a nominal episode
-with a failed M4 reduction case; the lineage panel shows the parent and reduced
-mask areas, while paired videos and traces show what actually happened. An
-`INFRA ERROR` means the policy was not evaluated, rather than that the robot
-failed the task.
-
-The viewer binds only to loopback by default. Do not use `--host 0.0.0.0` on an
-untrusted network.
