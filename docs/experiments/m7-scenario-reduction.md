@@ -95,6 +95,28 @@ but not sufficient (the soup alone passed). Nemotron's text also called the
 soup's shift the largest; the orange juice's was larger. For start 2 Nemotron
 had ranked the tomato sauce first; that start was not reducible.
 
+## Explanation model comparison
+
+The measured hypothesis check gives the soup `necessary_not_sufficient` (the
+scene without it passed S S S S; the soup alone passed S S). One explanation
+call per model on the same packet, scored against five known facts (soup not
+sufficient; soup necessary; sauce not needed and the model right about it;
+five shifts needed together; no reruns of tested sizes):
+
+| Model | Facts right | Format check | Notes |
+| --- | --- | --- | --- |
+| Nemotron 3 Nano | 2 of 5 clean | passed | called an applied entity "reverted"; repeated tested reruns |
+| Nemotron 3 Super | 3 of 5 | rejected | said the correct sauce prediction was wrong |
+| Nemotron 3 Ultra | 4 of 5, then 5 of 5 with the shrink history added | passed | one repeat before the shrink history was in the packet |
+
+Two input fixes mattered as much as the model: a plain sentence per rerun
+(Nano's first answer read "S S" for the soup alone as "reverting the soup did
+not help") and the list of shrink sizes already tested. Jethro chose Ultra
+for scenario explanations. The stored Ultra explanation states the
+necessary-but-not-sufficient result, the five-way conjunction and the shrink
+limits, and proposes untested next runs (shrink cream cheese, find the
+critical robot joints).
+
 ## Limits
 
 - One task, one failing start, one reference, one checkpoint and seed.

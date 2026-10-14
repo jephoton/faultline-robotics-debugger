@@ -106,3 +106,15 @@ measurement for finished runs, and a new `scenario_reduction` evidence packet
 (`scenario_packet.py`) gives Nemotron Nano the instruction, the difference
 table, the final selection with its fractions, the hypothesis and the
 measured result, citing rerun ids.
+
+## Amendment (October 13): explanation model for scenario cases
+
+Jethro chose to decide the explainer by measurement. On the same packet
+(with plain-language rerun descriptions and the shrink history), Nemotron 3
+Nano kept calling "only this entity applied" "this entity reverted" and
+proposed reruns already done; Nemotron 3 Super inverted a correct prediction
+and failed the format check; Nemotron 3 Ultra stated every checked fact
+correctly. Scenario-reduction explanations therefore use Ultra (the same
+model as the hypothesis; acceptable because the explanation is checked
+against measured reruns). Occlusion-case explanations keep Nano.
+
