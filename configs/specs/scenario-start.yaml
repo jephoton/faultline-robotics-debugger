@@ -1,0 +1,23 @@
+# Mode 1, a known failing start: screen a reference pool, reduce the failure, report.
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: soup-start14
+mode: scenario
+policy: {suite: libero_10}
+scenario:
+  task: 0
+  start: 14
+  reference: auto
+budget:
+  max_spend_usd: 3.0
+  max_hours: 2
+  max_candidates: 36
+nemotron: {hypothesis: true, explain: true}
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468

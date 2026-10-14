@@ -1,0 +1,16 @@
+# For `faultline replay CASE_DIR --spec replay.yaml`: one small Job re-runs a saved case.
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: replay-soup
+mode: replay
+budget:
+  max_spend_usd: 1.0
+  max_hours: 1
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468

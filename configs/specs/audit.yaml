@@ -1,0 +1,22 @@
+# Mode 2: how much image degradation does one start tolerate? One audit Job, report, case.
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: audit-task0
+mode: audit
+policy: {suite: libero_object}
+audit:
+  task: 0
+  start: 0
+  families: [blur, noise, darken, contrast]
+budget:
+  max_spend_usd: 2.0
+  max_hours: 1.5
+nemotron: {hypothesis: false, explain: false}
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468

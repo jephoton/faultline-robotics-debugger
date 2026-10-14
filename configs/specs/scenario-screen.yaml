@@ -1,0 +1,23 @@
+# Mode 1, find the failure first: screen a range of starts, reduce the best reproducible failure.
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: soup-screen
+mode: scenario
+policy: {suite: libero_10}
+scenario:
+  task: 0
+  screen: {starts: "10-49", confirm: 4}
+  reference: auto
+budget:
+  max_spend_usd: 4.0
+  max_hours: 3
+  max_candidates: 36
+nemotron: {hypothesis: true, explain: true}
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468
