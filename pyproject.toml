@@ -11,8 +11,11 @@ dependencies = ["numpy>=1.24,<1.25"]
 
 [project.optional-dependencies]
 serverless = ["PyYAML==6.0.3"]
+cli = ["PyYAML==6.0.3"]
+cloud = ["boto3", "truststore"]
 
 [project.scripts]
+faultline = "robot_debug.cli:main"
 faultline-viewer = "robot_debug.viewer.server:main"
 robot-debug-viewer = "robot_debug.viewer.server:main"
 
