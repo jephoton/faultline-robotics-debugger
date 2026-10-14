@@ -83,3 +83,26 @@ verifies" visible and gives it a real role in the loop.
 - Most candidates are invalid scenes: revisit granularity or interpolation.
 - Nemotron's ordering never beats the fixed order: keep it as hypothesis and
   explanation only, and say so.
+
+## Implementation note (October 14, 2026): measured hypothesis check
+
+The coarse `confirmed` / `partly` / `refuted` verdict needs a fully reduced
+run and compares only the top-ranked entity with the survivors. The real
+runs that stopped on their budget (entity-minimal, sizes unfinished) lost
+what mattered: the model's prediction that the soup is needed was right, but
+the soup alone does not reproduce the failure.
+
+`measure_hypothesis` (`scenario_hypothesis.py`) therefore reads, without new
+reruns, whether each of the top three ranked entities is *necessary*
+(the final selection without it did not reproduce) and *sufficient* (a
+candidate that changed only that entity reproduced). The label is one of
+`confirmed`, `necessary_not_sufficient`, `sufficient_not_necessary`,
+`not_in_final` or `inconclusive`, with a `result_scope` of `reduced` or
+`entity_minimal_sizes_partial`. Both properties are relative to the final
+selection, which is a local minimum, and a complement that was only tested
+with other sizes is marked `entity_set`. `hypothesis_verdict` and the
+summary field of the same name are unchanged. The report recomputes the
+measurement for finished runs, and a new `scenario_reduction` evidence packet
+(`scenario_packet.py`) gives Nemotron Nano the instruction, the difference
+table, the final selection with its fractions, the hypothesis and the
+measured result, citing rerun ids.
