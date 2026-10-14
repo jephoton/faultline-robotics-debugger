@@ -70,9 +70,9 @@ DEADLINE_ROUNDING_SECONDS = 60
 MAX_RECOMMENDED_DEADLINE_SECONDS = 2400
 # An audit on a LIBERO-10 task (M7a): episodes run up to 520 steps, so about 130 s of wall time for
 # a failing one with 12 evaluators sharing the server (the figure the scenario modes assume), and a
-# level takes two such waves. The runtime's hard cap (validate_workload_config) is 3000 s.
+# level takes one such wave per 12 attempts of its families. The runtime's hard cap
+# (validate_workload_config) is 3000 s.
 ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS = 130.0
-ASSUMED_LIBERO_10_LEVEL_SECONDS = 2 * ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
 MAX_LIBERO_10_DEADLINE_SECONDS = 3000
 # Optional audit target fields of the threshold configuration, passed to every episode.
 AUDIT_TARGET_KEYS = ("suite", "task_id", "init_state_index")
@@ -277,7 +277,9 @@ def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] 
     wall, level_seconds = ASSUMED_EPISODE_WALL_SECONDS, ASSUMED_LEVEL_SECONDS
     cap = MAX_RECOMMENDED_DEADLINE_SECONDS
     if config is not None and config.get("suite") == "libero_10":
-        wall, level_seconds = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS, ASSUMED_LIBERO_10_LEVEL_SECONDS
+        wall = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
+        if mode != "m6-smoke":
+            level_seconds = max(1, math.ceil(len(config["families"]) * config["attempts"] / M6_WORKERS)) * wall
         cap = MAX_LIBERO_10_DEADLINE_SECONDS
     if mode == "m6-smoke":
         work = math.ceil(len(smoke_manifest()) / M6_WORKERS) * wall

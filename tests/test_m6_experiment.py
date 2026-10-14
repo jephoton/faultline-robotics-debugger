@@ -153,6 +153,13 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             m6.recommended_deadline_seconds("m6-threshold", dict(THRESHOLD_CONFIG, suite="libero_10"))
 
+    def test_a_libero_10_level_takes_one_wave_per_twelve_attempts(self):
+        two = dict(THRESHOLD_CONFIG, families=["darken", "noise"], suite="libero_10")
+        self.assertLessEqual(m6.recommended_deadline_seconds("m6-threshold", two), 2400)
+        three = dict(THRESHOLD_CONFIG, families=["darken", "noise", "blur"], suite="libero_10")
+        with self.assertRaises(ValueError):
+            m6.recommended_deadline_seconds("m6-threshold", three)
+
     def test_a_larger_search_never_gets_a_shorter_deadline(self):
         base = m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG)
         for changes in (dict(attempts=6), dict(bisection_steps=5), dict(sweep=[0.2, 0.4, 0.6, 0.8, 0.9, 1.0])):
