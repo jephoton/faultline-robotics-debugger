@@ -16,7 +16,12 @@ simulator:
 * ``hypothesis_verdict``: the mechanical comparison of the model's top-ranked
   entity with the entities that survived reduction (``confirmed``, ``partly``,
   ``refuted``). Only simulator reruns decide what is in the reduced case; the
-  verdict is arithmetic, not an LLM judgement.
+  verdict is arithmetic, not an LLM judgement;
+* ``measure_hypothesis``: for the model's top-ranked entities, whether each is
+  *necessary* (the final selection without it did not reproduce) and *sufficient*
+  (it alone reproduced), read only from candidates the reduction already ran.
+  It keeps the half of a prediction that was right when the reduction stopped
+  early, or when an entity is necessary without being enough on its own.
 """
 
 from __future__ import annotations
@@ -220,7 +225,175 @@ def hypothesis_verdict(ranking: Sequence[str], reduced_selection: Mapping[str, A
     return "confirmed" if len(survivors) == 1 else "partly"
 
 
+_INFORMATIVE = ("reproduces", "does_not_reproduce")
+_TOLERANCE = 1e-9
+TOP_K = 3
+
+
+def _applied(selection: Any) -> Dict[str, Dict[str, float]]:
+    """``{entity: {component: t}}`` for the parts that are applied (t > 0)."""
+
+    applied: Dict[str, Dict[str, float]] = {}
+    if not isinstance(selection, Mapping):
+        return applied
+    for entity, parts in selection.items():
+        if not isinstance(parts, Mapping):
+            continue
+        kept = {}
+        for component, t in parts.items():
+            if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0:
+                kept[str(component)] = float(t)
+        if kept:
+            applied[str(entity)] = kept
+    return applied
+
+
+def _same_sizes(left: Mapping[str, Mapping[str, float]], right: Mapping[str, Mapping[str, float]]) -> bool:
+    if set(left) != set(right):
+        return False
+    for entity, parts in left.items():
+        if set(parts) != set(right[entity]):
+            return False
+        if any(abs(t - right[entity][component]) > _TOLERANCE for component, t in parts.items()):
+            return False
+    return True
+
+
+def _same_parts(left: Mapping[str, Mapping[str, float]], right: Mapping[str, Mapping[str, float]]) -> bool:
+    return set(left) == set(right) and all(set(left[name]) == set(right[name]) for name in left)
+
+
+def _reproduced(matches: Sequence[Mapping[str, Any]]) -> Optional[bool]:
+    """True when some match reproduced, False when every informative one did not, None if none is informative."""
+
+    decisions = [match["decision"] for match in matches if match.get("decision") in _INFORMATIVE]
+    if not decisions:
+        return None
+    return "reproduces" in decisions
+
+
+def _indices(matches: Sequence[Mapping[str, Any]]) -> List[int]:
+    return sorted(match["index"] for match in matches if isinstance(match.get("index"), int))
+
+
+def _measure_entity(entity: str, rank: int, final: Mapping[str, Mapping[str, float]],
+                    hybrids: Sequence[Mapping[str, Any]], reduction: Mapping[str, Any]) -> Dict[str, Any]:
+    survivors = list(final)
+    in_final = entity in final
+
+    # Sufficient: a tested candidate that changed only this entity.
+    singles = [c for c in hybrids if set(c["_applied"]) == {entity} and c.get("decision") in _INFORMATIVE]
+    reproduced = [c for c in singles if c["decision"] == "reproduces"]
+    if reproduced:
+        sufficient: Optional[bool] = True
+        sufficient_basis = _indices(reproduced)
+    elif singles:
+        sufficient, sufficient_basis = False, _indices(singles)
+    else:
+        sufficient, sufficient_basis = None, []
+
+    # Necessary, relative to the final selection: take just this entity out of it.
+    necessary: Optional[bool]
+    how: Optional[str]
+    necessary_indices: List[int] = []
+    candidates = [c for c in reduction.get("candidates") or [] if isinstance(c, Mapping)]
+    if not in_final:
+        necessary, how = False, "not_in_final"
+        final_candidate = next((c for c in candidates if c.get("index") == reduction.get("final_candidate")), None)
+        if final_candidate is not None:
+            necessary_indices = _indices([final_candidate])
+    else:
+        target = {name: parts for name, parts in final.items() if name != entity}
+        if not target:
+            gates = [c for c in candidates if c.get("role") == "reference" and c.get("decision") == "passes"
+                     and (reduction.get("reference") is None or c.get("reference") == reduction.get("reference"))]
+            if gates:
+                necessary, how, necessary_indices = True, "reference", _indices(gates)
+            else:
+                necessary, how = None, None
+        else:
+            exact = [c for c in hybrids if _same_sizes(c["_applied"], target) and c.get("decision") in _INFORMATIVE]
+            loose = [c for c in hybrids if c.get("phase") == "ddmin" and _same_parts(c["_applied"], target)
+                     and c.get("decision") in _INFORMATIVE]
+            chosen, how = (exact, "exact") if exact else (loose, "entity_set")
+            repro = _reproduced(chosen)
+            if repro is None:
+                necessary, how = None, None
+            else:
+                necessary, necessary_indices = not repro, _indices(chosen)
+
+    if not in_final:
+        label = "not_in_final"
+    elif necessary is True and sufficient is True:
+        label = "confirmed" if survivors == [entity] else "inconclusive"
+    elif necessary is True and sufficient is False:
+        label = "necessary_not_sufficient"
+    elif necessary is False and sufficient is True:
+        label = "sufficient_not_necessary"
+    else:
+        label = "inconclusive"
+    return {
+        "entity": entity, "rank": rank, "in_final": in_final,
+        "sufficient": sufficient, "necessary": necessary, "necessary_basis": how,
+        "basis": {"sufficient": sufficient_basis, "necessary": necessary_indices},
+        "label": label,
+    }
+
+
+def measure_hypothesis(ranking: Sequence[str], reduction: Mapping[str, Any], top: int = TOP_K) -> Dict[str, Any]:
+    """Was the model's top suspect necessary, sufficient, both or neither?
+
+    Reads only candidates the reduction already ran (no new runs). For each of the
+    first ``top`` ranked entities it reports ``sufficient`` (a tested candidate that
+    changed only that entity reproduced: True; was tested and did not: False; never
+    tested: None), ``necessary`` relative to the final selection (the final selection
+    without that entity did not reproduce: True; reproduced: False; not tested: None),
+    ``in_final``, a ``label`` and the candidate indices behind each answer.
+    ``necessary_basis`` says how the complement was matched: ``exact`` (same parts and
+    sizes), ``entity_set`` (a ddmin-phase candidate with the same entities and parts but
+    other sizes), ``reference`` (the final selection is that entity alone, so removing it
+    gives the passing reference) or ``not_in_final`` (necessary is False because the
+    entity did not survive).
+
+    The result's ``verdict`` is the top-ranked entity's label: ``confirmed`` (necessary,
+    sufficient and the only survivor), ``necessary_not_sufficient``,
+    ``sufficient_not_necessary``, ``not_in_final`` (refuted) or ``inconclusive``. Also
+    returned: ``survivors``, ``ranked_survivors_overlap`` (how many of the ``top_k``
+    ranked entities survived) and ``basis`` (the top entity's candidate indices).
+    Raises ``ValueError`` for an empty ranking or a reduction without a final selection.
+    """
+
+    if isinstance(ranking, (str, bytes)) or not ranking:
+        raise ValueError("ranking must not be empty")
+    if type(top) is not int or top < 1:
+        raise ValueError("top must be a positive integer")
+    final = _applied(reduction.get("final_selection"))
+    if not final:
+        raise ValueError("the reduction has no final selection")
+    hybrids = []
+    for candidate in reduction.get("candidates") or []:
+        if isinstance(candidate, Mapping) and candidate.get("role") == "hybrid" \
+                and isinstance(candidate.get("selection"), Mapping):
+            hybrids.append(dict(candidate, _applied=_applied(candidate["selection"])))
+    considered = list(ranking[:top])
+    entities = [_measure_entity(name, position + 1, final, hybrids, reduction)
+                for position, name in enumerate(considered)]
+    leader = entities[0]
+    return {
+        "top": leader["entity"],
+        "verdict": leader["label"],
+        "sufficient": leader["sufficient"],
+        "necessary": leader["necessary"],
+        "in_final": leader["in_final"],
+        "basis": sorted(set(leader["basis"]["sufficient"]) | set(leader["basis"]["necessary"])),
+        "survivors": list(final),
+        "top_k": len(considered),
+        "ranked_survivors_overlap": sum(1 for name in considered if name in final),
+        "entities": entities,
+    }
+
+
 __all__ = [
     "HypothesisError", "MAX_HYPOTHESIS_CHARS", "SYSTEM_PROMPT", "build_hypothesis_prompt",
-    "hypothesis_verdict", "nearest_reference", "parse_hypothesis_reply",
+    "hypothesis_verdict", "measure_hypothesis", "nearest_reference", "parse_hypothesis_reply",
 ]

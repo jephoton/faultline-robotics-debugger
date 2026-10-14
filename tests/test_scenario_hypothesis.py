@@ -9,6 +9,7 @@ import unittest
 from robot_debug import scenario_hypothesis as sh
 from robot_debug import scenario_state as ss
 from robot_debug import token_factory as tf
+from tests import reduction_fixtures as rf
 from tests.scenario_fakes import base_state, synthetic_layout, with_object_pose
 
 KEY = "TEST-SECRET-DO-NOT-LOG"
@@ -172,6 +173,122 @@ class VerdictTests(unittest.TestCase):
         for ranking, selection in (([], {"a": {"x": 1}}), (["a"], {}), (["a"], {"a": {}}), ("ab", {"a": {"x": 1}})):
             with self.subTest(ranking=ranking, selection=selection), self.assertRaises(ValueError):
                 sh.hypothesis_verdict(ranking, selection)
+
+
+class MeasureHypothesisTests(unittest.TestCase):
+    RANKING = ["soup", "sauce", "robot", "cream", "milk"]
+
+    def measure(self, reduction=None, ranking=None):
+        return sh.measure_hypothesis(ranking or self.RANKING, reduction or rf.partial_reduction())
+
+    def test_a_necessary_but_insufficient_top_suspect_is_labelled_so(self):
+        result = self.measure()
+        self.assertEqual("soup", result["top"])
+        self.assertEqual("necessary_not_sufficient", result["verdict"])
+        self.assertIs(result["necessary"], True)
+        self.assertIs(result["sufficient"], False)
+        self.assertTrue(result["in_final"])
+        self.assertEqual(["soup", "cream", "milk", "robot"], result["survivors"])
+        self.assertEqual(3, result["top_k"])
+        self.assertEqual(2, result["ranked_survivors_overlap"], "soup and robot are in the top 3 and survive")
+        self.assertEqual([2, 7], result["basis"])
+
+    def test_the_complement_falls_back_to_an_entity_set_match_when_sizes_differ(self):
+        soup = self.measure()["entities"][0]
+        self.assertEqual("entity_set", soup["necessary_basis"], "candidate 7 has the robot at full size")
+        self.assertEqual({"sufficient": [2], "necessary": [7]}, soup["basis"])
+
+    def test_an_exact_size_match_is_preferred_and_labelled_exact(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"].append(rf.candidate(
+            11, "shrink", {"cream": {"position": 1.0}, "milk": {"position": 1.0}, "robot": {"joints": 0.875}},
+            "does_not_reproduce"))
+        soup = self.measure(reduction)["entities"][0]
+        self.assertEqual("exact", soup["necessary_basis"])
+        self.assertEqual([11], soup["basis"]["necessary"])
+
+    def test_an_entity_set_match_must_come_from_the_ddmin_phase(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"][7]["phase"] = "shrink"
+        soup = self.measure(reduction)["entities"][0]
+        self.assertIsNone(soup["necessary"])
+        self.assertIsNone(soup["necessary_basis"])
+        self.assertEqual("inconclusive", soup["label"])
+
+    def test_a_reproducing_complement_means_not_necessary(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"][7]["decision"] = "reproduces"
+        soup = self.measure(reduction)["entities"][0]
+        self.assertIs(soup["necessary"], False)
+        self.assertEqual("inconclusive", soup["label"], "neither necessary nor sufficient")
+
+    def test_an_entity_that_did_not_survive_is_refuted_by_the_final_candidate(self):
+        sauce = self.measure(ranking=["sauce", "soup"])
+        self.assertEqual("not_in_final", sauce["verdict"])
+        self.assertFalse(sauce["in_final"])
+        entity = sauce["entities"][0]
+        self.assertIs(entity["necessary"], False)
+        self.assertEqual("not_in_final", entity["necessary_basis"])
+        self.assertIs(entity["sufficient"], False, "the sauce alone passed")
+        self.assertEqual([10], entity["basis"]["necessary"])
+
+    def test_sufficient_not_necessary(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"][2]["decision"] = "reproduces"
+        reduction["candidates"][7]["decision"] = "reproduces"
+        result = self.measure(reduction)
+        self.assertEqual("sufficient_not_necessary", result["verdict"])
+        self.assertIs(result["sufficient"], True)
+
+    def test_a_sole_survivor_that_is_necessary_and_sufficient_is_confirmed(self):
+        reduction = rf.partial_reduction()
+        final = {"soup": {"position": 0.25}}
+        reduction.update(final_selection=final, surviving_entities=["soup"], final_candidate=11)
+        reduction["candidates"][2]["decision"] = "reproduces"
+        reduction["candidates"].append(rf.candidate(11, "shrink", final, "reproduces"))
+        result = self.measure(reduction)
+        self.assertEqual("confirmed", result["verdict"])
+        self.assertIs(result["necessary"], True)
+        self.assertEqual("reference", result["entities"][0]["necessary_basis"])
+        self.assertEqual([1], result["entities"][0]["basis"]["necessary"], "the passing reference run")
+        self.assertEqual([2, 11], result["entities"][0]["basis"]["sufficient"])
+
+    def test_untested_means_none_not_false(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"] = [c for c in reduction["candidates"] if c["index"] not in (2, 7)]
+        soup = self.measure(reduction)["entities"][0]
+        self.assertIsNone(soup["sufficient"])
+        self.assertIsNone(soup["necessary"])
+        self.assertEqual("inconclusive", soup["label"])
+
+    def test_invalid_scenes_are_not_evidence(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"][2]["decision"] = "invalid_scene"
+        self.assertIsNone(self.measure(reduction)["entities"][0]["sufficient"])
+
+    def test_zero_sized_parts_do_not_count_as_applied(self):
+        reduction = rf.partial_reduction()
+        reduction["candidates"][2]["selection"] = {"soup": {"position": 1.0}, "milk": {"position": 0.0}}
+        self.assertIs(self.measure(reduction)["entities"][0]["sufficient"], False)
+
+    def test_the_input_is_not_modified_and_no_new_runs_are_implied(self):
+        reduction = rf.partial_reduction()
+        before = json.dumps(reduction, sort_keys=True)
+        self.measure(reduction)
+        self.assertEqual(before, json.dumps(reduction, sort_keys=True))
+
+    def test_bad_inputs_raise_value_error(self):
+        for ranking, reduction in (([], rf.partial_reduction()), ("soup", rf.partial_reduction()),
+                                   (["soup"], {"final_selection": None, "candidates": []}),
+                                   (["soup"], {"final_selection": {"soup": {"position": 0}}, "candidates": []})):
+            with self.subTest(ranking=ranking), self.assertRaises(ValueError):
+                sh.measure_hypothesis(ranking, reduction)
+        with self.assertRaises(ValueError):
+            sh.measure_hypothesis(["soup"], rf.partial_reduction(), top=0)
+
+    def test_top_limits_the_table(self):
+        self.assertEqual(["soup"], [e["entity"] for e in sh.measure_hypothesis(
+            self.RANKING, rf.partial_reduction(), top=1)["entities"]])
 
 
 # --- Token Factory call --------------------------------------------------------------
