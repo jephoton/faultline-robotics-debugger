@@ -1,5 +1,25 @@
 # Faultline current project state
 
+## October 13–14 M7 mode 1 status (Claude Code)
+
+- Mode 1 (scenario reduction, ADR 0028; early-decided gates, ADR 0029) built,
+  reviewed and run on LIBERO-10 (`docs/experiments/m7-scenario-reduction.md`).
+  Images v12 `31738b844cdf`, v13 `80326ce…` (reduction cap 60).
+- Result: task 0 start 14 vs passing start 28 reduces to an entity-minimal
+  conjunction of 5 position shifts (alphabet soup, orange juice, milk, cream
+  cheese, robot joints); no single shift reproduces; sizes only partly
+  shrunk. Nemotron 3 Ultra's specific predictions (soup necessary, sauce not)
+  held; the soup is not sufficient.
+- Spend ≈ US$3.44 of the US$4.00 mode 1 cap; balance ≈ US$1.8 (estimate from
+  US$5.23; reconcile). Top up before `faultline diagnose` work.
+- L40S capacity was scarce; scratchpad resubmitter reused one bucket. Tenant
+  bucket access-policy quota is 10: old M3/M6 buckets still hold objects and
+  must be emptied by Jethro before deletion.
+- In progress: measured hypothesis verdict (necessary/sufficient) and the
+  scenario explanation packet; then report, case and Nano explanation.
+- Next: `faultline diagnose` design checkpoint (ADR 0027 step 4, with the M3
+  startup cut and the resubmitter folded in).
+
 ## October 13 M6 status and M7 direction (Claude Code)
 
 - M6 complete (ADR 0026, `docs/experiments/m6-camera-and-scalar-families.md`):

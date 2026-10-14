@@ -364,3 +364,19 @@ episodes with a batched 12-worker setup at about 21–23 episodes per minute,
 including four concurrent threshold searches. Startup was again consistent
 (model download 337–341 s). No provider issues; the only friction was the
 daily CLI re-authentication before pushing the image.
+
+### October 13: Serverless Jobs for M7 mode 1 (LIBERO-10)
+
+Six Jobs ran (about 98 container minutes, about US$3.44 estimated) on a new
+checkpoint and suite with no provider-side defects once a machine started:
+startup stayed consistent (model download 338–347 s) and all exported
+evidence verified. Friction was capacity and quota, not the runtime: four of
+nine submissions of the L40S `1gpu-16vcpu-64gb` preset found no machine after
+about 27 minutes of provider retries (`NotEnoughResources`; nothing billed),
+another needed 22 minutes of provisioning retries, the tenant's bucket
+access-policy quota stopped a new bucket at 10 buckets, and the CLI hit
+several transient API connection timeouts. We worked around both by
+resubmitting automatically and reusing one bucket across attempts. Verdict:
+reliable once running; plan for capacity waits and keep buckets few. Token
+Factory served Nemotron 3 Ultra for the hypothesis calls without issue.
+
