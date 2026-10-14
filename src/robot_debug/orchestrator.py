@@ -591,7 +591,7 @@ class Orchestrator:
                     type(error).__name__))
 
     def _start(self) -> None:
-        self.backend.prepare(self.run_dir, self.spec)
+        self.backend.prepare(self.run_dir, self.spec.raw)       # backends read the raw YAML mapping
         try:
             live = self.backend.price_per_hour()
         except Exception:                   # noqa: BLE001 - a live price is optional

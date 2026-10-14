@@ -41,6 +41,8 @@ from . import (
 )
 
 DEFAULT_REGION = "eu-north1"
+DEFAULT_PLATFORM = "gpu-l40s-a"        # the same defaults robot_debug.spec applies to a spec
+DEFAULT_PRESET = "1gpu-16vcpu-64gb"
 GROUP_NAME = "faultline-readers"
 SERVICE_ACCOUNT_NAME = "faultline-reader"
 BUCKET_MAX_BYTES = 5 * 1024 ** 3
@@ -57,6 +59,7 @@ LIFECYCLE_RULES = [{
 }]
 
 _PROJECT_ID = re.compile(r"project-[a-z0-9]+\Z")
+_IMAGE_REGION = re.compile(r"cr\.([a-z0-9-]+)\.nebius\.cloud\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _TRANSIENT = re.compile(
     r"unavailable|i/o timeout|handshake|connection reset|connection refused|"
@@ -272,6 +275,13 @@ def default_s3_factory(endpoint: str, region: str, key_id: str, secret: str) -> 
     )
 
 
+def region_from_image(image: str) -> str:
+    """The region in a ``cr.<region>.nebius.cloud/...`` image host, else the default region."""
+
+    found = _IMAGE_REGION.match(image.split("/", 1)[0])
+    return found.group(1) if found else DEFAULT_REGION
+
+
 def _sanitise_name(name: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return cleaned[:40].strip("-") or "run"
@@ -339,17 +349,17 @@ class NebiusBackend:
     @classmethod
     def from_spec(cls, spec: Mapping[str, Any], **overrides: Any) -> "NebiusBackend":
         backend = spec.get("backend", {})
-        for field in ("platform", "preset", "image", "hf_token_secret", "hourly_usd"):
+        for field in ("image", "hf_token_secret", "hourly_usd"):
             if field not in backend:
                 raise BackendError("backend.%s is required for the nebius backend" % field)
         return cls(
             project=str(backend.get("project", "from-cli-profile")),
-            platform=str(backend["platform"]),
-            preset=str(backend["preset"]),
+            platform=str(backend.get("platform", DEFAULT_PLATFORM)),
+            preset=str(backend.get("preset", DEFAULT_PRESET)),
             image=str(backend["image"]),
             hf_token_secret=str(backend["hf_token_secret"]),
             hourly_usd=backend["hourly_usd"],
-            region=str(backend.get("region", DEFAULT_REGION)),
+            region=str(backend.get("region") or region_from_image(str(backend["image"]))),
             image_digest=backend.get("image_digest"),
             registry=backend.get("registry"),
             subnet=backend.get("subnet"),

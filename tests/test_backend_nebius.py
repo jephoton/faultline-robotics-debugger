@@ -172,6 +172,20 @@ class SpecTests(NebiusCase):
         self.assertIsInstance(backend, Backend)
         self.assertEqual(backend.price_per_hour(), 1.7468)
 
+    def test_platform_preset_and_region_default_like_the_spec_does(self):
+        minimal = {"kind": "nebius", "image": IMAGE, "hf_token_secret": "faultline-hf-token", "hourly_usd": 1.7,
+                   "nebius_executable": "/opt/nebius"}
+        backend = NebiusBackend.from_spec({"backend": minimal})
+        self.assertEqual((backend.platform, backend.preset, backend.region),
+                         ("gpu-l40s-a", "1gpu-16vcpu-64gb", "eu-north1"))
+
+    def test_region_is_derived_from_the_image_host_unless_given(self):
+        image = IMAGE.replace("cr.eu-north1.", "cr.us-central1.")
+        base = {"kind": "nebius", "image": image, "hf_token_secret": "faultline-hf-token", "hourly_usd": 1.7,
+                "nebius_executable": "/opt/nebius"}
+        self.assertEqual(NebiusBackend.from_spec({"backend": base}).region, "us-central1")
+        self.assertEqual(NebiusBackend.from_spec({"backend": dict(base, region="eu-west1")}).region, "eu-west1")
+
     def test_missing_fields_are_reported(self):
         with self.assertRaises(BackendError):
             NebiusBackend.from_spec({"backend": {"kind": "nebius"}})
