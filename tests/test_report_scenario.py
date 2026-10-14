@@ -13,6 +13,7 @@ import unittest
 
 from robot_debug import scenario_experiment as se
 from robot_debug.scenario_import import load_scenario_candidate
+from tests import reduction_fixtures as rf
 from tests.scenario_world import ScenarioWorld
 from tests.test_scenario_experiment import SCREEN, RunTestCase, make_plan
 
@@ -203,6 +204,131 @@ class ReportTests(RunTestCase):
 
     def test_pipes_in_text_do_not_break_tables(self):
         self.assertEqual("a/b", self.script._cell("a|b"))
+
+
+class PartialReductionReportTests(unittest.TestCase):
+    """A budget-exhausted, entity-minimal run: the summary stored no verdict, the report recomputes it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = load_script()
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def write_summary(self, **changes):
+        summary = {
+            "schema_version": 1, "mode": "scenario-reduce", "plan": rf.partial_plan(),
+            "reduction": rf.partial_reduction(), "differences": [
+                {"entity": "soup", "kind": "object", "position": {"distance_m": 0.0289}, "rotation": None,
+                 "joints": [], "distance": 2.89},
+                {"entity": "sauce", "kind": "object", "position": {"distance_m": 0.007}, "rotation": None,
+                 "joints": [], "distance": 0.7}],
+            "hypothesis_verdict": None, "videos": {}, "minimal_candidate": None, "checkpoint": None,
+            "total_seconds": 1000, "startup_seconds": 100}
+        summary.update(changes)
+        path = self.root / "scenario_summary.json"
+        path.write_text(json.dumps(summary), encoding="utf-8")
+        return path
+
+    def report(self, **changes):
+        summary = self.write_summary(**changes)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = self.script.main([str(summary), "--force"])
+        self.assertEqual(0, code, out.getvalue())
+        printed = json.loads(out.getvalue().splitlines()[-1])
+        text = (self.root / "scenario_reduction_report.md").read_text(encoding="utf-8")
+        return text, json.loads((self.root / printed["case"]).read_text(encoding="utf-8"))
+
+    def section(self, text):
+        start = text.index("## Hypothesis vs result")
+        end = text.find("\n## ", start + 5)
+        return text[start:end if end != -1 else None]
+
+    def test_the_section_is_recomputed_when_the_summary_has_no_verdict(self):
+        text, case = self.report()
+        section = self.section(text)
+        self.assertIn("Scope: entity-minimal, sizes only partly shrunk (stop reason `budget_exhausted`)", section)
+        self.assertIn("Measured label for the top-ranked entity (soup): **necessary_not_sufficient**", section)
+        self.assertIn("recomputed from the candidates in this summary", section)
+        self.assertIn("Reverting only the soup restores success", section)
+        self.assertIn("Ranking: soup, sauce, robot, cream, milk", section)
+        self.assertIn("| 1 | soup | yes | yes | no | necessary_not_sufficient |", section)
+        self.assertIn("| 2 | sauce | no | no | no | not_in_final |", section)
+        self.assertIn("| 3 | robot | yes | not tested | no | inconclusive |", section)
+
+    def test_the_evidence_shows_the_reruns_behind_each_cell(self):
+        section = self.section(self.report()[0])
+        self.assertIn("soup, sufficient: no. Candidate #2 (probe) changed only soup (position 1): S S S S, "
+                      "did not reproduce.", section)
+        self.assertIn("soup, necessary: yes. Candidate #7 (ddmin) kept cream (position 1); milk (position 1); "
+                      "robot (joints 1): S S S S, did not reproduce (same entities and parts as the final "
+                      "selection without soup, other sizes).", section)
+        self.assertIn("sauce, necessary: no. Not in the final selection; candidate #10 without it still "
+                      "reproduced: S F F F F.", section)
+
+    def test_it_says_plainly_what_the_model_got_right_and_missed(self):
+        section = self.section(self.report()[0])
+        self.assertIn("Right: the top-ranked entity (soup) is needed. The final selection without it did not "
+                      "reproduce the failure.", section)
+        self.assertIn("Missed: soup alone does not reproduce the failure, so it is necessary but not "
+                      "sufficient.", section)
+        self.assertIn("Also in the final selection but not in the top 3: cream, milk.", section)
+        self.assertIn("2 of the top 3 ranked entities are in the final selection (4 entities survive).", section)
+        self.assertIn("does not interpret the prose", section)
+
+    def test_the_case_record_gets_the_measurement_and_scope(self):
+        _, case = self.report()
+        self.assertIsNone(case["hypothesis"]["verdict"])
+        self.assertEqual("necessary_not_sufficient", case["hypothesis"]["measured_verdict"])
+        self.assertEqual("entity_minimal_sizes_partial", case["hypothesis"]["result_scope"])
+        self.assertEqual("necessary_not_sufficient", case["hypothesis"]["measurement"]["verdict"])
+
+    def test_a_stored_measurement_that_disagrees_is_flagged(self):
+        stored = dict(se.measurement_for(rf.partial_plan(), rf.partial_reduction()), verdict="confirmed")
+        text, _ = self.report(hypothesis_measurement=stored)
+        section = self.section(text)
+        self.assertIn("Warning: the Job recorded measured label `confirmed`", section)
+        self.assertNotIn("recomputed from the candidates", section)
+
+    def test_a_plan_file_fills_what_the_summary_plan_lacks(self):
+        plan = rf.partial_plan()
+        bare = {key: plan[key] for key in ("suite", "task_id", "instruction", "failing_start")}
+        summary = self.write_summary(plan=bare)
+        plan_path = self.root / "plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = self.script.main([str(summary), "--force", "--plan", str(plan_path)])
+        self.assertEqual(0, code, out.getvalue())
+        text = (self.root / "scenario_reduction_report.md").read_text(encoding="utf-8")
+        self.assertIn("Measured label for the top-ranked entity (soup): **necessary_not_sufficient**", text)
+
+    def test_a_plan_for_another_task_is_refused(self):
+        summary = self.write_summary()
+        other = dict(rf.partial_plan(), task_id=9)
+        plan_path = self.root / "plan.json"
+        plan_path.write_text(json.dumps(other), encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = self.script.main([str(summary), "--force", "--plan", str(plan_path)])
+        self.assertEqual(2, code)
+        self.assertIn("does not match", out.getvalue())
+
+    def test_a_fixed_order_run_has_no_comparison(self):
+        text, case = self.report(plan=rf.partial_plan(order_source="fixed_order"))
+        section = self.section(text)
+        self.assertIn("not applicable", section)
+        self.assertNotIn("Measured label", section)
+        self.assertIsNone(case["hypothesis"]["measurement"])
+
+    def test_a_run_that_is_not_entity_minimal_has_no_comparison(self):
+        reduction = dict(rf.partial_reduction(), entity_minimal=False)
+        text, _ = self.report(reduction=reduction)
+        self.assertIn("not available", self.section(text))
 
 
 if __name__ == "__main__":

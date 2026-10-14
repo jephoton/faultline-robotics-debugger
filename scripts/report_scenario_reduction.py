@@ -1,6 +1,6 @@
 """Write the Markdown report and the case record for a scenario Job summary.
 
-    report_scenario_reduction.py SUMMARY.json [--screen SCREEN_SUMMARY.json]
+    report_scenario_reduction.py SUMMARY.json [--screen SCREEN_SUMMARY.json] [--plan PLAN.json]
         [--out REPORT.md] [--case-out CASE.json] [--candidate-out CANDIDATE.json]
         [--hourly-rate USD]
 
@@ -9,8 +9,11 @@ and a case are written) or of a ``scenario-screen`` Job (the screen report only)
 reduction, ``--screen`` adds the screen table of the screen it was planned from.
 
 The report states what the simulator showed (outcomes of reruns), the minimal cause in
-one sentence, the Nemotron hypothesis, its source or fallback, and the mechanical
-verdict (``confirmed``, ``partly`` or ``refuted``). The case record holds the replay
+one sentence, the Nemotron hypothesis, its source or fallback, the mechanical verdict
+(``confirmed``, ``partly`` or ``refuted``, for a fully reduced run) and a "Hypothesis vs
+result" section: whether the model's top-ranked entities were necessary and sufficient,
+read from the reruns in the summary (recomputed, so budget-exhausted entity-minimal runs
+get one too). The case record holds the replay
 recipe as a scenario candidate file plus the three video references. Nothing here
 decides a claim: the result is a local minimum found by reruns, not proof of the
 globally smallest cause.
@@ -46,6 +49,28 @@ def load_summary(path: Path) -> Dict[str, Any]:
     if not isinstance(summary, dict) or summary.get("schema_version") != 1 \
             or summary.get("mode") not in se.SCENARIO_MODES:
         raise ReportError("not a scenario summary")
+    return summary
+
+
+def merge_plan(summary: Dict[str, Any], plan_path: Path) -> Dict[str, Any]:
+    """Fill what the summary's own plan lacks (order, order source, hypothesis) from ``plan.json``.
+
+    The task identity must match; a field the summary already has is never overridden.
+    """
+
+    try:
+        plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise ReportError("the plan is unreadable") from None
+    own = summary.get("plan")
+    if not isinstance(plan, dict) or not isinstance(own, dict):
+        raise ReportError("the plan or the summary has no plan")
+    for key in ("suite", "task_id", "instruction"):
+        if key in plan and key in own and plan[key] != own[key]:
+            raise ReportError("the plan does not match the summary")
+    for key in ("suite", "task_id", "instruction", "order", "order_source", "hypothesis"):
+        if own.get(key) in (None, [], {}) and key in plan:
+            own[key] = plan[key]
     return summary
 
 
@@ -130,6 +155,128 @@ def difference_rows(table: Sequence[Mapping[str, Any]]) -> List[List[Any]]:
     return rows
 
 
+def _yes_no(value: Any) -> str:
+    return "yes" if value is True else "no" if value is False else "not tested"
+
+
+_DECISION_TEXT = {"reproduces": "reproduced", "does_not_reproduce": "did not reproduce", "passes": "passes",
+                  "invalid_scene": "was an invalid scene"}
+
+
+def _run_text(candidate: Mapping[str, Any]) -> str:
+    return "{}, {}".format(_letters(candidate.get("outcomes") or []),
+                           _DECISION_TEXT.get(candidate.get("decision"), str(candidate.get("decision"))))
+
+
+def _evidence_sentences(entity: Mapping[str, Any], kind: str, by_index: Mapping[Any, Mapping[str, Any]]) -> str:
+    """The measured cell as one line: the answer, then the reruns it was read from."""
+
+    name = entity["entity"]
+    answer = entity[kind]
+    indices = entity["basis"][kind]
+    pieces = ["{}, {}: {}.".format(name, kind, _yes_no(answer))]
+    if kind == "necessary" and entity.get("necessary_basis") == "not_in_final":
+        pieces.append("Not in the final selection" + ("; candidate #{} without it still reproduced: {}.".format(
+            indices[0], _letters((by_index.get(indices[0]) or {}).get("outcomes") or [])) if indices else "."))
+        return " ".join(pieces)
+    if not indices:
+        pieces.append("No candidate changed only {}.".format(name) if kind == "sufficient" else
+                      "No candidate matched the final selection without {}.".format(name))
+        return " ".join(pieces)
+    for index in indices:
+        candidate = by_index.get(index) or {}
+        head = "Candidate #{} ({})".format(index, candidate.get("phase", "?"))
+        if kind == "sufficient":
+            pieces.append("{} changed only {}: {}.".format(
+                head, _selection_text(candidate.get("selection")), _run_text(candidate)))
+        elif entity.get("necessary_basis") == "reference":
+            pieces.append("{} is the passing reference with nothing changed: {}.".format(head, _run_text(candidate)))
+        else:
+            suffix = (" (same entities and parts as the final selection without {}, other sizes)".format(name)
+                      if entity.get("necessary_basis") == "entity_set" else "")
+            pieces.append("{} kept {}: {}{}.".format(
+                head, _selection_text(candidate.get("selection")), _run_text(candidate), suffix))
+    return " ".join(pieces)
+
+
+def hypothesis_vs_result_section(summary: Mapping[str, Any]) -> List[str]:
+    """What the model's ranking got right and missed, generated only from the reruns.
+
+    The measurement is recomputed from the stored candidates, so a run whose summary has
+    no stored verdict (a budget-exhausted, entity-minimal reduction) still gets one.
+    """
+
+    plan, reduction = summary["plan"], summary.get("reduction") or {}
+    hypothesis = plan.get("hypothesis") or {}
+    lines = ["## Hypothesis vs result", ""]
+    if plan.get("order_source") != "model":
+        return lines + ["Comparison not applicable: the fixed order is a search order, not a model hypothesis.", ""]
+    measurement = se.measurement_for(plan, reduction)
+    ranking = hypothesis.get("ranking") or plan.get("order") or []
+    lines += ["- Hypothesis text: {}".format(hypothesis.get("text") or "none"),
+              "- Ranking: {}".format(", ".join(ranking) or "-")]
+    if measurement is None:
+        return lines + ["- Comparison not available: the reduction is not entity-minimal (stop reason `{}`) or has "
+                        "no final selection, so no entity can be called necessary or sufficient.".format(
+                            reduction.get("stop_reason")), ""]
+    if measurement["result_scope"] == "reduced":
+        scope = "reduced (every kept part shrunk to its resolution)"
+    else:
+        scope = "entity-minimal, sizes only partly shrunk (stop reason `{}`)".format(reduction.get("stop_reason"))
+    stored = summary.get("hypothesis_measurement")
+    top = measurement["top"]
+    lines += ["- Scope: {}".format(scope),
+              "- Measured label for the top-ranked entity ({}): **{}**".format(top, measurement["verdict"])]
+    if stored is None:
+        lines.append("- This was recomputed from the candidates in this summary; no new runs were made.")
+    elif stored.get("verdict") != measurement["verdict"]:
+        lines.append("Warning: the Job recorded measured label `{}`, which differs from this recomputation.".format(
+            stored.get("verdict")))
+    by_index = {c["index"]: c for c in reduction.get("candidates") or []}
+    entities = measurement["entities"]
+    lines += [""] + _table(
+        ["rank", "entity", "in final selection", "necessary", "sufficient", "label"],
+        [[e["rank"], e["entity"], _yes_no(e["in_final"]), _yes_no(e["necessary"]), _yes_no(e["sufficient"]),
+          e["label"]] for e in entities])
+    lines += ["", "Necessary: the final selection without that entity did not reproduce the failure. Sufficient: "
+              "changing only that entity reproduced it. Both are read from reruns already in the candidate "
+              "list, relative to this final selection.", "", "### Evidence", ""]
+    for entity in entities:
+        lines.append("- " + _evidence_sentences(entity, "sufficient", by_index))
+        lines.append("- " + _evidence_sentences(entity, "necessary", by_index))
+    lines += ["", "### What the ranking got right and missed", ""]
+    leader = entities[0]
+    if leader["necessary"] is True:
+        lines.append("- Right: the top-ranked entity ({}) is needed. The final selection without it did not "
+                     "reproduce the failure.".format(top))
+    elif leader["necessary"] is False and not leader["in_final"]:
+        lines.append("- Missed: the top-ranked entity ({}) is not part of the minimal cause. The failure still "
+                     "reproduced without it.".format(top))
+    elif leader["necessary"] is False:
+        lines.append("- Missed: the top-ranked entity ({}) is not needed: the final selection without it still "
+                     "reproduced the failure.".format(top))
+    else:
+        lines.append("- Untested: whether the final selection without {} still reproduces the failure.".format(top))
+    if leader["sufficient"] is True:
+        lines.append("- Right: {} alone reproduces the failure.".format(top))
+    elif leader["sufficient"] is False:
+        lines.append("- Missed: {} alone does not reproduce the failure{}".format(
+            top, ", so it is necessary but not sufficient." if leader["necessary"] is True else "."))
+    else:
+        lines.append("- Untested: whether {} alone reproduces the failure.".format(top))
+    survivors = measurement["survivors"]
+    lines.append("- {} of the top {} ranked entities are in the final selection ({} entit{} survive).".format(
+        measurement["ranked_survivors_overlap"], measurement["top_k"], len(survivors),
+        "y" if len(survivors) == 1 else "ies"))
+    extra = [name for name in survivors if name not in [e["entity"] for e in entities]]
+    if extra:
+        lines.append("- Also in the final selection but not in the top {}: {}.".format(
+            measurement["top_k"], ", ".join(extra)))
+    lines += ["", "The hypothesis text is free prose; this section compares only the ranking with the "
+              "measurements and does not interpret the prose.", ""]
+    return lines
+
+
 def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) -> List[str]:
     plan, reduction = summary["plan"], summary.get("reduction") or {}
     selection = reduction.get("final_selection")
@@ -186,6 +333,7 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
         lines += ["Warning: the Job recorded verdict `{}`, which differs from this recomputation.".format(
             summary["hypothesis_verdict"]), ""]
     lines += [(hypothesis.get("text") or "No hypothesis text (the fixed order was used)."), ""]
+    lines += hypothesis_vs_result_section(summary)
     candidates = reduction.get("candidates") or []
     lines += ["## Candidates", ""]
     lines += _table(
@@ -259,6 +407,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("summary", type=Path)
     parser.add_argument("--screen", type=Path, help="the screen summary the reduction was planned from")
+    parser.add_argument("--plan", type=Path, help="plan.json to fill an order or hypothesis the summary lacks")
     parser.add_argument("--out", type=Path, help="report path (default: beside the summary)")
     parser.add_argument("--case-out", type=Path, help="case record path (reduce summaries)")
     parser.add_argument("--candidate-out", type=Path, help="write the replay candidate file here")
@@ -267,6 +416,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         args = parser.parse_args(argv)
         summary = load_summary(args.summary)
+        if args.plan is not None:
+            summary = merge_plan(summary, args.plan)
         screen = load_summary(args.screen) if args.screen else None
         if screen is not None and screen["mode"] != "scenario-screen":
             raise ReportError("--screen needs a scenario-screen summary")
