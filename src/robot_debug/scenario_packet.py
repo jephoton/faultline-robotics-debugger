@@ -183,12 +183,15 @@ def _validate(packet: object) -> Dict[str, Any]:
     checked_differences = [_difference(row) for row in differences]
     _require(len({row["entity"] for row in checked_differences}) == len(checked_differences))
 
-    minimal = _keys(value["minimal"], ("selection", "sentence", "entity_minimal", "reduced", "stop_reason"))
+    minimal = _keys(value["minimal"], ("selection", "sentence", "entity_minimal", "reduced", "stop_reason", "shrink"))
+    shrink = minimal["shrink"]
+    _require(type(shrink) is list and len(shrink) <= MAX_PARTS)
     _require(type(minimal["entity_minimal"]) is bool and type(minimal["reduced"]) is bool)
     checked_minimal = {"selection": _selection_from_parts(minimal["selection"]),
                        "sentence": _text(minimal["sentence"], 900),
                        "entity_minimal": minimal["entity_minimal"], "reduced": minimal["reduced"],
-                       "stop_reason": _text(minimal["stop_reason"], 64)}
+                       "stop_reason": _text(minimal["stop_reason"], 64),
+                       "shrink": [_text(note, 300) for note in shrink]}
 
     hypothesis = _keys(value["hypothesis"], ("text", "ranking", "source"))
     ranking = hypothesis["ranking"]
@@ -267,6 +270,33 @@ def evidence_meaning(phase: str, role: str, parts: Optional[List[Dict[str, Any]]
     return "{}: {} ({}), {}.".format(scene, outcomes, counts, verdict)
 
 
+def shrink_notes(minimal: Mapping[str, Any]) -> List[str]:
+    """Plain sentences on which sizes were already tested, so nobody proposes re-running them.
+
+    Added after all three Nemotron models (October 13) suggested shrink sizes the reduction
+    had already tried; the packet listed only the key reruns, not the shrink history.
+    """
+
+    notes = []
+    shrunk = set()
+    for part in minimal.get("parts") or []:
+        entity, component = part["entity"], part["component"]
+        shrunk.add(entity)
+        kept = round(float(part["t"]) * 100, 1)
+        lower = part.get("lower")
+        if lower is not None and part.get("lower_tested"):
+            notes.append("{} {}: {:g}% of the difference still fails; {:g}% and smaller sizes on the way "
+                         "were already tested and did not reproduce the failure.".format(
+                             entity, component, kept, round(float(lower) * 100, 1)))
+        else:
+            notes.append("{} {}: {:g}% kept; no smaller size was tested.".format(entity, component, kept))
+    for entity in sorted(minimal.get("selection") or {}):
+        if entity not in shrunk:
+            notes.append("{}: kept at its full difference; its size was not shrunk before the "
+                         "reduction stopped (untested).".format(entity))
+    return notes[:MAX_PARTS]
+
+
 def make_scenario_packet(case: Mapping[str, Any]) -> Dict[str, Any]:
     """The bounded packet for a ``scenario_reduction`` case record. Raises ``EvidencePacketError``."""
 
@@ -298,7 +328,8 @@ def make_scenario_packet(case: Mapping[str, Any]) -> Dict[str, Any]:
             "differences": list(case.get("differences") or []),
             "minimal": {"selection": _selection(minimal.get("selection")) or [],
                         "sentence": minimal["sentence"], "entity_minimal": bool(minimal.get("entity_minimal")),
-                        "reduced": bool(case.get("reduced")), "stop_reason": case.get("stop_reason") or "unknown"},
+                        "reduced": bool(case.get("reduced")), "stop_reason": case.get("stop_reason") or "unknown",
+                        "shrink": shrink_notes(minimal)},
             "hypothesis": {"text": hypothesis.get("text"), "ranking": list(hypothesis.get("ranking") or []),
                            "source": hypothesis.get("source") or "unknown"},
             "measured": measured,
@@ -351,7 +382,9 @@ SCENARIO_SYSTEM_PROMPT = (
     "success, F for policy failure, I for an invalid scene, one letter per attempt; each evidence "
     "item's meaning states in plain words which scene ran and whether it reproduced the failure, "
     "and is authoritative: a scene with only one entity applied tests whether that entity is "
-    "sufficient, not what happens when it is reverted. "
+    "sufficient, not what happens when it is reverted. minimal.shrink says which sizes were "
+    "already tested; never propose rerunning a size at or below one already tested, or a scene "
+    "already in evidence. "
     "Return exactly one JSON object with keys schema_version (the integer 1), observations, "
     "hypotheses and limitations. observations: 2 to 4 objects with keys text and evidence_ids, "
     "plain factual statements a reviewer can check against measured and evidence, saying what "
