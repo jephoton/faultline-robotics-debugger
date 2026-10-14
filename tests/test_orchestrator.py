@@ -1,0 +1,797 @@
+"""The orchestrator: fake backend, fake Nemotron, summaries modelled on the October 13 runs."""
+
+from __future__ import annotations
+
+import copy
+import datetime as dt
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
+
+from robot_debug import ledger as lg
+from robot_debug import orchestrator as orch
+from robot_debug import scenario_state as ss
+from robot_debug import spec as sp
+from robot_debug.scenario_import import build_candidate
+from tests.scenario_fakes import base_state, synthetic_layout, with_object_pose
+
+RATE = 1.8
+SECONDS = 1000                       # container seconds of every fake Job
+INSTRUCTION = "put the soup in the basket"
+MOMENT = dt.datetime(2026, 10, 14, 10, 15, 30, tzinfo=dt.timezone.utc)
+SOUP, BOWL = 3, 11                   # free-joint addresses in the synthetic layout
+
+
+class Handle(NamedTuple):
+    job_name: str
+    job_id: str
+
+
+class Result(NamedTuple):
+    job_name: str
+    job_id: str
+    state: str
+    reason: Optional[str]
+    started_at: Any
+    finished_at: Any
+    container_seconds: Optional[float]
+
+
+class Crash(BaseException):
+    """Stands in for a killed process: not caught by any `except Exception`."""
+
+
+class BackendFailure(Exception):
+    pass
+
+
+def spec_for(mode="scenario", cap=10.0, hours=5.0, **overrides) -> sp.Spec:
+    backend = {"kind": "nebius", "image": "cr.example.invalid/REGISTRY_ID/faultline@sha256:IMAGE_DIGEST",
+               "hf_token_secret": "faultline-hf-token", "hourly_usd": RATE}
+    data = {"faultline": 1, "name": "soup-start", "mode": mode, "policy": {"suite": "libero_10"},
+            "budget": {"max_spend_usd": cap, "max_hours": hours, "max_candidates": 36},
+            "nemotron": {"hypothesis": True, "explain": True}, "backend": backend}
+    if mode == "scenario":
+        data["scenario"] = overrides.pop("scenario", {"task": 3, "start": 0})
+    elif mode == "audit":
+        data["audit"] = {"task": 0, "start": 0, "families": ["blur", "noise"]}
+    else:
+        del data["policy"]
+    data.update(overrides)
+    return sp.parse_spec(data)
+
+
+# --- summaries --------------------------------------------------------------------------------
+
+
+def screen_summary(failing=True, extra_failing=None) -> Dict[str, Any]:
+    layout = synthetic_layout()
+    base = base_state(layout)
+    fail = with_object_pose(with_object_pose(base, SOUP, dxyz=(0.05, 0, 0)), BOWL, dxyz=(0, 0.04, 0))
+    near = with_object_pose(base, SOUP, dxyz=(0.04, 0, 0))              # soup differs by 1 cm only
+    starts = {
+        "0": {"outcomes": ["policy_failure"] * 5 if failing else ["success"], "state": fail.tolist(),
+              "decision": "reproduces" if failing else None},
+        "1": {"outcomes": ["success"], "state": near.tolist()},
+        "2": {"outcomes": ["success"], "state": base.tolist()},
+        "3": {"outcomes": ["policy_failure", "success", "policy_failure", "success", "success"],
+              "state": near.tolist(), "decision": "does_not_reproduce"},
+    }
+    if extra_failing is not None:
+        starts["7"] = {"outcomes": extra_failing, "state": fail.tolist(), "decision": "reproduces"}
+    return {"schema_version": 1, "mode": "scenario-screen", "suite": "libero_10", "stop_reason": None,
+            "complete": True, "total_seconds": 900, "checkpoint": None,
+            "tasks": {"3": {"instruction": INSTRUCTION, "layout": layout, "starts": starts}},
+            "reproducible_failures": [], "confirm": {"skipped_attempts": 2}, "topup": {"episodes": 0}}
+
+
+def reduce_summary(workload: Dict[str, Any], *, stop_reason: str, selection: Dict[str, Any],
+                   entity_minimal: bool, reduced: bool = False, verified: bool = True) -> Dict[str, Any]:
+    layout = workload["layout"]
+    reference = workload["references"][0]
+    plan = {"suite": workload["suite"], "task_id": workload["task_id"], "instruction": workload["instruction"],
+            "failing_start": workload["failing"]["start_index"],
+            "references": [r["start_index"] for r in workload["references"]],
+            "order": list(workload["order"]), "order_source": workload["order_source"],
+            "hypothesis": copy.deepcopy(workload["hypothesis"])}
+    candidate = None
+    if selection:
+        state = ss.hybrid(reference["state"], workload["failing"]["state"], selection, layout)
+        candidate = build_candidate(workload["suite"], workload["task_id"], state, {
+            "kind": "hybrid", "reference": reference["start_index"],
+            "failing": workload["failing"]["start_index"],
+            "applied": [{"entity": e, "component": c, "t": t} for e, parts in selection.items()
+                        for c, t in parts.items()]})
+    reduction = {
+        "stop_reason": stop_reason, "reduced": reduced, "error": None, "note": None, "attempts": 5,
+        "required_failures": 4, "bisection_steps": 4, "max_candidates": 36, "concurrency": 3,
+        "speculative_bisection": True, "reference": reference["start_index"],
+        "references_tried": [{"id": reference["start_index"], "decision": "passes", "outcomes": ["success"] * 5}],
+        "order": list(workload["order"]), "entities": list(workload["order"]), "entity_minimal": entity_minimal,
+        "surviving_entities": list(selection), "final_selection": selection or None,
+        "final_candidate": 7 if (selection and verified) else None, "parts": [], "ranked_probe": None,
+        "candidates": [], "candidates_tested": 12, "attempts_run": 60, "attempts_run_gates": 15,
+        "attempts_run_hybrid": 45, "attempts_skipped": 20, "attempts_stop_withdrawn": 0, "invalid_scenes": []}
+    return {"schema_version": 1, "mode": "scenario-reduce", "suite": workload["suite"], "plan": plan,
+            "reduction": reduction, "differences": reference["differences"], "videos": {},
+            "minimal_candidate": candidate, "checkpoint": None, "total_seconds": 600, "startup_seconds": 100,
+            "stop_reason": stop_reason, "complete": reduced, "hypothesis_verdict": None,
+            "hypothesis_measurement": None}
+
+
+# --- the fake backend ----------------------------------------------------------------------------
+
+
+def capacity() -> Dict[str, Any]:
+    return {"state": "FAILED", "reason": "NotEnoughResources", "container_seconds": None}
+
+
+def finished(summary: Callable[[Dict[str, Any]], Dict[str, Any]], name="scenario_summary.json",
+             state="COMPLETED", reason=None, seconds=SECONDS) -> Dict[str, Any]:
+    return {"state": state, "reason": reason, "container_seconds": seconds, "summary": summary,
+            "summary_name": name}
+
+
+class FakeBackend:
+    kind = "fake"
+
+    def __init__(self, behaviours: List[Dict[str, Any]], price=None) -> None:
+        self.behaviours = list(behaviours)
+        self.assigned: Dict[str, Dict[str, Any]] = {}
+        self.workloads: Dict[str, Dict[str, Any]] = {}
+        self.submitted: List[str] = []
+        self.waited: List[str] = []
+        self.cancelled: List[str] = []
+        self.finished = 0
+        self.prepared = 0
+        self.price = price
+        self.fail_prepare = False
+        self.fail_submit_at: Optional[int] = None
+        self.kills_at_wait: Optional[int] = None
+        self.interrupt_at_wait: Optional[int] = None
+        self.kill_class = Crash
+        self.on_wait: Optional[Callable[[], None]] = None
+
+    def prepare(self, run_dir, spec):
+        self.prepared += 1
+        if self.fail_prepare:
+            raise BackendFailure("prepare")
+
+    def price_per_hour(self):
+        if self.price is None:
+            raise BackendFailure("no price")
+        return self.price
+
+    def submit(self, job_name, workload):
+        if self.fail_submit_at is not None and len(self.submitted) == self.fail_submit_at:
+            raise BackendFailure("submit")
+        self.submitted.append(job_name)
+        self.workloads[job_name] = copy.deepcopy(workload)
+        self.assigned[job_name] = self.behaviours.pop(0)
+        return Handle(job_name, "id-" + job_name)
+
+    def wait(self, handle, *, running_max_seconds, total_max_seconds, poll_seconds=60):
+        self.waited.append(handle.job_name)
+        if self.on_wait is not None:
+            self.on_wait()
+        if self.kills_at_wait is not None and len(self.waited) == self.kills_at_wait:
+            raise Crash()
+        if self.interrupt_at_wait is not None and len(self.waited) == self.interrupt_at_wait:
+            raise KeyboardInterrupt()
+        behaviour = self.assigned.get(handle.job_name) or self.assigned.setdefault(
+            handle.job_name, self.behaviours.pop(0))
+        seconds = behaviour["container_seconds"]
+        return Result(handle.job_name, handle.job_id, behaviour["state"], behaviour["reason"],
+                      None if seconds is None else MOMENT, None if seconds is None else MOMENT, seconds)
+
+    def download(self, handle, dest):
+        behaviour = self.assigned[handle.job_name]
+        tree = Path(dest) / "faultline-runs" / handle.job_name
+        if behaviour.get("summary") is not None:
+            summary = behaviour["summary"](self.workloads.get(handle.job_name, {}))
+            target = tree / "scenario" / behaviour["summary_name"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(summary), encoding="utf-8")
+        else:
+            tree.mkdir(parents=True, exist_ok=True)
+        return tree
+
+    def logs_tail(self, handle, lines):
+        return "log of " + handle.job_name
+
+    def cancel(self, handle):
+        self.cancelled.append(handle.job_name)
+
+    def finish(self):
+        self.finished += 1
+
+
+class FakeTools(orch.DefaultTools):
+    """Real planning, workloads, reports and cases; fake time, explanation and registration."""
+
+    def __init__(self, explain_error=None) -> None:
+        def request(instruction, differences, api_key, **kwargs):
+            names = [row["entity"] for row in differences]
+            ranking = list(reversed(names))                        # the model ranks the bowl first
+            return {"source": "model", "ranking": ranking, "hypothesis": "The bowl matters.", "completed": [],
+                    "model": "fake/nemotron", "tier": "ultra", "fallback_reason": None,
+                    "provenance": {"model": "fake/nemotron"}, "raw_content": "raw reply"}
+
+        super().__init__(request=request, load_key=lambda env: "FAKE-KEY")
+        self.clock = MOMENT
+        self.slept: List[float] = []
+        self.explained: List[tuple] = []
+        self.registered: List[Path] = []
+        self.explain_error = explain_error
+
+    def now(self):
+        return self.clock
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+
+    def explain(self, case_path, out_path, env_file, label):
+        if self.explain_error is not None:
+            raise self.explain_error
+        self.explained.append((Path(case_path), Path(out_path), env_file, label))
+        Path(out_path).write_text(json.dumps({"kind": "scenario_explanation"}), encoding="utf-8")
+        return {"interpretation_status": "validated-structure"}
+
+    def register(self, run_dir):
+        self.registered.append(Path(run_dir))
+        return "registered-case-id"
+
+
+def make_world(spec: sp.Spec, behaviours, *, tools=None, backend=None, run_dir=None, **options):
+    temp = tempfile.TemporaryDirectory()
+    root = Path(temp.name)
+    tools = tools or FakeTools()
+    backend = backend or FakeBackend(behaviours)
+    if run_dir is None:
+        run_dir = orch.create_run_dir(root / "runs", spec, None, MOMENT)
+    clock = [1000.0]
+    ledger = lg.Ledger.load(run_dir / "ledger.json", cap_usd=spec.budget.max_spend_usd,
+                            max_hours=spec.budget.max_hours, hourly_usd=spec.backend.hourly_usd,
+                            clock=lambda: clock[0])
+    lines: List[str] = []
+    options.setdefault("poll_seconds", 0.0)
+    runner = orch.Orchestrator(spec, run_dir, backend, tools, ledger, out=lines.append, **options)
+    runner.test_clock = clock
+    return temp, runner, backend, tools, ledger, lines
+
+
+def reduce_one(**kwargs):
+    return lambda workload: reduce_summary(workload, **kwargs)
+
+
+SOUP_ONLY = {"soup_1": {"position": 1.0}}
+BOTH = {"soup_1": {"position": 1.0}, "bowl_1": {"position": 1.0}}
+
+
+def full_script():
+    """Screen, a partial reduce that needs a continuation, then an entity-minimal continuation."""
+
+    return [
+        finished(lambda workload: screen_summary()),
+        finished(reduce_one(stop_reason="budget_exhausted", selection=BOTH, entity_minimal=False),
+                 state="FAILED", reason="ContainerFailed"),
+        finished(reduce_one(stop_reason="budget_exhausted", selection=SOUP_ONLY, entity_minimal=True)),
+    ]
+
+
+def cost(seconds=SECONDS):
+    return (seconds + 240) / 3600.0 * RATE
+
+
+class Base(unittest.TestCase):
+    def world(self, behaviours, spec=None, **options):
+        temp, runner, backend, tools, ledger, lines = make_world(spec or spec_for(), behaviours, **options)
+        self.addCleanup(temp.cleanup)
+        return runner, backend, tools, ledger, lines
+
+
+class PureHelperTests(unittest.TestCase):
+    def test_choose_start_prefers_most_failures_then_lowest_index(self):
+        summary = screen_summary(extra_failing=["policy_failure"] * 5)
+        self.assertEqual(orch.choose_start(summary, 3, None), 0)           # 5 failures, lowest of the ties
+        summary = screen_summary(failing=False, extra_failing=["policy_failure", "success", "policy_failure",
+                                                              "policy_failure", "policy_failure"])
+        self.assertEqual(orch.choose_start(summary, 3, None), 7)           # 4 of 5 meets the gate
+        self.assertIsNone(orch.choose_start(screen_summary(failing=False), 3, None))
+
+    def test_choose_start_respects_a_given_start_and_the_gate(self):
+        summary = screen_summary(extra_failing=["policy_failure"] * 5)
+        self.assertEqual(orch.choose_start(summary, 3, 7), 7)
+        self.assertIsNone(orch.choose_start(summary, 3, 3))                # flaky: 2 of 5
+        self.assertIsNone(orch.choose_start(summary, 3, 99))
+
+    def test_invalid_scene_never_counts_as_a_failure(self):
+        summary = screen_summary()
+        summary["tasks"]["3"]["starts"]["0"]["validity"] = "invalid_scene"
+        self.assertIsNone(orch.choose_start(summary, 3, None))
+
+    def test_screen_table_lists_only_starts_that_failed(self):
+        lines = orch.screen_table(screen_summary(), 3)
+        self.assertEqual(lines, ["start 0: F F F F F (reproduces)", "start 3: F S F S S (does_not_reproduce)"])
+
+    def test_continuation_plan_follows_the_october_13_step(self):
+        tools = FakeTools()
+        config, _raw = tools.plan(screen_summary(), 3, 0, use_llm=True, env_file=None, references=3)
+        self.assertEqual(config["order"], ["bowl_1", "soup_1"])
+        reduction = {"final_selection": {"soup_1": {"position": 0.5}}, "reference": config["references"][0]["start_index"]}
+        nxt = orch.continuation_plan(config, reduction)
+        layout = config["layout"]
+        reference = config["references"][0]
+        expected = ss.hybrid(reference["state"], config["failing"]["state"], reduction["final_selection"], layout)
+        self.assertEqual(nxt["failing"]["state"], expected.tolist())
+        self.assertEqual(nxt["failing"]["outcomes"], ["policy_failure"] * 4)
+        self.assertEqual(nxt["failing"]["start_index"], 0)
+        self.assertEqual([r["start_index"] for r in nxt["references"]], [reference["start_index"]])
+        self.assertEqual([row["entity"] for row in nxt["references"][0]["differences"]], ["soup_1"])
+        self.assertEqual(nxt["order"], ["soup_1"])
+        self.assertEqual(nxt["hypothesis"]["ranking"], ["soup_1"])
+        self.assertEqual(config["order"], ["bowl_1", "soup_1"], "the input plan is not modified")
+        self.assertEqual(tools.reduce_workload("x" * 3, _write(config), 36)["mode"], "scenario-reduce")
+
+    def test_continuation_without_a_selection_stops(self):
+        with self.assertRaises(orch.StopRun):
+            orch.continuation_plan({"references": []}, {"final_selection": None, "reference": None})
+
+    def test_replay_verdict(self):
+        self.assertTrue(orch.replay_verdict({"replay": {"reproduces": True}}))
+        self.assertFalse(orch.replay_verdict({"replay": {"reproduces": False}}))
+        self.assertTrue(orch.replay_verdict({"replay": {"minimal": {"outcomes": ["policy_failure"] * 4 + ["success"]}}}))
+        self.assertFalse(orch.replay_verdict({"replay": {"minimal": {"outcomes": ["success"] * 5}}}))
+        self.assertIsNone(orch.replay_verdict({}))
+
+
+def _write(config):
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(config, handle)
+    handle.close()
+    return Path(handle.name)
+
+
+class Mode1EndToEnd(Base):
+    def test_screen_reduce_one_continuation_report_case_explanation_register(self):
+        runner, backend, tools, ledger, lines = self.world(full_script())
+        result = runner.diagnose()
+        run_dir = runner.run_dir
+
+        self.assertEqual((result.status, result.reason, result.exit_code), ("completed", None, 0))
+        tag = runner.tag
+        self.assertEqual(backend.submitted, ["soup-start-{}-{}".format(tag, s) for s in ("screen", "reduce", "reduce2")])
+        for name in backend.submitted:
+            self.assertEqual(backend.workloads[name]["run_id"], name)
+            self.assertTrue((run_dir / "jobs" / name / "workload.json").is_file())
+            self.assertTrue((run_dir / "jobs" / name / "result.json").is_file())
+            self.assertEqual((run_dir / "jobs" / name / "logs-tail.txt").read_text(), "log of " + name)
+        self.assertAlmostEqual(ledger.spent, 3 * cost())
+        self.assertEqual(result.spent_usd, ledger.spent)
+
+        first, second = (backend.workloads[n] for n in backend.submitted[1:])
+        self.assertEqual(first["mode"], "scenario-reduce")
+        self.assertEqual(first["failing"]["start_index"], 0)
+        self.assertEqual(first["order"], ["bowl_1", "soup_1"])            # Nemotron's ranking
+        self.assertEqual(first["order_source"], "model")
+        self.assertEqual(first["max_candidates"], 36)
+        # The continuation: the 2-entity scene, outcomes F F F F, one reference, same ranking minus nothing lost.
+        self.assertEqual(second["failing"]["outcomes"], ["policy_failure"] * 4)
+        self.assertEqual(len(second["references"]), 1)
+        self.assertEqual(second["max_candidates"], 36)
+
+        for name in ("report.md", "case.json", "minimal-candidate.json", "explanation.json", "spec.yaml",
+                     "ledger.json", "steps.json"):
+            self.assertTrue((run_dir / name).is_file(), name)
+        case = json.loads((run_dir / "case.json").read_text())
+        self.assertEqual(case["kind"], "scenario_reduction")
+        self.assertEqual(case["minimal"]["selection"], SOUP_ONLY)           # from the last continuation
+        self.assertEqual(result.case_id, case["case_id"])
+        self.assertEqual(len(tools.explained), 1)
+        self.assertEqual(tools.explained[0][1], run_dir / "explanation.json")
+        self.assertRegex(tools.explained[0][3], r"^[a-z0-9][a-z0-9\-]{0,31}$")
+        self.assertEqual(tools.registered, [run_dir])
+        self.assertEqual(backend.finished, 1)
+        self.assertEqual(backend.prepared, 1)
+
+        steps = json.loads((run_dir / "steps.json").read_text())["steps"]
+        for step in ("screen", "plan", "reduce", "reduce2", "report", "case", "explain", "register"):
+            self.assertEqual(steps[step]["status"], "done", step)
+        self.assertTrue(steps["reduce"]["partial"])
+        self.assertTrue(steps["reduce2"]["partial"], "entity-minimal but the budget ran out")
+        self.assertTrue(all("spent US$" in line for line in lines))
+        self.assertTrue(any(" screen … " in line for line in lines))
+        self.assertTrue(lines[0].startswith("10:15 "))
+        self.assertIn("raw reply", (run_dir / "plans" / "plan.json.hypothesis-raw.txt").read_text())
+
+    def test_no_llm_uses_the_fixed_order_and_skips_the_explanation(self):
+        runner, backend, tools, ledger, lines = self.world(full_script(), no_llm=True)
+        runner.diagnose()
+        self.assertEqual(backend.workloads[backend.submitted[1]]["order_source"], "fixed_order")
+        self.assertEqual(tools.explained, [])
+        self.assertNotIn("explanation.json", [p.name for p in runner.run_dir.iterdir()])
+
+    def test_reduced_first_time_needs_no_continuation(self):
+        script = [finished(lambda w: screen_summary()),
+                  finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(backend.submitted), 2)
+
+    def test_screen_mode_picks_the_best_start(self):
+        spec = spec_for(scenario={"task": 3, "screen": {"starts": "0-3", "confirm": 4}})
+        summary = screen_summary(extra_failing=["policy_failure"] * 5)
+        script = [finished(lambda w: summary),
+                  finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        runner, backend, *_ = self.world(script, spec=spec)
+        runner.diagnose()
+        self.assertEqual(backend.workloads[backend.submitted[0]]["start_indices"], [0, 1, 2, 3])
+        self.assertEqual(backend.workloads[backend.submitted[1]]["failing"]["start_index"], 0)
+
+    def test_a_pinned_reference_screens_only_two_starts_and_plans_one_reference(self):
+        spec = spec_for(scenario={"task": 3, "start": 0, "reference": 2})
+        script = [finished(lambda w: screen_summary()),
+                  finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        runner, backend, *_ = self.world(script, spec=spec)
+        runner.diagnose()
+        self.assertEqual(backend.workloads[backend.submitted[0]]["start_indices"], [0, 2])
+        self.assertEqual([r["start_index"] for r in backend.workloads[backend.submitted[1]]["references"]], [2])
+
+    def test_a_pinned_reference_that_failed_stops(self):
+        spec = spec_for(scenario={"task": 3, "start": 0, "reference": 3})
+        runner, backend, *_ = self.world([finished(lambda w: screen_summary())], spec=spec)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "reference_not_passing")
+        self.assertEqual(len(backend.submitted), 1)
+
+    def test_no_reproducible_failure_stops_with_the_screen_table(self):
+        runner, backend, tools, ledger, lines = self.world([finished(lambda w: screen_summary(failing=False))])
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason, result.exit_code), ("stopped", "no_reproducible_failure", 3))
+        self.assertEqual(len(backend.submitted), 1)
+        self.assertTrue((runner.run_dir / "report.md").is_file())
+        self.assertTrue(any("start 3:" in line for line in lines))
+        self.assertEqual(backend.finished, 1)
+
+    def test_import_is_reported_as_unsupported_before_any_job(self):
+        spec = spec_for(scenario={"task": 3, "import": "candidate.json"})
+        runner, backend, *_ = self.world([], spec=spec)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "import_unsupported")
+        self.assertEqual(backend.submitted, [])
+
+    def test_a_failed_explanation_does_not_fail_the_run(self):
+        runner, backend, tools, ledger, lines = self.world(full_script(), tools=FakeTools(explain_error=RuntimeError("boom")))
+        result = runner.diagnose()
+        self.assertEqual(result.status, "completed")
+        self.assertTrue(any("WARNING" in line and "explain" in line for line in lines))
+        self.assertEqual(runner.steps.get("explain")["status"], "skipped")
+
+    def test_failing_not_reproducible_ends_with_a_report_but_no_case(self):
+        script = [finished(lambda w: screen_summary()),
+                  finished(reduce_one(stop_reason="failing_not_reproducible", selection={}, entity_minimal=False),
+                           state="FAILED", reason="ContainerFailed")]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "failing_not_reproducible"))
+        self.assertTrue((runner.run_dir / "report.md").is_file())
+        self.assertFalse((runner.run_dir / "case.json").exists())
+        self.assertEqual(tools.registered, [])
+
+
+class CapacityAndCap(Base):
+    def test_capacity_failures_are_resubmitted_under_new_names_at_no_cost(self):
+        script = [capacity(), capacity(), finished(lambda w: screen_summary(failing=False))]
+        runner, backend, tools, ledger, lines = self.world(script)
+        runner.diagnose()
+        tag = runner.tag
+        base = "soup-start-{}-screen".format(tag)
+        self.assertEqual(backend.submitted, [base, base + "-a", base + "-b"])
+        self.assertEqual(tools.slept, [300, 300])
+        self.assertAlmostEqual(ledger.spent, cost())
+        self.assertEqual(ledger.jobs[base]["cost_usd"], 0.0)
+        for name in backend.submitted:
+            self.assertEqual(backend.workloads[name]["run_id"], name)
+        self.assertEqual(backend.workloads[base + "-b"]["mode"], backend.workloads[base]["mode"])
+
+    def test_six_capacity_failures_stop_the_run(self):
+        runner, backend, tools, ledger, lines = self.world([capacity() for _ in range(6)] + [capacity()])
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "capacity_unavailable")
+        self.assertEqual(len(backend.submitted), 6)
+        self.assertTrue(backend.submitted[-1].endswith("-screen-e"))
+        self.assertEqual(len(tools.slept), 5)
+        self.assertEqual(ledger.spent, 0.0)
+
+    def test_capacity_retries_respect_the_wall_clock(self):
+        spec = spec_for(hours=1.0)
+        runner, backend, tools, ledger, lines = self.world([capacity(), capacity()], spec=spec)
+        backend.on_wait = lambda: runner.test_clock.__setitem__(0, runner.test_clock[0] + 2000)
+        result = runner.diagnose()
+        self.assertIn(result.reason, ("max_hours",))
+        self.assertEqual(len(backend.submitted), 1)
+
+    def test_a_job_that_would_pass_the_cap_is_refused_before_submission(self):
+        probe = FakeTools().screen_workload("x", "libero_10", 3, "0-49", 4)["deadline_seconds"]
+        reduce_deadline = FakeTools().reduce_deadline(36)
+        worst = lambda d: (d + 240) / 3600.0 * RATE            # noqa: E731
+        spec = spec_for(cap=worst(probe) + worst(reduce_deadline) + 0.01)
+        script = [finished(lambda w: screen_summary(), seconds=probe),
+                  finished(reduce_one(stop_reason="budget_exhausted", selection=BOTH, entity_minimal=False),
+                           state="FAILED", reason="ContainerFailed", seconds=reduce_deadline),
+                  finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        runner, backend, tools, ledger, lines = self.world(script, spec=spec)
+        result = runner.diagnose()
+        self.assertEqual(len(backend.submitted), 2, "the continuation was never submitted")
+        self.assertEqual((result.status, result.reason), ("stopped", "spend_cap"))
+        self.assertTrue((runner.run_dir / "report.md").is_file())
+        self.assertTrue((runner.run_dir / "case.json").is_file(), "the best result so far is still reported")
+        self.assertLessEqual(ledger.spent, spec.budget.max_spend_usd)
+
+    def test_first_job_over_the_cap_is_refused(self):
+        runner, backend, *_ = self.world([], spec=spec_for(cap=0.05))
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "spend_cap")
+        self.assertEqual(backend.submitted, [])
+
+    def test_the_wall_clock_cap_refuses_a_job_that_cannot_finish(self):
+        runner, backend, *_ = self.world([], spec=spec_for(hours=0.1))
+        self.assertEqual(runner.diagnose().reason, "max_hours")
+        self.assertEqual(backend.submitted, [])
+
+    def test_failed_job_without_a_summary_is_a_stop_and_is_charged(self):
+        script = [{"state": "FAILED", "reason": "ContainerFailed", "container_seconds": 500, "summary": None,
+                   "summary_name": "scenario_summary.json"}]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "job_failed")
+        self.assertAlmostEqual(ledger.spent, cost(500))
+
+    def test_price_above_the_spec_is_refused(self):
+        backend = FakeBackend([], price=RATE * 1.5)
+        temp, runner, backend, *_ = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(runner.diagnose().reason, "price_above_spec")
+        self.assertEqual(backend.submitted, [])
+        self.assertEqual(backend.finished, 1)
+
+    def test_a_cheaper_or_unknown_live_price_is_fine(self):
+        for price in (None, RATE * 0.5, RATE):
+            backend = FakeBackend([finished(lambda w: screen_summary(failing=False))], price=price)
+            temp, runner, backend, *_ = make_world(spec_for(), [], backend=backend)
+            self.addCleanup(temp.cleanup)
+            self.assertEqual(runner.diagnose().reason, "no_reproducible_failure")
+
+
+class Cleanup(Base):
+    def test_finish_runs_when_prepare_fails(self):
+        backend = FakeBackend([])
+        backend.fail_prepare = True
+        temp, runner, backend, *_ = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(BackendFailure):
+            runner.diagnose()
+        self.assertEqual(backend.finished, 1)
+
+    def test_a_submit_error_is_a_stop_and_finish_runs(self):
+        backend = FakeBackend([])
+        backend.fail_submit_at = 0
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "backend_error")
+        self.assertEqual(ledger.spent, 0.0)
+        self.assertEqual(backend.finished, 1)
+
+    def test_keyboard_interrupt_cancels_the_job_finishes_and_charges_the_worst_case(self):
+        backend = FakeBackend([finished(lambda w: screen_summary())])
+        backend.interrupt_at_wait = 1
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(KeyboardInterrupt):
+            runner.diagnose()
+        self.assertEqual(backend.cancelled, backend.submitted)
+        self.assertEqual(backend.finished, 1)
+        name = backend.submitted[0]
+        self.assertEqual(ledger.jobs[name]["state"], "settled")
+        self.assertEqual(ledger.jobs[name]["cost_usd"], ledger.jobs[name]["reserved_usd"])
+        attempts = json.loads((runner.run_dir / "steps.json").read_text())["steps"]["screen"]["attempts"]
+        self.assertEqual(attempts[0]["state"], "cancelled")
+
+    def test_finish_failure_does_not_mask_the_result(self):
+        backend = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+
+        def broken():
+            backend.finished += 1
+            raise BackendFailure("finish")
+
+        backend.finish = broken
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(runner.diagnose().reason, "no_reproducible_failure")
+        self.assertTrue(any("cleanup failed" in line for line in lines))
+
+
+class Resume(Base):
+    def test_resume_skips_finished_steps_and_never_resubmits_a_recorded_job(self):
+        spec = spec_for()
+        # First run: the screen finishes, then submitting the reduce Job fails.
+        backend1 = FakeBackend([finished(lambda w: screen_summary())])
+        backend1.fail_submit_at = 1
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        first = runner1.diagnose()
+        self.assertEqual(first.reason, "backend_error")
+        run_dir = runner1.run_dir
+        spent_before = ledger1.spent
+        self.assertAlmostEqual(spent_before, cost())
+
+        # Second run over the same folder: only the reduce Jobs are submitted.
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        backend2 = FakeBackend(script)
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=run_dir)
+        self.addCleanup(_t.cleanup)
+        second = runner2.diagnose()
+        self.assertEqual(second.status, "completed")
+        self.assertEqual(len(backend2.submitted), 1)
+        self.assertTrue(backend2.submitted[0].endswith("-reduce-a"), "a failed submission is not reused")
+        self.assertAlmostEqual(ledger2.spent, spent_before + cost())
+        self.assertTrue(any("already done" in line and "screen" in line for line in lines2))
+
+    def test_resume_of_a_finished_run_submits_nothing(self):
+        runner, backend, tools, ledger, lines = self.world(full_script())
+        runner.diagnose()
+        run_dir = runner.run_dir
+        backend2 = FakeBackend([])
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec_for(), [], backend=backend2, run_dir=run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(backend2.submitted, [])
+        self.assertEqual(tools2.explained, [], "the explanation (which reserves a paid attempt) is not repeated")
+        self.assertEqual(backend2.finished, 1)
+
+    def test_resume_reattaches_to_a_job_that_was_in_flight(self):
+        spec = spec_for()
+        backend1 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        backend1.kills_at_wait = 1
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(Crash):
+            runner1.diagnose()
+        name = backend1.submitted[0]
+        self.assertEqual(backend1.finished, 1)
+        backend2 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual(backend2.submitted, [], "no second submission")
+        self.assertEqual(backend2.waited, [name])
+        self.assertEqual(result.reason, "no_reproducible_failure")
+        self.assertAlmostEqual(ledger2.spent, cost(), msg="settled once, not twice")
+
+
+class Mode2AndReplay(Base):
+    class AuditTools(FakeTools):
+        def audit_workload(self, spec, run_id):
+            return {"schema_version": 1, "mode": "m6-threshold", "run_id": run_id, "deadline_seconds": 1500}
+
+        def audit_report(self, summary):
+            return "# audit report\n"
+
+        def replay_workload(self, case, run_id, attempts):
+            self.replayed = (case["case_id"], run_id, attempts)
+            return {"schema_version": 1, "mode": "scenario-replay", "run_id": run_id, "deadline_seconds": 1000}
+
+    def audit_summary(self, complete=True):
+        return {"mode": "m6-threshold", "complete": complete, "stop_reason": None if complete else "deadline_exhausted",
+                "families": {"blur": {"threshold_severity": 0.4, "stop_reason": "threshold_found"},
+                             "noise": {"threshold_severity": None, "stop_reason": "budget_exhausted"}}}
+
+    def test_audit_runs_one_job_then_report_case_and_register(self):
+        spec = spec_for(mode="audit")
+        script = [finished(lambda w: self.audit_summary(), name="m6_summary.json")]
+        tools = self.AuditTools()
+        runner, backend, tools, ledger, lines = self.world(script, spec=spec, tools=tools)
+        result = runner.diagnose()
+        self.assertEqual((result.status, backend.submitted), ("completed", ["soup-start-{}-audit".format(runner.tag)]))
+        self.assertEqual((runner.run_dir / "report.md").read_text(), "# audit report\n")
+        case = json.loads((runner.run_dir / "case.json").read_text())
+        self.assertEqual((case["kind"], case["task_id"], case["start_index"]), ("audit", 0, 0))
+        self.assertEqual(case["families"]["blur"]["threshold_severity"], 0.4)
+        self.assertEqual(tools.registered, [runner.run_dir])
+        self.assertEqual(tools.explained, [])
+        self.assertAlmostEqual(ledger.spent, cost())
+
+    def test_partial_audit_summary_is_a_result_but_the_run_is_stopped(self):
+        spec = spec_for(mode="audit")
+        script = [finished(lambda w: self.audit_summary(False), name="m6_summary.json", state="FAILED",
+                           reason="ContainerFailed")]
+        runner, backend, tools, ledger, lines = self.world(script, spec=spec, tools=self.AuditTools())
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "deadline_exhausted"))
+        self.assertTrue((runner.run_dir / "case.json").is_file())
+
+    def replay_case(self):
+        case = {"kind": "scenario_reduction", "case_id": "ab" * 32, "suite": "libero_10",
+                "replay": {"candidate": {"x": 1}}}
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        (Path(directory.name) / "case.json").write_text(json.dumps(case), encoding="utf-8")
+        return Path(directory.name)
+
+    def test_replay_reports_whether_the_failure_reproduces(self):
+        for reproduces in (True, False):
+            with self.subTest(reproduces=reproduces):
+                tools = self.AuditTools()
+                script = [finished(lambda w: {"replay": {"reproduces": reproduces}, "complete": True})]
+                runner, backend, tools, ledger, lines = self.world(script, spec=spec_for(mode="replay"), tools=tools)
+                result = runner.replay(self.replay_case())
+                self.assertEqual(result.reproduces, reproduces)
+                self.assertEqual(result.status, "completed")
+                self.assertEqual(tools.replayed[2], 5)
+                self.assertIn("still reproduces" if reproduces else "no longer reproduces", " ".join(lines))
+                saved = json.loads((runner.run_dir / "replay-result.json").read_text())
+                self.assertEqual(saved["reproduces"], reproduces)
+
+    def test_replay_refuses_a_case_of_another_suite_or_kind(self):
+        runner, backend, *_ = self.world([], spec=spec_for(mode="replay", policy={"suite": "libero_object"}),
+                                         tools=self.AuditTools())
+        self.assertEqual(runner.replay(self.replay_case()).reason, "suite_mismatch")
+        self.assertEqual(backend.submitted, [])
+
+
+class DryRun(unittest.TestCase):
+    def test_dry_run_lists_jobs_and_worst_case_without_touching_anything(self):
+        tools = FakeTools()
+        lines, required = orch.dry_run_lines(spec_for(cap=3.0), tools)
+        text = "\n".join(lines)
+        self.assertIn("screen", text)
+        self.assertIn("reduce", text)
+        self.assertIn("optional", text)
+        self.assertGreater(required, 0)
+        self.assertIn("cap US$3.00", text)
+
+    def test_dry_run_warns_when_the_required_jobs_exceed_the_cap(self):
+        lines, _ = orch.dry_run_lines(spec_for(cap=0.5), FakeTools())
+        self.assertIn("WARNING", "\n".join(lines))
+
+    def test_too_many_candidates_for_one_job_is_a_clear_stop(self):
+        spec = spec_for()
+        spec = sp.parse_spec(dict(spec.raw, budget={"max_spend_usd": 10.0, "max_hours": 5, "max_candidates": 60}))
+        with self.assertRaises(orch.StopRun) as caught:
+            orch.dry_run_lines(spec, FakeTools())
+        self.assertEqual(caught.exception.reason, "candidates_too_large")
+
+    def test_dry_run_of_import_is_refused(self):
+        with self.assertRaises(orch.StopRun):
+            orch.dry_run_lines(spec_for(scenario={"task": 3, "import": "x.json"}), FakeTools())
+
+
+class RunFolder(unittest.TestCase):
+    def test_create_run_dir_copies_the_spec_and_never_reuses_a_folder(self):
+        with tempfile.TemporaryDirectory() as root:
+            spec = spec_for()
+            path = orch.create_run_dir(Path(root), spec, "faultline: 1\n", MOMENT)
+            self.assertEqual(path.name, "soup-start-20261014T101530Z")
+            self.assertEqual((path / "spec.yaml").read_text(), "faultline: 1\n")
+            with self.assertRaises(FileExistsError):
+                orch.create_run_dir(Path(root), spec, None, MOMENT)
+
+    def test_find_file_prefers_the_returned_tree(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            (root / "a" / "scenario").mkdir(parents=True)
+            (root / "b" / "scenario").mkdir(parents=True)
+            (root / "a" / "scenario" / "x.json").write_text("{}")
+            (root / "b" / "scenario" / "x.json").write_text("{}")
+            self.assertEqual(orch.find_file(root, "x.json", root / "b"), root / "b" / "scenario" / "x.json")
+            self.assertEqual(orch.find_file(root, "x.json"), root / "a" / "scenario" / "x.json")
+            self.assertIsNone(orch.find_file(root, "missing.json"))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -89,8 +89,13 @@ class LedgerTests(unittest.TestCase):
 
     def test_invalid_reservations_are_refused(self):
         ledger = self.make()
-        for bad in (0, -1, float("nan"), float("inf")):
+        for bad in (-1, float("nan"), float("inf"), "1", None):
             self.assertRaises(lg.LedgerError, ledger.reserve, "x", bad)
+
+    def test_a_free_backend_can_reserve_zero(self):
+        ledger = lg.Ledger(self.path, cap_usd=1.0, max_hours=1.0, hourly_usd=0.0, clock=self.clock)
+        ledger.reserve("local", ledger.worst_case_usd(1800))
+        self.assertEqual(ledger.settle("local", container_seconds=100), 0.0)
 
     def test_persisted_after_every_change_and_reloadable(self):
         ledger = self.make()

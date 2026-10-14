@@ -109,8 +109,8 @@ class Ledger:
     def reserve(self, job_name: str, worst_case_usd: float) -> None:
         if type(job_name) is not str or not job_name or job_name in self.jobs:
             raise LedgerError("a reservation needs a new job name")
-        if type(worst_case_usd) not in (int, float) or not math.isfinite(worst_case_usd) or worst_case_usd <= 0:
-            raise LedgerError("a reservation must be a positive amount")
+        if type(worst_case_usd) not in (int, float) or not math.isfinite(worst_case_usd) or worst_case_usd < 0:
+            raise LedgerError("a reservation must be a non-negative amount")
         amount = _money(worst_case_usd)
         if self.spent + self.reserved + amount > self.cap_usd + _EPSILON:
             raise BudgetExceeded(
