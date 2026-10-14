@@ -16,6 +16,7 @@ from robot_debug import scenario_state as ss
 from robot_debug.job_runtime import SCENARIO_MODES, JobRuntimeError, validate_workload_config
 from robot_debug.scenario_import import load_scenario_candidate
 from scripts import plan_scenario_reduction as planner
+from tests import reduction_fixtures as rf
 from tests.scenario_world import FAIL_X, FakeSimulation, ScenarioWorld
 
 SMOKE = {"schema_version": 1, "mode": "scenario-smoke", "run_id": "scn-smoke-1", "deadline_seconds": 1500}
@@ -779,6 +780,7 @@ class ReduceRunTests(RunTestCase):
         expected_x = 0.4 + 0.125 * (0.9 - 0.4)
         self.assertAlmostEqual(expected_x, candidate["state"][4])
         self.assertIsNone(summary["hypothesis_verdict"], "a fixed order is not a hypothesis")
+        self.assertIsNone(summary["hypothesis_measurement"], "a fixed order is not a hypothesis")
         self.assertEqual(self.plan["order"], summary["plan"]["order"])
         self.assertEqual("fixed_order", summary["plan"]["order_source"])
         self.assertEqual(["robot", "alphabet_soup_1"], [row["entity"] for row in summary["differences"]])
@@ -795,6 +797,7 @@ class ReduceRunTests(RunTestCase):
                 world = ScenarioWorld(item_seconds=0.0)
                 summary = self.run_mode(world, "scenario-reduce", se.build_reduce_workload(plan, run_id="scn-reduce-1"))
                 self.assertEqual(expected, summary["hypothesis_verdict"])
+                self.assertEqual("reduced", summary["hypothesis_measurement"]["result_scope"])
                 self.assertEqual(expected, se.build_case(summary)["hypothesis"]["verdict"])
 
     def test_the_held_fifth_attempt_saves_episodes_even_with_twelve_workers(self):
@@ -875,6 +878,49 @@ class ReduceRunTests(RunTestCase):
         self.assertTrue(all("policy_failure" not in c["outcomes"] for c in invalid))
         self.assertEqual(reduction["invalid_scenes"], [c["index"] for c in invalid])
         self.assertFalse(world.latched, "an invalid scene is not an infrastructure failure")
+
+
+class MeasurementTests(unittest.TestCase):
+    """The measured hypothesis check also covers entity-minimal runs that stopped on their budget."""
+
+    def test_an_entity_minimal_partial_reduction_gets_a_measurement_and_its_scope(self):
+        measurement = se.measurement_for(rf.partial_plan(), rf.partial_reduction())
+        self.assertEqual("necessary_not_sufficient", measurement["verdict"])
+        self.assertEqual("entity_minimal_sizes_partial", measurement["result_scope"])
+        self.assertEqual("necessary_not_sufficient", se.verdict_for(
+            rf.partial_plan(), rf.partial_reduction(), measured=True))
+
+    def test_the_legacy_verdict_is_unchanged(self):
+        self.assertIsNone(se.verdict_for(rf.partial_plan(), rf.partial_reduction()))
+        reduction = dict(rf.partial_reduction(), reduced=True, stop_reason="reduced")
+        self.assertEqual("partly", se.verdict_for(rf.partial_plan(), reduction))
+        self.assertEqual("reduced", se.measurement_for(rf.partial_plan(), reduction)["result_scope"])
+
+    def test_fixed_order_and_non_minimal_runs_get_no_measurement(self):
+        self.assertIsNone(se.measurement_for(rf.partial_plan(order_source="fixed_order"), rf.partial_reduction()))
+        self.assertIsNone(se.verdict_for(rf.partial_plan(order_source="fixed_order"), rf.partial_reduction(),
+                                         measured=True))
+        reduction = dict(rf.partial_reduction(), entity_minimal=False)
+        self.assertIsNone(se.measurement_for(rf.partial_plan(), reduction))
+
+    def test_missing_pieces_give_none_not_an_error(self):
+        reduction = dict(rf.partial_reduction(), final_selection=None)
+        self.assertIsNone(se.measurement_for(rf.partial_plan(), reduction))
+        plan = rf.partial_plan()
+        plan["order"], plan["hypothesis"]["ranking"] = [], []
+        self.assertIsNone(se.measurement_for(plan, rf.partial_reduction()))
+
+    def test_the_case_record_carries_the_measurement(self):
+        summary = {"mode": "scenario-reduce", "plan": rf.partial_plan(), "reduction": rf.partial_reduction(),
+                   "differences": [], "videos": {}, "minimal_candidate": None}
+        hypothesis = se.build_case(summary)["hypothesis"]
+        self.assertIsNone(hypothesis["verdict"], "the legacy field keeps its meaning")
+        self.assertEqual("necessary_not_sufficient", hypothesis["measurement"]["verdict"])
+        self.assertEqual("entity_minimal_sizes_partial", hypothesis["result_scope"])
+        self.assertEqual("necessary_not_sufficient", hypothesis["measured_verdict"])
+        fixed = dict(summary, plan=rf.partial_plan(order_source="fixed_order"))
+        self.assertIsNone(se.build_case(fixed)["hypothesis"]["measurement"])
+        json.dumps(se.build_case(summary), allow_nan=False)
 
 
 if __name__ == "__main__":

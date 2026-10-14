@@ -45,7 +45,7 @@ from robot_debug.scene_inspect import validity_companion
 from robot_debug.decided_gate import run_gates
 from robot_debug.job_process import InfrastructureError, RunCancelled
 from robot_debug.m6_experiment import ASSUMED_OVERHEAD_SECONDS, DEADLINE_ROUNDING_SECONDS, EvaluatorPool
-from robot_debug.scenario_hypothesis import hypothesis_verdict
+from robot_debug.scenario_hypothesis import compact_differences, hypothesis_verdict, measure_hypothesis
 from robot_debug.scenario_import import (
     build_candidate, load_scenario_candidate, write_scenario_candidate)
 from robot_debug.scenario_reduce import run_scenario_reduction
@@ -1097,7 +1097,8 @@ class ReduceDriver:
             "hypothesis": copy.deepcopy(self.config["hypothesis"]),
         }
         self.body.update(plan=plan, differences_match_plan=self.differences_match_plan,
-                         videos={}, minimal_candidate=None, differences=None, hypothesis_verdict=None)
+                         videos={}, minimal_candidate=None, differences=None, hypothesis_verdict=None,
+                         hypothesis_measurement=None)
         if result is None:
             return
         chosen = result.get("reference")
@@ -1129,6 +1130,7 @@ class ReduceDriver:
                 except (OSError, ValueError):
                     self.body["minimal_candidate"] = None
         self.body["hypothesis_verdict"] = verdict_for(plan, result)
+        self.body["hypothesis_measurement"] = measurement_for(plan, result)
 
     def complete(self, stop_reason: Optional[str]) -> bool:
         result = self.body.get("reduction") or {}
@@ -1368,26 +1370,88 @@ def _count_outcomes(records: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
 # ---------------------------------------------------------------------------
 
 CASE_SCHEMA_VERSION = 1
+MAX_CASE_EVIDENCE = 24
 
 
-def verdict_for(plan: Mapping[str, Any], reduction: Mapping[str, Any]) -> Optional[str]:
-    """``confirmed`` / ``partly`` / ``refuted`` for a *model* hypothesis, else ``None``.
+def _ranking_of(plan: Mapping[str, Any]) -> Sequence[str]:
+    return (plan.get("hypothesis") or {}).get("ranking") or plan.get("order") or []
+
+
+def measurement_for(plan: Mapping[str, Any], reduction: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The measured necessary/sufficient check of a *model* hypothesis, or ``None``.
+
+    Applies when the order came from the model and the reduction is either ``reduced`` or
+    at least entity-minimal (no whole entity can be removed), even if the budget ran out
+    before every size was shrunk. ``result_scope`` says which: ``reduced`` or
+    ``entity_minimal_sizes_partial``. The fixed order is a search order, not a prediction,
+    so it never gets one. See :func:`robot_debug.scenario_hypothesis.measure_hypothesis`.
+    """
+
+    if plan.get("order_source") != "model":
+        return None
+    reduced = bool(reduction.get("reduced"))
+    if not (reduced or reduction.get("entity_minimal")):
+        return None
+    ranking = _ranking_of(plan)
+    if not ranking or not reduction.get("final_selection"):
+        return None
+    try:
+        measurement = measure_hypothesis(ranking, reduction)
+    except ValueError:
+        return None
+    measurement["result_scope"] = "reduced" if reduced else "entity_minimal_sizes_partial"
+    return measurement
+
+
+def verdict_for(plan: Mapping[str, Any], reduction: Mapping[str, Any], measured: bool = False) -> Optional[str]:
+    """The verdict for a *model* hypothesis, else ``None``.
+
+    By default the coarse ``confirmed`` / ``partly`` / ``refuted`` (top-ranked entity against
+    the survivors), only for a fully ``reduced`` run, as before. With ``measured=True`` the label
+    of :func:`measurement_for` instead (``confirmed``, ``necessary_not_sufficient``,
+    ``sufficient_not_necessary``, ``not_in_final`` or ``inconclusive``), which is also available
+    for entity-minimal runs that stopped early.
 
     The fixed order (largest difference first) is a search order, not a hypothesis, so
     comparing its top entity with the survivors would present a heuristic as a prediction.
     """
 
+    if measured:
+        measurement = measurement_for(plan, reduction)
+        return None if measurement is None else measurement["verdict"]
     if plan.get("order_source") != "model" or not reduction.get("reduced"):
         return None
     selection = reduction.get("final_selection")
-    hypothesis = plan.get("hypothesis") or {}
-    ranking = hypothesis.get("ranking") or plan.get("order") or []
+    ranking = _ranking_of(plan)
     if not selection or not ranking:
         return None
     try:
         return hypothesis_verdict(ranking, selection)
     except ValueError:
         return None
+
+
+def _case_evidence(reduction: Mapping[str, Any], measurement: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """The few candidates a reader needs to check the measurement: the two gates, the final
+    candidate and every candidate the measurement was read from (bounded)."""
+
+    wanted = set()
+    for entity in (measurement or {}).get("entities") or []:
+        for indices in entity["basis"].values():
+            wanted.update(indices)
+    if reduction.get("final_candidate") is not None:
+        wanted.add(reduction["final_candidate"])
+    rows = []
+    for candidate in reduction.get("candidates") or []:
+        if candidate.get("role") in ("failing", "reference") or candidate.get("index") in wanted:
+            rows.append({
+                "index": candidate["index"], "phase": candidate.get("phase"), "role": candidate.get("role"),
+                "selection": copy.deepcopy(candidate.get("selection")),
+                "outcomes": list(candidate.get("outcomes") or []), "decision": candidate.get("decision")})
+    gates = [row for row in rows if row["role"] in ("failing", "reference")]
+    rest = [row for row in rows if row["role"] not in ("failing", "reference")]
+    chosen = gates[:2] + rest[:MAX_CASE_EVIDENCE - len(gates[:2])]
+    return sorted(chosen, key=lambda row: row["index"])
 
 
 def _fmt(value: float, digits: int = 1) -> str:
@@ -1467,6 +1531,7 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
     reference = reduction.get("reference")
     ranking = (plan["hypothesis"].get("ranking") or plan.get("order") or [])
     verdict = verdict_for(plan, reduction)
+    measurement = measurement_for(plan, reduction)
     identity = json.dumps(
         {"suite": plan["suite"], "task_id": plan["task_id"], "failing": plan["failing_start"],
          "reference": reference, "selection": selection}, sort_keys=True, separators=(",", ":"))
@@ -1505,7 +1570,12 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
             "text": hypothesis.get("text"), "ranking": list(ranking), "source": hypothesis.get("source"),
             "model": hypothesis.get("model"), "fallback_reason": hypothesis.get("fallback_reason"),
             "verdict": verdict,
+            "measurement": measurement,
+            "measured_verdict": None if measurement is None else measurement["verdict"],
+            "result_scope": None if measurement is None else measurement["result_scope"],
         },
+        "differences": compact_differences(summary.get("differences") or []),
+        "evidence": _case_evidence(reduction, measurement),
         "explanation": None,
         "measurements": {
             "candidates_tested": reduction.get("candidates_tested"),
@@ -1556,6 +1626,7 @@ __all__ = [
     "build_case",
     "build_reduce_workload",
     "describe_minimal_cause",
+    "measurement_for",
     "verdict_for",
     "make_scenario_evaluate",
     "planned_episodes",

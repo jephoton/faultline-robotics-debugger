@@ -123,6 +123,30 @@ def _clean_text(value: str, limit: int) -> str:
     return " ".join(kept.split())[:limit]
 
 
+def _compact_row(row: Mapping[str, Any]) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {"entity": row.get("entity"), "kind": row.get("kind", "object")}
+    if row.get("position"):
+        entry["position_cm"] = round(float(row["position"]["distance_m"]) * 100.0, 2)
+    if row.get("rotation"):
+        entry["rotation_deg"] = round(float(row["rotation"]["angle_deg"]), 1)
+    if row.get("joints"):
+        entry["joints"] = [
+            {"name": str(joint["name"]), "offset": round(float(joint["offset"]), 3),
+             "unit": str(joint["unit"])} for joint in row["joints"]]
+    return entry
+
+
+def compact_differences(differences: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """The difference table as small rounded rows (the shape the model and the case record use).
+
+    Each row keeps ``entity``, ``kind`` and, when present, ``position_cm``,
+    ``rotation_deg`` and ``joints`` (name, offset, unit); distances, offsets in metres and
+    joint types are dropped. Rows that are not mappings are skipped.
+    """
+
+    return [_compact_row(row) for row in differences or () if isinstance(row, Mapping)]
+
+
 def build_hypothesis_prompt(instruction: str, differences: Sequence[Mapping[str, Any]]) -> Dict[str, str]:
     """The system and user messages for the hypothesis call.
 
@@ -142,16 +166,7 @@ def build_hypothesis_prompt(instruction: str, differences: Sequence[Mapping[str,
         if type(name) is not str or _NAME.match(name) is None or name in seen:
             raise ValueError("difference rows need unique, plain entity names")
         seen.add(name)
-        entry: Dict[str, Any] = {"entity": name, "kind": row.get("kind", "object")}
-        if row.get("position"):
-            entry["position_cm"] = round(float(row["position"]["distance_m"]) * 100.0, 2)
-        if row.get("rotation"):
-            entry["rotation_deg"] = round(float(row["rotation"]["angle_deg"]), 1)
-        if row.get("joints"):
-            entry["joints"] = [
-                {"name": str(joint["name"]), "offset": round(float(joint["offset"]), 3),
-                 "unit": str(joint["unit"])} for joint in row["joints"]]
-        entries.append(entry)
+        entries.append(_compact_row(row))
     user = json.dumps(
         {"task_instruction": _clean_text(instruction, _MAX_INSTRUCTION_CHARS), "differences": entries},
         ensure_ascii=False, separators=(",", ":"), allow_nan=False)
@@ -394,6 +409,6 @@ def measure_hypothesis(ranking: Sequence[str], reduction: Mapping[str, Any], top
 
 
 __all__ = [
-    "HypothesisError", "MAX_HYPOTHESIS_CHARS", "SYSTEM_PROMPT", "build_hypothesis_prompt",
+    "HypothesisError", "MAX_HYPOTHESIS_CHARS", "SYSTEM_PROMPT", "build_hypothesis_prompt", "compact_differences",
     "hypothesis_verdict", "measure_hypothesis", "nearest_reference", "parse_hypothesis_reply",
 ]
