@@ -46,3 +46,11 @@ has a low ceiling.
   baking weights into the image (larger pull) and compare.
 - Early stopping saves little because most candidates are decided only at the
   fifth attempt: report it and keep the simpler path.
+
+## Amendment (October 14)
+
+B is implemented and measured: early-decided gates skipped 13 screen
+attempts and 31 and 33 attempts in the two LIBERO-10 reduction Jobs
+(`docs/experiments/m7-scenario-reduction.md`). A (startup cut) is skipped for
+now by Jethro's choice at the `faultline diagnose` checkpoint (ADR 0031).
+
