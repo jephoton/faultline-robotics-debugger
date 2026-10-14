@@ -17,7 +17,8 @@ from robot_debug.case_store import inspect_case, register_case
 from robot_debug.cases import case_identity
 from robot_debug.evidence_packet import make_evidence_packet, packet_identity
 from robot_debug.explanation_store import read_case_reports
-from robot_debug.token_factory import MODEL, TokenFactoryError, reserve_pilot
+from robot_debug.token_factory import (
+    EXPLAIN_MODEL, MODEL, TokenFactoryError, preflight, reserve_pilot)
 from tests.test_case_io import fixture
 
 
@@ -35,13 +36,13 @@ def load_script():
 
 def live_provenance(status="completed", error_code=None):
     return {
-        "source": "live", "provider": "nebius-token-factory", "model": MODEL,
+        "source": "live", "provider": "nebius-token-factory", "model": EXPLAIN_MODEL,
         "endpoint": "https://api.tokenfactory.nebius.com/v1/",
         "created_at": "2026-10-05T12:34:56Z", "request_status": status,
         "error_code": error_code, "latency_seconds": 0.25,
         "prompt_tokens": 100 if status == "completed" else None,
         "completion_tokens": 20 if status == "completed" else None,
-        "estimated_cost_usd": 0.0000108 if status == "completed" else None,
+        "estimated_cost_usd": None,
         "billed_cost_usd": None, "reservation_usd": 0.02,
     }
 
@@ -270,7 +271,7 @@ class ExplainCaseCliTests(unittest.TestCase):
             inspect_case=inspect_case,
             load_api_key=lambda path: calls.append(("key", path)) or "secret",
             preflight=lambda key: calls.append(("get", key)) or {
-                "model": MODEL, "endpoint": "private"},
+                "model": EXPLAIN_MODEL, "endpoint": "private"},
             reserve_pilot=reserve_pilot,
             request_interpretation=lambda *args: calls.append(("post", args)),
             store_report=lambda *args: None,
@@ -278,6 +279,29 @@ class ExplainCaseCliTests(unittest.TestCase):
         output = module.run_preflight(Path("chosen.env"), deps=deps)
         self.assertEqual(output, {"request_status": "ready"})
         self.assertEqual(calls, [("key", Path("chosen.env")), ("get", "secret")])
+
+    def test_default_dependencies_confirm_and_reserve_the_explanation_model(self):
+        module = load_script()
+        seen = []
+        with patch.object(module, "preflight",
+                          lambda key, model=None: seen.append((key, model)) or {}),                 patch.object(module, "reserve_pilot",
+                             lambda *a, **k: seen.append(("reserve", a[1:], k)) or {}):
+            module.DEFAULT_DEPENDENCIES.preflight("secret")
+            module.DEFAULT_DEPENDENCIES.reserve_pilot(Path("root"), "a" * 64, "b" * 64)
+            module.DEFAULT_SCENARIO_DEPENDENCIES.preflight("secret")
+            module.DEFAULT_SCENARIO_DEPENDENCIES.reserve_pilot(Path("root"), "a" * 64, "b" * 64)
+        self.assertEqual(seen, [("secret", EXPLAIN_MODEL),
+                                ("reserve", ("a" * 64, "b" * 64), {"model": EXPLAIN_MODEL}),
+                                ("secret", EXPLAIN_MODEL),
+                                ("reserve", ("a" * 64, "b" * 64), {"model": EXPLAIN_MODEL})])
+        self.assertNotEqual(EXPLAIN_MODEL, MODEL)
+
+    def test_research_cli_still_confirms_the_research_model(self):
+        research = importlib.util.spec_from_file_location(
+            "research_case_cli", ROOT / "scripts" / "research_case.py")
+        module = importlib.util.module_from_spec(research)
+        research.loader.exec_module(module)
+        self.assertIs(module.DEFAULT_DEPENDENCIES.preflight, preflight)
 
     def test_bad_arguments_and_failures_are_safe_json(self):
         bad = self.invoke("live", "--workspace", self.workspace, "--case-id", self.case_id,

@@ -26,6 +26,7 @@ from robot_debug.scenario_packet import (
     validate_scenario_explanation,
 )
 from robot_debug.token_factory import (
+    EXPLAIN_MODEL,
     TokenFactoryError,
     load_api_key,
     preflight,
@@ -56,6 +57,15 @@ _ATTEMPT_LABEL = re.compile(r"[a-z0-9][a-z0-9\-]{0,31}\Z")
 _MAX_CASE_BYTES = 1_048_576
 
 
+def _explain_preflight(api_key: str) -> dict:
+    """Confirm the explanation model (Nemotron 3 Ultra), not the research model, is in the catalog."""
+    return preflight(api_key, model=EXPLAIN_MODEL)
+
+
+def _explain_reserve_pilot(pilot_root: Path, case_id: str, packet_id: str) -> dict:
+    return reserve_pilot(pilot_root, case_id, packet_id, model=EXPLAIN_MODEL)
+
+
 class Dependencies(NamedTuple):
     """Private orchestration seams used by offline unit tests."""
 
@@ -78,16 +88,16 @@ class ScenarioDependencies(NamedTuple):
 
 DEFAULT_SCENARIO_DEPENDENCIES = ScenarioDependencies(
     load_api_key=load_api_key,
-    preflight=preflight,
-    reserve_pilot=reserve_pilot,
+    preflight=_explain_preflight,
+    reserve_pilot=_explain_reserve_pilot,
     request_scenario_interpretation=request_scenario_interpretation,
 )
 
 DEFAULT_DEPENDENCIES = Dependencies(
     inspect_case=inspect_case,
     load_api_key=load_api_key,
-    preflight=preflight,
-    reserve_pilot=reserve_pilot,
+    preflight=_explain_preflight,
+    reserve_pilot=_explain_reserve_pilot,
     request_interpretation=request_interpretation,
     store_report=store_report,
 )
