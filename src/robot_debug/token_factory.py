@@ -896,6 +896,19 @@ def request_scenario_hypothesis(instruction: str, differences: list, api_key: st
 
 _MAX_REQUEST_BYTES_SCENARIO_EXPLAIN = 12_000
 _MAX_TOKENS_SCENARIO_EXPLAIN = 1500
+# Jethro, October 13: scenario-reduction explanations use Nemotron 3 Ultra, chosen by a
+# measured comparison (docs/experiments/m7-scenario-reduction.md): on the same packet Nano
+# kept calling "only this entity applied" "this entity reverted", Super inverted a correct
+# prediction and failed the format check, and Ultra stated every checked fact correctly.
+# Its price is not pinned here, so the estimate is left empty and reconciled with billing.
+SCENARIO_EXPLAIN_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
+
+
+def _scenario_explain_provenance(*args, **kwargs) -> dict:
+    record = _provenance(*args, **kwargs)
+    record["model"] = SCENARIO_EXPLAIN_MODEL
+    record["estimated_cost_usd"] = None
+    return record
 
 
 def _scenario_explanation_payload(packet: dict) -> dict:
@@ -903,7 +916,7 @@ def _scenario_explanation_payload(packet: dict) -> dict:
 
     user = json.dumps(packet, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     payload = {
-        "model": MODEL,
+        "model": SCENARIO_EXPLAIN_MODEL,
         "messages": [
             {"role": "system", "content": SCENARIO_SYSTEM_PROMPT},
             {"role": "user", "content": user},
@@ -925,7 +938,7 @@ def request_scenario_interpretation(packet: dict, api_key: str,
                                     transport: Transport | None = None) -> dict:
     """Make exactly one bounded POST that interprets a ``scenario_reduction`` packet.
 
-    Same contract and provenance as :func:`request_interpretation` (Nemotron Nano, one
+    Same contract as :func:`request_interpretation` but with Nemotron 3 Super (one
     attempt, the US$0.02 reservation figure, no retry): ``response_json`` is the model text
     only when it passes :func:`robot_debug.scenario_packet.validate_scenario_explanation`
     against this packet. Rejected text is returned as ``rejected_content`` for local diagnosis
@@ -946,22 +959,22 @@ def request_scenario_interpretation(packet: dict, api_key: str,
         code = _post_error_code(exc)
         status = ("transport_error" if code == "timeout"
                   else "invalid_response" if code == "invalid_response" else "http_error")
-        return {"response_json": None, "provenance": _provenance(status, code, latency)}
+        return {"response_json": None, "provenance": _scenario_explain_provenance(status, code, latency)}
     latency = time.monotonic() - started
     try:
-        if type(response) is not dict or response.get("model") != MODEL:
+        if type(response) is not dict or response.get("model") != SCENARIO_EXPLAIN_MODEL:
             raise ValueError
         prompt, completion = _usage(response)
         if completion is not None and completion > _MAX_TOKENS_SCENARIO_EXPLAIN:
             raise ValueError
     except Exception:
         return {"response_json": None,
-                "provenance": _provenance("invalid_response", "invalid_response", latency)}
+                "provenance": _scenario_explain_provenance("invalid_response", "invalid_response", latency)}
     choices = response.get("choices")
     if (type(choices) is list and len(choices) == 1 and type(choices[0]) is dict
             and choices[0].get("finish_reason") == "length"):
         return {"response_json": None,
-                "provenance": _provenance("invalid_response", "output_limit", latency,
+                "provenance": _scenario_explain_provenance("invalid_response", "output_limit", latency,
                                           prompt, completion)}
     try:
         content = response["choices"][0]["message"]["content"]
@@ -977,10 +990,10 @@ def request_scenario_interpretation(packet: dict, api_key: str,
             raise ValueError
     except Exception:
         result = {"response_json": None,
-                  "provenance": _provenance("invalid_response", "invalid_response", latency,
+                  "provenance": _scenario_explain_provenance("invalid_response", "invalid_response", latency,
                                             prompt, completion)}
         if type(content) is str and not _research_leaks_key(content, api_key):
             result["rejected_content"] = content
         return result
     return {"response_json": content,
-            "provenance": _provenance("completed", None, latency, prompt, completion)}
+            "provenance": _scenario_explain_provenance("completed", None, latency, prompt, completion)}

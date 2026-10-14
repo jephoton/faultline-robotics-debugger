@@ -193,7 +193,7 @@ class ResponseTests(unittest.TestCase):
 
 
 class FakeTransport:
-    def __init__(self, content=None, finish="stop", model=tf.MODEL, error=None, usage=True):
+    def __init__(self, content=None, finish="stop", model=tf.SCENARIO_EXPLAIN_MODEL, error=None, usage=True):
         self.content = response() if content is None else content
         self.finish, self.model, self.error, self.usage = finish, model, error, usage
         self.calls = []
@@ -219,7 +219,7 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(1, len(transport.calls))
         method, path, payload, key = transport.calls[0]
         self.assertEqual(("POST", "chat/completions", KEY), (method, path, key))
-        self.assertEqual(tf.MODEL, payload["model"])
+        self.assertEqual(tf.SCENARIO_EXPLAIN_MODEL, payload["model"])
         self.assertEqual(sp.SCENARIO_SYSTEM_PROMPT, payload["messages"][0]["content"])
         self.assertEqual(self.packet, json.loads(payload["messages"][1]["content"]))
         self.assertEqual({"enable_thinking": False}, payload["chat_template_kwargs"])
@@ -280,3 +280,21 @@ class EvidenceMeaningTests(unittest.TestCase):
         self.assertIn("The failing start itself: F F F F (4 of 4 attempts failed), so this scene DOES reproduce",
                       evidence_meaning("gate", "failing", None, "F F F F", "reproduces"))
         self.assertIn("The passing reference start itself", evidence_meaning("gate", "reference", None, "S S S S S", "passes"))
+
+
+class ShrinkNotesTests(unittest.TestCase):
+    def test_tested_sizes_and_unshrunk_entities_are_stated(self):
+        from robot_debug.scenario_packet import shrink_notes
+        notes = shrink_notes({
+            "parts": [{"entity": "alphabet_soup_1", "component": "position", "t": 0.875, "lower": 0.75,
+                       "lower_tested": True}],
+            "selection": {"alphabet_soup_1": {"position": 0.875}, "milk_1": {"position": 1.0}}})
+        self.assertIn("87.5% of the difference still fails; 75% and smaller", notes[0])
+        self.assertIn("milk_1: kept at its full difference", notes[1])
+
+
+class ExplainerModelTests(unittest.TestCase):
+    def test_scenario_explanations_use_the_measured_choice_and_leave_cost_unpriced(self):
+        record = tf._scenario_explain_provenance("completed", None, 1.0, 100, 50)
+        self.assertEqual("nvidia/Nemotron-3-Ultra-550b-a55b", record["model"])
+        self.assertIsNone(record["estimated_cost_usd"])
