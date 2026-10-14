@@ -18,7 +18,7 @@ a minimal trigger and saves it as a replayable regression case. The
 | M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
-| **M7a product consolidation** | **Next:** scenario reduction of imported failures, `faultline diagnose`, automatic cases, breadth pack, UI overhaul, access options, website deployment ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)) |
+| **M7a product consolidation** | **In progress.** Mode 1 scenario reduction ran on LIBERO-10: a natural failure reduced to an entity-minimal conjunction of 5 shifts ([experiment](docs/experiments/m7-scenario-reduction.md), [ADR 0028](docs/decisions/0028-m7-scenario-reduction-design.md)). Next: `faultline diagnose`, automatic cases, breadth pack, UI overhaul, access options, website deployment ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)) |
 | M7b submission | Due October 30, 10:00 PT (target October 29) |
 
 Spend so far is tracked per experiment note; the Nebius AI Cloud balance was
