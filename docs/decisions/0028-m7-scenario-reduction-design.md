@@ -116,5 +116,6 @@ proposed reruns already done; Nemotron 3 Super inverted a correct prediction
 and failed the format check; Nemotron 3 Ultra stated every checked fact
 correctly. Scenario-reduction explanations therefore use Ultra (the same
 model as the hypothesis; acceptable because the explanation is checked
-against measured reruns). Occlusion-case explanations keep Nano.
+against measured reruns). Occlusion-case explanations later moved to Ultra
+too, and research summaries stay on Nano (ADR 0030).
 
