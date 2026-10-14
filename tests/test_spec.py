@@ -260,3 +260,13 @@ class YamlLoading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PoolTests(unittest.TestCase):
+    def test_start_mode_takes_an_optional_pool(self):
+        from robot_debug import spec as sp
+        self.assertEqual(sp._scenario({"task": 0, "start": 14}).pool_text, "0-19")
+        scenario = sp._scenario({"task": 0, "start": 14, "pool": "20-29"})
+        self.assertEqual(scenario.pool_text, "20-29")
+        with self.assertRaises(sp.SpecError):
+            sp._scenario({"task": 0, "screen": {"starts": "0-9"}, "pool": "0-9"})

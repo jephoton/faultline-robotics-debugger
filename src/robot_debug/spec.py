@@ -69,6 +69,7 @@ class Scenario:
     confirm: int = DEFAULT_CONFIRM
     import_path: Optional[str] = None
     reference: Any = "auto"              # "auto" or a start index
+    pool_text: str = "0-19"              # starts screened to find a reference for ``start``
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,7 @@ def parse_starts(text: Any, path: str) -> Tuple[int, ...]:
 
 
 def _scenario(value: Any) -> Scenario:
-    data = _exact(value, "scenario", ("task",), ("start", "screen", "import", "reference"))
+    data = _exact(value, "scenario", ("task",), ("start", "screen", "import", "reference", "pool"))
     task = _int(data["task"], "scenario.task", 0, MAX_TASK)
     chosen = [key for key in ("start", "screen", "import") if key in data]
     if len(chosen) != 1:
@@ -212,10 +213,16 @@ def _scenario(value: Any) -> Scenario:
         reference = _int(reference, "scenario.reference", 0, MAX_START)
     start = screen_starts = screen_text = import_path = None
     confirm = DEFAULT_CONFIRM
+    pool_text = "0-19"
+    if "pool" in data and chosen[0] != "start":
+        _fail("scenario.pool", "only applies with scenario.start")
     if chosen[0] == "start":
         start = _int(data["start"], "scenario.start", 0, MAX_START)
         if reference == start:
             _fail("scenario.reference", "must differ from scenario.start")
+        if "pool" in data:
+            pool_text = data["pool"]
+            parse_starts(pool_text, "scenario.pool")
     elif chosen[0] == "screen":
         screen = _exact(data["screen"], "scenario.screen", ("starts",), ("confirm",))
         screen_text = screen["starts"]
@@ -231,7 +238,8 @@ def _scenario(value: Any) -> Scenario:
             _fail("scenario.import", "must be a file path")
         import_path = path
     return Scenario(task=task, start=start, screen_starts=screen_starts, screen_text=screen_text,
-                    confirm=confirm, import_path=import_path, reference=reference)
+                    confirm=confirm, import_path=import_path, reference=reference,
+                    pool_text=pool_text.replace(" ", ""))
 
 
 def _audit(value: Any) -> Audit:

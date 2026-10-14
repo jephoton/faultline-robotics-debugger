@@ -531,7 +531,12 @@ def _screen_starts(spec: Spec) -> str:
         return sc.screen_text.replace(" ", "")
     if sc.reference != "auto":
         return ",".join(str(i) for i in sorted({sc.start, sc.reference}))
-    return "0-49"
+    # The failing start plus a pool of benchmark starts to choose the nearest passing
+    # reference from (scenario.pool, default 0-19; October 13's reference came from 10-49).
+    from robot_debug.spec import parse_starts
+
+    starts = set(parse_starts(sc.pool_text, "scenario.pool")) | {sc.start}
+    return ",".join(str(i) for i in sorted(starts))
 
 
 class Orchestrator:
