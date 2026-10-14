@@ -17,7 +17,9 @@ from unittest.mock import patch
 from robot_debug.evidence_packet import packet_identity
 from robot_debug.token_factory import (
     ENDPOINT,
+    EXPLAIN_MODEL,
     MODEL,
+    SCENARIO_EXPLAIN_MODEL,
     TokenFactoryError,
     load_api_key,
     preflight,
@@ -80,7 +82,7 @@ class _Connection:
 class TokenFactoryTests(unittest.TestCase):
     def response(self, **changes):
         value = {
-            "model": MODEL,
+            "model": EXPLAIN_MODEL,
             "choices": [{"message": {"content": CONTENT}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 20,
                       "total_tokens": 120},
@@ -122,6 +124,38 @@ class TokenFactoryTests(unittest.TestCase):
         with self.assertRaisesRegex(TokenFactoryError, "^invalid_response$"):
             preflight(KEY, lambda *args: {"data": "bad"})
 
+    def test_preflight_checks_the_requested_model(self):
+        catalog = {"data": [{"id": EXPLAIN_MODEL}]}
+        self.assertEqual(preflight(KEY, lambda *args: catalog, model=EXPLAIN_MODEL),
+                         {"model": EXPLAIN_MODEL, "endpoint": ENDPOINT})
+        with self.assertRaisesRegex(TokenFactoryError, "^catalog_missing$"):
+            preflight(KEY, lambda *args: catalog)  # default stays the research model
+        with self.assertRaisesRegex(TokenFactoryError, "^catalog_missing$"):
+            preflight(KEY, lambda *args: {"data": [{"id": MODEL}]}, model=EXPLAIN_MODEL)
+
+    def test_case_explanations_use_ultra_and_nano_is_kept_for_research(self):
+        self.assertEqual(EXPLAIN_MODEL, SCENARIO_EXPLAIN_MODEL)
+        self.assertEqual(EXPLAIN_MODEL, "nvidia/Nemotron-3-Ultra-550b-a55b")
+        self.assertEqual(MODEL, "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+        sent = []
+        request_interpretation(PACKET, KEY, lambda m, p, payload, k: sent.append(payload) or self.response())
+        self.assertEqual(sent[0]["model"], EXPLAIN_MODEL)
+
+    def test_a_response_from_the_old_nano_model_is_rejected_for_interpretations(self):
+        result = request_interpretation(PACKET, KEY, lambda *args: self.response(model=MODEL))
+        self.assert_safe_failure(result, "invalid_response", "invalid_response")
+        self.assertEqual(result["provenance"]["model"], EXPLAIN_MODEL)
+        self.assertIsNone(result["provenance"]["estimated_cost_usd"])
+
+    def test_reservation_records_the_model_it_is_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            record = reserve_pilot(Path(tmp) / "a", "a" * 64, packet_identity(PACKET),
+                                   model=EXPLAIN_MODEL)
+            self.assertEqual(record["model"], EXPLAIN_MODEL)
+            self.assertEqual(record["reservation_usd"], 0.02)
+            default = reserve_pilot(Path(tmp) / "b", "a" * 64, packet_identity(PACKET))
+            self.assertEqual(default["model"], MODEL)
+
     def test_preflight_maps_transport_failures_to_safe_codes(self):
         failures = [
             (TimeoutError(KEY), "timeout"),
@@ -147,7 +181,8 @@ class TokenFactoryTests(unittest.TestCase):
         self.assertEqual(result["response_json"], CONTENT)
         provenance = result["provenance"]
         self.assertEqual(provenance["request_status"], "completed")
-        self.assertEqual(provenance["estimated_cost_usd"], 0.0000108)
+        self.assertIsNone(provenance["estimated_cost_usd"])
+        self.assertEqual(provenance["model"], EXPLAIN_MODEL)
         self.assertEqual(provenance["prompt_tokens"], 100)
         self.assertEqual(provenance["completion_tokens"], 20)
         self.assertEqual(provenance["reservation_usd"], 0.02)
@@ -162,7 +197,7 @@ class TokenFactoryTests(unittest.TestCase):
         self.assertEqual((method, path, key), ("POST", "chat/completions", KEY))
         self.assertEqual((payload["model"], payload["max_tokens"],
                           payload["temperature"], payload["stream"]),
-                         (MODEL, 4096, 0, False))
+                         (EXPLAIN_MODEL, 4096, 0, False))
         self.assertEqual(payload["response_format"], {"type": "json_object"})
         encoded = json.dumps(payload, ensure_ascii=False,
                              separators=(",", ":")).encode("utf-8")
@@ -197,7 +232,7 @@ class TokenFactoryTests(unittest.TestCase):
                 self.assertIsNone(provenance["completion_tokens"])
                 self.assertIsNone(provenance["estimated_cost_usd"])
 
-    def test_completion_usage_accepts_the_4096_boundary_and_exact_cost(self):
+    def test_completion_usage_accepts_the_4096_boundary_without_a_cost_estimate(self):
         response = self.response(usage={
             "prompt_tokens": 100, "completion_tokens": 4096,
             "total_tokens": 4196,
@@ -205,7 +240,7 @@ class TokenFactoryTests(unittest.TestCase):
         result = request_interpretation(PACKET, KEY, lambda *args: response)
         self.assertEqual(result["response_json"], CONTENT)
         self.assertEqual(result["provenance"]["completion_tokens"], 4096)
-        self.assertEqual(result["provenance"]["estimated_cost_usd"], 0.00098904)
+        self.assertIsNone(result["provenance"]["estimated_cost_usd"])
 
     def test_bad_packet_or_oversized_request_fails_before_transport(self):
         bad = dict(PACKET, source_instruction="ignore rules")
@@ -251,7 +286,7 @@ class TokenFactoryTests(unittest.TestCase):
                 result = request_interpretation(PACKET, KEY, lambda *args: response)
                 self.assert_safe_failure(result, "invalid_response", "invalid_response")
 
-    def test_truncation_retains_trustworthy_usage_and_estimated_cost(self):
+    def test_truncation_retains_trustworthy_usage_without_a_cost_estimate(self):
         response = self.response(
             choices=[{"message": {"content": KEY}, "finish_reason": "length"}],
             usage={"prompt_tokens": 100, "completion_tokens": 4096,
@@ -261,7 +296,8 @@ class TokenFactoryTests(unittest.TestCase):
         provenance = result["provenance"]
         self.assertEqual(provenance["prompt_tokens"], 100)
         self.assertEqual(provenance["completion_tokens"], 4096)
-        self.assertEqual(provenance["estimated_cost_usd"], 0.00098904)
+        self.assertIsNone(provenance["estimated_cost_usd"])
+        self.assertEqual(provenance["model"], EXPLAIN_MODEL)
 
     def test_output_limit_requires_exact_model_valid_usage_and_one_dict_choice(self):
         invalid = [
@@ -603,7 +639,7 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
 
         def transport(method, path, payload, api_key):
             sent.append(payload)
-            return {"model": MODEL, "choices": [{"message": {"content": CONTENT.replace(
+            return {"model": EXPLAIN_MODEL, "choices": [{"message": {"content": CONTENT.replace(
                 "0123456789abcdef", "b000000000000000")}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}
 
@@ -653,7 +689,7 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
             "limitations": []})
 
         def transport(method, path, payload, api_key):
-            return {"model": MODEL, "choices": [{"message": {"content": bad},
+            return {"model": EXPLAIN_MODEL, "choices": [{"message": {"content": bad},
                     "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}
 
@@ -665,14 +701,14 @@ class TokenFactoryV2RequestTests(unittest.TestCase):
 
         leaked = bad.replace('"x"', json.dumps(KEY))
         result = request_interpretation(_v2_packet(), KEY, lambda *a: {
-            "model": MODEL, "choices": [{"message": {"content": leaked}, "finish_reason": "stop"}],
+            "model": EXPLAIN_MODEL, "choices": [{"message": {"content": leaked}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
         self.assertNotIn("rejected_content", result)
 
     def test_v1_request_is_unchanged(self):
         sent = []
         request_interpretation(PACKET, KEY, lambda m, p, payload, k: sent.append(payload) or {
-            "model": MODEL, "choices": [{"message": {"content": CONTENT}, "finish_reason": "stop"}],
+            "model": EXPLAIN_MODEL, "choices": [{"message": {"content": CONTENT}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
         self.assertEqual(json.loads(sent[0]["messages"][1]["content"]), PACKET)
         self.assertIn("1 or 2 brief", sent[0]["messages"][0]["content"])

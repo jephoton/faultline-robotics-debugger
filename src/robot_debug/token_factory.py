@@ -22,7 +22,13 @@ from .explanation import interpretation_context, validate_explanation
 
 
 ENDPOINT = "https://api.tokenfactory.nebius.com/v1/"
+# Research summaries (M5D) stay on Nano, which is priced below.
 MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+# Jethro, October 13/14: scenario-reduction explanations and occlusion case explanations use
+# Nemotron 3 Ultra, chosen by measured comparisons (docs/experiments/m7-scenario-reduction.md).
+# Its price is not pinned here, so its cost estimate is left empty and reconciled with billing.
+SCENARIO_EXPLAIN_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
+EXPLAIN_MODEL = SCENARIO_EXPLAIN_MODEL
 
 _HOST = "api.tokenfactory.nebius.com"
 _BASE_PATH = "/v1/"
@@ -286,8 +292,12 @@ def _post_error_code(error: BaseException) -> str:
     return code
 
 
-def preflight(api_key: str, transport: Transport | None = None) -> dict:
-    """Confirm that the authenticated fixed catalog contains the exact model."""
+def preflight(api_key: str, transport: Transport | None = None,
+              model: str = MODEL) -> dict:
+    """Confirm that the authenticated fixed catalog contains the exact ``model``.
+
+    Defaults to the research model; explanations pass ``EXPLAIN_MODEL``.
+    """
     if not _valid_key(api_key):
         raise TokenFactoryError("invalid_api_key")
     call = _default_transport if transport is None else transport
@@ -303,9 +313,9 @@ def preflight(api_key: str, transport: Transport | None = None) -> dict:
                        if type(item) is dict and type(item.get("id")) is str]
     except Exception:
         raise TokenFactoryError("invalid_response") from None
-    if MODEL not in identifiers:
+    if model not in identifiers:
         raise TokenFactoryError("catalog_missing")
-    return {"model": MODEL, "endpoint": ENDPOINT}
+    return {"model": model, "endpoint": ENDPOINT}
 
 
 def _safe_path(path: Path) -> bool:
@@ -334,7 +344,8 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def reserve_pilot(pilot_root: Path, case_id: str, packet_id: str) -> dict:
+def reserve_pilot(pilot_root: Path, case_id: str, packet_id: str,
+                  model: str = MODEL) -> dict:
     """Exclusively persist the one approved full-cap reservation."""
     root = Path(pilot_root)
     if (type(case_id) is not str or type(packet_id) is not str
@@ -355,7 +366,7 @@ def reserve_pilot(pilot_root: Path, case_id: str, packet_id: str) -> dict:
         "attempt_number": 1,
         "case_id": case_id,
         "packet_id": packet_id,
-        "model": MODEL,
+        "model": model,
     }
     encoded = json.dumps(reservation, sort_keys=True, separators=(",", ":"),
                          allow_nan=False).encode("utf-8")
@@ -418,13 +429,21 @@ def _provenance(status: str, error_code: str | None, latency: float,
     }
 
 
+def _explain_provenance(*args, **kwargs) -> dict:
+    """Provenance for a call to ``EXPLAIN_MODEL``: its price is not pinned, so no estimate."""
+    record = _provenance(*args, **kwargs)
+    record["model"] = EXPLAIN_MODEL
+    record["estimated_cost_usd"] = None
+    return record
+
+
 def _request_payload(packet: dict) -> dict:
     version_2 = packet["schema_version"] == 2
     user = interpretation_context(packet) if version_2 else packet
     packet_json = json.dumps(user, ensure_ascii=False, separators=(",", ":"),
                              allow_nan=False)
     payload = {
-        "model": MODEL,
+        "model": EXPLAIN_MODEL,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT_V2 if version_2 else _SYSTEM_PROMPT},
             {"role": "user", "content": packet_json},
@@ -435,9 +454,10 @@ def _request_payload(packet: dict) -> dict:
         "response_format": {"type": "json_object"},
     }
     if version_2:
-        # Nemotron 3 Nano reasons by default and its thinking tokens count against
-        # max_tokens; the v2 context already carries the analysis, so the first
-        # v2 attempt exhausted the limit while thinking. Turn thinking off.
+        # Nemotron reasoning models think by default and thinking tokens count against
+        # max_tokens; the v2 context already carries the analysis, so the first v2
+        # attempt (on Nano) exhausted the limit while thinking. Turn thinking off; the
+        # Ultra comparison call used the same payload and completed.
         payload["chat_template_kwargs"] = {"enable_thinking": False}
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
                          allow_nan=False).encode("utf-8")
@@ -469,7 +489,7 @@ def _usage(response: dict) -> tuple[int | None, int | None]:
 
 
 def _response_content(response: dict, packet: dict) -> tuple[str, dict]:
-    if type(response) is not dict or response.get("model") != MODEL:
+    if type(response) is not dict or response.get("model") != EXPLAIN_MODEL:
         raise ValueError
     choices = response.get("choices")
     if type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict:
@@ -515,22 +535,22 @@ def request_interpretation(packet: dict, api_key: str,
         else:
             status = "http_error"
         return {"response_json": None,
-                "provenance": _provenance(status, code, latency)}
+                "provenance": _explain_provenance(status, code, latency)}
     latency = time.monotonic() - started
     try:
-        if type(response) is not dict or response.get("model") != MODEL:
+        if type(response) is not dict or response.get("model") != EXPLAIN_MODEL:
             raise ValueError
         prompt, completion = _usage(response)
     except Exception:
         return {"response_json": None,
-                "provenance": _provenance("invalid_response", "invalid_response",
+                "provenance": _explain_provenance("invalid_response", "invalid_response",
                                            latency)}
     choices = response.get("choices")
     if (type(choices) is list and len(choices) == 1
             and type(choices[0]) is dict
             and choices[0].get("finish_reason") == "length"):
         return {"response_json": None,
-                "provenance": _provenance("invalid_response", "output_limit",
+                "provenance": _explain_provenance("invalid_response", "output_limit",
                                            latency, prompt, completion)}
     try:
         content = response["choices"][0]["message"]["content"]
@@ -542,7 +562,7 @@ def request_interpretation(packet: dict, api_key: str,
             raise ValueError
     except Exception:
         result = {"response_json": None,
-                  "provenance": _provenance("invalid_response", "invalid_response",
+                  "provenance": _explain_provenance("invalid_response", "invalid_response",
                                              latency, prompt, completion)}
         # Keep rejected model text in memory for local diagnosis only; it is
         # never stored in a report and is withheld if it contains the key.
@@ -550,7 +570,7 @@ def request_interpretation(packet: dict, api_key: str,
             result["rejected_content"] = content
         return result
     return {"response_json": content,
-            "provenance": _provenance("completed", None, latency,
+            "provenance": _explain_provenance("completed", None, latency,
                                        prompt, completion)}
 
 
@@ -896,19 +916,10 @@ def request_scenario_hypothesis(instruction: str, differences: list, api_key: st
 
 _MAX_REQUEST_BYTES_SCENARIO_EXPLAIN = 12_000
 _MAX_TOKENS_SCENARIO_EXPLAIN = 1500
-# Jethro, October 13: scenario-reduction explanations use Nemotron 3 Ultra, chosen by a
-# measured comparison (docs/experiments/m7-scenario-reduction.md): on the same packet Nano
-# kept calling "only this entity applied" "this entity reverted", Super inverted a correct
-# prediction and failed the format check, and Ultra stated every checked fact correctly.
-# Its price is not pinned here, so the estimate is left empty and reconciled with billing.
-SCENARIO_EXPLAIN_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
-
-
-def _scenario_explain_provenance(*args, **kwargs) -> dict:
-    record = _provenance(*args, **kwargs)
-    record["model"] = SCENARIO_EXPLAIN_MODEL
-    record["estimated_cost_usd"] = None
-    return record
+# SCENARIO_EXPLAIN_MODEL is defined at the top of this module (Jethro, October 13): on the same
+# packet Nano kept calling "only this entity applied" "this entity reverted", Super inverted a
+# correct prediction and failed the format check, and Ultra stated every checked fact correctly.
+_scenario_explain_provenance = _explain_provenance
 
 
 def _scenario_explanation_payload(packet: dict) -> dict:
