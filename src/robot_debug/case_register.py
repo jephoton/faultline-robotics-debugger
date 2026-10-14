@@ -93,6 +93,11 @@ def _job_scenario_dirs(run_dir: Path) -> List[Path]:
     jobs = run_dir / "jobs"
     if jobs.is_dir():
         for job in sorted((p for p in jobs.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True):
+            # The Nebius and local backends download a Job's export prefix straight into
+            # ``evidence/``; older hand-run downloads kept ``faultline-runs/<job>/`` inside it.
+            direct = job / "evidence" / "scenario"
+            if direct.is_dir():
+                found.append(direct)
             evidence = job / "evidence" / "faultline-runs"
             if evidence.is_dir():
                 for run in sorted((p for p in evidence.iterdir() if p.is_dir()), key=lambda p: p.name):
@@ -162,7 +167,7 @@ def register_run(run_dir: Any, root: Any = None) -> str:
     try:
         files = {}  # type: Dict[str, Optional[str]]
         for key, name in (("report", "report.md"), ("case", "case.json"), ("explanation", "explanation.json"),
-                          ("candidate", "minimal-candidate.json")):
+                          ("candidate", "minimal-candidate.json"), ("replay_inputs", "replay-inputs.json")):
             source = run_dir / name
             if source.is_file() and not source.is_symlink() and source.stat().st_size <= _MAX_JSON_BYTES:
                 shutil.copyfile(str(source), str(staging / name))

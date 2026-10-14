@@ -345,6 +345,9 @@ class PureHelperTests(unittest.TestCase):
         self.assertTrue(orch.replay_verdict({"replay": {"minimal": {"outcomes": ["policy_failure"] * 4 + ["success"]}}}))
         self.assertFalse(orch.replay_verdict({"replay": {"minimal": {"outcomes": ["success"] * 5}}}))
         self.assertIsNone(orch.replay_verdict({}))
+        self.assertTrue(orch.replay_verdict({"verdict": "still_reproduces"}))
+        self.assertFalse(orch.replay_verdict({"verdict": "no_longer_reproduces"}))
+        self.assertIsNone(orch.replay_verdict({"verdict": "reference_fails"}))
 
 
 def _write(config):
@@ -682,9 +685,12 @@ class Mode2AndReplay(Base):
         def audit_report(self, summary):
             return "# audit report\n"
 
-        def replay_workload(self, case, run_id, attempts):
-            self.replayed = (case["case_id"], run_id, attempts)
+        def replay_workload(self, case, run_id, attempts, inputs=None):
+            self.replayed = (case["case_id"], run_id, attempts, inputs)
             return {"schema_version": 1, "mode": "scenario-replay", "run_id": run_id, "deadline_seconds": 1000}
+
+        def replay_inputs(self, case_dir, case):
+            return {"layout": {"fake": True}, "reference_candidate": None}
 
     def audit_summary(self, complete=True):
         return {"mode": "m6-threshold", "complete": complete, "stop_reason": None if complete else "deadline_exhausted",
@@ -727,7 +733,7 @@ class Mode2AndReplay(Base):
         for reproduces in (True, False):
             with self.subTest(reproduces=reproduces):
                 tools = self.AuditTools()
-                script = [finished(lambda w: {"replay": {"reproduces": reproduces}, "complete": True})]
+                script = [finished(lambda w: {"verdict": "still_reproduces" if reproduces else "no_longer_reproduces", "complete": True})]
                 runner, backend, tools, ledger, lines = self.world(script, spec=spec_for(mode="replay"), tools=tools)
                 result = runner.replay(self.replay_case())
                 self.assertEqual(result.reproduces, reproduces)

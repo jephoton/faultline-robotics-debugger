@@ -178,8 +178,11 @@ class Resume(Fixture):
 
 class ReplayCommand(Fixture):
     class Tools(FakeTools):
-        def replay_workload(self, case, run_id, attempts):
+        def replay_workload(self, case, run_id, attempts, inputs=None):
             return {"schema_version": 1, "mode": "scenario-replay", "run_id": run_id, "deadline_seconds": 1000}
+
+        def replay_inputs(self, case_dir, case):
+            return {"layout": {"fake": True}, "reference_candidate": None}
 
     def case_dir(self):
         folder = self.dir / "case"
@@ -196,7 +199,7 @@ class ReplayCommand(Fixture):
                 code = self.run_cli(
                     ["replay", str(case_dir), "--spec", str(self.spec_path),
                      "--runs-root", str(self.runs / str(reproduces))],
-                    [finished(lambda w, r=reproduces: {"replay": {"reproduces": r}, "complete": True})],
+                    [finished(lambda w, r=reproduces: {"verdict": "still_reproduces" if r else "no_longer_reproduces", "complete": True})],
                     tools=self.Tools())
                 self.assertEqual(code, 0)
                 self.assertIn(words, self.text)

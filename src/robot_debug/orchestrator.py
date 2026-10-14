@@ -286,6 +286,9 @@ def verified_selection(reduction: Mapping[str, Any]) -> bool:
     return bool(reduction.get("final_selection")) and reduction.get("final_candidate") is not None
 
 
+REPLAY_INPUTS = "replay-inputs.json"
+
+
 def replay_verdict(summary: Mapping[str, Any]) -> Optional[bool]:
     """Whether a ``scenario-replay`` summary says the saved failure still reproduces.
 
@@ -294,6 +297,11 @@ def replay_verdict(summary: Mapping[str, Any]) -> Optional[bool]:
     ``None`` when the summary has neither.
     """
 
+    verdict = summary.get("verdict")
+    if verdict == "still_reproduces":
+        return True
+    if verdict == "no_longer_reproduces":
+        return False
     replay = summary.get("replay")
     if not isinstance(replay, Mapping):
         return None
@@ -375,10 +383,36 @@ class DefaultTools:
 
         return self._checked(audit_workload(spec, run_id))
 
-    def replay_workload(self, case: Mapping[str, Any], run_id: str, attempts: int) -> Dict[str, Any]:
+    def replay_workload(self, case: Mapping[str, Any], run_id: str, attempts: int,
+                        inputs: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
         from robot_debug.workloads import replay_workload
 
-        return self._checked(replay_workload(case, run_id, attempts=attempts))
+        return self._checked(replay_workload(case, run_id, attempts=attempts, **dict(inputs or {})))
+
+    def replay_inputs(self, case_dir: Path, case: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        """The layout and reference start a replay needs beyond ``case.json``.
+
+        Read from ``replay-inputs.json`` beside the case (written when a diagnosis finishes and
+        copied into the diagnoses index), else derived from the newest ``scenario-reduce``
+        workload under ``jobs/``. ``None`` when neither exists.
+        """
+
+        stored = case_dir / REPLAY_INPUTS
+        if stored.is_file():
+            return _read_json(stored)
+        from robot_debug.workloads import reference_inputs
+
+        jobs = case_dir / "jobs"
+        if not jobs.is_dir():
+            return None
+        for job in sorted((p for p in jobs.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True):
+            path = job / "workload.json"
+            if not path.is_file():
+                continue
+            workload = _read_json(path)
+            if isinstance(workload, Mapping) and workload.get("mode") == "scenario-reduce":
+                return reference_inputs(workload, case)
+        return None
 
     @staticmethod
     def _checked(workload: Dict[str, Any]) -> Dict[str, Any]:
@@ -916,6 +950,13 @@ class Orchestrator:
             candidate = (case.get("replay") or {}).get("candidate")
             if candidate:
                 self.tools.write_candidate(self.run_dir / "minimal-candidate.json", candidate)
+            try:
+                inputs = self.tools.replay_inputs(self.run_dir, case)
+            except Exception as error:   # replay is optional; a missing input must not fail the run
+                inputs = None
+                self.notes.append("replay inputs not saved: {}".format(type(error).__name__))
+            if inputs is not None:
+                _write_json(self.run_dir / REPLAY_INPUTS, inputs)
             self.steps.update("case", status="done", case_id=case["case_id"])
             self.say("case", "case.json {}".format(case["case_id"][:12]))
         case_id = self.steps.get("case").get("case_id")
@@ -1002,11 +1043,17 @@ class Orchestrator:
             raise StopRun("case_unsupported", "only scenario reduction cases can be replayed")
         if self.spec.suite is not None and self.spec.suite != case.get("suite"):
             raise StopRun("suite_mismatch", "the spec's suite differs from the case's")
-        workload = self.tools.replay_workload(case, self.job_name("replay", 0), REPLAY_ATTEMPTS)
+        case_root = case_path.parent
+        inputs = self.tools.replay_inputs(case_root, case)
+        if inputs is None:
+            raise StopRun("replay_inputs_missing",
+                          "no replay-inputs.json and no scenario-reduce workload beside the case")
+        workload = self.tools.replay_workload(case, self.job_name("replay", 0), REPLAY_ATTEMPTS, inputs)
         outcome = self.run_job("replay", workload, int(workload["deadline_seconds"]), "scenario_summary.json")
         verdict = replay_verdict(outcome.summary)
         _write_json(self.run_dir / "replay-result.json", {
-            "case_id": case.get("case_id"), "reproduces": verdict, "job_name": outcome.job_name,
+            "case_id": case.get("case_id"), "reproduces": verdict,
+            "verdict": (outcome.summary or {}).get("verdict"), "job_name": outcome.job_name,
             "summary": outcome.summary_path.relative_to(self.run_dir).as_posix()})
         text = {True: "the failure still reproduces", False: "the failure no longer reproduces",
                 None: "the replay summary does not say"}[verdict]
