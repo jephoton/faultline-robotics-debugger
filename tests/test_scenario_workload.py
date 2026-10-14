@@ -16,6 +16,7 @@ from robot_debug.job_workload import WorkloadPaths, run_workload
 from tests.scenario_world import FakeSimulation
 from tests.test_batch_experiment import World
 from tests.test_scenario_experiment import SCREEN, SMOKE, make_plan
+from tests.test_scenario_replay import replay_config
 from tests.test_serverless_workload import FakeCompleted
 
 
@@ -132,6 +133,21 @@ class ScreenWorkloadTests(WorkloadTestCase):
         self.assertTrue(params["state_out"].endswith("start_state.json"))
         self.assertIn("t00-s06-a02", runner.params, "failing start 6 is confirmed")
         self.assertNotIn("t00-s02-a02", runner.params, "a passing start is not")
+
+
+class ReplayWorkloadTests(WorkloadTestCase):
+    def test_the_replay_job_reports_its_verdict_and_exports(self):
+        config = replay_config()
+        summary, _world, runner, factory_calls = self.invoke(config)
+        self.assertEqual(("complete", "completed"), (summary["status"], summary["stop_reason"]), summary)
+        self.assertEqual("still_reproduces", summary["scenario_verdict"])
+        self.assertTrue(summary["scenario_complete"])
+        self.assertEqual("complete", self.exports[0][2]["status"])
+        self.assertEqual(10, len(factory_calls), "nine attempts after early decisions and the warm-up")
+        detail = self.detail(config)
+        self.assertEqual("still_reproduces", detail["verdict"])
+        replayed = [p for stem, p in runner.params.items() if not stem.startswith("warmup")]
+        self.assertTrue(all(p["scenario_start"]["candidate"].endswith(".json") for p in replayed))
 
 
 class ReduceWorkloadTests(WorkloadTestCase):

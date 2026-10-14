@@ -1,6 +1,6 @@
 """Job modes for LIBERO-10 scenario screening and reduction (ADR 0028, plan 2026-10-13).
 
-Three Serverless modes share the M3/M6 machinery in :mod:`robot_debug.batch_experiment`
+Four Serverless modes share the M3/M6 machinery in :mod:`robot_debug.batch_experiment`
 (one prefetch, one faultline server with ``max_batch_size = 12``, an untimed warm-up,
 concurrent single-episode evaluators, the SQLite scrub and the closed-evidence export)
 and one pool of 12 evaluator workers:
@@ -18,6 +18,11 @@ and one pool of 12 evaluator workers:
 ``scenario-reduce``
     Runs :func:`robot_debug.scenario_reduce.run_scenario_reduction` for one failing
     start and its nearest passing references on the same pool.
+
+``scenario-replay``
+    Re-runs saved scenes: each ``minimal`` scene (expected to fail) through the early-decided
+    failure gate and each ``reference`` scene (expected to pass) through the pass gate, and
+    reports whether the failure still reproduces. This is the regression-test use of a case.
 
 Classification. An episode that reports ``invalid_scene`` (aggregate metrics, and the
 scenario sidecar) is a *valid* record with outcome ``invalid_scene``: it never
@@ -50,7 +55,7 @@ from robot_debug.scenario_import import (
     build_candidate, load_scenario_candidate, write_scenario_candidate)
 from robot_debug.scenario_reduce import run_scenario_reduction
 
-SCENARIO_MODES = ("scenario-smoke", "scenario-screen", "scenario-reduce")
+SCENARIO_MODES = ("scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay")
 SCENARIO_SUITES = ("libero_10", "libero_object")
 DEFAULT_SUITE = "libero_10"
 SCENARIO_WORKERS = 12
@@ -106,6 +111,10 @@ MAX_ORDER = 64
 MAX_TEXT = 4000
 MAX_RAW = 8000
 MAX_INSTRUCTION = 500
+MAX_REPLAY_SCENES = 4
+MAX_REPLAY_ATTEMPTS = 8
+REPLAY_ROLES = ("minimal", "reference")
+DEFAULT_REPLAY_ATTEMPTS = 5
 
 COMMON_OPTIONAL = {"suite"}
 MODE_REQUIRED = {
@@ -113,12 +122,14 @@ MODE_REQUIRED = {
     "scenario-screen": {"task_ids", "start_indices"},
     "scenario-reduce": {"task_id", "instruction", "layout", "failing", "references", "order",
                         "order_source", "hypothesis"},
+    "scenario-replay": {"task_id", "layout", "scenes"},
 }
 MODE_OPTIONAL = {
     "scenario-smoke": {"task_id"},
     "scenario-screen": {"attempts", "confirm_attempts", "required_failures"},
     "scenario-reduce": {"attempts", "required_failures", "bisection_steps", "max_candidates",
                         "concurrency", "max_references", "speculative_bisection"},
+    "scenario-replay": {"attempts", "required_failures"},
 }
 _HYPOTHESIS_KEYS = {"text", "ranking", "source", "model", "tier", "fallback_reason", "completed",
                     "provenance", "raw_content"}
@@ -190,22 +201,81 @@ def validate_mode_fields(mode: str, config: Mapping[str, Any]) -> Dict[str, Any]
         worst = len(fields["task_ids"]) * len(fields["start_indices"]) * total
         if worst > MAX_SCREEN_EPISODES:
             _fail("the screen exceeds the episode bound")
+    elif mode == "scenario-replay":
+        fields.update(_validate_replay_fields(suite, config))
     else:
         fields.update(_validate_reduce_fields(suite, config))
     return fields
 
 
-def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, Any]:
-    fields = {}  # type: Dict[str, Any]
-    fields["task_id"] = _int(config["task_id"], "task_id", 0, SUITE_TASK_COUNT[suite] - 1)
-    fields["instruction"] = _text(config["instruction"], "instruction", MAX_INSTRUCTION).strip()
+def _checked_layout(suite: str, config: Mapping[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    """The task id and layout of a config, which must belong together and to the suite."""
+
+    task_id = _int(config["task_id"], "task_id", 0, SUITE_TASK_COUNT[suite] - 1)
     try:
         layout = ss.validate_layout(config["layout"])
     except ss.ScenarioStateError:
         _fail("layout is invalid")
-    if layout["suite"] != suite or layout["task_id"] != fields["task_id"]:
+    if layout["suite"] != suite or layout["task_id"] != task_id:
         _fail("layout does not belong to the suite and task")
-    fields["layout"] = copy.deepcopy(layout)
+    return task_id, copy.deepcopy(layout)
+
+
+_SCENE_NAME_LIMIT = 32
+
+
+def _scene_name_ok(name: Any) -> bool:
+    return (type(name) is str and 1 <= len(name) <= _SCENE_NAME_LIMIT
+            and name[0].isalnum() and all(ch.isalnum() or ch == "-" for ch in name)
+            and name == name.lower() and name.isascii())
+
+
+def _validate_replay_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, Any]:
+    from robot_debug.scenario_import import ScenarioImportError, _validate_source
+
+    fields = {}  # type: Dict[str, Any]
+    fields["task_id"], layout = _checked_layout(suite, config)
+    fields["layout"] = layout
+    scenes = config["scenes"]
+    if type(scenes) is not list or not 1 <= len(scenes) <= MAX_REPLAY_SCENES:
+        _fail("scenes must be a short non-empty list")
+    checked, seen = [], set()
+    for entry in scenes:
+        if type(entry) is not dict or not {"name", "state", "role"} <= set(entry) <= {
+                "name", "state", "role", "source"}:
+            _fail("a scene needs exactly name, state and role (and optionally source)")
+        if not _scene_name_ok(entry["name"]) or entry["name"] in seen:
+            _fail("scene names must be distinct short lowercase words with digits and hyphens")
+        seen.add(entry["name"])
+        if entry["role"] not in REPLAY_ROLES:
+            _fail("a scene role must be minimal or reference")
+        try:
+            state = ss.validate_state(entry["state"], layout).tolist()
+        except ss.ScenarioStateError:
+            _fail("a scene state does not match the layout")
+        scene = {"name": entry["name"], "state": state, "role": entry["role"]}
+        if "source" in entry:
+            try:
+                scene["source"] = _validate_source(entry["source"])
+            except ScenarioImportError:
+                _fail("a scene source is invalid")
+        checked.append(scene)
+    if not any(scene["role"] == "minimal" for scene in checked):
+        _fail("at least one scene must have the role minimal")
+    fields["scenes"] = checked
+    fields["attempts"] = _int(config.get("attempts", DEFAULT_REPLAY_ATTEMPTS), "attempts", 1,
+                              MAX_REPLAY_ATTEMPTS)
+    fields["required_failures"] = _int(
+        config.get("required_failures", min(4, fields["attempts"])), "required_failures", 1,
+        fields["attempts"])
+    return fields
+
+
+def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, Any]:
+    fields = {}  # type: Dict[str, Any]
+    fields["task_id"], layout = _checked_layout(suite, config)
+    fields["instruction"] = _text(config["instruction"], "instruction", MAX_INSTRUCTION).strip()
+    fields["layout"] = layout
 
     def state_of(value: Any) -> List[float]:
         try:
@@ -316,6 +386,8 @@ def planned_episodes(mode: str, config: Mapping[str, Any]) -> int:
     if mode == "scenario-screen":
         total = config.get("attempts", 1) + config.get("confirm_attempts", 4)
         return len(config["task_ids"]) * len(config["start_indices"]) * total
+    if mode == "scenario-replay":
+        return len(config.get("scenes") or [0, 0]) * int(config.get("attempts", DEFAULT_REPLAY_ATTEMPTS))
     attempts = config.get("attempts", 5)
     # The failing start, every reference that may have to be tried before one passes, and the
     # one full-hybrid check, then the candidate budget.
@@ -348,6 +420,10 @@ def recommended_deadline_seconds(mode: str, config: Mapping[str, Any]) -> int:
         fallbacks = int(config.get("max_references", MAX_REDUCE_REFERENCES)) - 1
         work = ((REDUCE_GATE_WAVES + rounds + fallbacks * REDUCE_REFERENCE_FALLBACK_ROUNDS)
                 * ASSUMED_REDUCE_ROUND_SECONDS * ASSUMED_HELD_FIFTH_FACTOR)
+    elif mode == "scenario-replay":
+        # One wave for the scenes' first attempts, one more for a failure gate's held fifth attempt.
+        episodes = planned_episodes(mode, config)
+        work = (_waves(episodes) + 1) * ASSUMED_FAILING_EPISODE_SECONDS
     else:
         raise ValueError("unsupported scenario mode")
     total = (sum(ASSUMED_OVERHEAD_SECONDS.values()) + work + be.ITEM_TIMEOUT_SECONDS
@@ -1137,7 +1213,109 @@ class ReduceDriver:
         return stop_reason is None and bool(result.get("reduced"))
 
 
-DRIVERS = {"scenario-smoke": SmokeDriver, "scenario-screen": ScreenDriver, "scenario-reduce": ReduceDriver}
+# ---- replay ---------------------------------------------------------------------------
+
+_DEFAULT_REPLAY_SOURCE = {"kind": "benchmark", "init_state_index": 0}   # provenance only
+_EXPECTED_OUTCOME = {"minimal": "policy_failure", "reference": "success"}
+
+
+def replay_verdict(scenes: Sequence[Mapping[str, Any]]) -> Optional[str]:
+    """The replay verdict from the scene decisions, or ``None`` while any scene is undecided.
+
+    ``invalid_scene`` beats ``reference_fails`` beats the failure result: a scene that is not a
+    valid scene says nothing about the policy, and a reference that fails means the minimal
+    result cannot be compared with anything.
+    """
+
+    if not scenes or any(scene.get("decision") is None for scene in scenes):
+        return None
+    if any(scene["decision"] == "invalid_scene" for scene in scenes):
+        return "invalid_scene"
+    if any(scene["role"] == "reference" and scene["decision"] == "fails" for scene in scenes):
+        return "reference_fails"
+    if all(scene["decision"] == "reproduces" for scene in scenes if scene["role"] == "minimal"):
+        return "still_reproduces"
+    return "no_longer_reproduces"
+
+
+class ReplayDriver:
+    mode = "scenario-replay"
+
+    def __init__(self, config: Mapping[str, Any], suite: str, batch_root: Path) -> None:
+        self.config, self.suite, self.batch_root = config, suite, Path(batch_root)
+        self.task_id = config["task_id"]
+        self.attempts = config["attempts"]
+        self.required = config["required_failures"]
+        self.scenes = config["scenes"]
+        self.paths = {}  # type: Dict[str, Path]
+        self.run_result = None  # type: Any
+        self.body = {"task_id": self.task_id, "gate": {"attempts": self.attempts,
+                                                       "required_failures": self.required},
+                     "scenes": [], "verdict": None, "instruction": None}  # type: Dict[str, Any]
+
+    def _write_scenes(self) -> None:
+        for scene in self.scenes:
+            if scene["name"] in self.paths:
+                continue
+            path = self.batch_root / "candidates" / "replay-{}.json".format(scene["name"])
+            write_scenario_candidate(path, build_candidate(
+                self.suite, self.task_id, scene["state"], scene.get("source") or _DEFAULT_REPLAY_SOURCE))
+            self.paths[scene["name"]] = path
+
+    def _item(self, scene: Mapping[str, Any]) -> Dict[str, Any]:
+        return _item("rp-" + scene["name"], "replay-" + scene["role"],
+                     {"task_id": self.task_id, "scenario_start": str(self.paths[scene["name"]])},
+                     scene=scene["name"], role=scene["role"])
+
+    def warmup_item(self) -> Dict[str, Any]:
+        self._write_scenes()
+        return self._item(self.scenes[0])
+
+    def run(self, ctx: _Context) -> Optional[str]:
+        self._write_scenes()
+        candidates = [{"key": scene["name"], "item": self._item(scene),
+                       "kind": "failure" if scene["role"] == "minimal" else "pass"}
+                      for scene in self.scenes]
+        executor = PoolExecutor(ctx.pool, ReduceDriver.attempt_item)
+        self.run_result = run_gates(
+            executor, candidates, attempts=self.attempts, required_failures=self.required,
+            max_in_flight=ctx.workers, remaining=ctx.remaining, drain=True)
+        ctx.progress("scenario_replay_done", decisions=dict(self.run_result.decisions),
+                     skipped_attempts=self.run_result.skipped_total, stop=self.run_result.stop)
+        if self.run_result.stop is not None:
+            return ctx.failure() or self.run_result.stop
+        return None
+
+    def finish(self, stop_reason: Optional[str], records: Sequence[Mapping[str, Any]]) -> None:
+        result = self.run_result
+        scenes = []
+        for scene in self.scenes:
+            name = scene["name"]
+            valid = sorted((r for r in (result.records.get(name, []) if result else [])
+                            if r.get("status") == "valid"), key=lambda r: r["attempt"])
+            for record in valid:
+                if record.get("instruction") and not self.body["instruction"]:
+                    self.body["instruction"] = record["instruction"]
+            outcomes = [r["outcome"] for r in valid]
+            scenes.append({
+                "name": name, "role": scene["role"], "expected": _EXPECTED_OUTCOME[scene["role"]],
+                "decision": result.decisions.get(name) if result else None,
+                "outcomes": outcomes, "failures": outcomes.count("policy_failure"),
+                "skipped_attempts": result.skipped.get(name, 0) if result else 0,
+                "attempts": [{"case_id": r["case_id"], "attempt": r["attempt"], "outcome": r["outcome"],
+                              "steps": r.get("steps"), "video": (r.get("artifacts") or {}).get("video"),
+                              "seconds": round(r["ended_seconds"] - r["started_seconds"], 3)}
+                             for r in valid],
+            })
+        self.body["scenes"] = scenes
+        self.body["verdict"] = replay_verdict(scenes) if stop_reason is None else None
+
+    def complete(self, stop_reason: Optional[str]) -> bool:
+        return stop_reason is None and self.body["verdict"] is not None
+
+
+DRIVERS = {"scenario-smoke": SmokeDriver, "scenario-screen": ScreenDriver, "scenario-reduce": ReduceDriver,
+           "scenario-replay": ReplayDriver}
 
 
 # ---------------------------------------------------------------------------
@@ -1174,7 +1352,7 @@ def write_summary(root: Path, summary: Mapping[str, Any]) -> None:
     os.replace(str(temporary), str(target))
 
 
-_BIG_CONFIG_KEYS = ("layout", "failing", "references", "hypothesis", "instruction", "order")
+_BIG_CONFIG_KEYS = ("layout", "failing", "references", "hypothesis", "instruction", "order", "scenes")
 
 
 def _config_echo(config: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1349,7 +1527,7 @@ def run_scenario(
         state["checkpoint"] = checkpoint_record(suite, batch_root.parent)
         if isinstance(driver, ScreenDriver):
             driver.finish(state["stop_reason"])
-        elif isinstance(driver, ReduceDriver):
+        elif isinstance(driver, (ReduceDriver, ReplayDriver)):
             driver.finish(state["stop_reason"], state["records"])
         summary = save()
     progress("scenario_summary", mode=mode, stop_reason=summary["stop_reason"],
@@ -1630,6 +1808,7 @@ __all__ = [
     "verdict_for",
     "make_scenario_evaluate",
     "planned_episodes",
+    "replay_verdict",
     "read_evidence",
     "recommended_deadline_seconds",
     "run_scenario",

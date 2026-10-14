@@ -17,7 +17,7 @@ BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
 # ADR 0026: the M6 smoke Job has fixed conditions; the threshold Job is bounded by these fields.
 M6_MODES = {"m6-smoke", "m6-threshold"}
 # ADR 0028: LIBERO-10 scenario screening and reduction. Their fields live in scenario_experiment.
-SCENARIO_MODES = {"scenario-smoke", "scenario-screen", "scenario-reduce"}
+SCENARIO_MODES = {"scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay"}
 _MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES | SCENARIO_MODES
 _BATCH_FIELDS = {"phases", "repeats_per_kind"}
 _BATCH_WORKERS = (4, 8, 12)

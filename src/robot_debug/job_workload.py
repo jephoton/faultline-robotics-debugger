@@ -806,6 +806,8 @@ def run_workload(
             summary["scenario_reproducible_failures"] = [
                 [item["task_id"], item["start_index"]]
                 for item in scenario_summary.get("reproducible_failures") or ()]
+        if accepted["mode"] == "scenario-replay":
+            summary["scenario_verdict"] = scenario_summary.get("verdict")
         if accepted["mode"] == "scenario-reduce":
             reduction = scenario_summary.get("reduction") or {}
             summary["scenario_reduction_stop_reason"] = reduction.get("stop_reason")

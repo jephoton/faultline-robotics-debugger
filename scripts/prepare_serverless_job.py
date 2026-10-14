@@ -185,7 +185,7 @@ def _validate_registry(value: str) -> None:
 # scenario modes) needs at least this deadline or the download fails.
 _BATCH_MODES = {
     "m3-batch", "m3-batch-smoke", "m6-smoke", "m6-threshold",
-    "scenario-smoke", "scenario-screen", "scenario-reduce",
+    "scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay",
 }
 MIN_BATCH_DEADLINE_SECONDS = 1000
 
