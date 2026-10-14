@@ -121,6 +121,33 @@ class M6ConfigTests(unittest.TestCase):
                 with self.subTest(mode=config["mode"], deadline=deadline), self.assertRaises(JobRuntimeError):
                     validate_workload_config(copy(config, deadline_seconds=deadline))
 
+    def test_the_audit_target_fields_are_optional_and_round_trip(self):
+        # Absent: the configuration is exactly what recorded evidence used.
+        self.assertEqual(THRESHOLD, validate_workload_config(THRESHOLD))
+        target = copy(THRESHOLD, suite="libero_10", task_id=3, init_state_index=14)
+        result = validate_workload_config(target)
+        self.assertEqual(target, result)
+        self.assertEqual(result, json.loads(json.dumps(result)))
+        for changes in ({"suite": "libero_10"}, {"task_id": 9}, {"init_state_index": 0},
+                        {"suite": "libero_object", "task_id": 0, "init_state_index": 49}):
+            with self.subTest(changes=changes):
+                self.assertEqual(copy(THRESHOLD, **changes),
+                                 validate_workload_config(copy(THRESHOLD, **changes)))
+
+    def test_the_audit_target_fields_are_bounded(self):
+        bad = (dict(suite="libero_goal"), dict(suite=None), dict(suite=3), dict(task_id=-1),
+               dict(task_id=10), dict(task_id=True), dict(task_id=1.0), dict(task_id="0"),
+               dict(init_state_index=-1), dict(init_state_index=50), dict(init_state_index=True),
+               dict(init_state_index=2.0), dict(init_state_index=None))
+        for changes in bad:
+            with self.subTest(changes=changes), self.assertRaises(JobRuntimeError):
+                validate_workload_config(copy(THRESHOLD, **changes))
+
+    def test_only_the_threshold_mode_takes_an_audit_target(self):
+        for extra in ({"suite": "libero_10"}, {"task_id": 1}, {"init_state_index": 2}):
+            with self.subTest(extra=extra), self.assertRaises(JobRuntimeError):
+                validate_workload_config(dict(SMOKE, **extra))
+
     def test_load_workload_reads_m6_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             for config in (SMOKE, THRESHOLD):

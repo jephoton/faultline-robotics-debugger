@@ -314,7 +314,8 @@ def _run_m6_mode(
     threshold_config = None
     if accepted["mode"] == "m6-threshold":
         threshold_config = {key: accepted[key] for key in (
-            "families", "sweep", "attempts", "required_failures", "bisection_steps")}
+            "families", "sweep", "attempts", "required_failures", "bisection_steps",
+            "suite", "task_id", "init_state_index") if key in accepted}
 
     return m6_experiment.run_m6(
         mode=accepted["mode"],

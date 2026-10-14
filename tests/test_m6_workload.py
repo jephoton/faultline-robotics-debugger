@@ -62,7 +62,11 @@ class M6Runner:
                 "episodes": [{"episode_index": 0, "samples": [
                     {"step": 0, "agentview": clean, "wrist": stats}]}]}), encoding="utf-8")
         fails = policy_fails(params) or stem in self.nominal_fails
-        (output / "pilot_aggregate.json").write_text(json.dumps(aggregate(success=not fails)), encoding="utf-8")
+        document = aggregate(success=not fails)
+        task_id = params.get("task_id", 0)
+        document["config"]["params"]["task_id"] = task_id
+        document["tasks"][0]["episodes"][0]["task_id"] = task_id
+        (output / "pilot_aggregate.json").write_text(json.dumps(document), encoding="utf-8")
         media = output / "episodes" / "pilot"
         media.mkdir(parents=True)
         (media / "task0000_ep0000_fixture.mp4").write_bytes(b"mp4")
@@ -286,6 +290,28 @@ class ThresholdWorkloadTests(WorkloadTestCase):
             self.assertEqual({"kind": "noise", "severity": 0.55}, runner.params[stem]["image_perturbation"])
         for control in [s for s in runner.params if s.startswith("nominal-control")]:
             self.assertNotIn("image_perturbation", runner.params[control])
+
+    def test_the_audit_target_reaches_the_written_benchmark_params(self):
+        config = dict(THRESHOLD, run_id="m6-threshold-target", families=["darken"], sweep=[0.5, 1.0],
+                      attempts=2, required_failures=2, bisection_steps=1,
+                      suite="libero_10", task_id=3, init_state_index=14)
+        summary, _world, runner, _calls = self.invoke(config)
+        self.assertEqual(("complete", "completed"), (summary["status"], summary["stop_reason"]))
+        self.assertGreater(len(runner.params), 6)
+        for stem, params in runner.params.items():
+            with self.subTest(stem=stem):
+                self.assertEqual(("libero_10", 3, 14), (
+                    params["suite"], params["task_id"], params["init_state_index"]))
+        detail = self.m6_summary(config)
+        self.assertEqual(("libero_10", 3, 14), (
+            detail["config"]["suite"], detail["config"]["task_id"], detail["config"]["init_state_index"]))
+
+    def test_without_a_target_the_params_keep_the_recorded_defaults(self):
+        _summary, _world, runner, _calls = self.invoke(THRESHOLD)
+        for params in runner.params.values():
+            self.assertEqual("libero_object", params["suite"])
+            self.assertNotIn("task_id", params)
+            self.assertNotIn("init_state_index", params)
 
     def test_a_failed_control_makes_the_run_partial_and_runs_no_family(self):
         config = dict(THRESHOLD, run_id="m6-threshold-nominal")

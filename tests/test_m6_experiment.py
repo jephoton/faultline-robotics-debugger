@@ -141,6 +141,18 @@ class ManifestTests(unittest.TestCase):
         # Single-attempt levels with one worker are strictly sequential.
         self.assertEqual(4, m6.threshold_waves(2, 2, 1, 1))
 
+    def test_a_libero_10_audit_uses_the_longer_episode_time(self):
+        small = dict(THRESHOLD_CONFIG, families=["darken"], sweep=[0.5, 1.0], attempts=3,
+                     required_failures=2, bisection_steps=2)
+        base = m6.recommended_deadline_seconds("m6-threshold", small)
+        self.assertEqual(base, m6.recommended_deadline_seconds(
+            "m6-threshold", dict(small, suite="libero_object", task_id=4, init_state_index=1)))
+        long_ = m6.recommended_deadline_seconds("m6-threshold", dict(small, suite="libero_10"))
+        self.assertGreater(long_, base)
+        self.assertLessEqual(long_, m6.MAX_LIBERO_10_DEADLINE_SECONDS)
+        with self.assertRaises(ValueError):
+            m6.recommended_deadline_seconds("m6-threshold", dict(THRESHOLD_CONFIG, suite="libero_10"))
+
     def test_a_larger_search_never_gets_a_shorter_deadline(self):
         base = m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG)
         for changes in (dict(attempts=6), dict(bisection_steps=5), dict(sweep=[0.2, 0.4, 0.6, 0.8, 0.9, 1.0])):
@@ -513,6 +525,34 @@ class ThresholdRunTests(RunTestCase):
         self.assertEqual(30, summary["conditions"]["darken"]["valid"])
         self.assertEqual(
             sum(item["attempts_used"] for item in summary["families"].values()), summary["valid_count"] - 5)
+
+    def test_without_an_audit_target_the_configs_are_the_recorded_ones(self):
+        world, summary = self.run_threshold()
+        for kwargs in world.by_case.values():
+            self.assertFalse({"suite", "task_id", "init_state_index"} & set(kwargs), kwargs)
+        self.assertEqual(set(THRESHOLD_CONFIG), set(summary["config"]))
+
+    def test_an_audit_target_reaches_every_episode_and_the_summary(self):
+        target = dict(THRESHOLD_CONFIG, families=["darken"], suite="libero_10", task_id=3,
+                      init_state_index=14)
+        world, summary = self.run_threshold(config=target)
+        self.assertGreater(len(world.by_case), 6)
+        for case, kwargs in world.by_case.items():
+            with self.subTest(case=case):
+                self.assertEqual(("libero_10", 3, 14), (
+                    kwargs["suite"], kwargs["task_id"], kwargs["init_state_index"]))
+        controls = [kwargs for case, kwargs in world.by_case.items() if "nominal" in case]
+        self.assertTrue(controls and all("image_perturbation" not in kwargs for kwargs in controls))
+        self.assertEqual(("libero_10", 3, 14), (
+            summary["config"]["suite"], summary["config"]["task_id"], summary["config"]["init_state_index"]))
+        self.assertEqual(0.35, summary["families"]["darken"]["threshold_severity"])
+
+    def test_a_partial_target_passes_only_what_was_given(self):
+        world, _summary = self.run_threshold(config=dict(
+            THRESHOLD_CONFIG, families=["darken"], task_id=2))
+        for kwargs in world.by_case.values():
+            self.assertEqual(2, kwargs["task_id"])
+            self.assertFalse({"suite", "init_state_index"} & set(kwargs))
 
     def test_the_four_families_share_one_pool_of_twelve_workers_and_one_server(self):
         world, _summary = self.run_threshold(M6World(boundary_decide(BOUNDARIES), item_seconds=0.06))

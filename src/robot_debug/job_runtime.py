@@ -26,6 +26,12 @@ _BATCH_REPEATS = {"m3-batch-smoke": 2, "m3-batch": 12}
 _MAX_BATCH_PHASES = 6
 M6_FAMILIES = ("darken", "noise", "blur", "contrast")
 _M6_THRESHOLD_FIELDS = {"families", "sweep", "attempts", "required_failures", "bisection_steps"}
+# Optional audit target (M7a): which suite, task and benchmark start the threshold searches run on.
+# Absent means the recorded default (LIBERO-Object, task 0, the upstream start behaviour).
+_M6_AUDIT_TARGET_FIELDS = {"suite", "task_id", "init_state_index"}
+M6_SUITES = ("libero_object", "libero_10")
+_M6_TASKS_PER_SUITE = 10
+_M6_MAX_START_INDEX = 49
 _M6_MAX_SWEEP_LEVELS = 8
 _M6_MAX_ATTEMPTS = 12
 _M6_MAX_BISECTION_STEPS = 6
@@ -60,7 +66,10 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
     if batch_mode:
         expected_fields = _CONFIG_FIELDS | _BATCH_FIELDS
     elif mode_name == "m6-threshold":
-        expected_fields = _CONFIG_FIELDS | _M6_THRESHOLD_FIELDS
+        required_fields = _CONFIG_FIELDS | _M6_THRESHOLD_FIELDS
+        if not required_fields <= set(config) <= required_fields | _M6_AUDIT_TARGET_FIELDS:
+            _fail("workload configuration must contain exactly the required fields")
+        expected_fields = set(config)
     elif mode_name in SCENARIO_MODES:
         from robot_debug import scenario_experiment as scenario
 
@@ -137,10 +146,24 @@ def _validate_m6_threshold_fields(config: Dict[str, Any]) -> Dict[str, Any]:
     worst_case = _M6_NOMINAL_CONTROLS + len(families) * (len(levels) + steps) * attempts
     if worst_case > _M6_MAX_TOTAL_ATTEMPTS:
         _fail("m6 threshold workload exceeds the episode bound")
-    return {
+    fields = {
         "families": list(families), "sweep": levels, "attempts": attempts,
         "required_failures": required, "bisection_steps": steps,
-    }
+    }  # type: Dict[str, Any]
+    if "suite" in config and (type(config["suite"]) is not str or config["suite"] not in M6_SUITES):
+        _fail("m6 suite must be one of {}".format(", ".join(M6_SUITES)))
+    if "task_id" in config and (
+        type(config["task_id"]) is not int or not 0 <= config["task_id"] < _M6_TASKS_PER_SUITE
+    ):
+        _fail("m6 task_id must be an integer from 0 to {}".format(_M6_TASKS_PER_SUITE - 1))
+    if "init_state_index" in config and (
+        type(config["init_state_index"]) is not int or not 0 <= config["init_state_index"] <= _M6_MAX_START_INDEX
+    ):
+        _fail("m6 init_state_index must be an integer from 0 to {}".format(_M6_MAX_START_INDEX))
+    for key in ("suite", "task_id", "init_state_index"):
+        if key in config:
+            fields[key] = config[key]
+    return fields
 
 
 def _validate_batch_fields(config: Dict[str, Any], mode: str) -> Tuple[int, List[List[int]]]:
@@ -593,6 +616,7 @@ __all__ = [
     "JobRuntimeError",
     "M6_FAMILIES",
     "M6_MODES",
+    "M6_SUITES",
     "SCENARIO_MODES",
     "export_closed_evidence",
     "validate_workload_config",

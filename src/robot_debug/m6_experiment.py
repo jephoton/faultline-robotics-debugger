@@ -68,6 +68,14 @@ ASSUMED_EPISODE_WALL_SECONDS = 44.0
 ASSUMED_LEVEL_SECONDS = 90.0
 DEADLINE_ROUNDING_SECONDS = 60
 MAX_RECOMMENDED_DEADLINE_SECONDS = 2400
+# An audit on a LIBERO-10 task (M7a): episodes run up to 520 steps, so about 130 s of wall time for
+# a failing one with 12 evaluators sharing the server (the figure the scenario modes assume), and a
+# level takes two such waves. The runtime's hard cap (validate_workload_config) is 3000 s.
+ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS = 130.0
+ASSUMED_LIBERO_10_LEVEL_SECONDS = 2 * ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
+MAX_LIBERO_10_DEADLINE_SECONDS = 3000
+# Optional audit target fields of the threshold configuration, passed to every episode.
+AUDIT_TARGET_KEYS = ("suite", "task_id", "init_state_index")
 
 
 def severity_token(severity: float) -> str:
@@ -262,22 +270,26 @@ def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] 
     never started with less than ``ITEM_TIMEOUT_SECONDS`` left, so the last item
     needs that much time plus one episode wall time. Rounded up to whole minutes;
     never below the prepare script's 1000 s floor, and refused above the
-    2400 s cap this milestone allows.
+    2400 s cap this milestone allows. A configuration that names ``suite`` ``libero_10``
+    uses the longer LIBERO-10 episode time and the runtime's 3000 s cap instead.
     """
 
-    wall = ASSUMED_EPISODE_WALL_SECONDS
+    wall, level_seconds = ASSUMED_EPISODE_WALL_SECONDS, ASSUMED_LEVEL_SECONDS
+    cap = MAX_RECOMMENDED_DEADLINE_SECONDS
+    if config is not None and config.get("suite") == "libero_10":
+        wall, level_seconds = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS, ASSUMED_LIBERO_10_LEVEL_SECONDS
+        cap = MAX_LIBERO_10_DEADLINE_SECONDS
     if mode == "m6-smoke":
         work = math.ceil(len(smoke_manifest()) / M6_WORKERS) * wall
     else:
         levels = len(config["sweep"]) + config["bisection_steps"]
         waves = 1 + threshold_waves(len(config["families"]), levels, config["attempts"])  # 1: controls
-        chain = (1 + levels) * ASSUMED_LEVEL_SECONDS  # controls, then the longest sequential chain
+        chain = (1 + levels) * level_seconds  # controls, then the longest sequential chain
         work = max(waves * wall, chain)
     total = sum(ASSUMED_OVERHEAD_SECONDS.values()) + work + be.ITEM_TIMEOUT_SECONDS + wall
     rounded = int(max(1000, math.ceil(total / DEADLINE_ROUNDING_SECONDS) * DEADLINE_ROUNDING_SECONDS))
-    if rounded > MAX_RECOMMENDED_DEADLINE_SECONDS:
-        raise ValueError("this workload needs more than the {} s cap; shrink it".format(
-            MAX_RECOMMENDED_DEADLINE_SECONDS))
+    if rounded > cap:
+        raise ValueError("this workload needs more than the {} s cap; shrink it".format(cap))
     return rounded
 
 
@@ -549,6 +561,8 @@ def run_m6(
     scrub = {"companions_removed": 0}
     smoke_items = smoke_manifest() if not threshold else []
     controls = nominal_controls() if threshold else []
+    # The audit target (suite, task, start) rides on every episode; absent keys keep the recorded configs.
+    target = {key: config[key] for key in AUDIT_TARGET_KEYS if config is not None and key in config}
 
     probe_cache: Dict[str, Optional[Dict[str, Any]]] = {}
 
@@ -607,7 +621,7 @@ def run_m6(
             "max_batch_size": M6_MAX_BATCH_SIZE,
             "config": None if config is None else {
                 key: config[key] for key in ("families", "sweep", "attempts", "required_failures",
-                                              "bisection_steps")},
+                                              "bisection_steps") + AUDIT_TARGET_KEYS if key in config},
             "stop_reason": state["stop_reason"],
             "planned_items": len(smoke_items) if not threshold else None,
             "attempted": len(started),
@@ -669,7 +683,7 @@ def run_m6(
                         load_result=load_result, run_item=run_item, cancel=cancel,
                         item_timeout=item_timeout, clock=clock, ready_at=ready_at,
                         configs_dir=configs, runs_dir=runs,
-                        config_kwargs=lambda item: item["config"],
+                        config_kwargs=lambda item: dict(item["config"], **target),
                     )
                     pool = EvaluatorPool(workers=workers, evaluate=evaluate, remaining=remaining,
                                          item_timeout=item_timeout, cancel=cancel)
