@@ -157,6 +157,35 @@ class ExplanationStoreTests(unittest.TestCase):
                        {"reservation_usd": 0.02}, {"request_status": "completed"}):
             item = copy.deepcopy(offline); item["provenance"].update(change); self.assert_invalid(item)
 
+    def ultra(self, **changes):
+        value = self.live(model="nvidia/Nemotron-3-Ultra-550b-a55b", estimated_cost_usd=None)
+        value.update(changes)
+        return value
+
+    def test_old_nano_and_new_ultra_live_records_are_both_valid(self):
+        for provenance in (self.live(), self.ultra(), self.ultra(prompt_tokens=None, completion_tokens=None),
+                           self.ultra(request_status="transport_error", error_code="timeout",
+                                      prompt_tokens=None, completion_tokens=None)):
+            with self.subTest(model=provenance["model"], status=provenance["request_status"]):
+                record = self.record(provenance=provenance)
+                self.assertEqual(validate_stored_report(record)["provenance"]["model"],
+                                 provenance["model"])
+
+    def test_ultra_records_carry_no_cost_estimate_and_no_other_model_is_accepted(self):
+        valid = self.record(provenance=self.ultra())
+        for change in ({"estimated_cost_usd": 0.000018}, {"estimated_cost_usd": 0.0},
+                       {"reservation_usd": 0.01}, {"reservation_usd": 0},
+                       {"billed_cost_usd": 0.0}, {"request_status": "completed", "error_code": "timeout"},
+                       {"model": "nvidia/Nemotron-3-Super-120b-a12b"},
+                       {"model": "nvidia/nemotron-3-ultra-550b-a55b"}):
+            with self.subTest(change=change):
+                item = copy.deepcopy(valid); item["provenance"].update(change)
+                self.assert_invalid(item)
+        # An old Nano record still needs its exact priced estimate.
+        item = copy.deepcopy(self.record(provenance=self.live()))
+        item["provenance"]["estimated_cost_usd"] = None
+        self.assert_invalid(item)
+
     def test_live_error_status_matrix_and_unknown_usage_are_valid(self):
         cases = [
             ("transport_error", "timeout"), ("http_error", "http_error"),

@@ -37,7 +37,10 @@ _PROVENANCE_KEYS = {
     "error_code", "latency_seconds", "prompt_tokens", "completion_tokens",
     "estimated_cost_usd", "billed_cost_usd", "reservation_usd",
 }
-_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+# Historical stored records were made with Nano (priced; an exact estimate is required).
+# Since October 14 case explanations use Ultra, whose price is not pinned: no estimate.
+_NANO_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+_ULTRA_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
 _ENDPOINT = "https://api.tokenfactory.nebius.com/v1/"
 _REPARSE = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 
@@ -138,8 +141,10 @@ def _provenance(value: object) -> dict:
         if type(value["reservation_usd"]) not in (int, float) or value["reservation_usd"] != 0:
             _fail()
     else:
-        if (value["provider"], value["model"], value["endpoint"]) != (
-                "nebius-token-factory", _MODEL, _ENDPOINT):
+        if (value["provider"], value["endpoint"]) != ("nebius-token-factory", _ENDPOINT):
+            _fail()
+        model = value["model"]
+        if model not in (_NANO_MODEL, _ULTRA_MODEL):
             _fail()
         status = value["request_status"]
         code = value["error_code"]
@@ -153,7 +158,7 @@ def _provenance(value: object) -> dict:
             _fail()
         if type(value["reservation_usd"]) not in (int, float) or value["reservation_usd"] != .02:
             _fail()
-        if prompt is None:
+        if prompt is None or model == _ULTRA_MODEL:
             if estimate is not None:
                 _fail()
         else:
