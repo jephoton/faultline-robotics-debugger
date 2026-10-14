@@ -1,0 +1,21 @@
+# Normalise text to LF in the repository and the working tree (a tool converted some files to CRLF).
+* text=auto eol=lf
+
+# Binary and generated artefacts: never touched by line-ending conversion.
+*.mp4 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.hdf5 binary
+*.h5 binary
+*.npz binary
+*.npy binary
+*.pt binary
+*.pth binary
+*.gz binary
+*.zip binary
+*.woff binary
+*.woff2 binary
