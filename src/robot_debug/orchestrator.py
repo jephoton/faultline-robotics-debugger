@@ -381,7 +381,7 @@ class DefaultTools:
     def audit_workload(self, spec: Spec, run_id: str) -> Dict[str, Any]:
         from robot_debug.workloads import audit_workload
 
-        return self._checked(audit_workload(spec, run_id))
+        return self._checked(audit_workload(spec.raw if isinstance(spec, Spec) else spec, run_id))
 
     def replay_workload(self, case: Mapping[str, Any], run_id: str, attempts: int,
                         inputs: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:

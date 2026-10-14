@@ -70,7 +70,8 @@ def _parser() -> argparse.ArgumentParser:
 def _lazy_backend_factory() -> Callable[[sp.Spec], Any]:
     from robot_debug.backends import make_backend
 
-    return make_backend
+    # The backends read the spec's raw YAML mapping (``backend:`` section), not the parsed Spec.
+    return lambda spec: make_backend(spec.raw if isinstance(spec, sp.Spec) else spec)
 
 
 def _lazy_image_module() -> Any:
