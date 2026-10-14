@@ -17,6 +17,7 @@ from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.case_io import SanitizedCaseValidationError
 from robot_debug.case_store import inspect_case, list_cases
 from robot_debug.explanation_store import read_case_reports
+from robot_debug.case_register import list_diagnoses, read_diagnosis
 
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
@@ -126,16 +127,39 @@ def public_recipe(case: dict) -> dict:
     return {"recipe": {key: projected[key] for key in ("schema_version", "case_id", "task", "policy", "runtime", "perturbation", "protocol")}, "missing": []}
 
 
+def public_diagnosis(entry: Mapping[str, Any], diagnoses_root: Path, artifact_root: Path) -> dict:
+    """An index entry for the browser: summary fields, file names and a ``/media`` URL per video."""
+    result = {key: value for key, value in entry.items() if key not in {"files"}}
+    videos = {}
+    for role, video in (entry.get("videos") or {}).items():
+        url = None
+        if isinstance(video, Mapping) and isinstance(video.get("file"), str):
+            try:
+                relative = (diagnoses_root / entry["case_id"] / video["file"]).resolve().relative_to(
+                    artifact_root.resolve())
+                url = "/media/" + relative.as_posix()
+            except (ValueError, OSError):
+                url = None
+            videos[role] = dict(video, url=url)
+        else:
+            videos[role] = None
+    result["videos"] = videos
+    return result
+
+
 def make_handler(
     catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None,
-    research_reader: Optional[ResearchReader] = None,
+    research_reader: Optional[ResearchReader] = None, diagnoses_root: Optional[Path] = None,
 ) -> Type[BaseHTTPRequestHandler]:
     """Create a handler closed over a catalog and the packaged static assets.
 
     ``research_reader`` reads stored (never fetched) research records and
     defaults to ``robot_debug.research_store.read_case_research``.
+    ``diagnoses_root`` is the folder of registered diagnoses (default
+    ``<artifacts>/diagnoses``, written by ``robot_debug.case_register``).
     """
     read_research = research_reader or default_research_reader
+    diagnoses = diagnoses_root or catalog.artifact_root / "diagnoses"
 
     class ViewerHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -164,13 +188,19 @@ def make_handler(
                     else:
                         case = inspect_case(case_workspace or catalog.artifact_root / "cases", parts[3])
                         self.send_json(200, public_recipe(case) if len(parts) == 5 else {"case": public_case(case)})
+                elif path == "/api/diagnoses":
+                    self.send_json(200, {"diagnoses": [public_diagnosis(entry, diagnoses, catalog.artifact_root)
+                                                       for entry in list_diagnoses(diagnoses)], "warnings": []})
+                elif path.startswith("/api/diagnoses/"):
+                    entry = read_diagnosis(diagnoses, path[len("/api/diagnoses/"):])
+                    self.send_json(200, {"diagnosis": public_diagnosis(entry, diagnoses, catalog.artifact_root)})
                 elif path.startswith("/api/episodes/") and path.endswith("/trace"):
                     episode_id = path[len("/api/episodes/") : -len("/trace")]
                     self.send_json(200, catalog.load_trace(episode_id))
                 elif path.startswith("/media/"):
                     self.send_media(unquote(path[len("/media/") :]))
-                elif path in {"/", "/index.html", "/styles.css", "/app.js"}:
-                    asset_name = "index.html" if path == "/" else path[1:]
+                elif path in {"/", "/index.html", "/styles.css", "/app.js", "/diagnoses", "/diagnoses.js"}:
+                    asset_name = {"/": "index.html", "/diagnoses": "diagnoses.html"}.get(path, path[1:])
                     asset = web_root / asset_name
                     if not asset.is_file():
                         raise FileNotFoundError(path)
@@ -258,10 +288,12 @@ def make_handler(
 def create_server(
     artifact_root: Path, host: str = "127.0.0.1", port: int = 8765,
     case_workspace: Optional[Path] = None, research_reader: Optional[ResearchReader] = None,
+    diagnoses_root: Optional[Path] = None,
 ) -> ThreadingHTTPServer:
     catalog = ArtifactCatalog(artifact_root)
     web_root = Path(__file__).with_name("web")
-    return ThreadingHTTPServer((host, port), make_handler(catalog, web_root, case_workspace, research_reader))
+    return ThreadingHTTPServer(
+        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root))
 
 
 def build_parser() -> argparse.ArgumentParser:
