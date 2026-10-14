@@ -202,7 +202,7 @@ def _validate(packet: object) -> Dict[str, Any]:
     checked_evidence = []
     seen = set()
     for item in evidence:
-        entry = _keys(item, ("evidence_id", "phase", "role", "selection", "outcomes", "decision"))
+        entry = _keys(item, ("evidence_id", "phase", "role", "selection", "outcomes", "decision", "meaning"))
         evidence_id = entry["evidence_id"]
         _require(type(evidence_id) is str and _EVIDENCE_ID.match(evidence_id) is not None
                  and evidence_id not in seen)
@@ -213,7 +213,7 @@ def _validate(packet: object) -> Dict[str, Any]:
         checked_evidence.append({
             "evidence_id": evidence_id, "phase": _text(entry["phase"], 16), "role": _text(entry["role"], 16),
             "selection": _selection_from_parts(entry["selection"], nullable=True), "outcomes": outcomes,
-            "decision": entry["decision"]})
+            "decision": entry["decision"], "meaning": _text(entry["meaning"], 600)})
     checked_evidence.sort(key=lambda row: int(row["evidence_id"][1:]))
     result = {"schema_version": SCENARIO_PACKET_VERSION, "kind": SCENARIO_PACKET_KIND, "task": checked_task,
               "differences": checked_differences, "minimal": checked_minimal, "hypothesis": checked_hypothesis,
@@ -238,6 +238,35 @@ def _selection_from_parts(value: object, nullable: bool = False) -> Optional[Lis
     return parts
 
 
+def evidence_meaning(phase: str, role: str, parts: Optional[List[Dict[str, Any]]], outcomes: str,
+                     decision: str) -> str:
+    """One plain sentence a reader (or a small model) cannot misread: which scene ran and what happened.
+
+    Added after Nemotron Nano read "changed only the soup, S S" as "reverting the soup did not
+    restore success" (October 13): the bare codes were too easy to invert.
+    """
+
+    counts = "{} of {} attempts failed".format(outcomes.split().count("F"), len(outcomes.split()))
+    if role == "failing":
+        scene = "The failing start itself"
+    elif role == "reference":
+        scene = "The passing reference start itself"
+    elif parts:
+        moved = ", ".join("{} {} {:g}%".format(part["entity"], part["component"], round(part["fraction"] * 100, 1))
+                          for part in parts)
+        scene = "The passing reference start with only these differences applied ({}); every other entity at the reference".format(moved)
+    else:
+        scene = "The passing reference start with no differences applied"
+    verdict = {
+        "reproduces": "so this scene DOES reproduce the failure",
+        "does_not_reproduce": "so this scene does NOT reproduce the failure (the task mostly succeeded)",
+        "passes": "so this scene passes as a reference should",
+        "fails": "so this reference does not pass reliably",
+        "invalid_scene": "so this scene was physically invalid and says nothing about the policy",
+    }.get(decision, "decision: " + decision)
+    return "{}: {} ({}), {}.".format(scene, outcomes, counts, verdict)
+
+
 def make_scenario_packet(case: Mapping[str, Any]) -> Dict[str, Any]:
     """The bounded packet for a ``scenario_reduction`` case record. Raises ``EvidencePacketError``."""
 
@@ -254,10 +283,14 @@ def make_scenario_packet(case: Mapping[str, Any]) -> Dict[str, Any]:
                 "entities": [{key: item[key] for key in (
                     "entity", "rank", "in_final", "necessary", "sufficient", "label", "necessary_basis")}
                     for item in measurement["entities"]]}
-        evidence = [{
-            "evidence_id": "c{}".format(item["index"]), "phase": item["phase"], "role": item["role"],
-            "selection": _selection(item.get("selection")), "outcomes": letters(item.get("outcomes")),
-            "decision": item["decision"]} for item in case.get("evidence") or []]
+        evidence = []
+        for item in case.get("evidence") or []:
+            parts = _selection(item.get("selection"))
+            outcomes = letters(item.get("outcomes"))
+            evidence.append({
+                "evidence_id": "c{}".format(item["index"]), "phase": item["phase"], "role": item["role"],
+                "selection": parts, "outcomes": outcomes, "decision": item["decision"],
+                "meaning": evidence_meaning(item["phase"], item["role"], parts, outcomes, item["decision"])})
         packet = {
             "schema_version": SCENARIO_PACKET_VERSION, "kind": SCENARIO_PACKET_KIND,
             "task": {"suite": case["suite"], "task_id": case["task_id"], "instruction": case["instruction"],
@@ -315,7 +348,10 @@ SCENARIO_SYSTEM_PROMPT = (
     "each top-ranked entity, necessary is true when the final selection without it did not "
     "reproduce the failure, sufficient is true when changing only that entity reproduced it; "
     "null means not tested. evidence lists those reruns by evidence_id; outcomes use S for "
-    "success, F for policy failure, I for an invalid scene, one letter per attempt. "
+    "success, F for policy failure, I for an invalid scene, one letter per attempt; each evidence "
+    "item's meaning states in plain words which scene ran and whether it reproduced the failure, "
+    "and is authoritative: a scene with only one entity applied tests whether that entity is "
+    "sufficient, not what happens when it is reverted. "
     "Return exactly one JSON object with keys schema_version (the integer 1), observations, "
     "hypotheses and limitations. observations: 2 to 4 objects with keys text and evidence_ids, "
     "plain factual statements a reviewer can check against measured and evidence, saying what "

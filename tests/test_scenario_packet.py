@@ -263,3 +263,20 @@ class RequestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvidenceMeaningTests(unittest.TestCase):
+    def test_a_single_entity_probe_that_passed_is_worded_as_not_reproducing(self):
+        from robot_debug.scenario_packet import evidence_meaning
+        text = evidence_meaning("probe", "hybrid",
+                                [{"entity": "alphabet_soup_1", "component": "position", "fraction": 1.0}],
+                                "S S", "does_not_reproduce")
+        self.assertIn("only these differences applied (alphabet_soup_1 position 100%)", text)
+        self.assertIn("0 of 2 attempts failed", text)
+        self.assertIn("does NOT reproduce the failure", text)
+
+    def test_gates_name_the_starts_themselves(self):
+        from robot_debug.scenario_packet import evidence_meaning
+        self.assertIn("The failing start itself: F F F F (4 of 4 attempts failed), so this scene DOES reproduce",
+                      evidence_meaning("gate", "failing", None, "F F F F", "reproduces"))
+        self.assertIn("The passing reference start itself", evidence_meaning("gate", "reference", None, "S S S S S", "passes"))
