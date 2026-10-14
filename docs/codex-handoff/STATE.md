@@ -15,8 +15,10 @@
 - L40S capacity was scarce; scratchpad resubmitter reused one bucket. Tenant
   bucket access-policy quota is 10: old M3/M6 buckets still hold objects and
   must be emptied by Jethro before deletion.
-- In progress: measured hypothesis verdict (necessary/sufficient) and the
-  scenario explanation packet; then report, case and Nano explanation.
+- Done: measured hypothesis check (soup `necessary_not_sufficient`), report and
+  case in ignored `artifacts/m7-scenario-case-t0s14/`, and a stored Nemotron 3
+  Ultra explanation (Ultra chosen over Nano and Super by a measured comparison;
+  ADR 0028 amendment). Download identities revoked.
 - Next: `faultline diagnose` design checkpoint (ADR 0027 step 4, with the M3
   startup cut and the resubmitter folded in).
 
