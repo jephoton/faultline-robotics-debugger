@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Callable, NamedTuple
 
@@ -19,11 +20,17 @@ from robot_debug.case_store import inspect_case
 from robot_debug.evidence_packet import make_evidence_packet, packet_identity
 from robot_debug.explanation import build_offline_report, explain_rejection
 from robot_debug.explanation_store import make_stored_report, store_report
+from robot_debug.scenario_packet import (
+    make_scenario_packet,
+    scenario_packet_identity,
+    validate_scenario_explanation,
+)
 from robot_debug.token_factory import (
     TokenFactoryError,
     load_api_key,
     preflight,
     request_interpretation,
+    request_scenario_interpretation,
     reserve_pilot,
 )
 
@@ -41,6 +48,14 @@ class ExplainCaseError(ValueError):
     """A fixed, non-private CLI orchestration error."""
 
 
+# Scenario reduction cases (M7) are plain JSON files written by report_scenario_reduction.py,
+# not entries in the case store. Each live attempt reserves its own US$0.02 under this
+# ignored folder; the label names the attempt.
+SCENARIO_ATTEMPTS_ROOT = REPOSITORY_ROOT / "artifacts" / "m7-scenario-explanations"
+_ATTEMPT_LABEL = re.compile(r"[a-z0-9][a-z0-9\-]{0,31}\Z")
+_MAX_CASE_BYTES = 1_048_576
+
+
 class Dependencies(NamedTuple):
     """Private orchestration seams used by offline unit tests."""
 
@@ -51,6 +66,22 @@ class Dependencies(NamedTuple):
     request_interpretation: Callable
     store_report: Callable
 
+
+class ScenarioDependencies(NamedTuple):
+    """Private seams for the scenario commands, replaced by fakes in offline tests."""
+
+    load_api_key: Callable
+    preflight: Callable
+    reserve_pilot: Callable
+    request_scenario_interpretation: Callable
+
+
+DEFAULT_SCENARIO_DEPENDENCIES = ScenarioDependencies(
+    load_api_key=load_api_key,
+    preflight=preflight,
+    reserve_pilot=reserve_pilot,
+    request_scenario_interpretation=request_scenario_interpretation,
+)
 
 DEFAULT_DEPENDENCIES = Dependencies(
     inspect_case=inspect_case,
@@ -85,6 +116,16 @@ def _parser() -> argparse.ArgumentParser:
     live.add_argument("--env-file", type=Path)
     live.add_argument("--packet-version", type=int, choices=(1, 2), default=1)
     live.add_argument("--attempt", choices=ATTEMPT_LABELS)
+
+    scenario_prepare = commands.add_parser("scenario-prepare")
+    scenario_prepare.add_argument("--case", type=Path, required=True)
+    scenario_prepare.add_argument("--packet-out", type=Path)
+
+    scenario_live = commands.add_parser("scenario-live")
+    scenario_live.add_argument("--case", type=Path, required=True)
+    scenario_live.add_argument("--out", type=Path, required=True)
+    scenario_live.add_argument("--env-file", type=Path)
+    scenario_live.add_argument("--attempt", required=True)
     return parser
 
 
@@ -180,6 +221,76 @@ def run_live(workspace: Path, case_id: str, env_file: Path | None,
     return _summary(record)
 
 
+def _scenario_packet(case_path: Path) -> tuple:
+    """Read a scenario case file and project it to the bounded packet (case id, packet)."""
+    try:
+        if Path(case_path).stat().st_size > _MAX_CASE_BYTES:
+            raise ExplainCaseError("invalid scenario case")
+        case = json.loads(Path(case_path).read_text(encoding="utf-8"))
+        packet = make_scenario_packet(case)
+        case_id = case["case_id"]
+    except ExplainCaseError:
+        raise
+    except Exception:
+        raise ExplainCaseError("invalid scenario case") from None
+    return case_id, packet
+
+
+def _write_new(path: Path, value: dict) -> None:
+    try:
+        with Path(path).open("x", encoding="utf-8", newline="\n") as handle:
+            json.dump(value, handle, ensure_ascii=False, indent=1, sort_keys=True, allow_nan=False)
+            handle.write("\n")
+    except FileExistsError:
+        raise ExplainCaseError("an output file exists") from None
+    except OSError:
+        raise ExplainCaseError("an output file could not be written") from None
+
+
+def run_scenario_prepare(case_path: Path, packet_out: Path | None = None) -> dict:
+    """Build the bounded packet for a scenario reduction case offline (no credentials, no network)."""
+    case_id, packet = _scenario_packet(case_path)
+    if packet_out is not None:
+        _write_new(packet_out, packet)
+    return {"case_id": case_id, "packet_id": scenario_packet_identity(packet),
+            "evidence_ids": [item["evidence_id"] for item in packet["evidence"]],
+            "measured_verdict": None if packet["measured"] is None else packet["measured"]["verdict"]}
+
+
+def run_scenario_live(case_path: Path, out: Path, env_file: Path | None, attempt: str,
+                      *, deps: ScenarioDependencies = DEFAULT_SCENARIO_DEPENDENCIES) -> dict:
+    """Reserve and make one paid attempt for a scenario case, then store the validated result."""
+    if type(attempt) is not str or _ATTEMPT_LABEL.fullmatch(attempt) is None:
+        raise ExplainCaseError("unknown attempt label")
+    if Path(out).exists():
+        raise ExplainCaseError("an output file exists")
+    case_id, packet = _scenario_packet(case_path)
+    packet_id = scenario_packet_identity(packet)
+    api_key = deps.load_api_key(env_file)
+    deps.preflight(api_key)
+    deps.reserve_pilot(SCENARIO_ATTEMPTS_ROOT / attempt, case_id, packet_id)
+    result = deps.request_scenario_interpretation(packet, api_key)
+    interpretation = None
+    status, error_code = "absent", result["provenance"].get("error_code")
+    if result["response_json"] is not None:
+        try:
+            interpretation = validate_scenario_explanation(result["response_json"], packet)
+            status = "validated-structure"
+        except Exception:
+            status, error_code = "rejected", "invalid_explanation"
+    record = {"schema_version": 1, "kind": "scenario_explanation", "case_id": case_id,
+              "packet_id": packet_id, "packet": packet, "interpretation_status": status,
+              "interpretation": interpretation, "error_code": error_code,
+              "provenance": result["provenance"],
+              "disclaimer": "The packet counts reruns only. Necessary and sufficient are relative to the "
+                            "final selection, which is a local minimum; there is no causal proof and the "
+                            "interpretation requires human review."}
+    _write_new(out, record)
+    return {"case_id": case_id, "packet_id": packet_id, "interpretation_status": status,
+            "request_status": result["provenance"]["request_status"],
+            "estimated_cost_usd": result["provenance"].get("estimated_cost_usd")}
+
+
 def main(argv=None) -> int:
     try:
         args = _parser().parse_args(argv)
@@ -188,6 +299,10 @@ def main(argv=None) -> int:
                                  packet_version=args.packet_version)
         elif args.command == "preflight":
             result = run_preflight(args.env_file)
+        elif args.command == "scenario-prepare":
+            result = run_scenario_prepare(args.case, args.packet_out)
+        elif args.command == "scenario-live":
+            result = run_scenario_live(args.case, args.out, args.env_file, args.attempt)
         else:
             result = run_live(args.workspace, args.case_id, args.env_file,
                               packet_version=args.packet_version, attempt=args.attempt)

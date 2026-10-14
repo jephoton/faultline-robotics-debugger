@@ -890,3 +890,97 @@ def request_scenario_hypothesis(instruction: str, differences: list, api_key: st
     result.update(source="model", ranking=parsed["ranking"], hypothesis=parsed["hypothesis"],
                   completed=parsed["completed"], provenance=provenance, raw_content=content)
     return result
+
+
+# --- M7: scenario reduction explanation (additive; nothing above is changed) -------
+
+_MAX_REQUEST_BYTES_SCENARIO_EXPLAIN = 12_000
+_MAX_TOKENS_SCENARIO_EXPLAIN = 1500
+
+
+def _scenario_explanation_payload(packet: dict) -> dict:
+    from .scenario_packet import SCENARIO_SYSTEM_PROMPT
+
+    user = json.dumps(packet, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": SCENARIO_SYSTEM_PROMPT},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": _MAX_TOKENS_SCENARIO_EXPLAIN,
+        "temperature": 0,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    if len(encoded) > _MAX_REQUEST_BYTES_SCENARIO_EXPLAIN:
+        raise TokenFactoryError("request_too_large")
+    return payload
+
+
+def request_scenario_interpretation(packet: dict, api_key: str,
+                                    transport: Transport | None = None) -> dict:
+    """Make exactly one bounded POST that interprets a ``scenario_reduction`` packet.
+
+    Same contract and provenance as :func:`request_interpretation` (Nemotron Nano, one
+    attempt, the US$0.02 reservation figure, no retry): ``response_json`` is the model text
+    only when it passes :func:`robot_debug.scenario_packet.validate_scenario_explanation`
+    against this packet. Rejected text is returned as ``rejected_content`` for local diagnosis
+    only, and withheld if it carries the key.
+    """
+    from .scenario_packet import validate_scenario_explanation, validate_scenario_packet
+
+    validated = validate_scenario_packet(packet)
+    if not _valid_key(api_key):
+        raise TokenFactoryError("invalid_api_key")
+    payload = _scenario_explanation_payload(validated)
+    call = _default_transport if transport is None else transport
+    started = time.monotonic()
+    try:
+        response = call("POST", "chat/completions", payload, api_key)
+    except (Exception, KeyboardInterrupt) as exc:
+        latency = time.monotonic() - started
+        code = _post_error_code(exc)
+        status = ("transport_error" if code == "timeout"
+                  else "invalid_response" if code == "invalid_response" else "http_error")
+        return {"response_json": None, "provenance": _provenance(status, code, latency)}
+    latency = time.monotonic() - started
+    try:
+        if type(response) is not dict or response.get("model") != MODEL:
+            raise ValueError
+        prompt, completion = _usage(response)
+        if completion is not None and completion > _MAX_TOKENS_SCENARIO_EXPLAIN:
+            raise ValueError
+    except Exception:
+        return {"response_json": None,
+                "provenance": _provenance("invalid_response", "invalid_response", latency)}
+    choices = response.get("choices")
+    if (type(choices) is list and len(choices) == 1 and type(choices[0]) is dict
+            and choices[0].get("finish_reason") == "length"):
+        return {"response_json": None,
+                "provenance": _provenance("invalid_response", "output_limit", latency,
+                                          prompt, completion)}
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        content = None
+    try:
+        if (type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict
+                or choices[0].get("finish_reason") != "stop"
+                or type(choices[0].get("message")) is not dict or type(content) is not str):
+            raise ValueError
+        interpretation = validate_scenario_explanation(content, validated)
+        if _research_leaks_key(content, api_key) or _contains_secret(interpretation, api_key):
+            raise ValueError
+    except Exception:
+        result = {"response_json": None,
+                  "provenance": _provenance("invalid_response", "invalid_response", latency,
+                                            prompt, completion)}
+        if type(content) is str and not _research_leaks_key(content, api_key):
+            result["rejected_content"] = content
+        return result
+    return {"response_json": content,
+            "provenance": _provenance("completed", None, latency, prompt, completion)}
