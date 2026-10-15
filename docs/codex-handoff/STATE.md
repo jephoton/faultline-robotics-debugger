@@ -1,5 +1,19 @@
 # Faultline current project state
 
+## October 15 `faultline diagnose` status (Claude Code)
+
+- `faultline diagnose / replay / image / cases` built (ADR 0031): spec,
+  spend ledger with a true worst-case bound, Nebius backend wrapping the CLI
+  (one bucket per run, reusable read identity, capacity resubmission,
+  watchdog, per-Job download, clean-up), local Docker backend (untested on a
+  GPU), scenario-replay Job mode, generalised audit mode, diagnoses index in
+  the viewer. Independent review: 7 must-fix defects fixed. Image v14
+  `d95d5f78d17f`. Suite 2145 OK.
+- First live run: `faultline replay` on the October 13 case -> minimal scene
+  F S F F F, reference S S S S S, `still_reproduces`, US$0.41.
+- Specs with real ids live only in ignored `artifacts/specs-local/`.
+- Next: breadth pack (ADR 0027), then UI overhaul, then Vercel gallery.
+
 ## October 13–14 M7 mode 1 status (Claude Code)
 
 - Mode 1 (scenario reduction, ADR 0028; early-decided gates, ADR 0029) built,

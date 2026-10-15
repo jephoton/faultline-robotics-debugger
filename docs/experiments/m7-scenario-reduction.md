@@ -143,3 +143,14 @@ Ignored `artifacts/serverless-m7-*-20261013*/evidence/` (summaries, configs,
 sidecars, traces, MP4s) and the plans with Nemotron replies in
 `artifacts/serverless-m7-reduce{,2,3}-20261013/`. Download identities were
 revoked after the runs.
+
+## Regression replay with `faultline replay` (October 15)
+
+The first live run of the new `faultline` tooling (ADR 0031) replayed this
+case: the minimal 5-shift scene failed F S F F F (`reproduces`) and passing
+start 28 succeeded 5 of 5, so the verdict is `still_reproduces`. One L40S Job,
+597 s of workload, about US$0.41 against a US$1.20 cap (worst-case
+reservation US$1.08). Two earlier attempts stopped before creating a Job
+(US$0): a WSL path bug in the backend, fixed in `718fbf2`, which also proved
+the clean-up path (access key and empty bucket deleted).
+
