@@ -333,7 +333,8 @@ def _run_m6_mode(
         clock=clock,
         progress=progress,
         prefetch=None if prefetch_hook is None else (lambda: prefetch_hook(log_root=run_root / "logs")),
-        write_config=run_failure_search._write_config,
+        # The stage writer adds scene_perturbation / instruction lines the plain writer rejects.
+        write_config=m6_experiment.write_stage_config,
         load_result=lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0],
     )
 

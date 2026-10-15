@@ -356,3 +356,16 @@ class ThresholdWorkloadTests(WorkloadTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditWriterWiringTests(unittest.TestCase):
+    def test_audit_jobs_write_configs_with_the_scene_aware_stage_writer(self):
+        import inspect
+        from robot_debug import job_workload
+        source = inspect.getsource(job_workload._run_m6_mode)
+        self.assertIn("write_config=m6_experiment.write_stage_config", source)
+
+    def test_the_stage_writer_refuses_interpolation_characters(self):
+        from robot_debug import m6_experiment
+        with self.assertRaises(ValueError):
+            m6_experiment.write_stage_config(instruction="pick up ${oc.env:HF_TOKEN}", config_path="unused.yaml")
