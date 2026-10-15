@@ -45,3 +45,20 @@ untested on GPU (the development machine has no suitable GPU).
   with tests instead of scratchpad scripts.
 - The experiment-named Job modes stay for replaying recorded evidence; the
   scenario and audit modes are driven by the spec.
+
+## Implementation notes (October 15)
+
+- An independent review before the first live run found seven defects (a
+  setup crash, Jobs left running after Ctrl-C during submit, a worst case that
+  the fixed one-hour provider timeout could exceed, unbounded waiting, and a
+  possible second `job create`); all were fixed with tests, including an
+  end-to-end mode-1 test through the real Nebius backend and a fake CLI.
+- **Worst case is now a real upper bound:** provider timeout =
+  ceil((deadline + 600 s) / 60) x 60; reservation = (timeout + 240 s start
+  allowance) x hourly rate. The watchdog cancels at deadline + 300 s and the
+  provider stops the Job at the timeout even if the laptop sleeps.
+- `scenario.start` screens a configurable reference pool (default starts
+  0-19) instead of 0-49.
+- Every finished diagnosis or replay saves `replay-inputs.json`, so a case can
+  be replayed later from the diagnoses index.
+
