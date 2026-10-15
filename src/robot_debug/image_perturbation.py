@@ -36,6 +36,8 @@ from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
+from robot_debug import scene_perturbation
+
 KINDS = ("darken", "noise", "blur", "contrast", "jpeg", "colour_cast", "motion_blur", "dead_pixels")
 
 DARKEN_MAX_REDUCTION = 0.95
@@ -90,8 +92,14 @@ def _validate_severity(severity: Any) -> float:
 
 
 def physical_value(kind: str, severity: float) -> Dict[str, Any]:
-    """The physical parameter a severity maps to, as ``{"name", "value"}``."""
+    """The physical parameter a severity maps to, as ``{"name", "value"}``.
 
+    Scene families (viewpoint, lighting) are answered by :mod:`robot_debug.scene_perturbation`, so the
+    threshold search and the reports can ask one function about any audit family.
+    """
+
+    if kind in scene_perturbation.SCENE_KINDS:
+        return scene_perturbation.physical_value(kind, severity)
     if kind not in KINDS:
         raise ValueError("unknown perturbation kind")
     s = _validate_severity(severity)

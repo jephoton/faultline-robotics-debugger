@@ -11,6 +11,11 @@ different noise realisation than the policy saw (same distribution, different
 pixels). Blur, darkening, contrast and occlusion are deterministic functions of the
 image, so for them the video always matches. The per-camera probe records statistics
 of the real policy input, not of the video.
+
+Scene families (``scene_perturbation``, ADR 0032) change the simulated scene itself, so
+the recorded video shows exactly what the policy saw. They are applied to the MuJoCo
+model after the start state is set and before the settling steps, and undone before the
+next reset (see :mod:`robot_debug.scene_perturbation`).
 """
 
 from __future__ import annotations
@@ -28,6 +33,15 @@ from robot_debug.occlusion import (
     RectOcclusion,
     apply_agentview_occlusion,
     apply_wrist_occlusion,
+)
+# The scene-family bounds are re-exported so they can be calibrated from one place.
+from robot_debug.scene_perturbation import (  # noqa: F401
+    LIGHTING_MAX_REDUCTION,
+    SCENE_KINDS,
+    VIEWPOINT_MAX_SHIFT_M,
+    VIEWPOINT_MAX_YAW_DEG,
+    ScenePerturbation,
+    SceneRig,
 )
 
 _CAMERAS = ("agentview", "wrist")
@@ -65,7 +79,12 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     deviation of the policy-input image before and after the perturbation at the
     first observation after reset and every 40th step up to 280. It proves each
     camera was perturbed without storing frames, is rewritten atomically, stays
-    under 16 KB and never changes the observation.
+    under 16 KB and never changes the observation. A scene family adds the values it
+    applied to each episode (``scene_applied``) to the same file.
+
+    ``scene_perturbation`` (``{"kind": "viewpoint" | "lighting", "severity": s}``) perturbs
+    the scene after the start state and before settling. The benchmark start is then
+    replayed step for step as upstream does it (the same replay ``state_out`` uses).
     """
 
     def __init__(
@@ -82,6 +101,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         scenario_start: Optional[Mapping[str, Any]] = None,
         layout_out: Optional[str] = None,
         state_out: Optional[str] = None,
+        scene_perturbation: Optional[Mapping[str, Any]] = None,
         **kwargs: Any
     ) -> None:
         if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
@@ -110,6 +130,15 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             raise ValueError("state_out exports benchmark starts; a scenario_start is already a start state")
         self.layout_out = layout_out
         self.state_out = state_out
+        self.scene_perturbation = ScenePerturbation.from_mapping(scene_perturbation)
+        if self.scene_perturbation is not None:
+            if external_reset is not None:
+                raise ValueError("scene_perturbation cannot be combined with external_reset")
+            wait = kwargs.get("num_steps_wait", 10)
+            if self.scene_perturbation.enabled and (isinstance(wait, bool) or not isinstance(wait, int) or wait < 1):
+                raise ValueError("scene_perturbation needs at least one settling step to render the new scene")
+        self._scene_rig = SceneRig()
+        self._scene_applied = []  # type: List[Dict[str, Any]]
         self._exported = set()  # type: set
         self.external_reset = external_reset
         self.scenario_start = scenario_start
@@ -169,18 +198,24 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     def _scalar_active(self) -> bool:
         return self.image_perturbation is not None and self.image_perturbation.enabled
 
+    def _scene_active(self) -> bool:
+        return self.scene_perturbation is not None and self.scene_perturbation.enabled
+
     def _episode_seed(self) -> int:
         return stable_seed(self._perturbation_seed, max(self._episode_index, 0))
 
     def perturbation_record(self) -> Optional[dict]:
         """The replay spec of the new options, or ``None`` when none is enabled."""
 
-        if not self._scalar_active() and not self.wrist_occlusion.enabled:
+        if not self._scalar_active() and not self.wrist_occlusion.enabled and not self._scene_active():
             return None
         record = {"seed": self._perturbation_seed}
         if self._scalar_active():
             record["image_perturbation"] = dict(
                 self.image_perturbation.to_mapping(), physical=self.image_perturbation.physical())
+        if self._scene_active():
+            record["scene_perturbation"] = dict(
+                self.scene_perturbation.to_mapping(), physical=self.scene_perturbation.physical())
         if self.wrist_occlusion.enabled:
             record["wrist_occlusion"] = {
                 "x": self.wrist_occlusion.x, "y": self.wrist_occlusion.y,
@@ -193,6 +228,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self._begin_episode()
         self._invalid_scene = False
         self._invalid_obs = None
+        if self._scene_active():
+            self._scene_rig.restore()  # the simulator is reused across episodes
         if self.scenario_start is not None:
             return self._reset_from_scenario(task)
         if self.external_reset is not None:
@@ -200,7 +237,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         if self.init_state_index is not None:
             # The pinned upstream reset starts from ``init_states[task["episode_idx"]]``.
             task = dict(task, episode_idx=self.init_state_index)
-        if self.state_out is not None:
+        if self.state_out is not None or self._scene_active():
             return self._reset_benchmark_start(task)
         observation = super().reset(task)
         if self.layout_out is not None:
@@ -337,11 +374,13 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         video frame. A benchmark start is never cut short: the contact scan only records
         ``validity`` (and the deepest penetration) beside ``state_out``, so a screen can
         refuse an interpenetrating start without changing any episode.
+
+        Without ``state_out`` the same replay serves a ``scene_perturbation``, which is applied
+        after the start state is set and before the dummy steps (so the first observation
+        policy sees is already rendered from the perturbed scene).
         """
 
         from robot_debug import scene_inspect
-        from robot_debug.scenario_import import (
-            ScenarioImportError, candidate_from_benchmark, write_scenario_candidate)
         from vla_eval.benchmarks.libero import benchmark as upstream
 
         env = self._make_env(task)
@@ -349,20 +388,30 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self._current_task_id = task["task_id"]
         env.reset()
         sim = scene_inspect.sim_of(env)
-        length = int(np.asarray(env.get_sim_state()).size)
-        context = self._scene_context(task, sim, length)
-        self._export_layout(task, context)
+        exporting = self.state_out is not None
+        context = None
+        length = 0
+        if exporting or self.layout_out is not None:
+            length = int(np.asarray(env.get_sim_state()).size)
+            context = self._scene_context(task, sim, length)
+            self._export_layout(task, context)
         index = task.get("episode_idx", 0)
-        state = np.asarray(
-            self._task_suite.get_task_init_states(task["task_id"])[index], dtype=np.float64).reshape(-1)
-        if state.size != length:
-            raise ScenarioImportError("benchmark start state length does not match the environment's")
-        observation = env.set_init_state(state)
+        initial = self._task_suite.get_task_init_states(task["task_id"])[index]
+        if exporting:
+            from robot_debug.scenario_import import (
+                ScenarioImportError, candidate_from_benchmark, write_scenario_candidate)
+
+            state = np.asarray(initial, dtype=np.float64).reshape(-1)
+            if state.size != length:
+                raise ScenarioImportError("benchmark start state length does not match the environment's")
+            observation = env.set_init_state(state)
+        else:
+            observation = env.set_init_state(initial)
         forward = getattr(sim, "forward", None)
         if callable(forward):
             forward()
         key = ("state", self._suite_name(), task["task_id"])
-        if key not in self._exported:
+        if exporting and key not in self._exported:
             scan = scene_inspect.scan_contacts(
                 sim.model, sim.data, scene_inspect.PENETRATION_LIMIT_M, body_entity=context["body_entity"])
             write_scenario_candidate(
@@ -378,6 +427,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 "deepest_static_pair": scan.get("deepest_static_pair"),
             })
             self._exported.add(key)
+        if self._scene_active():
+            self._apply_scene(sim)
         dummy_action = getattr(upstream, "LIBERO_DUMMY_ACTION", [0.0] * 6 + [-1.0])
         for _ in range(self.num_steps_wait):
             observation, _reward, _done, _info = env.step(dummy_action)
@@ -386,6 +437,30 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 robot.controller.use_delta = False
         self._recorder.record_video(self._extract_frame(observation))
         return observation
+
+    def _apply_scene(self, sim: Any) -> Dict[str, Any]:
+        """Apply the scene family to the model, record what was applied, and return the record."""
+
+        applied = dict(self._scene_rig.apply(sim, self.scene_perturbation),
+                       episode_index=max(self._episode_index, 0))
+        self._scene_applied.append(applied)
+        self._record_scene_probe()
+        return applied
+
+    def _record_scene_probe(self) -> None:
+        """Rewrite the camera-probe sidecar with the applied scene values; a probe problem never breaks the episode."""
+
+        if self.camera_probe is None:
+            return
+        try:
+            text = self._probe_text()
+            if len(text.encode("utf-8")) > PROBE_MAX_BYTES:
+                self._scene_applied.pop()
+                self._probe_truncated = True
+                text = self._probe_text()
+            self._write_probe(text)
+        except (OSError, ValueError, TypeError):
+            pass
 
     def _reset_from_scenario(self, task: Any) -> Any:
         """Start the episode from the validated scenario state (ADR 0028).
@@ -442,6 +517,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             "deepest_static_penetration_m": scan.get("deepest_static_penetration_m"),
             "deepest_static_pair": scan.get("deepest_static_pair"),
         }
+        if self._scene_active():
+            record["scene_applied"] = self._apply_scene(sim)
         if not scan["valid"]:
             self._invalid_scene = True
             self._invalid_obs = observation
@@ -556,6 +633,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             "perturbation": self.perturbation_record(),
             "episodes": self._probe_episodes,
         }
+        if self._scene_active():
+            document["scene_applied"] = self._scene_applied
         if self._probe_truncated:
             document["truncated"] = True
         return json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
