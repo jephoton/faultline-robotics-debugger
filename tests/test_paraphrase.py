@@ -188,6 +188,16 @@ class ValidationTests(unittest.TestCase):
                          {item["reason"] for item in rejected})
         self.assertTrue(all(len(item["text"]) <= 200 for item in rejected))
 
+    def test_text_without_a_word_is_rejected(self):
+        self.assertTrue(pp.has_words("go"))
+        self.assertFalse(pp.has_words("... !"))
+        accepted, rejected = pp.validate_paraphrases(ORIGINAL, ["...", "?!", GOOD[0]])
+        self.assertEqual([GOOD[0]], accepted)
+        self.assertEqual(["no_words", "no_words"], [item["reason"] for item in rejected])
+
+    def test_the_known_instruction_is_the_one_the_benchmark_uses(self):
+        self.assertEqual(ORIGINAL, pp.KNOWN_INSTRUCTIONS[("libero_object", 0)])
+
     def test_the_count_caps_the_accepted_list(self):
         accepted, rejected = pp.validate_paraphrases(ORIGINAL, GOOD, count=2)
         self.assertEqual(GOOD[:2], accepted)

@@ -18,7 +18,10 @@ BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
 M6_MODES = {"m6-smoke", "m6-threshold"}
 # ADR 0028: LIBERO-10 scenario screening and reduction. Their fields live in scenario_experiment.
 SCENARIO_MODES = {"scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay"}
-_MODES = {"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES | SCENARIO_MODES
+# ADR 0032: instruction paraphrase screening and reduction. Their fields live in language_experiment.
+LANGUAGE_MODES = {"paraphrase-screen", "paraphrase-reduce"}
+_MODES = ({"pilot", "search", "grid", "reduce", "m5b", "m5b-grid"} | BATCH_MODES | M6_MODES | SCENARIO_MODES
+          | LANGUAGE_MODES)
 _BATCH_FIELDS = {"phases", "repeats_per_kind"}
 _BATCH_WORKERS = (4, 8, 12)
 # Equal-work manifest sizes fixed by ADR 0025: repeats per kind (nominal, reduced mask).
@@ -83,6 +86,14 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         if not required <= set(config) <= allowed:
             _fail("workload configuration must contain exactly the required fields")
         expected_fields = set(config)
+    elif mode_name in LANGUAGE_MODES:
+        from robot_debug import language_experiment as language
+
+        required = _CONFIG_FIELDS | language.MODE_REQUIRED[mode_name]
+        allowed = required | language.COMMON_OPTIONAL | language.MODE_OPTIONAL[mode_name]
+        if not required <= set(config) <= allowed:
+            _fail("workload configuration must contain exactly the required fields")
+        expected_fields = set(config)
     if set(config) != expected_fields:
         _fail("workload configuration must contain exactly the required fields")
     schema_version = config["schema_version"]
@@ -113,6 +124,13 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         try:
             validated.update(scenario.validate_mode_fields(mode, config))
         except scenario.ScenarioConfigError as error:
+            raise JobRuntimeError(str(error)) from error
+    if mode in LANGUAGE_MODES:
+        from robot_debug import language_experiment as language
+
+        try:
+            validated.update(language.validate_mode_fields(mode, config))
+        except language.LanguageConfigError as error:
             raise JobRuntimeError(str(error)) from error
     return validated
 
@@ -617,9 +635,10 @@ def export_closed_evidence(
 
 
 __all__ = [
+    "AUDIT_FAMILIES",
     "BATCH_MODES",
     "JobRuntimeError",
-    "AUDIT_FAMILIES",
+    "LANGUAGE_MODES",
     "M6_FAMILIES",
     "M6_MODES",
     "M6_SUITES",

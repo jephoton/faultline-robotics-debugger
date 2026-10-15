@@ -14,10 +14,11 @@ from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import yaml
 
-from robot_debug import batch_experiment, m6_experiment, scenario_experiment
+from robot_debug import batch_experiment, language_experiment, m6_experiment, scenario_experiment
 from robot_debug.job_process import EvaluatorCancelled, InfrastructureError, RunCancelled
 from robot_debug.job_runtime import (
     BATCH_MODES,
+    LANGUAGE_MODES,
     M6_MODES,
     SCENARIO_MODES,
     JobRuntimeError,
@@ -379,6 +380,48 @@ def _run_scenario_mode(
     )
 
 
+def _run_language_mode(
+    *,
+    accepted: Mapping[str, Any],
+    run_root: Path,
+    roots: "WorkloadPaths",
+    model_factory: Callable[..., Any],
+    set_model: Callable[[Any], None],
+    bounded_runner: Callable[..., Any],
+    latch: Dict[str, Optional[str]],
+    remaining: Callable[[], float],
+    launch_deadline: float,
+    clock: Callable[[], float],
+    progress: Callable[..., None],
+) -> Dict[str, Any]:
+    """Drive a paraphrase mode (ADR 0032) through the same bounded evaluator runner as the scenario modes."""
+
+    def run_item(command: Sequence[str], *, item_timeout: float, cancel: Any) -> Any:
+        return bounded_runner(
+            command, cwd=roots.upstream_root, check=False, item_timeout=item_timeout, cancel=cancel
+        )
+
+    prefetch_hook = getattr(model_factory, "prefetch", None)
+    return language_experiment.run_language(
+        mode=accepted["mode"],
+        config=accepted,
+        batch_root=run_root / "language",
+        log_root=run_root / "logs",
+        project_root=roots.project_root,
+        model_factory=model_factory,
+        set_model=set_model,
+        run_item=run_item,
+        failure=lambda: latch["reason"],
+        remaining=remaining,
+        launch_deadline=launch_deadline,
+        clock=clock,
+        progress=progress,
+        prefetch=None if prefetch_hook is None else (lambda: prefetch_hook(log_root=run_root / "logs")),
+        write_config=run_failure_search._write_config,
+        load_result=lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0],
+    )
+
+
 def run_workload(
     config: object,
     *,
@@ -440,11 +483,13 @@ def run_workload(
     batch = accepted["mode"] in BATCH_MODES
     m6 = accepted["mode"] in M6_MODES
     scenario = accepted["mode"] in SCENARIO_MODES
+    language = accepted["mode"] in LANGUAGE_MODES
     batch_summary: Optional[Dict[str, Any]] = None
     m6_summary: Optional[Dict[str, Any]] = None
     scenario_summary: Optional[Dict[str, Any]] = None
+    language_summary: Optional[Dict[str, Any]] = None
     # Batch-style modes start their own model inside the experiment runner.
-    own_model = batch or m6 or scenario
+    own_model = batch or m6 or scenario or language
 
     def set_model(new_model: Any) -> None:
         nonlocal model
@@ -644,6 +689,25 @@ def run_workload(
                     scenario_reason = scenario_summary.get("stop_reason")
                     if scenario_reason is not None:
                         latch_failure(str(scenario_reason))
+                elif language:
+                    language_summary = _run_language_mode(
+                        accepted=accepted,
+                        run_root=run_root,
+                        roots=roots,
+                        model_factory=model_factory,
+                        set_model=set_model,
+                        bounded_runner=bounded_runner,
+                        latch=latch,
+                        remaining=remaining,
+                        launch_deadline=launch_deadline,
+                        clock=clock,
+                        progress=progress,
+                    )
+                    if language_summary.get("cleanup_unconfirmed"):
+                        cleanup_confirmed = False
+                    language_reason = language_summary.get("stop_reason")
+                    if language_reason is not None:
+                        latch_failure(str(language_reason))
                 elif mode in ("pilot", "m5b"):
                     configs = run_root / mode / "configs"
                     configs.mkdir(parents=True)
@@ -812,6 +876,16 @@ def run_workload(
             reduction = scenario_summary.get("reduction") or {}
             summary["scenario_reduction_stop_reason"] = reduction.get("stop_reason")
             summary["scenario_final_selection"] = reduction.get("final_selection")
+    if language_summary is not None:
+        summary["language_stop_reason"] = language_summary.get("stop_reason")
+        summary["language_complete"] = language_summary.get("complete")
+        summary["language_outcomes"] = language_summary.get("outcomes")
+        if accepted["mode"] == "paraphrase-screen":
+            summary["language_reproducing"] = list(language_summary.get("reproducing") or ())
+        if accepted["mode"] == "paraphrase-reduce":
+            reduction = language_summary.get("reduction") or {}
+            summary["language_reduction_stop_reason"] = reduction.get("stop_reason")
+            summary["language_final_edits"] = reduction.get("final_edits")
     if grid_summary is not None:
         summary["grid_stop_reason"] = grid_summary.get("stop_reason")
         found = grid_summary.get("confirmed_failure")

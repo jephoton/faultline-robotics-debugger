@@ -33,6 +33,11 @@ MAX_COUNT = 12
 EXTRA_REQUESTED = 2              # asked for beyond the wanted count, to absorb rejected duplicates
 MAX_REPLY_ITEMS = 40
 MIN_CHARS, MAX_CHARS = 1, 200
+# Task language Faultline has verified against the benchmark, by (suite, task). Any other task
+# needs ``paraphrase.instruction`` in the spec (the text the benchmark gives that task).
+KNOWN_INSTRUCTIONS = {
+    ("libero_object", 0): "pick up the alphabet soup and place it in the basket",
+}
 
 _TOKEN = re.compile(r"[A-Za-z0-9]+(?:['\-][A-Za-z0-9]+)*|[^\sA-Za-z0-9]")
 _SPACES = re.compile(r"\s+")
@@ -204,6 +209,12 @@ def clean_instruction(text: Any) -> str:
     return text
 
 
+def has_words(text: str) -> bool:
+    """Whether ``text`` has at least one word token (not only punctuation)."""
+
+    return any(token[0].isalnum() for token in tokenize(text))
+
+
 def _fingerprint(text: str) -> str:
     return "".join(text.lower().split())
 
@@ -222,7 +233,9 @@ def validate_paraphrases(original: str, candidates: Sequence[Any],
     for candidate in candidates:
         try:
             text = clean_instruction(candidate)
-            if not tokenize(text) or _fingerprint(text) in seen:
+            if not has_words(text):
+                raise ParaphraseError("no_words")
+            if _fingerprint(text) in seen:
                 raise ParaphraseError("duplicate")
         except ParaphraseError as error:
             rejected.append({"text": candidate[:MAX_CHARS] if type(candidate) is str else "", "reason": str(error)})
@@ -315,7 +328,7 @@ def request_paraphrases(instruction: str, count: int, api_key: str, model: str =
 
 
 __all__ = [
-    "DEFAULT_COUNT", "MAX_CHARS", "MAX_COUNT", "PARAPHRASE_MODEL", "ParaphraseError", "SYSTEM_PROMPT",
+    "DEFAULT_COUNT", "KNOWN_INSTRUCTIONS", "MAX_CHARS", "MAX_COUNT", "PARAPHRASE_MODEL", "has_words", "ParaphraseError", "SYSTEM_PROMPT",
     "apply_edits", "build_prompt", "clean_instruction", "edit_label", "normalize", "parse_reply",
     "request_paraphrases", "tokenize", "validate_edits", "validate_paraphrases", "word_edits",
 ]
