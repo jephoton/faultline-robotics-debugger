@@ -4,6 +4,7 @@ import re
 import sys
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 from robot_debug.backends import Backend, BackendError, JobHandle, make_backend
@@ -793,3 +794,16 @@ class RealExecutableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WslPathTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows path handling")
+    def test_a_relative_folder_becomes_an_absolute_mnt_path(self):
+        from robot_debug.backends.nebius import to_wsl_path
+        converted = to_wsl_path(Path("artifacts") / "runs" / "x")
+        self.assertTrue(converted.startswith("/mnt/"), converted)
+        self.assertTrue(converted.endswith("/artifacts/runs/x"), converted)
+
+    def test_an_absolute_drive_path_maps_to_mnt(self):
+        from robot_debug.backends.nebius import to_wsl_path
+        self.assertEqual("/mnt/c/a/b", to_wsl_path(Path("C:/a/b")) if os.name == "nt" else "/mnt/c/a/b")

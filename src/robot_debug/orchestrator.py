@@ -295,6 +295,19 @@ def verified_selection(reduction: Mapping[str, Any]) -> bool:
 REPLAY_INPUTS = "replay-inputs.json"
 
 
+def _safe_error(error: BaseException, limit: int = 400) -> str:
+    """A short, id-redacted message for the run log (backend messages carry no secrets)."""
+
+    text = " ".join(str(error).split())
+    try:
+        from robot_debug.backends import redact
+
+        text = redact(text)
+    except Exception:  # noqa: BLE001 - redaction is best effort; the backend already redacts ids
+        pass
+    return text[:limit]
+
+
 def replay_verdict(summary: Mapping[str, Any]) -> Optional[bool]:
     """Whether a ``scenario-replay`` summary says the saved failure still reproduces.
 
@@ -796,9 +809,10 @@ class Orchestrator:
             else:
                 self.ledger.settle_worst_case(job_name)
             attempt["state"] = "failed"
+            attempt["error"] = _safe_error(error)
             self.steps.update(step, status="stopped")
-            raise StopRun("backend_error", "submit failed ({}); {}".format(
-                type(error).__name__, "no Job was created" if outcome == "not_found" else
+            raise StopRun("backend_error", "submit failed ({}: {}); {}".format(
+                type(error).__name__, attempt["error"], "no Job was created" if outcome == "not_found" else
                 "the Job may exist and was {}; its worst case is charged".format(
                     "cancelled" if outcome == "cancelled" else "not confirmed cancelled"))) from None
         attempt.update(job_id=getattr(handle, "job_id", None), state="submitted")
