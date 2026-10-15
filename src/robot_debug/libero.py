@@ -150,6 +150,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         if instruction is not None and (
             not isinstance(instruction, str) or not 1 <= len(instruction) <= INSTRUCTION_MAX_CHARS
             or not instruction.isprintable()
+            or any(char in instruction for char in "${}")  # the harness config loader interpolates ${...}
         ):
             raise ValueError("instruction must be 1 to {} printable characters".format(INSTRUCTION_MAX_CHARS))
         if instruction_out is not None and (not isinstance(instruction_out, str) or not instruction_out):
@@ -479,6 +480,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             "schema_version": 1,
             "instruction_used": used,
             "overridden": self.instruction is not None,
+            "task_language": task.get("name"),
         })
 
     def _record_scene_probe(self) -> None:

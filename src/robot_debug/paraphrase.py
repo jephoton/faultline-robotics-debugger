@@ -96,10 +96,12 @@ def _join(pieces: Sequence[Tuple[str, bool]]) -> str:
 def word_edits(original: str, paraphrase: str) -> List[Dict[str, Any]]:
     """The independent token edits that turn ``original`` into ``paraphrase``, in order.
 
-    Each edit is ``{"id", "start", "end", "original", "replacement", "spaced"}``: it replaces the
-    original tokens ``[start, end)`` (an insertion has ``start == end``, a deletion an empty
-    ``replacement``) with ``replacement``; ``spaced`` says, per replacement token, whether it had
-    whitespace before it in the paraphrase. Edits never overlap, are ordered by position and are
+    Each edit is ``{"id", "start", "end", "original", "replacement", "spaced", "next_spaced"}``: it
+    replaces the original tokens ``[start, end)`` (an insertion has ``start == end``, a deletion an
+    empty ``replacement``) with ``replacement``; ``spaced`` says, per replacement token, whether it
+    had whitespace before it in the paraphrase, and ``next_spaced`` whether the token right after
+    the edit did (``None`` at the end), so a hybrid never gains or loses a space next to inserted
+    punctuation ("Please, pick" not "Please,pick"). Edits never overlap, are ordered by position and are
     numbered from 0. The result is JSON-clean and deterministic.
     """
 
@@ -113,6 +115,7 @@ def word_edits(original: str, paraphrase: str) -> List[Dict[str, Any]]:
         edits.append({
             "id": len(edits), "start": i1, "end": i2, "original": old[i1:i2],
             "replacement": [token for token, _ in new[j1:j2]], "spaced": [spaced for _, spaced in new[j1:j2]],
+            "next_spaced": new[j2][1] if j2 < len(new) else None,
         })
     return edits
 
@@ -125,7 +128,7 @@ def validate_edits(original: str, edits: Any) -> List[Dict[str, Any]]:
     old = tokenize(original)
     clean = []  # type: List[Dict[str, Any]]
     position = 0
-    keys = {"id", "start", "end", "original", "replacement", "spaced"}
+    keys = {"id", "start", "end", "original", "replacement", "spaced", "next_spaced"}
     for edit in edits:
         if type(edit) is not dict or set(edit) != keys:
             raise ParaphraseError("invalid_edits")
@@ -149,8 +152,11 @@ def validate_edits(original: str, edits: Any) -> List[Dict[str, Any]]:
         # Adjacent edits would be one edit; an insertion directly after another edit likewise.
         if clean and start == clean[-1]["end"]:
             raise ParaphraseError("invalid_edits")
+        if edit["next_spaced"] is not None and type(edit["next_spaced"]) is not bool:
+            raise ParaphraseError("invalid_edits")
         clean.append({"id": edit["id"], "start": start, "end": end, "original": list(edit["original"]),
-                      "replacement": list(edit["replacement"]), "spaced": list(spaced)})
+                      "replacement": list(edit["replacement"]), "spaced": list(spaced),
+                      "next_spaced": edit["next_spaced"]})
         position = end
     if len({edit["id"] for edit in clean}) != len(clean):
         raise ParaphraseError("invalid_edits")
@@ -174,6 +180,10 @@ def apply_edits(original: str, edits: Sequence[Mapping[str, Any]]) -> str:
         pieces.extend(old[cursor:start])
         pieces.extend(zip(edit["replacement"], edit["spaced"]))
         cursor = end
+        if edit.get("next_spaced") is not None and cursor < len(old):
+            # The token after an edit takes the paraphrase's spacing, not the original's.
+            token, _ = old[cursor]
+            old = old[:cursor] + [(token, bool(edit["next_spaced"]))] + old[cursor + 1:]
     pieces.extend(old[cursor:])
     if not pieces:
         raise ParaphraseError("empty_text")
@@ -206,6 +216,9 @@ def clean_instruction(text: Any) -> str:
         raise ParaphraseError("bad_length")
     if any(not 32 <= ord(char) < 127 for char in text):
         raise ParaphraseError("not_ascii")
+    if any(char in text for char in "${}"):
+        # The harness loads evaluator configs with OmegaConf interpolation; ${...} would be expanded.
+        raise ParaphraseError("interpolation_characters")
     return text
 
 

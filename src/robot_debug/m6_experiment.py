@@ -215,6 +215,7 @@ def write_stage_config(
     if instruction is not None and (
         not isinstance(instruction, str) or not 1 <= len(instruction) <= INSTRUCTION_MAX_CHARS
         or not instruction.isprintable()
+        or any(char in instruction for char in "${}")  # the harness config loader interpolates ${...}
     ):
         raise ValueError("instruction must be 1 to {} printable characters".format(INSTRUCTION_MAX_CHARS))
     run_failure_search._write_config(**kwargs)

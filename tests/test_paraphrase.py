@@ -328,3 +328,28 @@ class JobSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InterpolationTests(unittest.TestCase):
+    def test_config_interpolation_characters_are_rejected(self):
+        from robot_debug import paraphrase as pp
+        for text in ("pick up ${oc.env:HF_TOKEN}", "place it in {the} basket", "cost $5 soup"):
+            with self.assertRaises(pp.ParaphraseError):
+                pp.clean_instruction(text)
+
+
+class SpacingTests(unittest.TestCase):
+    ORIGINAL = "pick up the alphabet soup and place it in the basket"
+
+    def test_all_edits_reproduce_the_paraphrase_text_exactly(self):
+        from robot_debug import paraphrase as pp
+        for para in ("Please, pick up the alphabet soup and put it in the basket.",
+                     'pick up the "alphabet soup" and place it in the basket',
+                     "Kindly grab the alphabet soup, then drop it into the basket!"):
+            self.assertEqual(pp.normalize(para), pp.apply_edits(self.ORIGINAL, pp.word_edits(self.ORIGINAL, para)))
+
+    def test_inserted_punctuation_keeps_the_paraphrase_spacing_in_a_hybrid(self):
+        from robot_debug import paraphrase as pp
+        edits = pp.word_edits(self.ORIGINAL, "Please, pick up the alphabet soup and put it in the basket.")
+        self.assertEqual("Please, pick up the alphabet soup and place it in the basket",
+                         pp.apply_edits(self.ORIGINAL, [edits[0]]))
