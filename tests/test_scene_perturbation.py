@@ -308,3 +308,24 @@ class RigStateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Float32WriteTests(unittest.TestCase):
+    def test_float32_model_arrays_accept_scaled_values(self):
+        import numpy as np
+        from robot_debug import scene_perturbation as sp
+        original = np.array([[0.8, 0.8, 0.8], [0.3, 0.3, 0.3]], dtype=np.float32)
+        target = original.copy()
+        sp._write(target, original.astype(np.float64) * 0.55, "light diffuse")   # must not raise
+        np.testing.assert_allclose(target, (original.astype(np.float64) * 0.55).astype(np.float32))
+
+    def test_a_write_that_does_not_take_still_fails(self):
+        import numpy as np
+        from robot_debug import scene_perturbation as sp
+
+        class Stubborn(np.ndarray):
+            def __setitem__(self, key, value):
+                pass
+        target = np.zeros((2, 3), dtype=np.float32).view(Stubborn)
+        with self.assertRaises(sp.SceneError):
+            sp._write(target, np.ones((2, 3)), "light diffuse")

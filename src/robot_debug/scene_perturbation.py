@@ -171,7 +171,12 @@ def _write(target: Any, value: np.ndarray, what: str) -> None:
     """Write into a model array in place and check the write took effect."""
 
     target[...] = value
-    if not np.allclose(np.asarray(target, dtype=np.float64), value, rtol=0.0, atol=1e-12):
+    # Compare at the array's own precision: MuJoCo keeps light colours in float32 and
+    # positions in float64 (a float64 tolerance rejected every lighting write, October 15).
+    stored = np.asarray(target)
+    expected = np.asarray(value, dtype=stored.dtype)
+    tolerance = float(np.finfo(stored.dtype).eps) * 8.0 if stored.dtype.kind == "f" else 0.0
+    if not np.allclose(stored.astype(np.float64), expected.astype(np.float64), rtol=tolerance, atol=tolerance):
         raise SceneError("the simulator did not accept the new {}".format(what))
 
 
