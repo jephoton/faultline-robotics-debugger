@@ -200,6 +200,13 @@ class WaitTests(LocalBackendCase):
         self.assertEqual(result.reason, "watchdog_cancel")
         self.assertEqual(len([c for c in self.docker.calls if c[1:2] == ["stop"]]), 1)
 
+    def test_lookup_and_cancel_report_whether_the_container_exists(self):
+        backend = self.make(run_for=10_000)
+        handle = backend.submit("unit-a", self.workload())
+        self.assertEqual(backend.lookup("unit-a"), handle)
+        self.assertIsNone(backend.lookup("unit-b"))
+        self.assertEqual(backend.cancel(handle), "cancelled")
+
     def test_total_limit_also_cancels(self):
         backend = self.make(run_for=10_000)
         handle = backend.submit("unit-a", self.workload())

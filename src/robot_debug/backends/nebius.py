@@ -602,22 +602,36 @@ class NebiusBackend:
             return "(logs unavailable: %s)" % error
         return "\n".join(text.splitlines()[-max(1, lines):])
 
-    def cancel(self, handle: JobHandle) -> None:
+    def lookup(self, job_name: str) -> Optional[JobHandle]:
+        """The Job called ``job_name`` or ``None`` when the API says there is none.
+
+        Raises :class:`BackendError` when the API cannot answer, so the caller never mistakes
+        an outage for "never created".
+        """
+
+        job_id = self._lookup_job_id(job_name)
+        return None if job_id is None else JobHandle(job_name, job_id)
+
+    def cancel(self, handle: JobHandle) -> str:
+        """Cancel the Job. Returns ``cancelled`` (the API accepted the cancel), ``finished`` (already
+        terminal) or ``not_found`` (no such Job); raises when the cancel could not be sent."""
+
         job_id = handle.job_id or self._lookup_job_id(handle.job_name)
         if job_id is None:
-            return
+            return "not_found"
         try:
             status = (self._get_job(job_id).get("status") or {})
             if str(status.get("state") or "").upper() in _TERMINAL:
-                return
+                return "finished"
         except BackendError:
             pass
         try:
             self._cli.text(["ai", "job", "cancel", job_id])
         except CliError as error:
             if error.kind == "notfound":
-                return
+                return "not_found"
             raise
+        return "cancelled"
 
     def finish(self) -> None:
         state = self._state

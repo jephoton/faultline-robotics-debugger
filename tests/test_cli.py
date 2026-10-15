@@ -148,6 +148,17 @@ class Diagnose(Fixture):
         backend = self.backends[0]
         self.assertEqual(backend.cancelled, backend.submitted)
         self.assertEqual(backend.finished, 1)
+        self.assertIn("sent and acknowledged", self.text)
+
+    def test_ctrl_c_with_a_failing_cancel_does_not_claim_a_cancel(self):
+        from tests.test_orchestrator import BackendFailure
+        code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                            [finished(lambda w: screen_summary())], interrupt_at_wait=1,
+                            cancel_error=BackendFailure("api down"))
+        self.assertEqual(code, 130)
+        self.assertIn("could not be confirmed", self.text)
+        self.assertNotIn("acknowledged", self.text)
+        self.assertNotIn("released", self.text)
 
 
 class Resume(Fixture):

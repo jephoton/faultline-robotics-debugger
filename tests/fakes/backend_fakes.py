@@ -68,6 +68,9 @@ class FakeDocker:
         self.calls.append(list(argv))
         if list(argv[1:2]) == ["info"]:
             return completed(argv, 0, json.dumps({name: {} for name in self.runtimes}), "")
+        if list(argv[1:2]) == ["inspect"]:
+            known = any(argv[-1] in process.argv for process in self.processes)
+            return completed(argv, 0 if known else 1, "running" if known else "", "" if known else "No such object")
         if list(argv[1:2]) == ["stop"]:
             if not self.ignore_stop:
                 for process in self.processes:

@@ -549,6 +549,7 @@ class Orchestrator:
         self.poll_seconds, self.pause_seconds, self.max_attempts = poll_seconds, pause_seconds, max_attempts
         self.steps = StepLog(self.run_dir / "steps.json", {"name": spec.name, "mode": spec.mode})
         self._inflight: Optional[Tuple[Any, str]] = None
+        self.cancel_outcome: Optional[Tuple[str, str]] = None
         match = _STAMP.search(self.run_dir.name)
         self.tag = (match.group(1)[2:] + match.group(2)[:4]) if match else "000000" + "0000"
         self.notes: List[str] = []
@@ -581,6 +582,10 @@ class Orchestrator:
         except KeyboardInterrupt:
             self._cancel_inflight()
             self.steps.set_run(status="interrupted")
+            raise
+        except Exception:
+            self._cancel_inflight()              # best effort: never leave a paid Job running behind a crash
+            self.steps.set_run(status="failed")
             raise
         finally:
             try:
@@ -631,24 +636,50 @@ class Orchestrator:
         except Exception:                    # noqa: BLE001 - the backends package may be absent in tests
             return JobHandleRecord(job_name, job_id)
 
+    def _cancel(self, handle: Any) -> str:
+        """Ask the backend to cancel a Job. ``cancelled`` (the request was sent and accepted), ``finished``,
+        ``not_found`` (no such Job: proven never created) or ``unconfirmed`` (the cancel itself failed)."""
+
+        try:
+            outcome = self.backend.cancel(handle)
+        except Exception:                    # noqa: BLE001 - best effort
+            return "unconfirmed"
+        return outcome if outcome in ("cancelled", "finished", "not_found") else "cancelled"
+
     def _cancel_inflight(self) -> None:
         if self._inflight is None:
             return
         handle, job_name = self._inflight
+        outcome = self._cancel(handle)
         try:
-            self.backend.cancel(handle)
-        except Exception:                    # noqa: BLE001 - best effort
-            pass
-        try:
-            self.ledger.settle_worst_case(job_name)
+            if outcome == "not_found":
+                self.ledger.settle(job_name, None)           # provably never created
+            else:
+                self.ledger.settle_worst_case(job_name)
         except lg.LedgerError:
             pass
         for record in self.steps.data["steps"].values():
             for attempt in record.get("attempts", []):
-                if attempt.get("job_name") == job_name and attempt.get("state") == "submitted":
+                if attempt.get("job_name") == job_name and attempt.get("state") in ("submitting", "submitted"):
                     attempt["state"] = "cancelled"
         self.steps.save()
+        self.cancel_outcome = (job_name, outcome)
         self._inflight = None
+
+    def interrupt_report(self) -> str:
+        """What the interrupt did about the Job in flight; never claims a cancel that was not acknowledged."""
+
+        if self.cancel_outcome is None:
+            return "no Job was in flight, so nothing needed cancelling."
+        name, outcome = self.cancel_outcome
+        if outcome == "cancelled":
+            return "the cancel request for Job {} was sent and acknowledged by the backend.".format(name)
+        if outcome == "finished":
+            return "Job {} had already finished; its spend is charged at the worst case.".format(name)
+        if outcome == "not_found":
+            return "Job {} did not exist, so nothing was cancelled and nothing is charged.".format(name)
+        return ("WARNING: the cancel of Job {} could not be confirmed; check the cloud console and cancel it "
+                "by hand. The ledger charges its worst case.".format(name))
 
     def run_job(self, step: str, workload: Mapping[str, Any], deadline: int, summary_name: str) -> JobOutcome:
         """Submit (resubmitting under capacity failures), wait, download and read one Job's summary."""
@@ -666,11 +697,14 @@ class Orchestrator:
             if prior is not None and prior["state"] == "submitted":
                 handle = self._handle(job_name, prior["job_id"])
                 self.say(step, "re-attaching to {}".format(job_name))
+                self._inflight = (handle, job_name)
+            elif prior is not None and prior["state"] == "submitting":
+                handle = self._reattach_submitting(step, job_name, prior, deadline)
+                if handle is None:                 # the interrupted submission never created the Job
+                    continue
             else:
                 handle = self._submit(step, job_name, workload, deadline, job_dir, attempts)
-            self._inflight = (handle, job_name)
             outcome = self._await(step, handle, job_name, deadline, job_dir, attempts, summary_name)
-            self._inflight = None
             if outcome is not None:
                 return outcome
             if number + 1 >= self.max_attempts:
@@ -691,28 +725,79 @@ class Orchestrator:
         except lg.TimeExhausted as error:
             self.steps.update(step, status="stopped")
             raise StopRun("max_hours", str(error)) from None
+        payload = dict(workload, run_id=job_name)
+        _write_json(job_dir / "workload.json", payload)
+        # Record the attempt before reserving and before the real create, so a crash at any point leaves
+        # a trail that --resume can follow (look the Job up by name; never reserve the same name twice).
+        attempt: Dict[str, Any] = {"job_name": job_name, "job_id": None, "state": "submitting"}
+        attempts.append(attempt)
+        self.steps.save()
         try:
             self.ledger.reserve(job_name, self.ledger.worst_case_usd(deadline))
         except lg.BudgetExceeded as error:
+            attempts.remove(attempt)
             self.steps.update(step, status="stopped")
             raise StopRun("spend_cap", str(error)) from None
-        payload = dict(workload, run_id=job_name)
-        _write_json(job_dir / "workload.json", payload)
+        # In flight from here on: a Ctrl-C inside backend.submit cancels the Job by name.
+        self._inflight = (self._handle(job_name, None), job_name)
         try:
             handle = self.backend.submit(job_name, payload)
-        except BaseException as error:
-            if isinstance(error, Exception):
-                self.ledger.settle(job_name, None)           # the submit was refused: nothing runs
-                attempts.append({"job_name": job_name, "job_id": None, "state": "failed"})
-                self.steps.update(step, status="stopped")
-                raise StopRun("backend_error", "submit failed ({})".format(type(error).__name__)) from None
-            self.ledger.settle_worst_case(job_name)          # interrupted mid-submit: a Job may exist
-            raise
-        attempts.append({"job_name": job_name, "job_id": getattr(handle, "job_id", None), "state": "submitted"})
+        except Exception as error:
+            # The real create may have run. Find the Job by name and cancel it; only a Job that provably
+            # does not exist is free, anything else is charged the whole reservation.
+            self._inflight = None
+            outcome = self._cancel(self._handle(job_name, None))
+            if outcome == "not_found":
+                self.ledger.settle(job_name, None)
+            else:
+                self.ledger.settle_worst_case(job_name)
+            attempt["state"] = "failed"
+            self.steps.update(step, status="stopped")
+            raise StopRun("backend_error", "submit failed ({}); {}".format(
+                type(error).__name__, "no Job was created" if outcome == "not_found" else
+                "the Job may exist and was {}; its worst case is charged".format(
+                    "cancelled" if outcome == "cancelled" else "not confirmed cancelled"))) from None
+        attempt.update(job_id=getattr(handle, "job_id", None), state="submitted")
+        self._inflight = (handle, job_name)
         self.steps.update(step, job_name=job_name)
         self.say(step, "submitted {} (deadline {} s, reserved US${:.2f})".format(
             job_name, deadline, self.ledger.jobs[job_name]["reserved_usd"]))
         return handle
+
+    def _reattach_submitting(self, step: str, job_name: str, attempt: Dict[str, Any], deadline: int) -> Any:
+        """Resume an attempt that was interrupted inside ``backend.submit``: find the Job by name.
+
+        Returns its handle (the existing reservation is kept), or ``None`` after settling the
+        reservation at zero when the Job was provably never created.
+        """
+
+        try:
+            found = self.backend.lookup(job_name)
+        except Exception as error:               # noqa: BLE001 - the cloud cannot say; keep the reservation
+            self.steps.update(step, status="stopped")
+            raise StopRun("backend_error", "could not look up {} after an interrupted submission ({}); the "
+                          "reservation is kept, resume again when the cloud API answers".format(
+                              job_name, type(error).__name__)) from None
+        if found is None:
+            if job_name in self.ledger.jobs:
+                self.ledger.settle(job_name, None)
+            attempt["state"] = "failed"
+            self.steps.save()
+            self.say(step, "{} was never created; submitting under a new name".format(job_name))
+            return None
+        if job_name not in self.ledger.jobs:
+            try:
+                self.ledger.reserve(job_name, self.ledger.worst_case_usd(deadline))
+            except lg.BudgetExceeded as error:
+                self._cancel(found)
+                attempt["state"] = "cancelled"
+                self.steps.update(step, status="stopped")
+                raise StopRun("spend_cap", str(error)) from None
+        attempt.update(job_id=getattr(found, "job_id", None), state="submitted")
+        self._inflight = (found, job_name)
+        self.steps.update(step, job_name=job_name)
+        self.say(step, "re-attaching to {} (found by name)".format(job_name))
+        return found
 
     def _await(self, step: str, handle: Any, job_name: str, deadline: int, job_dir: Path,
                attempts: List[Dict[str, Any]], summary_name: str) -> Optional[JobOutcome]:
@@ -725,6 +810,7 @@ class Orchestrator:
         except Exception as error:               # noqa: BLE001 - polling failed after the backend's retries
             self._best_effort_cancel(handle)
             self.ledger.settle_worst_case(job_name)
+            self._inflight = None
             attempt["state"] = "failed"
             self.steps.update(step, status="stopped")
             raise StopRun("backend_error", "waiting failed ({})".format(type(error).__name__)) from None
@@ -740,6 +826,7 @@ class Orchestrator:
         capacity = "notenoughresources" in str(reason or "").lower() and not seconds
         if capacity:
             self.ledger.settle(job_name, None)
+            self._inflight = None
             attempt["state"] = "capacity"
             self.steps.save()
             self.say(step, "{} found no capacity ({})".format(job_name, reason))
@@ -750,6 +837,7 @@ class Orchestrator:
             cost = self.ledger.settle_worst_case(job_name)
         else:
             cost = self.ledger.settle(job_name, seconds)
+        self._inflight = None                    # terminal and settled: a later Ctrl-C must not cancel or recharge it
         job_dir.mkdir(parents=True, exist_ok=True)
         _write_json(job_dir / "result.json", {
             "job_name": job_name, "job_id": getattr(handle, "job_id", None), "state": state, "reason": reason,

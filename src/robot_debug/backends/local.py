@@ -185,8 +185,18 @@ class LocalBackend:
             return ""
         return "\n".join(text.splitlines()[-max(1, lines):])
 
-    def cancel(self, handle: JobHandle) -> None:
+    def lookup(self, job_name: str) -> Optional[JobHandle]:
+        if job_name in self._running:
+            return JobHandle(job_name, job_name)
+        try:
+            result = self._run([self._docker, "inspect", "--format", "{{.State.Status}}", job_name], timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise BackendError("could not ask docker about %s: %s" % (job_name, type(error).__name__)) from error
+        return JobHandle(job_name, job_name) if result.returncode == 0 else None
+
+    def cancel(self, handle: JobHandle) -> str:
         self._stop(handle.job_name)
+        return "cancelled" if handle.job_name in self._running else "not_found"
 
     def finish(self) -> None:
         for running in self._running.values():

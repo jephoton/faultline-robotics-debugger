@@ -153,6 +153,13 @@ class FakeBackend:
         self.interrupt_at_wait: Optional[int] = None
         self.kill_class = Crash
         self.on_wait: Optional[Callable[[], None]] = None
+        self.created: set = set()                    # Jobs that exist in the (fake) cloud
+        self.submit_error: Optional[BaseException] = None
+        self.error_after_create = True               # the injected submit error comes after the Job exists
+        self.error_at_submit: Optional[int] = None
+        self.interrupt_at_download = False
+        self.cancel_error: Optional[Exception] = None
+        self.lookup_error: Optional[Exception] = None
 
     def prepare(self, run_dir, spec):
         self.prepared += 1
@@ -167,10 +174,22 @@ class FakeBackend:
     def submit(self, job_name, workload):
         if self.fail_submit_at is not None and len(self.submitted) == self.fail_submit_at:
             raise BackendFailure("submit")
+        failing = self.submit_error is not None and (
+            self.error_at_submit is None or len(self.submitted) == self.error_at_submit)
+        if failing and not self.error_after_create:
+            raise self.submit_error
         self.submitted.append(job_name)
+        self.created.add(job_name)
         self.workloads[job_name] = copy.deepcopy(workload)
         self.assigned[job_name] = self.behaviours.pop(0)
+        if failing:
+            raise self.submit_error
         return Handle(job_name, "id-" + job_name)
+
+    def lookup(self, job_name):
+        if self.lookup_error is not None:
+            raise self.lookup_error
+        return Handle(job_name, "id-" + job_name) if job_name in self.created else None
 
     def wait(self, handle, *, running_max_seconds, total_max_seconds, poll_seconds=60):
         self.waited.append(handle.job_name)
@@ -187,6 +206,9 @@ class FakeBackend:
                       None if seconds is None else MOMENT, None if seconds is None else MOMENT, seconds)
 
     def download(self, handle, dest):
+        if self.interrupt_at_download:
+            self.interrupt_at_download = False
+            raise KeyboardInterrupt()
         behaviour = self.assigned[handle.job_name]
         tree = Path(dest) / "faultline-runs" / handle.job_name
         if behaviour.get("summary") is not None:
@@ -203,6 +225,9 @@ class FakeBackend:
 
     def cancel(self, handle):
         self.cancelled.append(handle.job_name)
+        if self.cancel_error is not None:
+            raise self.cancel_error
+        return "cancelled" if handle.job_name in self.created else "not_found"
 
     def finish(self):
         self.finished += 1
@@ -675,6 +700,166 @@ class Resume(Base):
         self.assertEqual(backend2.waited, [name])
         self.assertEqual(result.reason, "no_reproducible_failure")
         self.assertAlmostEqual(ledger2.spent, cost(), msg="settled once, not twice")
+
+
+class InFlight(Base):
+    """A Job is tracked from before it is submitted until its result is settled."""
+
+    def attempts(self, runner, step="screen"):
+        return json.loads((runner.run_dir / "steps.json").read_text())["steps"][step]["attempts"]
+
+    def test_ctrl_c_during_submit_cancels_the_job_by_name_and_charges_the_worst_case(self):
+        backend = FakeBackend([finished(lambda w: screen_summary())])
+        backend.submit_error = KeyboardInterrupt()
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(KeyboardInterrupt):
+            runner.diagnose()
+        name = backend.submitted[0]
+        self.assertEqual(backend.cancelled, [name])
+        self.assertEqual(ledger.jobs[name]["cost_usd"], ledger.jobs[name]["reserved_usd"])
+        self.assertEqual(self.attempts(runner)[0]["state"], "cancelled")
+        self.assertIn("acknowledged", runner.interrupt_report())
+
+    def test_ctrl_c_before_the_job_exists_costs_nothing(self):
+        backend = FakeBackend([])
+        backend.submit_error = KeyboardInterrupt()
+        backend.error_after_create = False
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(KeyboardInterrupt):
+            runner.diagnose()
+        self.assertEqual(ledger.spent, 0.0)
+        self.assertIn("did not exist", runner.interrupt_report())
+
+    def test_interrupt_report_admits_an_unconfirmed_cancel(self):
+        backend = FakeBackend([finished(lambda w: screen_summary())])
+        backend.submit_error = KeyboardInterrupt()
+        backend.cancel_error = BackendFailure("api down")
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(KeyboardInterrupt):
+            runner.diagnose()
+        report = runner.interrupt_report()
+        self.assertIn("could not be confirmed", report)
+        self.assertNotIn("acknowledged", report)
+        name = backend.submitted[0]
+        self.assertEqual(ledger.jobs[name]["cost_usd"], ledger.jobs[name]["reserved_usd"])
+
+    def test_a_failed_submit_of_a_job_that_exists_is_cancelled_and_charged(self):
+        backend = FakeBackend([finished(lambda w: screen_summary())])
+        backend.submit_error = BackendFailure("create response lost")
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        result = runner.diagnose()
+        name = backend.submitted[0]
+        self.assertEqual((result.reason, backend.cancelled), ("backend_error", [name]))
+        self.assertEqual(ledger.jobs[name]["cost_usd"], ledger.jobs[name]["reserved_usd"])
+
+    def test_a_failed_submit_with_an_unreachable_api_is_charged_the_worst_case(self):
+        backend = FakeBackend([])
+        backend.submit_error = BackendFailure("create failed")
+        backend.error_after_create = False
+        backend.cancel_error = BackendFailure("api down")
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(runner.diagnose().reason, "backend_error")
+        self.assertGreater(ledger.spent, 0.0, "it cannot be proven that nothing was created")
+
+    def test_any_exception_cancels_the_job_in_flight(self):
+        backend = FakeBackend([finished(lambda w: screen_summary())])
+        temp, runner, backend, tools, ledger, lines = make_world(spec_for(), [], backend=backend)
+        self.addCleanup(temp.cleanup)
+
+        def broken():
+            raise RuntimeError("boom")
+
+        tools.now = broken                      # first called after the Job was submitted
+        with self.assertRaises(RuntimeError):
+            runner.diagnose()
+        self.assertEqual(backend.cancelled, backend.submitted)
+        name = backend.submitted[0]
+        self.assertEqual(ledger.jobs[name]["state"], "settled")
+        self.assertEqual(backend.finished, 1)
+
+    def test_resume_after_a_crash_during_submit_reattaches_to_the_job_by_name(self):
+        spec = spec_for()
+        backend1 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        backend1.submit_error = Crash()
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(Crash):
+            runner1.diagnose()
+        name = backend1.submitted[0]
+        self.assertEqual(self.attempts(runner1)[0]["state"], "submitting")
+        self.assertEqual(ledger1.jobs[name]["state"], "reserved")
+        backend2 = FakeBackend([])
+        backend2.created.add(name)
+        backend2.assigned[name] = finished(lambda w: screen_summary(failing=False))
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual(backend2.submitted, [], "no second create, no second reservation")
+        self.assertEqual(backend2.waited, [name])
+        self.assertEqual(result.reason, "no_reproducible_failure")
+        self.assertAlmostEqual(ledger2.spent, cost())
+
+    def test_resume_after_a_crash_before_the_job_was_created_settles_zero_and_moves_on(self):
+        spec = spec_for()
+        backend1 = FakeBackend([])
+        backend1.submit_error = Crash()
+        backend1.error_after_create = False
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(Crash):
+            runner1.diagnose()
+        first = "soup-start-{}-screen".format(runner1.tag)
+        backend2 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        runner2.diagnose()
+        self.assertEqual(backend2.submitted, [first + "-a"])
+        self.assertEqual(ledger2.jobs[first]["cost_usd"], 0.0)
+        self.assertAlmostEqual(ledger2.spent, cost())
+
+    def test_resume_with_an_unreachable_lookup_stops_and_keeps_the_reservation(self):
+        spec = spec_for()
+        backend1 = FakeBackend([finished(lambda w: screen_summary())])
+        backend1.submit_error = Crash()
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(Crash):
+            runner1.diagnose()
+        backend2 = FakeBackend([])
+        backend2.lookup_error = BackendFailure("api down")
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        self.assertEqual(runner2.diagnose().reason, "backend_error")
+        self.assertEqual(backend2.submitted, [])
+        self.assertEqual(ledger2.jobs[backend1.submitted[0]]["state"], "reserved")
+
+    def test_ctrl_c_during_download_keeps_the_settled_job_and_resume_downloads_it_again(self):
+        spec = spec_for()
+        backend1 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        backend1.interrupt_at_download = True
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(KeyboardInterrupt):
+            runner1.diagnose()
+        name = backend1.submitted[0]
+        self.assertEqual(backend1.cancelled, [], "a finished Job is not cancelled")
+        self.assertAlmostEqual(ledger1.jobs[name]["cost_usd"], cost())
+        self.assertEqual(self.attempts(runner1)[0]["state"], "submitted")
+        self.assertIn("no Job was in flight", runner1.interrupt_report())
+        backend2 = FakeBackend([])
+        backend2.created.add(name)
+        backend2.assigned[name] = finished(lambda w: screen_summary(failing=False))
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual((backend2.submitted, backend2.waited), ([], [name]))
+        self.assertEqual(result.reason, "no_reproducible_failure")
+        self.assertAlmostEqual(ledger2.spent, cost(), msg="paid once")
 
 
 class Mode2AndReplay(Base):

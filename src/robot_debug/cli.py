@@ -7,7 +7,8 @@
 
 Exit codes: 0 completed, 2 invalid spec or usage, 3 stopped (no failure found, a cap
 was reached, a Job failed; the run folder holds what was produced), 1 unexpected
-error, 130 interrupted (the in-flight Job is cancelled; ``--resume`` continues).
+error, 130 interrupted (the in-flight Job is cancelled and the message says whether the
+cancel was acknowledged; ``--resume`` continues).
 
 Nothing here reads or prints a credential: the Token Factory key is read by the
 planning and explanation code from the environment or ``--env-file``, and the cloud
@@ -119,6 +120,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
          tools: Any = None, image_module: Any = None, out: Callable[[str], None] = print,
          poll_seconds: float = 60.0, pause_seconds: float = orch.CAPACITY_PAUSE_SECONDS) -> int:
     run_dir: Optional[Path] = None
+    runner: Optional[orch.Orchestrator] = None
     try:
         args = _parser().parse_args(argv)
         if args.command == "cases":
@@ -156,7 +158,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         out("error: {}".format(error))
         return 2
     except KeyboardInterrupt:
-        out("Interrupted: the in-flight Job was cancelled and cloud resources released.")
+        out("Interrupted: " + (runner.interrupt_report() if runner is not None else "nothing had been started."))
         if run_dir is not None:
             out("Continue with: faultline diagnose --resume {}".format(run_dir))
         return 130

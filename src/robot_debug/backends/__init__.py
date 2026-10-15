@@ -64,8 +64,18 @@ class Backend(Protocol):
     def logs_tail(self, handle: JobHandle, lines: int = 200) -> str:
         """The last ``lines`` lines of the Job's log (best effort)."""
 
-    def cancel(self, handle: JobHandle) -> None:
-        """Stop the Job if it is still running."""
+    def lookup(self, job_name: str) -> Optional[JobHandle]:
+        """The existing Job called ``job_name``, or ``None`` when it provably does not exist.
+
+        Raises :class:`BackendError` when that cannot be told (an outage is not "never created").
+        """
+
+    def cancel(self, handle: JobHandle) -> str:
+        """Stop the Job if it is still running (the handle may carry only the name).
+
+        Returns ``cancelled`` (the cancel was sent and accepted), ``finished`` (already
+        terminal) or ``not_found`` (no such Job); raises when the cancel could not be sent.
+        """
 
     def finish(self) -> None:
         """Delete per-run credentials; idempotent and safe after failures."""
