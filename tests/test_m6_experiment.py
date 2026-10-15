@@ -11,13 +11,12 @@ import types
 import unittest
 
 from robot_debug import m6_experiment as m6
-from robot_debug.job_runtime import M6_FAMILIES
 from robot_debug.job_workload import CERTIFIED_M4_RECTANGLE
 from robot_debug.parallel_eval import _MASK_RECTANGLE
 from tests.test_batch_experiment import World
 
 THRESHOLD_CONFIG = {
-    "families": list(M6_FAMILIES),
+    "families": list(m6.LEGACY_FAMILIES),
     "sweep": [0.2, 0.4, 0.6, 0.8, 1.0],
     "attempts": 5,
     "required_failures": 4,
@@ -83,7 +82,7 @@ class ManifestTests(unittest.TestCase):
             by_kind["agentview_mask_wrist_black"])
         self.assertEqual({"wrist_occlusion": dict(m6.REDUCED_MASK)}, by_kind["wrist_mask_only"])
         self.assertNotIn("x", by_kind["wrist_mask_only"], "agent view stays clean")
-        for family in M6_FAMILIES:
+        for family in m6.LEGACY_FAMILIES:
             self.assertEqual({"image_perturbation": {"kind": family, "severity": 0.6}},
                              by_kind["{}_0.6".format(family)])
 
@@ -159,6 +158,27 @@ class ManifestTests(unittest.TestCase):
         three = dict(THRESHOLD_CONFIG, families=["darken", "noise", "blur"], suite="libero_10")
         with self.assertRaises(ValueError):
             m6.recommended_deadline_seconds("m6-threshold", three)
+
+    def test_suite_step_limits_mirror_the_pinned_upstream_harness(self):
+        self.assertEqual({"libero_object": 280, "libero_10": 520, "libero_spatial": 220, "libero_goal": 300},
+                         m6.SUITE_MAX_STEPS)
+        self.assertEqual(("libero_object", "libero_10", "libero_spatial", "libero_goal"), m6.SUITES)
+
+    def test_spatial_and_goal_audits_get_step_scaled_deadlines(self):
+        small = dict(THRESHOLD_CONFIG, families=["darken", "noise"], sweep=[0.5, 1.0], attempts=3,
+                     required_failures=2, bisection_steps=2)
+        base = m6.recommended_deadline_seconds("m6-threshold", dict(small, suite="libero_object"))
+        # Spatial episodes (220 steps) are no longer than Object's (280): the recorded timing holds.
+        self.assertEqual(base, m6.recommended_deadline_seconds("m6-threshold", dict(small, suite="libero_spatial")))
+        goal = m6.recommended_deadline_seconds("m6-threshold", dict(small, suite="libero_goal"))
+        self.assertGreaterEqual(goal, base)
+        self.assertLess(goal, m6.recommended_deadline_seconds("m6-threshold", dict(small, suite="libero_10")))
+        for suite in ("libero_spatial", "libero_goal"):
+            self.assertLessEqual(
+                m6.recommended_deadline_seconds("m6-threshold", dict(THRESHOLD_CONFIG, suite=suite)),
+                m6.MAX_RECOMMENDED_DEADLINE_SECONDS)
+        self.assertEqual(m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG),
+                         m6.recommended_deadline_seconds("m6-threshold", dict(THRESHOLD_CONFIG, suite="libero_object")))
 
     def test_a_larger_search_never_gets_a_shorter_deadline(self):
         base = m6.recommended_deadline_seconds("m6-threshold", THRESHOLD_CONFIG)
@@ -506,7 +526,7 @@ class ThresholdRunTests(RunTestCase):
 
         self.assertIsNone(summary["stop_reason"])
         self.assertTrue(summary["complete"])
-        self.assertEqual(list(M6_FAMILIES), sorted(families, key=list(M6_FAMILIES).index))
+        self.assertEqual(list(m6.LEGACY_FAMILIES), sorted(families, key=list(m6.LEGACY_FAMILIES).index))
         self.assertEqual("threshold_found", families["darken"]["stop_reason"])
         self.assertEqual(0.35, families["darken"]["threshold_severity"])
         self.assertEqual(0.3375, families["darken"]["lower_bound"])
@@ -582,7 +602,7 @@ class ThresholdRunTests(RunTestCase):
         self.assertFalse(summary["complete"])
         self.assertFalse(summary["nominal_controls"]["passed"])
         self.assertEqual({"policy_failure": 1, "success": 4}, summary["nominal_controls"]["outcomes"])
-        self.assertEqual(set(M6_FAMILIES), set(summary["families"]))
+        self.assertEqual(set(m6.LEGACY_FAMILIES), set(summary["families"]))
         for family in summary["families"].values():
             self.assertEqual("nominal_failed", family["stop_reason"])
             self.assertIsNone(family["threshold_severity"])

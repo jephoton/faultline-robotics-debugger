@@ -25,7 +25,7 @@ SESSION_DIRECTORY_NAME = "first-failure-search"
 SWEEP_SIDES = (0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
 NOMINAL_EPISODE_INDICES = tuple(range(20))
 # M7: LIBERO-10 joins the original suite; one suite (one model server) per Job.
-SUPPORTED_SUITES = ("libero_object", "libero_10")
+SUPPORTED_SUITES = ("libero_object", "libero_10", "libero_spatial", "libero_goal")
 
 
 def _resolve_evaluator_command(interpreter: Path) -> str:

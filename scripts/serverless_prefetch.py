@@ -25,6 +25,8 @@ from typing import Dict, Optional, Sequence
 SUITE_CHECKPOINTS = {
     "libero_object": "nvidia/gr00t17-lerobot-libero_object-640",
     "libero_10": "nvidia/gr00t17-lerobot-libero_10-640",
+    "libero_spatial": "nvidia/gr00t17-lerobot-libero_spatial-640",
+    "libero_goal": "nvidia/gr00t17-lerobot-libero_goal-640",
 }
 DEFAULT_SUITE = "libero_object"
 BASE_MODEL = "nvidia/GR00T-N1.7-3B"
@@ -32,6 +34,9 @@ PINNED_REVISIONS = {
     "nvidia/gr00t17-lerobot-libero_object-640": "1499db357f6ca3762b56c2e8c00b530eb9a09444",
     # Resolved from the Hugging Face model API (current main) on October 13, 2026.
     "nvidia/gr00t17-lerobot-libero_10-640": "5ee08ab09fac5c5ef2388a14c882ea825ac861db",
+    # Resolved from the Hugging Face model API (current main) on October 15, 2026.
+    "nvidia/gr00t17-lerobot-libero_spatial-640": "32a6ec786d6509df31b40392b4e4dcdda78c0f11",
+    "nvidia/gr00t17-lerobot-libero_goal-640": "436c57c0eb7a90be54270abf3977668b2084ad75",
     BASE_MODEL: "2fc962b973bccdd5d8ce4f67cc63b264d6886495",
 }
 RESOLVED_REPOSITORIES = ("nvidia/Cosmos-Reason2-2B",)

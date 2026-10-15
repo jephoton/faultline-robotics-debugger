@@ -118,6 +118,8 @@ DEFAULT_SUITE = "libero_object"
 SUITE_CHECKPOINTS = {
     "libero_object": "nvidia/gr00t17-lerobot-libero_object-640",
     "libero_10": "nvidia/gr00t17-lerobot-libero_10-640",
+    "libero_spatial": "nvidia/gr00t17-lerobot-libero_spatial-640",
+    "libero_goal": "nvidia/gr00t17-lerobot-libero_goal-640",
 }
 
 

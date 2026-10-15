@@ -21,7 +21,7 @@ import json
 from typing import Any, Dict, Mapping, Optional
 
 from robot_debug import m6_experiment, scenario_experiment
-from robot_debug.job_runtime import M6_FAMILIES, M6_SUITES, JobRuntimeError, validate_workload_config
+from robot_debug.job_runtime import M6_FAMILIES, JobRuntimeError, validate_workload_config
 from robot_debug.scenario_import import ScenarioImportError, validate_scenario_candidate
 
 MAX_WORKLOAD_BYTES = 64 * 1024
@@ -69,8 +69,8 @@ def audit_workload(spec: Mapping[str, Any], run_id: str) -> Dict[str, Any]:
     audit = _section(spec, "audit")
     policy = spec.get("policy") if isinstance(spec.get("policy"), Mapping) else {}
     suite = policy.get("suite", "libero_object")
-    if suite not in M6_SUITES:
-        raise WorkloadError("policy.suite must be one of {}".format(", ".join(M6_SUITES)))
+    if suite not in m6_experiment.SUITES:
+        raise WorkloadError("policy.suite must be one of {}".format(", ".join(m6_experiment.SUITES)))
     families = audit.get("families", list(M6_FAMILIES))
     if (not isinstance(families, (list, tuple)) or not families
             or any(name not in M6_FAMILIES for name in families) or len(set(families)) != len(families)):

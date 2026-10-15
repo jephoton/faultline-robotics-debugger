@@ -7,8 +7,10 @@ import copy
 import json
 from pathlib import Path
 import unittest
+from unittest import mock
 
 from robot_debug import scenario_experiment as se
+from robot_debug import job_runtime
 from robot_debug.job_runtime import validate_workload_config
 from robot_debug.scenario_import import build_candidate, candidate_from_benchmark
 from robot_debug.workloads import WorkloadError, audit_workload, reference_inputs, replay_workload
@@ -57,6 +59,25 @@ class AuditWorkloadTests(unittest.TestCase):
         self.assertGreater(audit_workload(long_, "a")["deadline_seconds"],
                            audit_workload(base, "a")["deadline_seconds"])
 
+    def test_every_suite_of_the_breadth_pack_is_accepted_and_carried(self):
+        # The Job-side validator (job_runtime, owned by the language unit) lists the suites; accept all four here.
+        suites = ("libero_object", "libero_10", "libero_spatial", "libero_goal")
+        with mock.patch.object(job_runtime, "M6_SUITES", suites):
+            for suite in suites:
+                with self.subTest(suite=suite):
+                    workload = audit_workload(dict(spec(families=["darken"]), policy={"suite": suite}), "a")
+                    self.assertEqual(suite, workload["suite"])
+                    self.assertEqual(workload, validate_workload_config(workload))
+
+    def test_spatial_and_goal_deadlines_follow_the_step_limits(self):
+        suites = ("libero_object", "libero_10", "libero_spatial", "libero_goal")
+        with mock.patch.object(job_runtime, "M6_SUITES", suites):
+            deadline = {suite: audit_workload(dict(spec(families=["darken"]), policy={"suite": suite}),
+                                              "a")["deadline_seconds"] for suite in suites}
+        self.assertEqual(deadline["libero_object"], deadline["libero_spatial"])
+        self.assertGreaterEqual(deadline["libero_goal"], deadline["libero_object"])
+        self.assertGreater(deadline["libero_10"], deadline["libero_goal"])
+
     def test_a_search_too_big_for_libero_10_is_refused_with_advice(self):
         big = dict(spec(families=["darken", "noise", "blur", "contrast"]), policy={"suite": "libero_10"})
         with self.assertRaisesRegex(WorkloadError, "shrink"):
@@ -72,7 +93,7 @@ class AuditWorkloadTests(unittest.TestCase):
             {"audit": {"task": 10}}, {"audit": {"task": -1}}, {"audit": {"start": 50}},
             {"audit": {"sweep": [0.5, 0.2]}}, {"audit": {"attempts": 0}},
             {"audit": {"attempts": 3, "required_failures": 4}},
-            {"audit": {}, "policy": {"suite": "libero_goal"}}, {}, {"audit": "x"},
+            {"audit": {}, "policy": {"suite": "libero_90"}}, {}, {"audit": "x"},
         )
         for item in bad:
             with self.subTest(spec=item), self.assertRaises(WorkloadError):

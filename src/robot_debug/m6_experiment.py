@@ -35,9 +35,11 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from robot_debug import batch_experiment as be
 from robot_debug.image_perturbation import physical_value
-from robot_debug.job_runtime import M6_FAMILIES
 from robot_debug.threshold_search import ThresholdStop, run_threshold_search
 
+# The four families of the recorded M6 runs. The smoke manifest and the default audit stay on these,
+# whatever families are added later.
+LEGACY_FAMILIES = ("darken", "noise", "blur", "contrast")
 M6_WORKERS = 12
 M6_MAX_BATCH_SIZE = 12
 SUMMARY_NAME = "m6_summary.json"
@@ -76,6 +78,11 @@ ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS = 130.0
 MAX_LIBERO_10_DEADLINE_SECONDS = 3000
 # Optional audit target fields of the threshold configuration, passed to every episode.
 AUDIT_TARGET_KEYS = ("suite", "task_id", "init_state_index")
+# Per-suite episode step limits of the pinned upstream harness (``MAX_STEP_MAPPING`` in
+# ``vla_eval/benchmarks/libero/benchmark.py`` at commit 35f1200); the benchmark applies them by suite
+# name, this table only scales the deadline estimates. The first two suites keep their recorded timings.
+SUITE_MAX_STEPS = {"libero_object": 280, "libero_10": 520, "libero_spatial": 220, "libero_goal": 300}
+SUITES = tuple(SUITE_MAX_STEPS)
 
 
 def severity_token(severity: float) -> str:
@@ -194,7 +201,7 @@ def smoke_manifest() -> List[Dict[str, Any]]:
         items.append(_item(
             "wrist-mask-only-{:02d}".format(number), "wrist_mask_only",
             {"wrist_occlusion": dict(REDUCED_MASK)}, repeat=number))
-    for family in M6_FAMILIES:
+    for family in LEGACY_FAMILIES:
         kind = "{}_{:g}".format(family, SMOKE_SEVERITY)
         for number in range(1, SMOKE_FAMILY_REPEATS + 1):
             items.append(_item(
@@ -276,11 +283,16 @@ def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] 
 
     wall, level_seconds = ASSUMED_EPISODE_WALL_SECONDS, ASSUMED_LEVEL_SECONDS
     cap = MAX_RECOMMENDED_DEADLINE_SECONDS
-    if config is not None and config.get("suite") == "libero_10":
+    suite = None if config is None else config.get("suite")
+    if suite == "libero_10":
         wall = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
         if mode != "m6-smoke":
             level_seconds = max(1, math.ceil(len(config["families"]) * config["attempts"] / M6_WORKERS)) * wall
         cap = MAX_LIBERO_10_DEADLINE_SECONDS
+    elif suite in SUITE_MAX_STEPS:
+        # Episodes that run to the step limit scale with it; shorter suites keep the recorded timing.
+        wall = max(wall, math.ceil(ASSUMED_EPISODE_WALL_SECONDS * SUITE_MAX_STEPS[suite] / 280.0))
+        level_seconds = ASSUMED_LEVEL_SECONDS * wall / ASSUMED_EPISODE_WALL_SECONDS
     if mode == "m6-smoke":
         work = math.ceil(len(smoke_manifest()) / M6_WORKERS) * wall
     else:

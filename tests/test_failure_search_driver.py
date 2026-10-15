@@ -246,8 +246,14 @@ class SuiteAndStartConfigTests(unittest.TestCase):
         self.assertIn("      suite: libero_10\n", text)
         self.assertNotIn("libero_object", text.split("params:")[1])
 
+    def test_the_new_suites_are_written(self):
+        for suite in ("libero_spatial", "libero_goal"):
+            with self.subTest(suite=suite):
+                text = self.write_config(suite=suite, task_id=4)
+                self.assertIn("      suite: {}\n".format(suite), text)
+
     def test_only_the_supported_suites_are_accepted(self):
-        for suite in ("libero_spatial", "libero_goal", "libero_90", "libero_object ", "", None, 10, "x\n"):
+        for suite in ("libero_90", "libero_object ", "", None, 10, "x\n"):
             with self.subTest(suite=suite), self.assertRaises(ValueError):
                 self.write_config(suite=suite)
 
