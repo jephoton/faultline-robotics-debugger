@@ -113,6 +113,65 @@ class AuditWorkloadTests(unittest.TestCase):
         audit_workload(original, "a")
         self.assertEqual(before, original)
 
+    def test_the_breadth_pack_families_are_accepted_in_canonical_order(self):
+        from robot_debug import m6_experiment
+
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            workload = audit_workload(
+                spec(families=["lighting", "jpeg", "viewpoint", "dead_pixels", "colour_cast", "motion_blur"],
+                     attempts=3, required_failures=2, bisection_steps=2, sweep=[0.5, 1.0]), "a")
+        self.assertEqual(["jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting"],
+                         workload["families"])
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            self.assertEqual(workload, validate_workload_config(workload))
+
+    def test_each_new_family_alone_gives_a_valid_workload_with_a_sensible_deadline(self):
+        from robot_debug import m6_experiment
+
+        legacy = audit_workload(spec(families=["blur"]), "a")["deadline_seconds"]
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            for family in ("jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting"):
+                with self.subTest(family=family):
+                    workload = audit_workload(spec(families=[family]), "a")
+                    self.assertEqual([family], workload["families"])
+                    self.assertGreaterEqual(workload["deadline_seconds"], legacy)
+                    self.assertLessEqual(workload["deadline_seconds"], 2400)
+
+    def test_all_ten_families_exceed_the_episode_bound_unless_the_search_is_narrowed(self):
+        from robot_debug import m6_experiment
+
+        everything = spec(families=list(m6_experiment.FAMILIES))
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            with self.assertRaises(WorkloadError):
+                audit_workload(everything, "a")
+            narrowed = spec(families=list(m6_experiment.FAMILIES), attempts=3, required_failures=2,
+                            bisection_steps=2, sweep=[0.5, 1.0])
+            self.assertEqual(10, len(audit_workload(narrowed, "a")["families"]))
+
+    def test_unknown_names_and_scene_names_in_the_wrong_place_are_refused(self):
+        from robot_debug import m6_experiment
+
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            for families in (["sepia"], ["viewpoint", "viewpoint"], ["Jpeg"], ["jpeg", None]):
+                with self.subTest(families=families), self.assertRaises(WorkloadError):
+                    audit_workload(spec(families=families), "a")
+
+    def test_the_default_stays_the_four_recorded_families_even_when_the_runtime_knows_more(self):
+        from robot_debug import m6_experiment
+
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES):
+            workload = audit_workload({"audit": {}}, "a")
+        self.assertEqual(["darken", "noise", "blur", "contrast"], workload["families"])
+
+    def test_a_spec_for_a_breadth_suite_and_family_carries_both(self):
+        from robot_debug import m6_experiment
+
+        goal = dict(spec(families=["viewpoint"]), policy={"suite": "libero_goal"})
+        with mock.patch.object(job_runtime, "M6_FAMILIES", m6_experiment.FAMILIES), \
+                mock.patch.object(job_runtime, "M6_SUITES", m6_experiment.SUITES):
+            workload = audit_workload(goal, "a")
+        self.assertEqual(("libero_goal", ["viewpoint"]), (workload["suite"], workload["families"]))
+
 
 def reduce_workload():
     return se.build_reduce_workload(make_plan(), run_id="scn-reduce-1")

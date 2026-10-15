@@ -986,5 +986,209 @@ class PythonCompatibilityTests(unittest.TestCase):
                 ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=(3, 8))
 
 
+
+class BreadthFamiliesTests(unittest.TestCase):
+    """ADR 0032: the audit accepts the new image families and the two scene families."""
+
+    ALL = ("darken", "noise", "blur", "contrast", "jpeg", "colour_cast", "motion_blur", "dead_pixels",
+           "viewpoint", "lighting")
+
+    def test_the_family_registry_lists_every_family_in_canonical_order(self):
+        self.assertEqual(self.ALL, m6.FAMILIES)
+        self.assertEqual(("darken", "noise", "blur", "contrast"), m6.LEGACY_FAMILIES)
+        self.assertEqual(("viewpoint", "lighting"), m6.SCENE_FAMILIES)
+        self.assertEqual(self.ALL[:8], m6.IMAGE_FAMILIES)
+
+    def test_scene_families_use_the_scene_option_and_image_families_the_image_option(self):
+        self.assertEqual({"image_perturbation": {"kind": "jpeg", "severity": 0.4}}, m6.scalar_config("jpeg", 0.4))
+        self.assertEqual({"scene_perturbation": {"kind": "viewpoint", "severity": 0.4}},
+                         m6.scalar_config("viewpoint", 0.4))
+        self.assertEqual({"scene_perturbation": {"kind": "lighting", "severity": 0.0125}},
+                         m6.scalar_config("lighting", 0.0125))
+
+    def test_level_items_carry_the_scene_option(self):
+        (first, *_rest) = m6.level_items("viewpoint", 0.6, 3)
+        self.assertEqual("viewpoint-s600000-a01", first["case_id"])
+        self.assertEqual({"scene_perturbation": {"kind": "viewpoint", "severity": 0.6}}, first["config"])
+        self.assertEqual("viewpoint", first["meta"]["family"])
+
+    def test_the_smoke_manifest_is_frozen_on_the_four_recorded_families(self):
+        families = {item["meta"]["family"] for item in m6.smoke_manifest() if "family" in item["meta"]}
+        self.assertEqual(set(m6.LEGACY_FAMILIES), families)
+
+    def test_a_new_family_never_shortens_the_deadline_and_jpeg_costs_the_most(self):
+        base = dict(THRESHOLD_CONFIG, sweep=[0.5, 1.0], attempts=3, required_failures=2, bisection_steps=2)
+        legacy = m6.recommended_deadline_seconds("m6-threshold", dict(base, families=["blur"]))
+        deadlines = {family: m6.recommended_deadline_seconds("m6-threshold", dict(base, families=[family]))
+                     for family in m6.FAMILIES}
+        for family, seconds in deadlines.items():
+            with self.subTest(family=family):
+                self.assertGreaterEqual(seconds, legacy)
+        self.assertEqual(max(deadlines.values()), deadlines["jpeg"])
+        self.assertEqual(deadlines["viewpoint"], deadlines["lighting"], "scene families add no per-step cost")
+        self.assertEqual(legacy, deadlines["darken"], "the recorded families keep their recorded estimates")
+
+    def test_the_per_step_overhead_of_the_worst_family_in_the_mix_sets_the_estimate(self):
+        base = dict(THRESHOLD_CONFIG, sweep=[0.5, 1.0], attempts=3, required_failures=2, bisection_steps=2)
+        mixed = m6.recommended_deadline_seconds("m6-threshold", dict(base, families=["blur", "jpeg"]))
+        alone = m6.recommended_deadline_seconds("m6-threshold", dict(base, families=["jpeg"]))
+        self.assertGreaterEqual(mixed, alone)
+
+    def test_a_family_costs_more_on_a_longer_suite(self):
+        config = dict(THRESHOLD_CONFIG, families=["jpeg"], sweep=[0.5, 1.0], attempts=3, required_failures=2,
+                      bisection_steps=2)
+        wall_object = m6.episode_wall_seconds(config)
+        wall_ten = m6.episode_wall_seconds(dict(config, suite="libero_10"))
+        self.assertGreater(wall_ten, wall_object)
+        self.assertEqual(m6.ASSUMED_EPISODE_WALL_SECONDS, m6.episode_wall_seconds(dict(config, families=["darken"])))
+        self.assertGreater(wall_object, m6.ASSUMED_EPISODE_WALL_SECONDS)
+
+    def test_step_overheads_cover_exactly_the_costly_new_families(self):
+        self.assertEqual({"jpeg", "motion_blur", "colour_cast", "dead_pixels"}, set(m6.FAMILY_STEP_OVERHEAD_SECONDS))
+        self.assertTrue(all(0 < seconds < 0.1 for seconds in m6.FAMILY_STEP_OVERHEAD_SECONDS.values()))
+
+
+class StageConfigWriterTests(unittest.TestCase):
+    """``write_stage_config`` adds the breadth-pack benchmark options to the generated YAML."""
+
+    def write(self, **options):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config_path = root / "configs" / "viewpoint-s400000-a01.yaml"
+            config_path.parent.mkdir()
+            m6.write_stage_config(
+                config_path=config_path, output_dir=root / "runs" / "x", project_root=root / "project",
+                stage_name="m6-x", episode_indices=(0,), **options)
+            return config_path.read_text(encoding="utf-8")
+
+    def params(self, text):
+        import yaml
+
+        return yaml.safe_load(text)["benchmarks"][0]["params"]
+
+    def test_without_the_new_options_the_file_is_the_recorded_one(self):
+        from scripts import run_failure_search
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "case.yaml"
+            options = dict(config_path=path, output_dir=root / "o", project_root=root / "p", stage_name="s",
+                           episode_indices=(0,), image_perturbation={"kind": "blur", "severity": 0.4})
+            run_failure_search._write_config(**options)
+            plain = path.read_text(encoding="utf-8")
+            m6.write_stage_config(**options)
+            self.assertEqual(plain, path.read_text(encoding="utf-8"))
+            m6.write_stage_config(scene_perturbation=None, instruction=None, instruction_out=False, **options)
+            self.assertEqual(plain, path.read_text(encoding="utf-8"))
+
+    def test_a_scene_family_is_written_with_its_probe_sidecar(self):
+        params = self.params(self.write(scene_perturbation={"kind": "viewpoint", "severity": 0.4}, task_id=2))
+        self.assertEqual({"kind": "viewpoint", "severity": 0.4}, params["scene_perturbation"])
+        self.assertTrue(params["camera_probe"].endswith("viewpoint-s400000-a01.camera_probe.json"))
+        self.assertEqual(2, params["task_id"])
+
+    def test_an_image_family_keeps_its_single_probe_line(self):
+        text = self.write(image_perturbation={"kind": "jpeg", "severity": 0.4}, scene_perturbation=None)
+        self.assertEqual(1, text.count("camera_probe:"))
+        self.assertNotIn("scene_perturbation", text)
+
+    def test_a_scene_family_with_an_image_family_writes_one_probe_line(self):
+        text = self.write(image_perturbation={"kind": "blur", "severity": 0.4},
+                          scene_perturbation={"kind": "lighting", "severity": 0.3})
+        self.assertEqual(1, text.count("camera_probe:"))
+        params = self.params(text)
+        self.assertEqual("lighting", params["scene_perturbation"]["kind"])
+        self.assertEqual("blur", params["image_perturbation"]["kind"])
+
+    def test_an_instruction_and_its_sidecar_are_written(self):
+        params = self.params(self.write(instruction='move the "soup" tin: now', instruction_out=True))
+        self.assertEqual('move the "soup" tin: now', params["instruction"])
+        self.assertTrue(params["instruction_out"].endswith("viewpoint-s400000-a01.instruction.json"))
+
+    def test_a_non_ascii_instruction_survives_the_yaml_round_trip(self):
+        params = self.params(self.write(instruction="déplace la boîte"))
+        self.assertEqual("déplace la boîte", params["instruction"])
+        self.assertNotIn("instruction_out", params)
+
+    def test_bad_values_are_refused_before_a_file_is_written(self):
+        for options in ({"scene_perturbation": {"kind": "viewpoint"}}, {"scene_perturbation": "x"},
+                        {"scene_perturbation": {"kind": "blur", "severity": 0.5}},
+                        {"scene_perturbation": {"kind": "lighting", "severity": 0.1234567}},
+                        {"instruction": ""}, {"instruction": "a\nb"}, {"instruction": 5},
+                        {"instruction": "x" * 201}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                self.write(**options)
+
+    def test_the_written_options_are_accepted_by_the_benchmark_constructor(self):
+        from robot_debug.scene_perturbation import ScenePerturbation
+
+        params = self.params(self.write(scene_perturbation={"kind": "lighting", "severity": 0.25},
+                                        instruction="open the drawer", instruction_out=True))
+        self.assertEqual("lighting", ScenePerturbation.from_mapping(params["scene_perturbation"]).kind)
+
+
+class SceneThresholdRunTests(RunTestCase):
+    """A threshold run over mixed families: image families and scene families share the pool."""
+
+    @staticmethod
+    def decide(case, kwargs):
+        spec = kwargs.get("image_perturbation") or kwargs.get("scene_perturbation")
+        if spec is None:
+            return "success"
+        boundary = {"jpeg": 0.7, "dead_pixels": None, "viewpoint": 0.35, "lighting": 0.05}[spec["kind"]]
+        return "policy_failure" if boundary is not None and spec["severity"] >= boundary else "success"
+
+    def test_scene_and_image_families_find_their_thresholds_on_one_pool(self):
+        config = dict(THRESHOLD_CONFIG, families=["jpeg", "dead_pixels", "viewpoint", "lighting"])
+        world = M6World(self.decide, item_seconds=0.02)
+        summary = self.run_m6(world, "m6-threshold", config)
+        families = summary["families"]
+
+        self.assertIsNone(summary["stop_reason"])
+        self.assertTrue(summary["complete"])
+        self.assertEqual((0.7, 0.6875), (families["jpeg"]["threshold_severity"], families["jpeg"]["lower_bound"]))
+        self.assertEqual("no_reproducible_failure", families["dead_pixels"]["stop_reason"])
+        self.assertEqual(0.35, families["viewpoint"]["threshold_severity"])
+        self.assertEqual(0.05, families["lighting"]["threshold_severity"])
+        self.assertEqual({"name": "jpeg_quality", "value": round(95 - 90 * 0.7, 6)},
+                         families["jpeg"]["threshold_physical"])
+        self.assertEqual({"name": "camera_shift_m", "value": 0.035}, families["viewpoint"]["threshold_physical"])
+        self.assertEqual({"name": "light_scale", "value": round(1 - 0.9 * 0.05, 6)},
+                         families["lighting"]["threshold_physical"])
+        scene_cases = [kwargs for kwargs in world.by_case.values() if "scene_perturbation" in kwargs]
+        self.assertTrue(scene_cases)
+        self.assertTrue(all("image_perturbation" not in kwargs for kwargs in scene_cases))
+
+    def test_the_applied_scene_values_reach_the_level_entries_of_scene_families_only(self):
+        class SceneProbingWorld(M6World):
+            def write_config(self, **kwargs):
+                super().write_config(**kwargs)
+                spec = kwargs.get("scene_perturbation")
+                if spec is not None:
+                    path = kwargs["config_path"]
+                    path.with_name(path.stem + m6.PROBE_SUFFIX).write_text(json.dumps({
+                        "schema_version": 1, "perturbation": {"seed": 7}, "episodes": [],
+                        "scene_applied": [{"episode_index": 0, "kind": spec["kind"], "severity": spec["severity"],
+                                           "shift_m": round(0.1 * spec["severity"], 6)}]}), encoding="utf-8")
+
+        config = dict(THRESHOLD_CONFIG, families=["viewpoint", "jpeg"], sweep=[0.4, 1.0], bisection_steps=0)
+        summary = self.run_m6(SceneProbingWorld(self.decide, item_seconds=0.01), "m6-threshold", config)
+        viewpoint = summary["families"]["viewpoint"]
+        self.assertEqual({"kind": "viewpoint", "severity": 0.4, "shift_m": 0.04},
+                         viewpoint["levels"][0]["scene_applied"])
+        self.assertIsNone(viewpoint["levels"][0]["camera_effect"], "a scene family has no image statistics")
+        for level in summary["families"]["jpeg"]["levels"]:
+            self.assertNotIn("scene_applied", level)
+
+    def test_nominal_controls_carry_no_scene_option(self):
+        config = dict(THRESHOLD_CONFIG, families=["viewpoint"])
+        world = M6World(self.decide, item_seconds=0.01)
+        self.run_m6(world, "m6-threshold", config)
+        controls = [kwargs for case, kwargs in world.by_case.items() if "nominal" in case]
+        self.assertTrue(controls)
+        self.assertTrue(all("scene_perturbation" not in kwargs and "image_perturbation" not in kwargs
+                            for kwargs in controls))
+
+
 if __name__ == "__main__":
     unittest.main()

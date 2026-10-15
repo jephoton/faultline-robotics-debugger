@@ -52,6 +52,11 @@ class InstructionOverrideTests(FakeHarnessCase):
             with self.subTest(length=len(text)):
                 self.assertEqual(text, self.benchmark_type(instruction=text).instruction)
 
+    def test_the_config_writer_uses_the_same_length_limit(self):
+        from robot_debug import m6_experiment
+
+        self.assertEqual(self.adapter.INSTRUCTION_MAX_CHARS, m6_experiment.INSTRUCTION_MAX_CHARS)
+
     def test_rejects_other_instructions(self):
         for text in ("", "x" * 201, 5, True, ["a"], "line\nbreak", "tab\there", "nul\x00", "bell\x07"):
             with self.subTest(text=text), self.assertRaises(ValueError):

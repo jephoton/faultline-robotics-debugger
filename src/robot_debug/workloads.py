@@ -21,7 +21,7 @@ import json
 from typing import Any, Dict, Mapping, Optional
 
 from robot_debug import m6_experiment, scenario_experiment
-from robot_debug.job_runtime import M6_FAMILIES, JobRuntimeError, validate_workload_config
+from robot_debug.job_runtime import JobRuntimeError, validate_workload_config
 from robot_debug.scenario_import import ScenarioImportError, validate_scenario_candidate
 
 MAX_WORKLOAD_BYTES = 64 * 1024
@@ -60,8 +60,10 @@ def audit_workload(spec: Mapping[str, Any], run_id: str) -> Dict[str, Any]:
     """The ``m6-threshold`` workload for a spec's ``audit`` section and ``policy.suite``.
 
     ``audit`` holds ``task`` (default 0), ``start`` (omitted: the upstream start behaviour) and
-    ``families`` (a non-empty subset of darken, noise, blur, contrast; default all four, which a
-    LIBERO-10 audit cannot afford, see the deadline cap). It may also narrow the search with
+    ``families`` (a non-empty subset of ``m6_experiment.FAMILIES``: the image families darken, noise,
+    blur, contrast, jpeg, colour_cast, motion_blur, dead_pixels and the scene families viewpoint and
+    lighting; default the four recorded ones, which a LIBERO-10 audit cannot afford, see the deadline
+    cap). ``policy.suite`` is any of the four LIBERO suites. It may also narrow the search with
     ``sweep``, ``attempts``, ``required_failures`` and ``bisection_steps``. The deadline is the
     recommended one for the search, and ``WorkloadError`` says so when it exceeds the cap.
     """
@@ -71,13 +73,15 @@ def audit_workload(spec: Mapping[str, Any], run_id: str) -> Dict[str, Any]:
     suite = policy.get("suite", "libero_object")
     if suite not in m6_experiment.SUITES:
         raise WorkloadError("policy.suite must be one of {}".format(", ".join(m6_experiment.SUITES)))
-    families = audit.get("families", list(M6_FAMILIES))
+    families = audit.get("families", list(m6_experiment.LEGACY_FAMILIES))
     if (not isinstance(families, (list, tuple)) or not families
-            or any(name not in M6_FAMILIES for name in families) or len(set(families)) != len(families)):
-        raise WorkloadError("audit.families must be a non-empty subset of {}".format(", ".join(M6_FAMILIES)))
+            or any(name not in m6_experiment.FAMILIES for name in families)
+            or len(set(families)) != len(families)):
+        raise WorkloadError("audit.families must be a non-empty subset of {}".format(
+            ", ".join(m6_experiment.FAMILIES)))
     config = {
         "schema_version": 1, "mode": "m6-threshold", "run_id": run_id,
-        "families": [name for name in M6_FAMILIES if name in families],
+        "families": [name for name in m6_experiment.FAMILIES if name in families],
         "suite": suite, "task_id": audit.get("task", 0),
     }  # type: Dict[str, Any]
     if audit.get("start") is not None:

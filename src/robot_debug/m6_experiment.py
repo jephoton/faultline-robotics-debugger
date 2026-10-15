@@ -34,12 +34,22 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from robot_debug import batch_experiment as be
-from robot_debug.image_perturbation import physical_value
+from robot_debug.image_perturbation import KINDS as IMAGE_FAMILIES, physical_value
+from robot_debug.scene_perturbation import SCENE_KINDS as SCENE_FAMILIES
 from robot_debug.threshold_search import ThresholdStop, run_threshold_search
 
 # The four families of the recorded M6 runs. The smoke manifest and the default audit stay on these,
-# whatever families are added later.
+# whatever families are added later. ``FAMILIES`` lists everything an audit accepts: the image
+# families (both cameras, ``image_perturbation``) then the scene families (``scene_perturbation``).
 LEGACY_FAMILIES = ("darken", "noise", "blur", "contrast")
+FAMILIES = tuple(IMAGE_FAMILIES) + tuple(SCENE_FAMILIES)
+# Extra wall time per policy step that a family adds to an episode, beyond the recorded timings
+# (which already include the four legacy families): both cameras, measured on a 256x256 frame
+# (jpeg 8 ms, motion blur 2 ms, colour cast 1 ms, dead pixels 0.6 ms each), rounded up. The scene
+# families only act at reset and add nothing per step.
+FAMILY_STEP_OVERHEAD_SECONDS = {
+    "jpeg": 0.020, "motion_blur": 0.006, "colour_cast": 0.003, "dead_pixels": 0.002,
+}
 M6_WORKERS = 12
 M6_MAX_BATCH_SIZE = 12
 SUMMARY_NAME = "m6_summary.json"
@@ -172,6 +182,62 @@ def camera_effect(probes: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any
 
 
 # ---------------------------------------------------------------------------
+# Stage configuration (the benchmark options the generic writer does not know)
+# ---------------------------------------------------------------------------
+
+# Must equal ``robot_debug.libero.INSTRUCTION_MAX_CHARS`` (a test enforces it).
+INSTRUCTION_MAX_CHARS = 200
+
+
+def write_stage_config(
+    *, scene_perturbation: Optional[Mapping[str, Any]] = None, instruction: Optional[str] = None,
+    instruction_out: bool = False, **kwargs: Any
+) -> None:
+    """``run_failure_search._write_config`` plus the breadth-pack benchmark options.
+
+    ``scene_perturbation`` (``{"kind", "severity"}`` of a scene family) is written as that benchmark
+    option, with the camera-probe sidecar when no other family already asked for one (the probe
+    records the applied values). ``instruction`` replaces the language the policy receives, and
+    ``instruction_out=True`` adds the per-episode sidecar ``<config stem>.instruction.json``. Every
+    other keyword goes to the generic writer unchanged, so a stage without the new options gets
+    byte-identical configuration. Bad values raise ``ValueError`` before any file is written.
+    """
+
+    from robot_debug.scene_perturbation import ScenePerturbation
+    from scripts import run_failure_search
+
+    try:
+        scene = ScenePerturbation.from_mapping(scene_perturbation)
+    except TypeError as error:
+        raise ValueError(str(error)) from error
+    if scene is not None and abs(round(scene.severity, 6) - scene.severity) > 1e-12:
+        raise ValueError("scene_perturbation severity supports at most six decimals")
+    if instruction is not None and (
+        not isinstance(instruction, str) or not 1 <= len(instruction) <= INSTRUCTION_MAX_CHARS
+        or not instruction.isprintable()
+    ):
+        raise ValueError("instruction must be 1 to {} printable characters".format(INSTRUCTION_MAX_CHARS))
+    run_failure_search._write_config(**kwargs)
+    config_path = Path(kwargs["config_path"])
+    lines: List[str] = []
+    if scene is not None:
+        lines += ["      scene_perturbation:", "        kind: {}".format(scene.kind),
+                  "        severity: {:.6f}".format(scene.severity)]
+        if kwargs.get("wrist_occlusion") is None and kwargs.get("image_perturbation") is None:
+            lines.append("      camera_probe: {}".format(run_failure_search._yaml_scalar(
+                config_path.with_name(config_path.stem + ".camera_probe.json"))))
+    if instruction is not None:
+        lines.append("      instruction: {}".format(run_failure_search._yaml_scalar(instruction)))
+    if instruction_out:
+        lines.append("      instruction_out: {}".format(run_failure_search._yaml_scalar(
+            config_path.with_name(config_path.stem + ".instruction.json"))))
+    if lines:
+        # ``params`` is the last block of the generated file, so appended lines extend it.
+        text = config_path.read_text(encoding="utf-8")
+        config_path.write_text(text + "\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Manifests
 # ---------------------------------------------------------------------------
 
@@ -186,7 +252,10 @@ def nominal_controls(count: int = NOMINAL_CONTROLS, prefix: str = "nominal-contr
 
 
 def scalar_config(family: str, severity: float) -> Dict[str, Any]:
-    return {"image_perturbation": {"kind": family, "severity": round(float(severity), 6)}}
+    """The benchmark option of one family level: scene families use ``scene_perturbation``."""
+
+    option = "scene_perturbation" if family in SCENE_FAMILIES else "image_perturbation"
+    return {option: {"kind": family, "severity": round(float(severity), 6)}}
 
 
 def smoke_manifest() -> List[Dict[str, Any]]:
@@ -268,6 +337,24 @@ def threshold_waves(families: int, levels: int, attempts: int, workers: int = M6
     return waves
 
 
+def episode_wall_seconds(config: Optional[Mapping[str, Any]] = None) -> float:
+    """Assumed wall time of one worst-case episode for a threshold configuration's suite and families.
+
+    The recorded 44 s (LIBERO-Object, 280 steps) scaled up for suites with longer episodes, plus the
+    per-step cost of the slowest family in the configuration (``FAMILY_STEP_OVERHEAD_SECONDS``).
+    ``None`` and the smoke mode use the recorded value.
+    """
+
+    suite = None if config is None else config.get("suite")
+    steps = SUITE_MAX_STEPS.get(suite, SUITE_MAX_STEPS["libero_object"])
+    if suite == "libero_10":
+        wall = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
+    else:
+        wall = max(ASSUMED_EPISODE_WALL_SECONDS, math.ceil(ASSUMED_EPISODE_WALL_SECONDS * steps / 280.0))
+    families = () if config is None else config.get("families", ())
+    return wall + steps * max([FAMILY_STEP_OVERHEAD_SECONDS.get(name, 0.0) for name in families] or [0.0])
+
+
 def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] = None) -> int:
     """A Job ``deadline_seconds`` from the documented timing assumptions.
 
@@ -281,17 +368,16 @@ def recommended_deadline_seconds(mode: str, config: Optional[Mapping[str, Any]] 
     uses the longer LIBERO-10 episode time and the runtime's 3000 s cap instead.
     """
 
-    wall, level_seconds = ASSUMED_EPISODE_WALL_SECONDS, ASSUMED_LEVEL_SECONDS
+    level_seconds = ASSUMED_LEVEL_SECONDS
     cap = MAX_RECOMMENDED_DEADLINE_SECONDS
     suite = None if config is None else config.get("suite")
+    wall = episode_wall_seconds(config)
     if suite == "libero_10":
-        wall = ASSUMED_LIBERO_10_EPISODE_WALL_SECONDS
+        cap = MAX_LIBERO_10_DEADLINE_SECONDS
         if mode != "m6-smoke":
             level_seconds = max(1, math.ceil(len(config["families"]) * config["attempts"] / M6_WORKERS)) * wall
-        cap = MAX_LIBERO_10_DEADLINE_SECONDS
-    elif suite in SUITE_MAX_STEPS:
-        # Episodes that run to the step limit scale with it; shorter suites keep the recorded timing.
-        wall = max(wall, math.ceil(ASSUMED_EPISODE_WALL_SECONDS * SUITE_MAX_STEPS[suite] / 280.0))
+    else:
+        # A longer or slower episode stretches the two-wave level in proportion.
         level_seconds = ASSUMED_LEVEL_SECONDS * wall / ASSUMED_EPISODE_WALL_SECONDS
     if mode == "m6-smoke":
         work = math.ceil(len(smoke_manifest()) / M6_WORKERS) * wall
@@ -543,7 +629,7 @@ def run_m6(
     if write_config is None or load_result is None:
         from scripts import run_failure_search
 
-        write_config = write_config or run_failure_search._write_config
+        write_config = write_config or write_stage_config
         load_result = load_result or (
             lambda output: run_failure_search._load_stage_results(output, expected_count=1)[0]
         )
@@ -594,6 +680,20 @@ def run_m6(
                 probes.append(probe_cache[case_id])
         return camera_effect(probes)
 
+    def scene_for(subset: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+        """The scene values applied to the first valid item of a level that wrote any (a scene family)."""
+
+        for record in subset:
+            if record["status"] != "valid":
+                continue
+            case_id = record["case_id"]
+            if case_id not in probe_cache:
+                probe_cache[case_id] = load_probe(probe_path(configs, case_id))
+            applied = (probe_cache[case_id] or {}).get("scene_applied")
+            if isinstance(applied, list) and applied and isinstance(applied[0], dict):
+                return {key: value for key, value in applied[0].items() if key != "episode_index"}
+        return None
+
     families_lock = threading.Lock()
 
     def enriched_families(finished: Mapping[str, Any]) -> Dict[str, Any]:
@@ -604,8 +704,11 @@ def run_m6(
             levels = []
             for level in result.get("levels", ()):
                 item = dict(level)
-                item["camera_effect"] = effect_for([
-                    r for r in records if r.get("family") == name and r.get("severity") == level["severity"]])
+                at_level = [
+                    r for r in records if r.get("family") == name and r.get("severity") == level["severity"]]
+                item["camera_effect"] = effect_for(at_level)
+                if name in SCENE_FAMILIES:
+                    item["scene_applied"] = scene_for(at_level)
                 levels.append(item)
             copy["levels"] = levels
             threshold = result.get("threshold_severity")
