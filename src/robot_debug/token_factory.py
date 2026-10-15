@@ -1008,3 +1008,114 @@ def request_scenario_interpretation(packet: dict, api_key: str,
         return result
     return {"response_json": content,
             "provenance": _scenario_explain_provenance("completed", None, latency, prompt, completion)}
+
+
+# --- M7a: instruction paraphrases (additive; nothing above is changed) ----------------
+
+_MAX_REQUEST_BYTES_PARAPHRASE = 4_000
+_MAX_TOKENS_PARAPHRASE = 1500
+_PARAPHRASE_TEMPERATURE = 0.7
+_PARAPHRASE_FALLBACK_CODES = {
+    "invalid_api_key", "authentication_failed", "timeout", "http_error", "invalid_response",
+    "model_unavailable", "model_mismatch", "output_limit", "request_too_large", "unsafe_response",
+}
+
+
+def request_paraphrase_reply(prompt: dict, api_key: str, transport: Transport | None = None, *,
+                             model: str) -> dict:
+    """One catalog read and at most one bounded POST asking ``model`` for instruction paraphrases.
+
+    ``prompt`` holds the ``system`` and ``user`` messages (:func:`robot_debug.paraphrase.build_prompt`).
+    The reply is advisory and never raises for a model or network problem: ``content`` is the model
+    text (``None`` on any problem) and ``fallback_reason`` is a fixed code (a missing key or model,
+    a transport error, a truncated or unexpected reply, a reply carrying the key). The text is
+    returned unparsed; the caller validates it. Returns ``content``, ``model``,
+    ``fallback_reason`` and ``provenance`` (no price is pinned for the larger models, so no cost
+    estimate; reconcile with billing).
+    """
+
+    if (type(prompt) is not dict or type(prompt.get("system")) is not str
+            or type(prompt.get("user")) is not str or type(model) is not str or not model):
+        raise ValueError("a paraphrase prompt needs a system and a user message and a model")
+    result = {"content": None, "model": model, "fallback_reason": None, "provenance": None}
+
+    def fall_back(reason: str, **extra) -> dict:
+        result["fallback_reason"] = reason if reason in _PARAPHRASE_FALLBACK_CODES else "http_error"
+        result.update(extra)
+        return result
+
+    if not _valid_key(api_key):
+        return fall_back("invalid_api_key")
+    call = _default_transport if transport is None else transport
+    started = time.monotonic()
+    try:
+        catalog = call("GET", "models", None, api_key)
+    except Exception as exc:  # noqa: BLE001 - mapped to a fixed code
+        return fall_back(_http_code(exc))
+    try:
+        data = catalog["data"]
+        if type(data) is not list:
+            raise ValueError
+        identifiers = [item["id"] for item in data
+                       if type(item) is dict and type(item.get("id")) is str]
+    except (KeyError, TypeError, ValueError):
+        return fall_back("invalid_response")
+    if model not in identifiers:
+        return fall_back("model_unavailable")
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": prompt["system"]},
+                     {"role": "user", "content": prompt["user"]}],
+        "max_tokens": _MAX_TOKENS_PARAPHRASE,
+        "temperature": _PARAPHRASE_TEMPERATURE,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    if len(encoded) > _MAX_REQUEST_BYTES_PARAPHRASE:
+        return fall_back("request_too_large")
+    if _contains_secret(payload, api_key):
+        return fall_back("unsafe_response")
+
+    try:
+        response = call("POST", "chat/completions", payload, api_key)
+    except Exception as exc:  # noqa: BLE001 - mapped to a fixed code
+        code = _post_error_code(exc)
+        status = "transport_error" if code == "timeout" else (
+            "invalid_response" if code == "invalid_response" else "http_error")
+        return fall_back(code, provenance=_scenario_provenance(
+            status, code, time.monotonic() - started, model))
+    latency = time.monotonic() - started
+    try:
+        if type(response) is not dict or response.get("model") != model:
+            raise ValueError
+        prompt_tokens, completion_tokens = _usage(response)
+    except Exception:  # noqa: BLE001
+        mismatch = type(response) is dict and response.get("model") != model
+        code = "model_mismatch" if mismatch else "invalid_response"
+        return fall_back(code, provenance=_scenario_provenance(
+            "invalid_response", code, latency, model))
+    provenance = _scenario_provenance("completed", None, latency, model, prompt_tokens, completion_tokens)
+    try:
+        choices = response["choices"]
+        if type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict:
+            raise ValueError
+        finish = choices[0].get("finish_reason")
+        content = choices[0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, ValueError):
+        provenance.update(request_status="invalid_response", error_code="invalid_response")
+        return fall_back("invalid_response", provenance=provenance)
+    if finish == "length":
+        provenance.update(request_status="invalid_response", error_code="output_limit")
+        return fall_back("output_limit", provenance=provenance)
+    if finish != "stop" or type(content) is not str:
+        provenance.update(request_status="invalid_response", error_code="invalid_response")
+        return fall_back("invalid_response", provenance=provenance)
+    if _research_leaks_key(content, api_key):
+        provenance.update(request_status="invalid_response", error_code="unsafe_response")
+        return fall_back("unsafe_response", provenance=provenance)
+    result.update(content=content, provenance=provenance)
+    return result
