@@ -4,6 +4,8 @@ Mode 1 (``scenario``): screen -> choose the failing start -> plan (Nemotron or t
 fixed order) -> reduce Job -> continuation Jobs while the result is not
 entity-minimal and the cap allows -> report, case, explanation, registration.
 Mode 2 (``audit``): one audit Job -> report -> case -> registration.
+``paraphrase`` (ADR 0032): Nemotron paraphrases the task instruction locally -> screen Job -> choose the
+failing paraphrase -> reduce Job (delta debugging over its word edits) -> report -> case -> registration.
 ``replay``: one Job that re-runs a saved case.
 
 Everything that touches the cloud goes through a *backend* (``robot_debug.backends``)
@@ -363,6 +365,63 @@ def replay_text(verdict: Optional[str]) -> str:
     return REPLAY_TEXT.get(verdict, "Inconclusive: the replay ended with the verdict '{}'.".format(verdict))
 
 
+PARAPHRASE_DEFAULT_CANDIDATES = 24
+
+
+def paraphrase_candidates(spec: Spec) -> int:
+    """The reduction's candidate budget: ``budget.max_candidates`` when the spec sets it, else 24."""
+
+    budget = spec.raw.get("budget") if isinstance(spec.raw, Mapping) else None
+    if isinstance(budget, Mapping) and "max_candidates" in budget:
+        return spec.budget.max_candidates
+    return PARAPHRASE_DEFAULT_CANDIDATES
+
+
+def paraphrase_failures(row: Mapping[str, Any]) -> int:
+    """Policy failures among the first five attempts of a screened paraphrase that reproduced, else 0.
+
+    A reproducing paraphrase has at least four recorded attempts (the early-decided gate stops at the
+    fourth failure; the top-up normally adds the fifth)."""
+
+    outcomes = row.get("outcomes")
+    if row.get("decision") != "reproduces" or not isinstance(outcomes, list) or len(outcomes) < 4:
+        return 0
+    count = outcomes[:5].count("policy_failure")
+    return count if count >= 4 else 0
+
+
+def choose_paraphrase(summary: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
+    """The reproducing paraphrase to reduce: most failures, then fewest word edits, then the lowest label;
+    ``None`` when no paraphrase met the 4-of-5 gate."""
+
+    best = None
+    for row in summary.get("instructions") or ():
+        if not isinstance(row, Mapping) or row.get("kind") != "paraphrase":
+            continue
+        count = paraphrase_failures(row)
+        if not count:
+            continue
+        edits = row.get("edit_count")
+        key = (-count, edits if type(edits) is int else 10 ** 6, str(row.get("label")))
+        if best is None or key < best[0]:
+            best = (key, row)
+    return None if best is None else best[1]
+
+
+def paraphrase_table(summary: Mapping[str, Any]) -> List[str]:
+    """Instructions that failed at least once, as ``p03: F S F F F (reproduces) - text`` lines."""
+
+    letters = {"success": "S", "policy_failure": "F", "invalid_scene": "I"}
+    lines = []
+    for row in summary.get("instructions") or ():
+        outcomes = row.get("outcomes") or []
+        if any(item != "success" for item in outcomes):
+            lines.append("{}: {} ({}) - {}".format(
+                row.get("label"), " ".join(letters.get(item, "?") for item in outcomes), row.get("decision") or "-",
+                row.get("text")))
+    return lines or ["every instruction passed"]
+
+
 # --------------------------------------------------------------------------------------
 # Tools: workloads, planning, reports, explanation, registration (lazy, replaceable)
 # --------------------------------------------------------------------------------------
@@ -390,8 +449,10 @@ class DefaultTools:
     """The real implementations. ``request`` and ``load_key`` let a test fake Nemotron."""
 
     def __init__(self, request: Optional[Callable[..., Any]] = None,
-                 load_key: Optional[Callable[..., Any]] = None) -> None:
+                 load_key: Optional[Callable[..., Any]] = None,
+                 paraphrase_transport: Optional[Callable[..., Any]] = None) -> None:
         self.request, self.load_key = request, load_key
+        self.paraphrase_transport = paraphrase_transport
 
     # time
     def now(self) -> dt.datetime:
@@ -462,6 +523,84 @@ class DefaultTools:
             if isinstance(workload, Mapping) and workload.get("mode") == "scenario-reduce":
                 return reference_inputs(workload, case)
         return None
+
+    # paraphrase mode (ADR 0032)
+    def generate_paraphrases(self, original: str, count: int, model: str,
+                             env_file: Optional[Path]) -> Dict[str, Any]:
+        """Ask Nemotron on Token Factory for paraphrases. The key stays on this machine."""
+
+        from robot_debug import paraphrase as pp
+        from robot_debug import token_factory as tf
+
+        try:
+            key = (self.load_key or tf.load_api_key)(env_file)
+        except tf.TokenFactoryError as error:
+            raise StopRun("paraphrase_failed", "no usable Token Factory key ({})".format(error)) from None
+        return pp.request_paraphrases(original, count, key, model, transport=self.paraphrase_transport)
+
+    def paraphrase_screen_workload(self, run_id: str, spec: Spec, original: str,
+                                   paraphrases: Sequence[str]) -> Dict[str, Any]:
+        from robot_debug import language_experiment as le
+
+        pc = spec.paraphrase
+        try:
+            workload = le.build_screen_workload(run_id=run_id, suite=spec.suite, task_id=pc.task, start=pc.start,
+                                                original=original, paraphrases=paraphrases)
+        except ValueError as error:
+            raise StopRun("workload_invalid", str(error)) from None
+        return self._checked(self._valid(workload))
+
+    def paraphrase_reduce_workload(self, run_id: str, spec: Spec, original: str, paraphrase: str) -> Dict[str, Any]:
+        from robot_debug import language_experiment as le
+
+        pc = spec.paraphrase
+        try:
+            workload = le.build_reduce_workload(
+                run_id=run_id, suite=spec.suite, task_id=pc.task, start=pc.start, original=original,
+                paraphrase=paraphrase, max_candidates=paraphrase_candidates(spec))
+        except ValueError as error:
+            raise StopRun("candidates_too_large", str(error)) from None
+        return self._checked(self._valid(workload))
+
+    def paraphrase_deadlines(self, spec: Spec) -> Tuple[int, int]:
+        """The (screen, reduce) Job deadlines the spec plans, without needing the paraphrases yet."""
+
+        from robot_debug import language_experiment as le
+
+        pc = spec.paraphrase
+        try:
+            screen = le.recommended_deadline_seconds("paraphrase-screen", {"paraphrases": ["x"] * pc.count})
+            reduce_ = le.recommended_deadline_seconds(
+                "paraphrase-reduce", {"max_candidates": paraphrase_candidates(spec)})
+        except ValueError as error:
+            raise StopRun("candidates_too_large", str(error)) from None
+        return screen, reduce_
+
+    @staticmethod
+    def _valid(workload: Dict[str, Any]) -> Dict[str, Any]:
+        from robot_debug.job_runtime import JobRuntimeError, validate_workload_config
+
+        try:
+            validate_workload_config(workload)
+        except JobRuntimeError as error:
+            raise StopRun("workload_invalid", str(error)) from None
+        return workload
+
+    def paraphrase_report(self, screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any]],
+                          hourly_usd: Optional[float]) -> str:
+        module = _load_script("report_paraphrase")
+        try:
+            return module.build_report(screen, reduction, hourly_usd)
+        except (module.ReportError, KeyError, TypeError) as error:
+            raise StopRun("report_failed", str(error)) from None
+
+    def paraphrase_case(self, reduction: Mapping[str, Any], screen: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+        from robot_debug import language_experiment as le
+
+        try:
+            return le.build_case(reduction, screen)
+        except (ValueError, KeyError, TypeError):
+            raise StopRun("case_failed", "the summary cannot be turned into a case") from None
 
     @staticmethod
     def _checked(workload: Dict[str, Any]) -> Dict[str, Any]:
@@ -537,6 +676,7 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
         return lg.worst_case_seconds(deadline) / 3600.0 * rate
 
     jobs: List[Tuple[str, str, int]] = []
+    preface: List[str] = []
     if spec.mode == "scenario":
         sc = spec.scenario
         if sc.import_path:
@@ -554,10 +694,20 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
         workload = tools.audit_workload(spec, "dry-run")
         jobs.append(("audit", "audit task {} start {}: {}".format(
             spec.audit.task, spec.audit.start, ", ".join(spec.audit.families)), int(workload["deadline_seconds"])))
+    elif spec.mode == "paraphrase":
+        pc = spec.paraphrase
+        screen_deadline, reduce_deadline = tools.paraphrase_deadlines(spec)
+        preface = ["Before the first Job, Nemotron ({}) writes {} paraphrases of the task instruction on this "
+                   "machine (Token Factory; not on the GPU ledger).".format(pc.model, pc.count)]
+        jobs.append(("screen", "screen {} paraphrases of task {} start {}".format(pc.count, pc.task, pc.start),
+                     screen_deadline))
+        jobs.append(("reduce", "reduce the best failing paraphrase ({} candidates)".format(
+            paraphrase_candidates(spec)), reduce_deadline))
     else:
         raise StopRun("dry_run_unsupported", "replay builds its Job from a case; there is nothing to plan")
-    lines = ["Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
-        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours)]
+    lines = list(preface)
+    lines.append("Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
+        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours))
     required = 0.0
     for index, (step, text, deadline) in enumerate(jobs):
         cost = worst(deadline)
@@ -673,6 +823,8 @@ class Orchestrator:
             return self._scenario()
         if self.spec.mode == "audit":
             return self._audit()
+        if self.spec.mode == "paraphrase":
+            return self._paraphrase()
         raise StopRun("wrong_mode", "a replay spec is used with `faultline replay`")
 
     # -- Jobs --------------------------------------------------------------------------------
@@ -1140,6 +1292,92 @@ class Orchestrator:
         self.steps.update("register", status="done", case_id=case_id)
         self.say("register", "viewer case {}".format(str(case_id)[:12]))
 
+    # -- paraphrase mode (ADR 0032) ------------------------------------------------------------
+
+    def _paraphrase(self) -> RunResult:
+        spec, pc = self.spec, self.spec.paraphrase
+        original = pc.instruction
+        paraphrases = self._generate_paraphrases(original)
+        screen_workload = self.tools.paraphrase_screen_workload(
+            self.job_name("screen", 0), spec, original, paraphrases)
+        screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
+                              "language_summary.json")
+        screen_summary = screen.summary
+        chosen = choose_paraphrase(screen_summary)
+        if chosen is None:
+            self._write_paraphrase_report(screen_summary, None)
+            raise StopRun("no_reproducible_failure", "no paraphrase failed 4 of 5 attempts. "
+                          + "; ".join(paraphrase_table(screen_summary)))
+        if not (screen_summary.get("control") or {}).get("passed"):
+            self._write_paraphrase_report(screen_summary, None)
+            raise StopRun("control_not_passing", "the original wording did not pass both control attempts, so a "
+                          "failing paraphrase cannot be attributed to the wording. "
+                          + "; ".join(paraphrase_table(screen_summary)))
+        self.say("choose", "{} fails {} of 5 ({} word edits): {}".format(
+            chosen["label"], paraphrase_failures(chosen), chosen.get("edit_count"), chosen["text"]))
+        reduce_workload = self.tools.paraphrase_reduce_workload(
+            self.job_name("reduce", 0), spec, original, chosen["text"])
+        reduction = self.run_job("reduce", reduce_workload, int(reduce_workload["deadline_seconds"]),
+                                 "language_summary.json")
+        return self._finish_paraphrase(reduction, screen_summary)
+
+    def _generate_paraphrases(self, original: str) -> List[str]:
+        pc = self.spec.paraphrase
+        path = self.run_dir / "paraphrases.json"
+        if self.steps.is_done("paraphrase"):
+            return list(_read_json(path)["paraphrases"])
+        if self.no_llm:
+            raise StopRun("llm_required", "paraphrase mode needs Nemotron to write the paraphrases; "
+                          "run without --no-llm")
+        self.say("paraphrase", "asking Nemotron ({}) for {} paraphrases (Token Factory; not on the GPU ledger)".format(
+            pc.model, pc.count))
+        result = self.tools.generate_paraphrases(original, pc.count, pc.model, self.env_file)
+        if not result.get("paraphrases"):
+            raise StopRun("paraphrase_failed", "no usable paraphrases ({})".format(
+                result.get("fallback_reason") or "none returned"))
+        _write_json(path, {key: result.get(key) for key in (
+            "original", "paraphrases", "rejected", "model", "provenance", "raw_content")})
+        self.steps.update("paraphrase", status="done", count=len(result["paraphrases"]), model=result.get("model"))
+        self.say("paraphrase", "{} paraphrases (paraphrases.json)".format(len(result["paraphrases"])))
+        return list(result["paraphrases"])
+
+    def _write_paraphrase_report(self, screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any]]) -> None:
+        try:
+            text = self.tools.paraphrase_report(screen, reduction, self.spec.backend.hourly_usd)
+            (self.run_dir / "report.md").write_text(text, encoding="utf-8", newline="\n")
+        except (StopRun, OrchestratorError):
+            pass
+        for line in paraphrase_table(screen):
+            self.out("  " + line)
+
+    def _finish_paraphrase(self, reduction: JobOutcome, screen_summary: Mapping[str, Any]) -> RunResult:
+        summary = reduction.summary
+        detail = summary.get("reduction") or {}
+        if not self.steps.is_done("report"):
+            text = self.tools.paraphrase_report(screen_summary, summary, self.spec.backend.hourly_usd)
+            (self.run_dir / "report.md").write_text(text, encoding="utf-8", newline="\n")
+            self.steps.update("report", status="done")
+            self.say("report", "report.md")
+        case_id = None
+        minimal = summary.get("minimal")
+        if isinstance(minimal, Mapping) and minimal.get("verified"):
+            case_path = self.run_dir / "case.json"
+            if not self.steps.is_done("case"):
+                case = self.tools.paraphrase_case(summary, screen_summary)
+                _write_json(case_path, case)
+                self.steps.update("case", status="done", case_id=case["case_id"])
+                self.say("case", "case.json {}".format(case["case_id"][:12]))
+            case_id = self.steps.get("case").get("case_id")
+            if self.spec.nemotron.explain and not self.no_llm:
+                self.say("explain", "no explanation yet for paraphrase cases (the explainer reads scenario cases)")
+            self._register("case")
+        finished = bool(detail.get("reduced")) and case_id is not None
+        reason = None if finished else str(detail.get("stop_reason") or summary.get("stop_reason") or "incomplete")
+        self.steps.set_run(status="completed" if finished else "stopped", reason=reason)
+        self.say("done", "completed" if finished else "stopped: {}".format(reason))
+        return RunResult("completed" if finished else "stopped", reason, self.run_dir, self.ledger.spent,
+                         case_id=case_id, notes=list(self.notes))
+
     # -- mode 2 --------------------------------------------------------------------------------
 
     def _audit(self) -> RunResult:
@@ -1216,6 +1454,7 @@ class Orchestrator:
 
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
-    "choose_start", "continuation_plan", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
+    "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
+    "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

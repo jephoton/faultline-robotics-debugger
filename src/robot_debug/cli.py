@@ -5,6 +5,10 @@
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
 
+A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
+rewords the task instruction, one Job screens the rewordings, a second reduces the failing wording to its
+minimal word edits; needs the Token Factory key, so it cannot run with ``--no-llm``).
+
 Exit codes: 0 completed, 2 invalid spec or usage, 3 stopped (no failure found, a cap
 was reached, a Job failed; the run folder holds what was produced), 1 unexpected
 error, 130 interrupted (the in-flight Job is cancelled and the message says whether the
@@ -39,7 +43,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="faultline", description="Find, confirm, minimise and replay robot-policy failures.")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
 
-    diagnose = commands.add_parser("diagnose", help="run a whole diagnosis from a spec file")
+    diagnose = commands.add_parser("diagnose", help="run a whole diagnosis (scenario, audit or paraphrase) from a spec file")
     diagnose.add_argument("spec", type=Path, nargs="?", help="the spec (optional with --resume)")
     diagnose.add_argument("--env-file", type=Path, help="dotenv file holding NEBIUS_API_KEY (Token Factory)")
     diagnose.add_argument("--no-llm", action="store_true", help="no Nemotron: fixed order, no explanation")

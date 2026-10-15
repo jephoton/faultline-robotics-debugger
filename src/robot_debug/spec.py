@@ -14,6 +14,11 @@ Modes:
     range of starts to screen) or ``import`` (a validated scenario candidate file).
 ``audit`` (mode 2)
     One perturbation-threshold audit of a task and start.
+``paraphrase`` (ADR 0032)
+    Reword the task instruction with Nemotron, screen the paraphrases for a failure, reduce the
+    failing wording to its minimal word edits. ``paraphrase`` holds the task, the benchmark start,
+    how many paraphrases to ask for, optionally the Token Factory model and the original
+    instruction text (required unless the suite and task are one Faultline knows).
 ``replay``
     Used only with ``faultline replay`` (the case supplies the scenario); the spec
     gives the name, budget and backend.
@@ -29,8 +34,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from robot_debug import paraphrase as _paraphrase_module
+
 SPEC_VERSION = 1
-MODES = ("scenario", "audit", "replay")
+MODES = ("scenario", "audit", "paraphrase", "replay")
 SUITES = ("libero_10", "libero_object", "libero_spatial", "libero_goal")
 FAMILIES = ("darken", "noise", "blur", "contrast",
             "jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting")
@@ -48,6 +55,7 @@ MAX_SCREEN_EPISODES = 600
 DEFAULT_PLATFORM = "gpu-l40s-a"
 DEFAULT_PRESET = "1gpu-16vcpu-64gb"
 
+_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-/]{0,127}\Z")
 _NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\Z")
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-]{0,63}\Z")
 _IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-/:@]{0,299}\Z")
@@ -88,6 +96,15 @@ class Audit:
 
 
 @dataclass(frozen=True)
+class Paraphrase:
+    task: int
+    start: int
+    count: int = _paraphrase_module.DEFAULT_COUNT
+    model: str = _paraphrase_module.PARAPHRASE_MODEL
+    instruction: Optional[str] = None      # the original task text (None: the known text of this suite and task)
+
+
+@dataclass(frozen=True)
 class Budget:
     max_spend_usd: float
     max_hours: float
@@ -121,11 +138,13 @@ class Spec:
     backend: BackendSpec
     scenario: Optional[Scenario] = None
     audit: Optional[Audit] = None
+    paraphrase: Optional[Paraphrase] = None
     raw: Mapping[str, Any] = field(default_factory=dict, compare=False)
 
     @property
     def mode_label(self) -> str:
-        return {"scenario": "mode 1", "audit": "mode 2", "replay": "replay"}[self.mode]
+        return {"scenario": "mode 1", "audit": "mode 2", "paraphrase": "paraphrase",
+                "replay": "replay"}[self.mode]
 
 
 # --- primitives -----------------------------------------------------------------------
@@ -264,6 +283,29 @@ def _audit(value: Any) -> Audit:
                  start=_int(data["start"], "audit.start", 0, MAX_START), families=tuple(families))
 
 
+def _paraphrase(value: Any, suite: Optional[str]) -> Paraphrase:
+    data = _exact(value, "paraphrase", ("task", "start"), ("count", "model", "instruction"))
+    task = _int(data["task"], "paraphrase.task", 0, MAX_TASK)
+    model = data.get("model", _paraphrase_module.PARAPHRASE_MODEL)
+    _text(model, "paraphrase.model", _MODEL, "a Token Factory model id such as nvidia/nemotron-3-super-120b-a12b")
+    instruction = data.get("instruction", _paraphrase_module.KNOWN_INSTRUCTIONS.get((suite, task)))
+    if instruction is None:
+        _fail("paraphrase.instruction", "is required for this suite and task (the task's language, as the "
+              "benchmark gives it)")
+    try:
+        instruction = _paraphrase_module.clean_instruction(instruction)
+    except _paraphrase_module.ParaphraseError:
+        _fail("paraphrase.instruction", "must be 1 to {} printable ASCII characters".format(
+            _paraphrase_module.MAX_CHARS))
+    if not _paraphrase_module.has_words(instruction):
+        _fail("paraphrase.instruction", "must contain words")
+    return Paraphrase(
+        task=task, start=_int(data["start"], "paraphrase.start", 0, MAX_START),
+        count=_int(data.get("count", _paraphrase_module.DEFAULT_COUNT), "paraphrase.count", 1,
+                   _paraphrase_module.MAX_COUNT),
+        model=model, instruction=instruction)
+
+
 def _budget(value: Any) -> Budget:
     data = _exact(value, "budget", ("max_spend_usd", "max_hours"), ("max_candidates",))
     return Budget(
@@ -345,7 +387,7 @@ def parse_spec(data: Any) -> Spec:
     if mode == "replay":
         optional.append("policy")
     else:
-        required += ["policy", "scenario" if mode == "scenario" else "audit"]
+        required += ["policy", mode]
     _exact(top, "spec", tuple(required), tuple(optional))
     if type(top["faultline"]) is not int or top["faultline"] != SPEC_VERSION:
         _fail("faultline", "must be the spec version {}".format(SPEC_VERSION))
@@ -363,6 +405,7 @@ def parse_spec(data: Any) -> Spec:
         nemotron=_nemotron(top.get("nemotron", {})), backend=_backend(top["backend"]),
         scenario=_scenario(top["scenario"]) if mode == "scenario" else None,
         audit=_audit(top["audit"]) if mode == "audit" else None,
+        paraphrase=_paraphrase(top["paraphrase"], suite) if mode == "paraphrase" else None,
         raw=top,
     )
 
@@ -419,6 +462,6 @@ def load_spec(path: Any) -> Spec:
 
 
 __all__ = [
-    "Audit", "BackendSpec", "Budget", "Nemotron", "Scenario", "Spec", "SpecError",
+    "Audit", "BackendSpec", "Budget", "Nemotron", "Paraphrase", "Scenario", "Spec", "SpecError",
     "load_spec", "parse_spec", "parse_spec_text", "parse_starts",
 ]

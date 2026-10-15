@@ -1,0 +1,28 @@
+# Paraphrase mode: Nemotron rewords the task instruction, one Job screens the rewordings for a failure,
+# a second Job reduces the failing wording to the smallest set of word edits that still fails.
+# The Token Factory key (NEBIUS_API_KEY, or --env-file) is read on this machine only and never enters a Job.
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: paraphrase-task0
+mode: paraphrase
+policy: {suite: libero_object}      # libero_object, libero_10, libero_spatial or libero_goal
+paraphrase:
+  task: 0
+  start: 0                          # the benchmark start (0-49) every wording is run from
+  count: 10                         # paraphrases to ask for (1-12)
+  # model: nvidia/nemotron-3-super-120b-a12b   # the Token Factory model that writes them (this is the default)
+  # instruction: "pick up the alphabet soup and place it in the basket"
+  #   ^ the task's language as the benchmark gives it. Optional for libero_object task 0, required for any other task.
+budget:
+  max_spend_usd: 4.0
+  max_hours: 3
+  # max_candidates: 24              # the reduction's candidate budget (default 24)
+nemotron: {hypothesis: false, explain: false}
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468

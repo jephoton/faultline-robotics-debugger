@@ -7,6 +7,9 @@ policy: {suite: libero_object}
 audit:
   task: 0
   start: 0
+  # Image families (both cameras): blur, noise, darken, contrast, jpeg, colour_cast, motion_blur, dead_pixels.
+  # Scene families (simulator level, applied at reset): viewpoint, lighting.
+  # Each family is searched from severity 0 (no change) to 1 (the strongest); more families cost more time.
   families: [blur, noise, darken, contrast]
 budget:
   max_spend_usd: 2.0
