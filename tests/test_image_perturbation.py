@@ -198,11 +198,223 @@ class NoiseTests(unittest.TestCase):
 
     def test_other_families_ignore_the_noise_key(self) -> None:
         image = _image()
-        for kind in ("darken", "blur", "contrast"):
+        for kind in ("darken", "blur", "contrast", "jpeg", "colour_cast", "motion_blur"):
             with self.subTest(kind=kind):
                 a = ScalarPerturbation(kind, 0.6).apply(image, episode_seed=1, step=0, camera="wrist")
                 b = ScalarPerturbation(kind, 0.6).apply(image, episode_seed=2, step=9, camera="agentview")
                 np.testing.assert_array_equal(a, b)
+
+
+def _smooth_image(seed=5, shape=(64, 64, 3)):
+    """A smooth, photo-like test image (cumulative sums of noise), so compression has structure to remove."""
+
+    rng = np.random.RandomState(seed)
+    field = np.cumsum(np.cumsum(rng.normal(size=shape), axis=0), axis=1)
+    field = (field - field.min()) / (field.max() - field.min())
+    return np.rint(field * 255).astype(np.uint8)
+
+
+NEW_FAMILIES = ("jpeg", "colour_cast", "motion_blur", "dead_pixels")
+
+
+class CatalogTests(unittest.TestCase):
+    def test_the_catalog_lists_the_original_four_then_the_four_new_families(self) -> None:
+        self.assertEqual(("darken", "noise", "blur", "contrast") + NEW_FAMILIES, ip.KINDS)
+
+    def test_physical_values_of_the_new_families(self) -> None:
+        cases = {
+            "jpeg": ("jpeg_quality", lambda s: 95.0 - 90.0 * s),
+            "colour_cast": ("red_gain", lambda s: 1.0 + 0.6 * s),
+            "motion_blur": ("motion_kernel_px", lambda s: 1.0 + 30.0 * s),
+            "dead_pixels": ("dead_pixel_fraction", lambda s: 0.2 * s),
+        }
+        for kind, (name, expected) in cases.items():
+            for severity in (0.0, 0.2, 0.6, 1.0):
+                with self.subTest(kind=kind, severity=severity):
+                    physical = ScalarPerturbation(kind, severity).physical()
+                    self.assertEqual(name, physical["name"])
+                    self.assertAlmostEqual(expected(severity), physical["value"], places=6)
+
+    def test_every_new_family_is_deterministic_and_keeps_shape_and_dtype(self) -> None:
+        image = _smooth_image()
+        for kind in NEW_FAMILIES:
+            with self.subTest(kind=kind):
+                spec = ScalarPerturbation(kind, 0.55)
+                a = spec.apply(image, episode_seed=3, step=4, camera="wrist")
+                b = spec.apply(image, episode_seed=3, step=4, camera="wrist")
+                np.testing.assert_array_equal(a, b)
+                self.assertEqual((image.shape, np.uint8), (a.shape, a.dtype))
+                self.assertFalse(np.array_equal(a, image))
+
+    def test_non_multiple_of_eight_sizes_work_for_every_new_family(self) -> None:
+        image = _smooth_image(shape=(21, 30, 3))
+        for kind in NEW_FAMILIES:
+            with self.subTest(kind=kind):
+                self.assertEqual((21, 30, 3), ScalarPerturbation(kind, 1.0).apply(image).shape)
+
+    def test_each_new_family_runs_well_under_twenty_milliseconds_on_a_policy_frame(self) -> None:
+        import time
+
+        image = _smooth_image(shape=(256, 256, 3))
+        for kind in NEW_FAMILIES:
+            with self.subTest(kind=kind):
+                spec = ScalarPerturbation(kind, 1.0)
+                spec.apply(image, episode_seed=1, step=0, camera="wrist")  # warm caches
+                started = time.perf_counter()
+                for step in range(10):
+                    spec.apply(image, episode_seed=1, step=step, camera="wrist")
+                self.assertLess((time.perf_counter() - started) / 10.0, 0.020)
+
+
+class JpegTests(unittest.TestCase):
+    @staticmethod
+    def error(severity):
+        image = _smooth_image()
+        out = ScalarPerturbation("jpeg", severity).apply(image)
+        return float(np.abs(out.astype(np.int64) - image.astype(np.int64)).mean())
+
+    def test_the_error_grows_with_severity(self) -> None:
+        errors = [self.error(s) for s in (0.05, 0.3, 0.6, 1.0)]
+        self.assertEqual(errors, sorted(errors))
+        self.assertLess(errors[0], 2.5)
+        self.assertGreater(errors[-1], 2 * errors[0])
+
+    def test_a_flat_image_stays_flat_and_only_its_level_is_quantised(self) -> None:
+        image = np.full((16, 16, 3), 117, dtype=np.uint8)
+        out = ScalarPerturbation("jpeg", 1.0).apply(image)
+        self.assertEqual(1, len(np.unique(out.reshape(-1, 3), axis=0)), "no blocking within a flat region")
+        # Quality 5 quantises the DC term with a step of 160 (20 grey levels per block average).
+        self.assertLessEqual(int(np.abs(out.astype(int) - 117).max()), 12)
+        near = ScalarPerturbation("jpeg", 0.0125).apply(image)
+        self.assertLessEqual(int(np.abs(near.astype(int) - 117).max()), 1)
+
+    def test_detail_is_flattened_at_the_lowest_quality(self) -> None:
+        rng = np.random.RandomState(0)
+        image = rng.randint(0, 256, size=(32, 32, 3)).astype(np.uint8)
+        out = ScalarPerturbation("jpeg", 1.0).apply(image)
+        self.assertLess(float(out.std()), float(image.std()) * 0.7)
+
+    def test_uses_the_standard_quantisation_tables(self) -> None:
+        # The textbook tables at quality 50 are the base tables themselves (scale 100).
+        np.testing.assert_array_equal(ip._LUMINANCE_TABLE, ip._quantisation_table(ip._LUMINANCE_TABLE, 50.0))
+        self.assertEqual(16.0, ip._LUMINANCE_TABLE[0, 0])
+        self.assertEqual(99.0, ip._CHROMINANCE_TABLE[7, 7])
+        self.assertEqual(1.0, ip._quantisation_table(ip._LUMINANCE_TABLE, 100.0).min())
+
+    def test_agrees_with_a_reference_jpeg_encoder_when_one_is_installed(self) -> None:
+        try:
+            import io
+
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed here; the encoder is pure NumPy by design")
+        image = _smooth_image(shape=(64, 64, 3))
+        for severity in (0.0125, 0.5, 1.0):
+            with self.subTest(severity=severity):
+                quality = int(round(95 - 90 * severity))
+                buffer = io.BytesIO()
+                Image.fromarray(image).save(buffer, "JPEG", quality=quality, subsampling=0)
+                reference = np.array(Image.open(buffer))
+                ours = ScalarPerturbation("jpeg", severity).apply(image)
+                gap = float(np.abs(ours.astype(np.int64) - reference.astype(np.int64)).mean())
+                self.assertLess(gap, 3.0)
+
+
+class ColourCastTests(unittest.TestCase):
+    def test_gains_are_warm_red_up_green_unchanged_blue_down(self) -> None:
+        image = np.full((4, 4, 3), 100, dtype=np.uint8)
+        out = ScalarPerturbation("colour_cast", 0.5).apply(image)
+        self.assertEqual([130, 100, 70], out[0, 0].tolist())
+        full = ScalarPerturbation("colour_cast", 1.0).apply(image)
+        self.assertEqual([160, 100, 40], full[0, 0].tolist())
+
+    def test_values_clip_to_the_uint8_range(self) -> None:
+        image = np.full((2, 2, 3), 250, dtype=np.uint8)
+        out = ScalarPerturbation("colour_cast", 1.0).apply(image)
+        self.assertEqual([255, 250, 100], out[0, 0].tolist())
+
+    def test_the_cast_is_monotone(self) -> None:
+        image = np.full((2, 2, 3), 100, dtype=np.uint8)
+        levels = (0.0, 0.3, 0.6, 1.0)
+        reds = [int(ScalarPerturbation("colour_cast", s).apply(image)[0, 0, 0]) for s in levels]
+        blues = [int(ScalarPerturbation("colour_cast", s).apply(image)[0, 0, 2]) for s in levels]
+        self.assertEqual(reds, sorted(reds))
+        self.assertEqual(blues, sorted(blues, reverse=True))
+
+
+class MotionBlurTests(unittest.TestCase):
+    def test_blurs_only_along_rows(self) -> None:
+        image = np.zeros((9, 41, 3), dtype=np.uint8)
+        image[:, 20] = 255  # a vertical line: a horizontal blur smears it sideways
+        out = ScalarPerturbation("motion_blur", 0.5).apply(image)  # kernel 16 px
+        self.assertLess(int(out[4, 20, 0]), 255)
+        self.assertGreater(int(out[4, 25, 0]), 0)
+        horizontal = np.zeros((41, 9, 3), dtype=np.uint8)
+        horizontal[20, :] = 255  # a horizontal line is unchanged by a horizontal blur
+        np.testing.assert_array_equal(horizontal, ScalarPerturbation("motion_blur", 0.5).apply(horizontal))
+
+    def test_the_streak_widens_with_the_kernel_and_total_brightness_is_kept(self) -> None:
+        image = np.zeros((5, 101, 3), dtype=np.uint8)
+        image[:, 50] = 255
+        widths = []
+        for severity in (0.1, 0.4, 1.0):
+            out = ScalarPerturbation("motion_blur", severity).apply(image)
+            widths.append(int((out[2, :, 0] > 0).sum()))
+            self.assertAlmostEqual(255.0, float(out[2, :, 0].sum()), delta=255 * 0.06)
+        self.assertEqual(widths, sorted(widths))
+        self.assertGreater(widths[-1], widths[0])
+
+    def test_the_kernel_is_a_normalised_line_of_one_plus_thirty_s_pixels(self) -> None:
+        impulse = np.zeros((1, 101, 3), dtype=np.uint8)
+        impulse[0, 50] = 255
+        out = ScalarPerturbation("motion_blur", 1.0).apply(impulse)  # 31 px kernel
+        support = np.nonzero(out[0, :, 0])[0]
+        self.assertEqual((35, 65), (int(support.min()), int(support.max())))
+        self.assertEqual(31, len(support), "a 31 px box spreads one pixel over 31 pixels")
+        self.assertLessEqual(int(out[0, 35:66, 0].max()) - int(out[0, 35:66, 0].min()), 1, "flat weights")
+
+    def test_a_constant_image_is_unchanged_including_at_the_borders(self) -> None:
+        image = np.full((6, 12, 3), 77, dtype=np.uint8)
+        np.testing.assert_array_equal(image, ScalarPerturbation("motion_blur", 1.0).apply(image))
+
+    def test_the_effect_is_continuous_in_severity(self) -> None:
+        image = _smooth_image()
+        small = ScalarPerturbation("motion_blur", 0.0125).apply(image)
+        self.assertLessEqual(int(np.abs(small.astype(int) - image.astype(int)).max()), 40)
+        self.assertFalse(np.array_equal(small, image), "a 1.375 px kernel already blends a little")
+
+
+class DeadPixelTests(unittest.TestCase):
+    def test_exactly_the_requested_fraction_of_pixels_is_pinned_to_black_or_white(self) -> None:
+        image = np.full((64, 64, 3), 128, dtype=np.uint8)
+        out = ScalarPerturbation("dead_pixels", 0.5).apply(image, episode_seed=2, step=1, camera="agentview")
+        changed = (out != 128).any(axis=2)
+        self.assertEqual(int(round(0.2 * 0.5 * 64 * 64)), int(changed.sum()))
+        self.assertEqual([0, 255], np.unique(out[changed]).tolist())
+        self.assertTrue((out[changed].min(axis=1) == out[changed].max(axis=1)).all(), "all channels of a pixel agree")
+        self.assertTrue(0.3 < float((out[changed] == 255).mean()) < 0.7)
+
+    def test_more_severity_kills_more_pixels(self) -> None:
+        image = np.full((64, 64, 3), 128, dtype=np.uint8)
+        counts = [int((ScalarPerturbation("dead_pixels", s).apply(image, episode_seed=2, step=1)[..., 0] != 128).sum())
+                  for s in (0.1, 0.4, 0.8, 1.0)]
+        self.assertEqual(counts, sorted(counts))
+        self.assertGreater(counts[-1], counts[0])
+
+    def test_every_key_part_changes_which_pixels_die(self) -> None:
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        spec = ScalarPerturbation("dead_pixels", 0.6)
+        base = spec.apply(image, episode_seed=7, step=12, camera="agentview")
+        for name, other in {
+            "step": spec.apply(image, episode_seed=7, step=13, camera="agentview"),
+            "camera": spec.apply(image, episode_seed=7, step=12, camera="wrist"),
+            "seed": spec.apply(image, episode_seed=8, step=12, camera="agentview"),
+        }.items():
+            with self.subTest(part=name):
+                self.assertFalse(np.array_equal(base, other))
+
+    def test_the_noise_and_dead_pixel_streams_do_not_share_a_seed(self) -> None:
+        self.assertNotEqual(ip.stable_seed(7, 0, "wrist", "noise", 0.5), ip.stable_seed(7, 0, "wrist", "dead_pixels", 0.5))
 
 
 class StableSeedTests(unittest.TestCase):
