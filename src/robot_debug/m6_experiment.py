@@ -48,7 +48,7 @@ FAMILIES = tuple(IMAGE_FAMILIES) + tuple(SCENE_FAMILIES)
 # (jpeg 8 ms, motion blur 2 ms, colour cast 1 ms, dead pixels 0.6 ms each), rounded up. The scene
 # families only act at reset and add nothing per step.
 FAMILY_STEP_OVERHEAD_SECONDS = {
-    "jpeg": 0.020, "motion_blur": 0.006, "colour_cast": 0.003, "dead_pixels": 0.002,
+    "jpeg": 0.010, "motion_blur": 0.006, "colour_cast": 0.003, "dead_pixels": 0.002,
 }
 M6_WORKERS = 12
 M6_MAX_BATCH_SIZE = 12

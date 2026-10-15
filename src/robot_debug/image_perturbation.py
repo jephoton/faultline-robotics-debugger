@@ -191,6 +191,25 @@ def _dct_matrix_2d() -> np.ndarray:
     return matrix
 
 
+def _pillow_jpeg(image: np.ndarray, quality: float) -> Optional[np.ndarray]:
+    """A libjpeg round trip (4:4:4) through Pillow, or ``None`` when Pillow is unavailable.
+
+    The LIBERO simulator image ships Pillow 10.4 (about 2.4 ms per 256x256 frame), whereas the
+    pure-NumPy fallback below took about 33 ms per frame there (October 15), which would have
+    roughly doubled an episode's wall time with three compressed frames per step.
+    """
+
+    try:
+        import io
+        from PIL import Image
+    except ImportError:
+        return None
+    buffer = io.BytesIO()
+    Image.fromarray(np.ascontiguousarray(image, dtype=np.uint8)).save(
+        buffer, format="JPEG", quality=int(round(quality)), subsampling=0, optimize=False)
+    return np.asarray(Image.open(io.BytesIO(buffer.getvalue())).convert("RGB"), dtype=np.uint8)
+
+
 def _jpeg(image: np.ndarray, quality: float) -> np.ndarray:
     """Round-trip an image through baseline-JPEG-style compression, deterministically.
 
@@ -328,7 +347,9 @@ class ScalarPerturbation:
         elif self.kind == "blur":
             return np.ascontiguousarray(_blur(image, BLUR_SIGMA_MAX_PIXELS * s))
         elif self.kind == "jpeg":
-            return np.ascontiguousarray(_jpeg(image, JPEG_QUALITY_MAX - JPEG_QUALITY_SPAN * s))
+            quality = JPEG_QUALITY_MAX - JPEG_QUALITY_SPAN * s
+            encoded = _pillow_jpeg(image, quality)
+            return np.ascontiguousarray(encoded if encoded is not None else _jpeg(image, quality))
         elif self.kind == "colour_cast":
             gains = np.array([1.0 + COLOUR_CAST_GAIN * s, 1.0, 1.0 - COLOUR_CAST_GAIN * s])
             out = np.clip(np.rint(image.astype(np.float64) * gains), 0, 255)

@@ -450,3 +450,18 @@ class StableSeedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PillowJpegTests(unittest.TestCase):
+    def test_jpeg_uses_pillow_when_present_and_matches_the_numpy_codec_closely(self):
+        import numpy as np
+        from robot_debug import image_perturbation as ip
+        rng = np.random.default_rng(3)
+        image = (rng.random((64, 64, 3)) * 255).astype(np.uint8)
+        pillow = ip._pillow_jpeg(image, 50.0)
+        if pillow is None:
+            self.skipTest("Pillow not installed")
+        self.assertEqual(image.shape, pillow.shape)
+        self.assertLess(float(np.abs(pillow.astype(float) - ip._jpeg(image, 50.0).astype(float)).mean()), 4.0)  # random noise: the worst case for JPEG
+        applied = ip.ScalarPerturbation("jpeg", 0.5).apply(image, episode_seed=1, step=0, camera="agentview")
+        np.testing.assert_array_equal(applied, ip._pillow_jpeg(image, ip.JPEG_QUALITY_MAX - ip.JPEG_QUALITY_SPAN * 0.5))
