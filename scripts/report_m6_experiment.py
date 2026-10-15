@@ -35,12 +35,24 @@ FAMILY_LABELS = {
     "noise": "Gaussian noise",
     "blur": "Gaussian blur",
     "contrast": "Contrast reduction",
+    "jpeg": "JPEG compression",
+    "colour_cast": "Colour cast",
+    "motion_blur": "Motion blur",
+    "dead_pixels": "Dead pixels",
+    "viewpoint": "Camera viewpoint",
+    "lighting": "Scene lighting",
 }
 _PHYSICAL_FORMAT = {
     "brightness_factor": "brightness x{:.2f}",
     "noise_sigma": "noise sigma {:.1f} of 255",
     "blur_sigma_px": "blur sigma {:.2f} px",
     "contrast_factor": "contrast x{:.2f}",
+    "jpeg_quality": "JPEG quality {:.0f}",
+    "red_gain": "red gain x{:.2f}",
+    "motion_kernel_px": "motion blur {:.0f} px",
+    "dead_pixel_fraction": "dead pixels {:.1%}",
+    "camera_shift_m": "camera moved {:.3f} m",
+    "light_scale": "lights x{:.2f}",
 }
 _STOP_TEXT = {
     "threshold_found": "threshold found",
