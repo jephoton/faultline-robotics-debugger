@@ -219,6 +219,32 @@ class Refusals(unittest.TestCase):
             data["backend"].update(patch)
             self.assertRefused(data)
 
+    def test_the_optional_backend_keys_the_backends_read_are_accepted(self):
+        data = scenario_spec()
+        data["backend"].update({
+            "region": "eu-north1", "subnet": "vpcsubnet-e00fakesubnet00001", "profile": "work",
+            "nebius_executable": ["wsl.exe", "-e", "nebius"], "image_digest": "sha256:" + "ab" * 32,
+            "registry": "registry-e00fakeregistry001"})
+        spec = sp.parse_spec(data)
+        self.assertEqual(spec.raw["backend"]["region"], "eu-north1")
+        data["backend"]["nebius_executable"] = "/opt/nebius"
+        sp.parse_spec(data)
+        local = scenario_spec()
+        local["backend"] = {"kind": "local", "image": "faultline-serverless:dev", "docker_executable": "podman"}
+        sp.parse_spec(local)
+
+    def test_backend_keys_are_checked_and_belong_to_their_backend(self):
+        for patch in ({"region": "EU North"}, {"subnet": "subnet-1"}, {"image_digest": "sha256:123"},
+                      {"registry": "reg istry"}, {"profile": "has space"}, {"nebius_executable": []},
+                      {"nebius_executable": [1]}, {"nebius_executable": ""}, {"docker_executable": "docker"}):
+            with self.subTest(patch=patch):
+                data = scenario_spec()
+                data["backend"].update(patch)
+                self.assertRefused(data)
+        local = scenario_spec()
+        local["backend"] = {"kind": "local", "image": "faultline-serverless:dev", "region": "eu-north1"}
+        self.assertRefused(local)
+
     def test_nemotron_flags_must_be_bool(self):
         data = scenario_spec()
         data["nemotron"] = {"hypothesis": "yes"}

@@ -51,6 +51,13 @@ _NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\Z")
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-]{0,63}\Z")
 _IMAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-/:@]{0,299}\Z")
 _PROJECT = re.compile(r"(?:from-cli-profile|project-[a-z0-9]{1,64})\Z")
+_REGION = re.compile(r"[a-z][a-z0-9-]{1,30}\Z")
+_SUBNET = re.compile(r"vpcsubnet-[a-z0-9]{1,64}\Z")
+_REGISTRY = re.compile(r"registry-[a-z0-9]{1,64}\Z")
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+# Optional ``backend:`` keys that only the named backend reads.
+NEBIUS_KEYS = ("region", "subnet", "profile", "nebius_executable", "image_digest", "registry")
+LOCAL_KEYS = ("docker_executable",)
 
 
 class SpecError(ValueError):
@@ -271,13 +278,41 @@ def _nemotron(value: Any) -> Nemotron:
                     explain=_bool(data.get("explain", False), "nemotron.explain"))
 
 
+def _executable(value: Any, path: str) -> None:
+    parts = value if type(value) is list else [value]
+    if not 1 <= len(parts) <= 8 or any(
+            type(part) is not str or not part.strip() or len(part) > 300 or any(ord(c) < 32 for c in part)
+            for part in parts):
+        _fail(path, "must be a program path or a list of up to 8 non-empty strings")
+
+
+def _backend_options(data: Mapping[str, Any]) -> None:
+    """The optional keys the backends read from the raw ``backend:`` mapping (checked, not defaulted)."""
+
+    checks = (("region", _REGION, "a region name such as eu-north1"),
+              ("subnet", _SUBNET, "a subnet id (vpcsubnet-...)"),
+              ("registry", _REGISTRY, "a registry id (registry-...)"),
+              ("image_digest", _DIGEST, "sha256:<64 hex characters>"),
+              ("profile", _TOKEN, "a CLI profile name"))
+    for key, pattern, what in checks:
+        if key in data:
+            _text(data[key], "backend." + key, pattern, what)
+    for key in ("nebius_executable", "docker_executable"):
+        if key in data:
+            _executable(data[key], "backend." + key)
+
+
 def _backend(value: Any) -> BackendSpec:
     data = _exact(value, "backend", ("kind",), (
-        "project", "platform", "preset", "image", "hf_token_secret", "hourly_usd"))
+        "project", "platform", "preset", "image", "hf_token_secret", "hourly_usd") + NEBIUS_KEYS + LOCAL_KEYS)
     kind = data["kind"]
     if kind not in BACKEND_KINDS:
         _fail("backend.kind", "must be one of {}".format(", ".join(BACKEND_KINDS)))
     cloud = kind == "nebius"
+    for key in (LOCAL_KEYS if cloud else NEBIUS_KEYS):
+        if key in data:
+            _fail("backend." + key, "only applies to the {} backend".format("local" if cloud else "nebius"))
+    _backend_options(data)
     for key in (("image", "hf_token_secret", "hourly_usd") if cloud else ("image",)):
         if key not in data:
             _fail("backend", "missing required key(s) for {}: {}".format(kind, key))

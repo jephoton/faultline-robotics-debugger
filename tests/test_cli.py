@@ -71,6 +71,19 @@ class DryRun(Fixture):
         backend = self.backends[0]
         self.assertEqual((backend.prepared, backend.submitted, backend.finished), (0, [], 0))
 
+    def test_dry_run_shows_the_plan_even_when_the_backend_rejects_the_spec(self):
+        from robot_debug.backends import BackendError
+
+        def rejecting(spec):
+            raise BackendError("backend.image must be pinned")
+        code = cli.main(["diagnose", str(self.spec_path), "--dry-run"], make_backend=rejecting, tools=FakeTools(),
+                        out=self.lines.append)
+        self.assertEqual(code, 2)
+        self.assertIn("Planned Jobs", self.text)
+        self.assertIn("Worst case of the required Jobs", self.text)
+        self.assertIn("Backend check failed: backend.image must be pinned", self.text)
+        self.assertLess(self.text.index("Planned Jobs"), self.text.index("Backend check failed"))
+
     def test_dry_run_survives_a_missing_backends_package(self):
         def missing(spec):
             raise ImportError("robot_debug.backends")
@@ -214,6 +227,15 @@ class ReplayCommand(Fixture):
                     tools=self.Tools())
                 self.assertEqual(code, 0)
                 self.assertIn(words, self.text)
+
+    def test_replay_says_plainly_when_it_is_inconclusive(self):
+        case_dir = self.case_dir()
+        code = self.run_cli(
+            ["replay", str(case_dir), "--spec", str(self.spec_path), "--runs-root", str(self.runs)],
+            [finished(lambda w: {"verdict": "reference_fails", "complete": True})], tools=self.Tools())
+        self.assertEqual(code, 3)
+        self.assertIn("Inconclusive: the reference failed", self.text)
+        self.assertNotIn("does not say", self.text)
 
     def test_replay_needs_a_spec(self):
         self.assertEqual(self.run_cli(["replay", str(self.dir)]), 2)

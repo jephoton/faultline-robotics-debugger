@@ -103,6 +103,7 @@ class RunResult:
     spent_usd: float
     case_id: Optional[str] = None
     reproduces: Optional[bool] = None
+    verdict: Optional[str] = None          # replay only: still_reproduces | no_longer_reproduces | reference_fails | ...
     notes: List[str] = field(default_factory=list)
 
     @property
@@ -317,6 +318,36 @@ def replay_verdict(summary: Mapping[str, Any]) -> Optional[bool]:
     if isinstance(outcomes, list) and outcomes:
         return outcomes.count("policy_failure") >= REPLAY_REQUIRED_FAILURES
     return None
+
+
+def replay_verdict_key(summary: Mapping[str, Any]) -> Optional[str]:
+    """The replay verdict as a string: the summary's own (``reference_fails``, ``invalid_scene``, ...),
+    else derived from :func:`replay_verdict`; ``None`` when the summary says nothing."""
+
+    verdict = summary.get("verdict")
+    if isinstance(verdict, str) and verdict:
+        return verdict
+    reproduces = replay_verdict(summary)
+    if reproduces is None:
+        return None
+    return "still_reproduces" if reproduces else "no_longer_reproduces"
+
+
+REPLAY_TEXT = {
+    "still_reproduces": "The failure still reproduces.",
+    "no_longer_reproduces": "The failure no longer reproduces.",
+    "reference_fails": "Inconclusive: the reference failed, so the minimal scene cannot be compared with it.",
+    "invalid_scene": "Inconclusive: a scene was invalid (the simulator rejected it), so the replay says nothing "
+                     "about the policy.",
+}
+
+
+def replay_text(verdict: Optional[str]) -> str:
+    """One plain sentence for a replay verdict (never collapses an inconclusive one into silence)."""
+
+    if verdict is None:
+        return "Inconclusive: the replay summary does not say."
+    return REPLAY_TEXT.get(verdict, "Inconclusive: the replay ended with the verdict '{}'.".format(verdict))
 
 
 # --------------------------------------------------------------------------------------
@@ -1148,21 +1179,20 @@ class Orchestrator:
         workload = self.tools.replay_workload(case, self.job_name("replay", 0), REPLAY_ATTEMPTS, inputs)
         outcome = self.run_job("replay", workload, int(workload["deadline_seconds"]), "scenario_summary.json")
         verdict = replay_verdict(outcome.summary)
+        key = replay_verdict_key(outcome.summary or {})
         _write_json(self.run_dir / "replay-result.json", {
-            "case_id": case.get("case_id"), "reproduces": verdict,
-            "verdict": (outcome.summary or {}).get("verdict"), "job_name": outcome.job_name,
+            "case_id": case.get("case_id"), "reproduces": verdict, "verdict": key, "job_name": outcome.job_name,
             "summary": outcome.summary_path.relative_to(self.run_dir).as_posix()})
-        text = {True: "the failure still reproduces", False: "the failure no longer reproduces",
-                None: "the replay summary does not say"}[verdict]
-        self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict)
-        self.say("replay", text)
+        self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
+                           verdict=key)
+        self.say("replay", replay_text(key))
         return RunResult("completed" if verdict is not None else "stopped",
                          None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
-                         case_id=case.get("case_id"), reproduces=verdict, notes=list(self.notes))
+                         case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
 
 
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
     "choose_start", "continuation_plan", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
-    "replay_verdict", "screen_table", "utc_stamp", "verified_selection",
+    "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

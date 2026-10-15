@@ -374,6 +374,16 @@ class PureHelperTests(unittest.TestCase):
         self.assertFalse(orch.replay_verdict({"verdict": "no_longer_reproduces"}))
         self.assertIsNone(orch.replay_verdict({"verdict": "reference_fails"}))
 
+    def test_replay_verdict_key_keeps_the_provider_verdict(self):
+        self.assertEqual(orch.replay_verdict_key({"verdict": "reference_fails"}), "reference_fails")
+        self.assertEqual(orch.replay_verdict_key({"verdict": "invalid_scene"}), "invalid_scene")
+        self.assertEqual(orch.replay_verdict_key({"verdict": "still_reproduces"}), "still_reproduces")
+        self.assertEqual(orch.replay_verdict_key({"replay": {"reproduces": False}}), "no_longer_reproduces")
+        self.assertIsNone(orch.replay_verdict_key({}))
+        self.assertIn("reference failed", orch.replay_text("reference_fails"))
+        self.assertIn("invalid", orch.replay_text("invalid_scene"))
+        self.assertIn("does not say", orch.replay_text(None))
+
 
 def _write(config):
     handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
@@ -927,6 +937,20 @@ class Mode2AndReplay(Base):
                 self.assertIn("still reproduces" if reproduces else "no longer reproduces", " ".join(lines))
                 saved = json.loads((runner.run_dir / "replay-result.json").read_text())
                 self.assertEqual(saved["reproduces"], reproduces)
+
+    def test_replay_keeps_an_inconclusive_verdict_and_says_it_plainly(self):
+        for verdict, words in (("reference_fails", "reference failed"), ("invalid_scene", "invalid")):
+            with self.subTest(verdict=verdict):
+                script = [finished(lambda w, v=verdict: {"verdict": v, "complete": True})]
+                runner, backend, tools, ledger, lines = self.world(
+                    script, spec=spec_for(mode="replay"), tools=self.AuditTools())
+                result = runner.replay(self.replay_case())
+                self.assertEqual((result.status, result.reason, result.verdict, result.reproduces),
+                                 ("stopped", "replay_inconclusive", verdict, None))
+                saved = json.loads((runner.run_dir / "replay-result.json").read_text())
+                self.assertEqual((saved["verdict"], saved["reproduces"]), (verdict, None))
+                self.assertIn(words, orch.replay_text(verdict))
+                self.assertIn(orch.replay_text(verdict), " ".join(lines))
 
     def test_replay_refuses_a_case_of_another_suite_or_kind(self):
         runner, backend, *_ = self.world([], spec=spec_for(mode="replay", policy={"suite": "libero_object"}),

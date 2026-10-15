@@ -110,8 +110,8 @@ def _final_lines(result: orch.RunResult) -> List[str]:
              "Run folder: {}".format(result.run_dir), "Spent: US${:.2f}".format(result.spent_usd)]
     if result.case_id:
         lines.append("Case: {}".format(result.case_id[:12]))
-    if result.reproduces is not None:
-        lines.append("The failure {}.".format("still reproduces" if result.reproduces else "no longer reproduces"))
+    if result.verdict is not None or result.reproduces is not None:
+        lines.append(orch.replay_text(result.verdict))
     lines += ["Note: " + note for note in result.notes]
     return lines
 
@@ -197,14 +197,19 @@ def _diagnose_inputs(args: argparse.Namespace):
 
 def _dry_run(spec: sp.Spec, tools: Any, factory: Optional[Callable[[sp.Spec], Any]], out: Callable[[str], None]) -> int:
     lines, _required = orch.dry_run_lines(spec, tools)
+    for line in lines:                               # the plan first: it needs no backend and no cloud
+        out(line)
     try:
         factory = factory or _lazy_backend_factory()
         factory(spec)                                # constructing validates the backend section; nothing is called
-        lines.append("Backend '{}' accepted the spec. Dry run: nothing was created or submitted.".format(spec.backend.kind))
     except ImportError:
-        lines.append("Backend not checked (the backends package is not installed). Dry run: nothing was created.")
-    for line in lines:
-        out(line)
+        out("Backend not checked (the backends package is not installed). Dry run: nothing was created.")
+        return 0
+    except Exception as error:                       # noqa: BLE001 - BackendError and friends: report, never a traceback
+        out("Backend check failed: {}".format(error))
+        out("Fix the backend: section before running; nothing was created or submitted.")
+        return 2
+    out("Backend '{}' accepted the spec. Dry run: nothing was created or submitted.".format(spec.backend.kind))
     return 0
 
 
