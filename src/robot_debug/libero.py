@@ -89,8 +89,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
     ``instruction`` replaces the language the policy receives (the observation's
     ``task_description``, which upstream fills from the task name in ``make_obs``);
-    ``instruction_out`` (a JSON path) records, per episode, the text the policy receives,
-    overridden or not. Without them every observation is exactly what upstream builds.
+    ``instruction_out`` (a JSON path) records the text the policy receives (one object with
+    ``schema_version`` and ``instruction_used``), overridden or not. Without them every observation is exactly what upstream builds.
     """
 
     def __init__(
@@ -156,7 +156,6 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
             raise ValueError("instruction_out must be a non-empty path")
         self.instruction = instruction
         self.instruction_out = instruction_out
-        self._instruction_records = []  # type: List[Dict[str, Any]]
         self._exported = set()  # type: set
         self.external_reset = external_reset
         self.scenario_start = scenario_start
@@ -467,17 +466,20 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         return applied
 
     def _record_instruction(self, task: Any) -> None:
-        """Append this episode's policy-facing instruction to ``instruction_out`` (atomic JSON)."""
+        """Write the policy-facing instruction to ``instruction_out`` (one atomic JSON object).
+
+        An episode's instruction is the override, else the task's language; one config runs one
+        task, so the object is the same for every episode and is simply rewritten.
+        """
 
         if self.instruction_out is None:
             return
         used = self.instruction if self.instruction is not None else task.get("name")
-        self._instruction_records.append({
-            "episode_index": self._episode_index,
+        self._write_json_atomically(self.instruction_out, {
+            "schema_version": 1,
             "instruction_used": used,
             "overridden": self.instruction is not None,
         })
-        self._write_json_atomically(self.instruction_out, self._instruction_records)
 
     def _record_scene_probe(self) -> None:
         """Rewrite the camera-probe sidecar with the applied scene values; a probe problem never breaks the episode."""

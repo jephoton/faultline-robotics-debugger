@@ -67,27 +67,26 @@ class InstructionSidecarTests(SceneHarnessCase):
     def records(self, path):
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def test_each_episode_appends_the_instruction_the_policy_receives(self):
+    def test_the_sidecar_is_one_object_with_the_instruction_the_policy_receives(self):
         benchmark, out = self.make_with(instruction="grab the tin")
         for episode in range(3):
             benchmark.reset(self.task(episode))
         self.assertEqual(
-            [{"episode_index": episode, "instruction_used": "grab the tin", "overridden": True}
-             for episode in range(3)], self.records(out))
+            {"schema_version": 1, "instruction_used": "grab the tin", "overridden": True}, self.records(out))
         self.assertEqual([], [name for name in os.listdir(self.root) if "partial" in name])
 
     def test_without_an_override_the_sidecar_records_the_task_language(self):
         benchmark, out = self.make_with()
         benchmark.reset(self.task())
         self.assertEqual(
-            [{"episode_index": 0, "instruction_used": "pick the soup", "overridden": False}], self.records(out))
+            {"schema_version": 1, "instruction_used": "pick the soup", "overridden": False}, self.records(out))
 
     def test_the_recorded_text_is_what_make_obs_sends(self):
         benchmark, out = self.make_with(instruction="grab the tin")
         task = self.task()
         benchmark.reset(task)
         sent = benchmark.make_obs({"frame": np.zeros((2, 2, 3), dtype=np.uint8)}, task)["task_description"]
-        self.assertEqual(sent, self.records(out)[0]["instruction_used"])
+        self.assertEqual(sent, self.records(out)["instruction_used"])
 
     def test_no_sidecar_is_written_unless_asked(self):
         benchmark = self.make(instruction="grab the tin")
@@ -104,7 +103,7 @@ class InstructionSidecarTests(SceneHarnessCase):
             instruction="grab the tin", instruction_out=str(out),
             scenario_start={"candidate": str(candidate), "metadata_out": str(self.root / "scenario_start.json")})
         benchmark.reset(self.task())
-        self.assertEqual("grab the tin", self.records(out)[0]["instruction_used"])
+        self.assertEqual("grab the tin", self.records(out)["instruction_used"])
 
     def test_rejects_an_empty_or_non_string_path(self):
         for value in ("", 5, ["a"], True):
