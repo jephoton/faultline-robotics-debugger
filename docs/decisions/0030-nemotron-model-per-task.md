@@ -26,6 +26,7 @@ is a sensible basis for a choice, not a proof; outputs vary between calls.
 | Scenario hypothesis (before reruns) | - | fallback | used | **Ultra** (ADR 0028) |
 | Scenario explanation | called an applied entity "reverted"; repeated tested reruns | inverted a correct prediction; failed format | all checked facts right | **Ultra** |
 | Occlusion explanation (M4 case) | cited a non-existent evidence id (rejected) | valid; one garbled sentence | valid; named the critical x 0.625–0.75 column | **Ultra** |
+| Instruction paraphrases (breadth pack, October 15) | changed a target ("container" for the basket) in 1 of 10 | all 10 kept objects and target; varied wording | all 10 kept meaning but near-identical wording (too narrow to find failures) | **Super** |
 | Research summary (M5D) | valid, correct, one source only | rejected by the causation-wording filter | richer but over the 400-character limit | **Nano** (only accepted output; context, not evidence) |
 
 Two input fixes for scenario explanations mattered as much as the model: one
@@ -39,5 +40,5 @@ plain sentence per rerun and the list of shrink sizes already tested.
   empty and reconciled with billing; each call is well under one cent.
 - Research summaries stay on Nano. Revisit only with a validator change (for
   example a 600-character limit) and a fresh comparison.
-- The instruction-paraphrase family (breadth pack) gets the same comparison
-  before its model is fixed.
+- Instruction paraphrases use Super (comparison above; one call per model at
+  temperature 0.7 on the LIBERO-Object task 0 instruction).
