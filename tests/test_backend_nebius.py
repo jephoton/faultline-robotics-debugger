@@ -717,7 +717,7 @@ class LifecycleTests(NebiusCase):
         self.assertEqual(self.cli.keys, {})
         self.assertEqual(self.cli.count("iam", "v2", "access-key", "delete"), 1)
         self.assertTrue(json.loads((self.run_dir / "backend-state.json").read_text("utf-8"))["access_key_deleted"])
-        self.assertEqual(self.cli.count("storage", "bucket", "delete"), 0)
+        self.assertEqual(self.cli.count("storage", "bucket", "delete"), 1, "an empty bucket is removed once")
 
     def test_finish_tolerates_an_already_deleted_key(self):
         backend = self.prepared()

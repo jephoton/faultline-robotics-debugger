@@ -51,6 +51,7 @@ class FakeNebius:
                                       (900, "COMPLETED", None)]
         self.json_create = json_create
         self.cancel_ignored = False
+        self.bucket_nonempty = False       # a bucket delete is refused while the bucket holds objects
         self.project_output = PROJECT + "\n"
         self.counter = 0
         self.secret_value = "SECRET-VALUE-FOR-TESTS"
@@ -102,6 +103,7 @@ class FakeNebius:
             (("iam", "group-membership", "create"), self.membership_create),
             (("storage", "bucket", "create"), self.bucket_create),
             (("storage", "bucket", "get-by-name"), self.bucket_by_name),
+            (("storage", "bucket", "delete"), self.bucket_delete),
             (("iam", "v2", "access-key", "create"), self.key_create),
             (("iam", "v2", "access-key", "get"), self.key_get),
             (("iam", "v2", "access-key", "delete"), self.key_delete),
@@ -178,6 +180,16 @@ class FakeNebius:
         if bucket is None:
             return completed(argv, 1, "", "NotFound: bucket")
         return self.ok(argv, {"metadata": {"id": bucket["id"], "name": option(args, "--name")}})
+
+    def bucket_delete(self, argv, args):
+        bucket_id = option(args, "--id")
+        for name, bucket in self.buckets.items():
+            if bucket["id"] == bucket_id:
+                if self.bucket_nonempty:
+                    return completed(argv, 1, "", "FailedPrecondition: bucket is not empty")
+                del self.buckets[name]
+                return self.op(argv, bucket_id)
+        return completed(argv, 1, "", "NotFound: bucket")
 
     def key_create(self, argv, args):
         key_id = self.next_id("accesskey")

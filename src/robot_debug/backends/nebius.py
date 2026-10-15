@@ -362,6 +362,7 @@ class NebiusBackend:
             Path(__file__).resolve().parents[3] / "scripts" / "prepare_serverless_job.py")
         self._run_dir: Optional[Path] = None
         self._state: Dict[str, Any] = {}
+        self.cleanup_report: Dict[str, str] = {}
 
     @classmethod
     def from_spec(cls, spec: Mapping[str, Any], **overrides: Any) -> "NebiusBackend":
@@ -465,12 +466,15 @@ class NebiusBackend:
             state["membership_ok"] = True
             self._save_state()
 
-        # One bucket per diagnosis.
-        if "bucket_id" not in state:
+        # One bucket per diagnosis (a resumed run after finish() removed it gets a fresh one).
+        if "bucket_id" not in state or state.get("bucket_deleted"):
             name = str(spec.get("name") or self._run_dir.name)
             bucket_name = "faultline-%s-%s" % (_sanitise_name(name), self._suffix())
             state["bucket_name"] = bucket_name
             state["bucket_id"] = self._create_bucket(bucket_name, project, state["group_id"])
+            state["bucket_deleted"] = False
+            state.pop("bucket_delete_outcome", None)
+            state["pending_jobs"] = []
             self._save_state()
 
         # One access key per diagnosis (a resumed run after finish() gets a fresh one).
@@ -497,6 +501,7 @@ class NebiusBackend:
             try:
                 saved = json.loads(record.read_text(encoding="utf-8"))
                 if saved.get("job_id"):
+                    self._mark_pending(job_name)
                     return JobHandle(job_name, saved["job_id"])  # never resubmit a known Job
             except (OSError, ValueError):
                 pass
@@ -522,6 +527,7 @@ class NebiusBackend:
         create = argv[1:-2] + ["--async", "--format", "json"]
         job_id = self._create_job(job_name, create, job_dir)
         record.write_text(json.dumps({"job_name": job_name, "job_id": job_id}), encoding="utf-8")
+        self._mark_pending(job_name)
         return JobHandle(job_name, job_id)
 
     def wait(self, handle: JobHandle, *, running_max_seconds: float,
@@ -554,7 +560,10 @@ class NebiusBackend:
                 if origin is None:
                     origin = parse_time((job.get("metadata") or {}).get("created_at"))
                 if state in _TERMINAL:
-                    return self._result(handle.job_name, job_id, job, cancel_sent_at is not None)
+                    result = self._result(handle.job_name, job_id, job, cancel_sent_at is not None)
+                    if result.started_at is None:
+                        self._clear_pending(handle.job_name)          # it never ran: it exported nothing
+                    return result
                 if state == "RUNNING" and running_since is None:
                     running_since = parse_time(status.get("started_at")) or now
             if now - (origin or entered) > ceiling:
@@ -618,6 +627,7 @@ class NebiusBackend:
                 partial.unlink()
                 raise BackendError("size mismatch downloading %s" % relative)
             partial.replace(target)
+        self._clear_pending(handle.job_name)
         return dest
 
     def logs_tail(self, handle: JobHandle, lines: int = 200) -> str:
@@ -663,19 +673,75 @@ class NebiusBackend:
         return "cancelled"
 
     def finish(self) -> None:
+        """Delete the per-run access key, then try to delete the results bucket.
+
+        The bucket is only attempted when every submitted Job's results were downloaded (or the Job
+        never started), and ``storage bucket delete`` succeeds only on an EMPTY bucket: no object is
+        ever deleted here. A bucket that is not empty (the normal case, because the Jobs wrote their
+        evidence into it) is kept and the outcome is recorded in ``backend-state.json`` and
+        :attr:`cleanup_report`. Leftover buckets expire their objects after 1 day (the lifecycle
+        rule set at creation) but still count against the per-tenant bucket-policy quota, so remove
+        old ``faultline-*`` buckets once they are empty.
+        """
+
         state = self._state
+        report: Dict[str, str] = {}
+        self.cleanup_report = report
         key_id = state.get("access_key_id")
-        if not key_id or state.get("access_key_deleted"):
+        if key_id and not state.get("access_key_deleted"):
+            try:
+                self._cli.text(["iam", "v2", "access-key", "delete", "--id", key_id])
+            except CliError as error:
+                if error.kind != "notfound":
+                    report["access_key"] = "not deleted: " + str(error)
+                    raise
+            state["access_key_deleted"] = True
+            self._save_state()
+            report["access_key"] = "deleted"
+        elif key_id:
+            report["access_key"] = "already deleted"
+        self._delete_bucket(report)
+
+    def _delete_bucket(self, report: Dict[str, str]) -> None:
+        state = self._state
+        bucket_id = state.get("bucket_id")
+        if not bucket_id or state.get("bucket_deleted"):
+            return
+        pending = list(state.get("pending_jobs") or [])
+        if pending:
+            report["bucket"] = "kept: results of %d Job(s) not downloaded yet" % len(pending)
             return
         try:
-            self._cli.text(["iam", "v2", "access-key", "delete", "--id", key_id])
+            self._cli.text(["storage", "bucket", "delete", "--id", bucket_id])
         except CliError as error:
-            if error.kind != "notfound":
-                raise
-        state["access_key_deleted"] = True
+            if error.kind == "notfound":
+                state["bucket_deleted"] = True
+                report["bucket"] = "deleted"
+            else:
+                detail = "not empty" if re.search(r"not.?empty|precondition", str(error), re.IGNORECASE) else "refused"
+                outcome = "kept: %s (objects expire after 1 day)" % detail
+                state["bucket_delete_outcome"] = outcome + ": " + str(error)[-200:]
+                report["bucket"] = outcome
+        else:
+            state["bucket_deleted"] = True
+            report["bucket"] = "deleted"
+        if state.get("bucket_deleted"):
+            state.pop("bucket_delete_outcome", None)
         self._save_state()
 
     # -- internals ----------------------------------------------------------
+
+    def _mark_pending(self, job_name: str) -> None:
+        pending = self._state.setdefault("pending_jobs", [])
+        if job_name not in pending:
+            pending.append(job_name)
+            self._save_state()
+
+    def _clear_pending(self, job_name: str) -> None:
+        pending = self._state.get("pending_jobs") or []
+        if job_name in pending:
+            pending.remove(job_name)
+            self._save_state()
 
     def _need_prepared(self) -> Path:
         if self._run_dir is None or "bucket_id" not in self._state:

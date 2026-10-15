@@ -625,10 +625,19 @@ class Orchestrator:
         finally:
             try:
                 self.backend.finish()
+                self._record_cleanup()
             except Exception as error:      # noqa: BLE001 - cleanup must not mask the result
                 self.notes.append("backend cleanup failed: {}".format(type(error).__name__))
                 self.out("WARNING backend cleanup failed ({}); check for leftover cloud resources".format(
                     type(error).__name__))
+
+    def _record_cleanup(self) -> None:
+        """Note what the backend cleaned up (access key, results bucket) in steps.json and on screen."""
+
+        report = getattr(self.backend, "cleanup_report", None)
+        if isinstance(report, dict) and report:
+            self.steps.set_run(cleanup=dict(report))
+            self.out("cleanup: " + "; ".join("{} {}".format(k.replace("_", " "), v) for k, v in sorted(report.items())))
 
     def _start(self) -> None:
         self.backend.prepare(self.run_dir, self.spec.raw)       # backends read the raw YAML mapping
