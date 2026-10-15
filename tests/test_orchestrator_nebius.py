@@ -112,5 +112,37 @@ class WholeDiagnosisOnNebius(unittest.TestCase):
         self.assertTrue((world.run_dir / "report.md").is_file())
 
 
+class LimitsOnNebius(unittest.TestCase):
+    def test_the_reservation_is_the_provider_timeout_bound_plus_the_start_allowance(self):
+        world = NebiusWorld(self, nebius_spec(), reduced_script())
+        world.runner.diagnose()
+        for name in world.cli.jobs:
+            deadline = json.loads((world.run_dir / "jobs" / name / "workload.json").read_text())["deadline_seconds"]
+            timeout = lg.provider_timeout_seconds(deadline)
+            args = world.cli.jobs[name]["args"]
+            expected = "{}h".format(timeout // 3600) if timeout % 3600 == 0 else "{}m".format(timeout // 60)
+            self.assertEqual(args[args.index("--timeout") + 1], expected)
+            self.assertAlmostEqual(world.ledger.jobs[name]["reserved_usd"], (timeout + 240) / 3600.0 * RATE)
+            self.assertLessEqual(world.ledger.jobs[name]["cost_usd"], world.ledger.jobs[name]["reserved_usd"])
+
+    def test_an_unreachable_api_stops_the_run_cancels_and_charges_the_worst_case(self):
+        world = NebiusWorld(self, nebius_spec(), reduced_script())
+        world.cli.job_plan = [(0, "RUNNING", None)]
+        original = world.backend.submit
+
+        def submit_then_lose_the_api(job_name, workload):
+            handle = original(job_name, workload)
+            world.cli.fail(("ai", "job", "get"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+            world.cli.fail(("ai", "job", "cancel"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+            return handle
+
+        world.backend.submit = submit_then_lose_the_api
+        result = world.runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "backend_error"))
+        name = next(iter(world.cli.jobs))
+        self.assertEqual(world.ledger.jobs[name]["cost_usd"], world.ledger.jobs[name]["reserved_usd"])
+        self.assertGreater(world.cli.count("ai", "job", "cancel"), 0, "a cancel was attempted")
+
+
 if __name__ == "__main__":
     unittest.main()

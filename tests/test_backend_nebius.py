@@ -365,11 +365,68 @@ class SubmitTests(NebiusCase):
         written = json.loads((self.run_dir / "jobs" / "soup-a" / "workload.json").read_text(encoding="utf-8"))
         self.assertEqual(written["run_id"], "soup-a")
 
-    def test_non_json_create_output_is_recovered_by_name(self):
+    def test_the_provider_timeout_is_the_deadline_plus_the_grace_in_whole_minutes(self):
         backend = self.prepared()
+        backend.submit("soup-a", self.workload())                   # deadline_seconds 1800
+        args = self.cli.jobs["soup-a"]["args"]
+        self.assertEqual(args[args.index("--timeout") + 1], "40m")
+        config = json.loads((self.run_dir / "jobs" / "soup-a" / "job-config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["timeout_seconds"], 2400)
+
+    def test_job_id_text_output_is_parsed_without_another_call(self):
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())          # the fake prints "Job ID: aijob-e00fake..."
+        self.assertEqual(handle.job_id, self.cli.jobs["soup-a"]["id"])
+        self.assertEqual(self.cli.count("ai", "job", "get-by-name"), 0)
+        self.assertEqual(len(self.real_creates()), 1)
+
+    def real_creates(self):
+        return [c for c in self.cli.calls if c[:3] == ["ai", "job", "create"] and "--dry-run" not in c]
+
+    def silence_create_output(self, text="created"):
+        real_call = self.cli.__call__
+
+        def quiet(argv, cwd=None, timeout=None):
+            result = real_call(argv, cwd=cwd, timeout=timeout)
+            if "--dry-run" not in argv and list(argv[1:4]) == ["ai", "job", "create"]:
+                return completed(argv, 0, text, "")
+            return result
+
+        return quiet
+
+    def test_unparseable_create_output_never_creates_again_and_finds_the_job_by_name(self):
+        backend = self.prepared()
+        backend._cli._runner = self.silence_create_output()
         handle = backend.submit("soup-a", self.workload())
         self.assertEqual(handle.job_id, self.cli.jobs["soup-a"]["id"])
+        self.assertEqual(len(self.real_creates()), 1)
         self.assertEqual(self.cli.count("ai", "job", "get-by-name"), 1)
+
+    def test_a_job_that_cannot_be_found_after_an_exit_0_create_is_an_error_not_a_second_create(self):
+        backend = self.prepared()
+        real_call = self.cli.__call__
+
+        def create_without_effect(argv, cwd=None, timeout=None):
+            if "--dry-run" not in argv and list(argv[1:4]) == ["ai", "job", "create"]:
+                self.cli.calls.append(list(argv[1:]))
+                return completed(argv, 0, "ok", "")
+            return real_call(argv, cwd=cwd, timeout=timeout)
+
+        backend._cli._runner = create_without_effect
+        with self.assertRaises(BackendError) as caught:
+            backend.submit("soup-a", self.workload())
+        self.assertIn("could not be found by name", str(caught.exception))
+        self.assertEqual(len(self.real_creates()), 1)
+        lookups = self.cli.count("ai", "job", "get-by-name")
+        self.assertTrue(1 < lookups <= 6, lookups)
+
+    def test_transient_lookup_errors_after_an_exit_0_create_are_retried_without_creating_again(self):
+        backend = self.prepared()
+        backend._cli._runner = self.silence_create_output()
+        self.cli.fail(("ai", "job", "get-by-name"), "Unavailable: try later", times=4)
+        handle = backend.submit("soup-a", self.workload())
+        self.assertEqual(handle.job_id, self.cli.jobs["soup-a"]["id"])
+        self.assertEqual(len(self.real_creates()), 1)
 
     def test_json_create_output_is_used_directly(self):
         self.cli.json_create = True
@@ -511,6 +568,35 @@ class WaitTests(NebiusCase):
         self.cli.fail(("ai", "job", "cancel"), "Unavailable: try later", times=3)
         result = backend.wait(handle, running_max_seconds=100, total_max_seconds=6000, poll_seconds=60)
         self.assertEqual(result.reason, "watchdog_cancel")
+
+    def test_an_unreachable_api_ends_in_an_error_after_a_hard_ceiling(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        self.cli.fail(("ai", "job", "get"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+        self.cli.fail(("ai", "job", "cancel"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+        started = self.clock.now
+        with self.assertRaises(BackendError) as caught:
+            backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60)
+        self.assertIn("gave up waiting", str(caught.exception))
+        elapsed = self.clock.now - started
+        self.assertLess(elapsed, 6000 + 300 + 300 + 200)
+        self.assertGreater(elapsed, 6000)
+
+    def test_a_cancel_that_always_fails_ends_in_an_error_after_the_ceiling(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        self.cli.fail(("ai", "job", "cancel"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+        started = self.clock.now
+        with self.assertRaises(BackendError):
+            backend.wait(handle, running_max_seconds=100, total_max_seconds=6000, poll_seconds=60)
+        self.assertLess(self.clock.now - started, 6000 + 300 + 300 + 200)
+        self.assertGreater(self.cli.count("ai", "job", "cancel"), 3)
+
+    def test_the_cancel_grace_ends_before_the_provider_timeout_does(self):
+        from robot_debug import ledger
+        from robot_debug.backends import nebius
+        from robot_debug import orchestrator as orch
+        for deadline in (1000, 1500, 3000):
+            watchdog = deadline + orch.RUNNING_GRACE_SECONDS + nebius.CANCEL_GRACE_SECONDS
+            self.assertLessEqual(watchdog, ledger.provider_timeout_seconds(deadline))
 
     def test_handle_without_id_is_recovered_by_name(self):
         backend, handle = self.start()
@@ -665,6 +751,25 @@ class LifecycleTests(NebiusCase):
         self.cli.jobs["soup-a"]["cancelled_at"] = None
         backend.cancel(handle)
         self.assertEqual(self.cli.count("ai", "job", "cancel"), 1)
+
+    def test_cancel_reports_what_happened(self):
+        self.cli.job_plan = [(0, "RUNNING", None), (5000, "COMPLETED", None)]
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())
+        self.assertEqual(backend.cancel(handle), "cancelled")
+        self.clock.now += 6000
+        self.cli.jobs["soup-a"]["cancelled_at"] = None
+        self.assertEqual(backend.cancel(handle), "finished")
+        self.assertEqual(backend.cancel(JobHandle("never-created", None)), "not_found")
+
+    def test_lookup_finds_a_job_by_name_and_says_none_when_absent(self):
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())
+        self.assertEqual(backend.lookup("soup-a"), handle)
+        self.assertIsNone(backend.lookup("soup-b"))
+        self.cli.fail(("ai", "job", "get-by-name"), "PermissionDenied: nope", times=1)
+        with self.assertRaises(BackendError):
+            backend.lookup("soup-a")
 
     def test_logs_tail(self):
         backend = self.prepared()

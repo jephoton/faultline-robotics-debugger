@@ -30,15 +30,32 @@ class LedgerTests(unittest.TestCase):
     def make(self, cap=3.0, hours=2.0):
         return lg.Ledger(self.path, cap_usd=cap, max_hours=hours, hourly_usd=RATE, clock=self.clock)
 
-    def test_worst_case_is_deadline_plus_start_allowance(self):
+    def test_provider_timeout_is_the_deadline_plus_a_grace_in_whole_minutes(self):
+        self.assertEqual(lg.JOB_TIMEOUT_GRACE_SECONDS, 600)
+        self.assertEqual(lg.provider_timeout_seconds(1800), 2400)
+        self.assertEqual(lg.provider_timeout_seconds(1000), 1620)       # 1600 s rounded up to 27 minutes
+        self.assertEqual(lg.provider_timeout_seconds(3000), 3600)
+        for deadline in (1000, 1001, 1234.5, 2999):
+            timeout = lg.provider_timeout_seconds(deadline)
+            self.assertEqual(timeout % 60, 0)
+            self.assertGreaterEqual(timeout, deadline + lg.JOB_TIMEOUT_GRACE_SECONDS)
+            self.assertLess(timeout, deadline + lg.JOB_TIMEOUT_GRACE_SECONDS + 60)
+
+    def test_worst_case_is_the_provider_timeout_plus_start_allowance(self):
         ledger = self.make()
-        # 1800 s + 240 s at US$1.80/h
-        self.assertAlmostEqual(ledger.worst_case_usd(1800), (1800 + 240) / 3600 * RATE)
+        # (1800 + 600 grace) s provider timeout + 240 s start allowance at US$1.80/h
+        self.assertAlmostEqual(ledger.worst_case_usd(1800), (2400 + 240) / 3600 * RATE)
+
+    def test_settling_at_the_provider_timeout_never_exceeds_the_reservation(self):
+        ledger = self.make(cap=10.0)
+        ledger.reserve("a", ledger.worst_case_usd(1800))
+        cost = ledger.settle("a", container_seconds=lg.provider_timeout_seconds(1800))
+        self.assertLessEqual(cost, ledger.worst_case_usd(1800) + 1e-9)
 
     def test_reserve_then_settle_converts_container_time(self):
         ledger = self.make()
         ledger.reserve("a", ledger.worst_case_usd(1800))
-        self.assertAlmostEqual(ledger.reserved, 1.02)
+        self.assertAlmostEqual(ledger.reserved, 1.32)
         cost = ledger.settle("a", container_seconds=1200)
         self.assertAlmostEqual(cost, (1200 + 240) / 3600 * RATE)
         self.assertAlmostEqual(ledger.spent, 0.72)

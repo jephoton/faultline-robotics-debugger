@@ -22,6 +22,13 @@ _REQUIRED_FIELDS = frozenset({
     "workload_file",
 })
 _OPTIONAL_FIELDS = frozenset({"registry_secret", "image_digest", "external_reset_file"})
+# The provider --timeout. Without timeout_seconds the Job keeps the original fixed 1 h bound. A
+# submitter that knows the workload deadline passes deadline + 600 s rounded up to whole minutes, so
+# the spend ledger's worst case is a real upper bound; it never exceeds the 1 h bound.
+_TIMEOUT_FIELD = "timeout_seconds"
+DEFAULT_TIMEOUT_SECONDS = 3600
+MIN_TIMEOUT_SECONDS = 600
+MIN_TIMEOUT_AFTER_DEADLINE_SECONDS = 300
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 _IMAGE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IMAGE_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
@@ -62,7 +69,7 @@ def prepare(config: dict[str, object]) -> list[str]:
         "--subnet-id", values["subnet_id"],
         "--disk-size", "150Gi",
         "--shm-size", "16Gi",
-        "--timeout", "1h",
+        "--timeout", _format_timeout(values.get(_TIMEOUT_FIELD, DEFAULT_TIMEOUT_SECONDS)),
         "--restart-policy", "never",
         "--volume", values["bucket_id"] + ":/persistent:rw",
         "--env-secret", "HF_TOKEN=" + values["hf_secret"],
@@ -83,17 +90,23 @@ def prepare(config: dict[str, object]) -> list[str]:
     return command
 
 
-def _validate(config: object) -> dict[str, str]:
+def _format_timeout(seconds: Any) -> str:
+    if seconds % 3600 == 0:
+        return "{}h".format(seconds // 3600)
+    return "{}m".format(seconds // 60)
+
+
+def _validate(config: object) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ConfigError("configuration must be a JSON object")
     keys = set(config)
-    unknown = keys - _REQUIRED_FIELDS - _OPTIONAL_FIELDS
+    unknown = keys - _REQUIRED_FIELDS - _OPTIONAL_FIELDS - {_TIMEOUT_FIELD}
     missing = _REQUIRED_FIELDS - keys
     if unknown:
         raise ConfigError("configuration contains unknown field(s)")
     if missing:
         raise ConfigError("missing configuration field(s): " + ", ".join(sorted(missing)))
-    values: dict[str, str] = {}
+    values: dict[str, Any] = {}
     for field in _REQUIRED_FIELDS:
         value = config[field]
         if type(value) is not str:
@@ -106,6 +119,14 @@ def _validate(config: object) -> dict[str, str]:
                 raise ConfigError(field + " must be a string")
             values[field] = value
 
+    if _TIMEOUT_FIELD in config:
+        timeout = config[_TIMEOUT_FIELD]
+        if (type(timeout) is not int or timeout % 60 != 0
+                or not MIN_TIMEOUT_SECONDS <= timeout <= DEFAULT_TIMEOUT_SECONDS):
+            raise ConfigError(
+                "timeout_seconds must be a whole number of minutes from %d to %d seconds"
+                % (MIN_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS))
+        values[_TIMEOUT_FIELD] = timeout
     if _RUN_ID.fullmatch(values["run_id"]) is None:
         raise ConfigError("run_id must be 1-63 lowercase ASCII letters, digits, or interior hyphens")
     for field, pattern in _ID_PATTERNS.items():
@@ -122,6 +143,7 @@ def _validate(config: object) -> dict[str, str]:
             raise ConfigError(field + " must be a Secret Stash selector, not a secret value")
     _validate_workload_file(values["workload_file"])
     _validate_batch_deadline(values["workload_file"])
+    _validate_timeout_after_deadline(values["workload_file"], values.get(_TIMEOUT_FIELD))
     if "external_reset_file" in values:
         # Same local-path and 64 KiB inject limits as the workload file.
         _validate_workload_file(values["external_reset_file"])
@@ -206,6 +228,22 @@ def _validate_batch_deadline(path: str) -> None:
         raise ConfigError(
             "batch workload deadline_seconds must be at least %d to fit the model "
             "download and the runtime's 600 s post-download reserve" % MIN_BATCH_DEADLINE_SECONDS)
+
+
+def _validate_timeout_after_deadline(path: str, timeout: Any) -> None:
+    """The provider timeout must leave the watchdog room after the workload's own deadline."""
+
+    if timeout is None:
+        return
+    try:
+        workload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    deadline = workload.get("deadline_seconds") if isinstance(workload, dict) else None
+    if type(deadline) in (int, float) and timeout < deadline + MIN_TIMEOUT_AFTER_DEADLINE_SECONDS:
+        raise ConfigError(
+            "timeout_seconds must be at least the workload deadline_seconds plus %d"
+            % MIN_TIMEOUT_AFTER_DEADLINE_SECONDS)
 
 
 def _validate_workload_file(value: str) -> None:

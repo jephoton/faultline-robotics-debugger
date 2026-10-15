@@ -1,7 +1,8 @@
 """The spend ledger of one ``faultline`` run (ADR 0031).
 
-Every paid Job is *reserved* before it is submitted at its worst case (its deadline
-plus the image-pull and start allowance, at the backend's hourly rate) and
+Every paid Job is *reserved* before it is submitted at its worst case (the provider
+timeout the Job is created with, which is its deadline plus a fixed grace rounded up to
+whole minutes, plus the image-pull and start allowance, at the backend's hourly rate) and
 *settled* afterwards at the measured container time plus that start allowance. A
 reservation is refused when spent + reserved + the new worst case would exceed the
 cap, so a run can never be committed beyond ``budget.max_spend_usd``. A Job that
@@ -25,6 +26,7 @@ from typing import Any, Callable, Dict, Optional
 
 SCHEMA_VERSION = 1
 DEFAULT_START_ALLOWANCE_SECONDS = 240
+JOB_TIMEOUT_GRACE_SECONDS = 600        # provider timeout = Job deadline + this, rounded up to whole minutes
 _EPSILON = 1e-9
 
 
@@ -38,6 +40,22 @@ class BudgetExceeded(LedgerError):
 
 class TimeExhausted(LedgerError):
     """The run's wall-clock cap is used up."""
+
+
+def provider_timeout_seconds(deadline_seconds: float) -> int:
+    """The ``--timeout`` a Job with this deadline is created with: deadline + grace, whole minutes up.
+
+    The provider stops the Job at this limit whatever the laptop is doing, so it bounds what one
+    Job can bill. The watchdog (deadline + 300 s, then at most 300 s for the cancel) ends earlier.
+    """
+
+    return int(math.ceil((float(deadline_seconds) + JOB_TIMEOUT_GRACE_SECONDS) / 60.0)) * 60
+
+
+def worst_case_seconds(deadline_seconds: float, start_allowance_seconds: float = DEFAULT_START_ALLOWANCE_SECONDS) -> int:
+    """Billable seconds one Job can cost at most: provider timeout + start allowance."""
+
+    return provider_timeout_seconds(deadline_seconds) + int(start_allowance_seconds)
 
 
 def _money(value: float) -> float:
@@ -102,9 +120,9 @@ class Ledger:
         return _money(self.cap_usd - self.spent - self.reserved)
 
     def worst_case_usd(self, deadline_seconds: float) -> float:
-        """What a Job with this deadline can cost at most: deadline plus the start allowance."""
+        """What a Job with this deadline can cost at most: its provider timeout plus the start allowance."""
 
-        return (float(deadline_seconds) + self.start_allowance_seconds) / 3600.0 * self.hourly_usd
+        return worst_case_seconds(deadline_seconds, self.start_allowance_seconds) / 3600.0 * self.hourly_usd
 
     def reserve(self, job_name: str, worst_case_usd: float) -> None:
         if type(job_name) is not str or not job_name or job_name in self.jobs:
@@ -186,4 +204,5 @@ class Ledger:
         os.replace(str(temporary), str(self.path))
 
 
-__all__ = ["BudgetExceeded", "Ledger", "LedgerError", "TimeExhausted", "DEFAULT_START_ALLOWANCE_SECONDS"]
+__all__ = ["BudgetExceeded", "Ledger", "LedgerError", "TimeExhausted", "DEFAULT_START_ALLOWANCE_SECONDS",
+           "JOB_TIMEOUT_GRACE_SECONDS", "provider_timeout_seconds", "worst_case_seconds"]

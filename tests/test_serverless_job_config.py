@@ -57,6 +57,30 @@ class ServerlessJobConfigTests(unittest.TestCase):
         config.update(overrides)
         return config
 
+    def timeout_of(self, **overrides: object) -> str:
+        argv = self.module.prepare(self.valid_config(**overrides))
+        return argv[argv.index("--timeout") + 1]
+
+    def test_timeout_defaults_to_one_hour_and_follows_timeout_seconds(self) -> None:
+        self.assertEqual(self.timeout_of(), "1h")
+        self.assertEqual(self.timeout_of(timeout_seconds=2400), "40m")
+        self.assertEqual(self.timeout_of(timeout_seconds=1620), "27m")
+        self.assertEqual(self.timeout_of(timeout_seconds=3600), "1h")
+
+    def test_timeout_seconds_is_bounded_whole_minutes(self) -> None:
+        for value in (599, 3660, 2401, True, "40m", 2400.0, -60, 0):
+            with self.subTest(value=value), self.assertRaises(self.module.ConfigError):
+                self.module.prepare(self.valid_config(timeout_seconds=value))
+
+    def test_timeout_must_leave_room_after_the_workload_deadline(self) -> None:
+        Path("workload.json").write_text(
+            json.dumps({"mode": "scenario-reduce", "deadline_seconds": 2400}), encoding="utf-8")
+        with self.assertRaises(self.module.ConfigError):
+            self.module.prepare(self.valid_config(timeout_seconds=2400))
+        with self.assertRaises(self.module.ConfigError):
+            self.module.prepare(self.valid_config(timeout_seconds=2640))
+        self.assertEqual(self.timeout_of(timeout_seconds=2700), "45m")
+
     def test_external_reset_file_adds_a_second_bounded_inject_file(self) -> None:
         Path("external-reset.json.gz").write_bytes(b"\x1f\x8b" + b"x" * 100)
         argv = self.module.prepare(self.valid_config(external_reset_file="external-reset.json.gz"))

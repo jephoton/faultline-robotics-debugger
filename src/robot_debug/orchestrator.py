@@ -46,6 +46,11 @@ STEPS_SCHEMA = 1
 MAX_ATTEMPTS = 6                       # submissions of one step under capacity failures
 CAPACITY_PAUSE_SECONDS = 300
 MAX_CONTINUATIONS = 3
+# Time limits of one Job, all measured from its deadline D (the Job's own budget):
+#   D + 300 s   the watchdog cancels a running Job (RUNNING_GRACE_SECONDS)
+#   D + 600 s   at the latest the cancel is given up on (the backend's cancel grace is 300 s)
+#   D + 600 s   the provider stops the Job whatever happens (ledger.provider_timeout_seconds, rounded up
+#               to whole minutes); the ledger reserves exactly that plus the start allowance.
 RUNNING_GRACE_SECONDS = 300            # beyond the Job's own deadline before the watchdog cancels
 QUEUE_ALLOWANCE_SECONDS = 2400         # waiting for a machine, pulling the image
 PRICE_TOLERANCE = 1.05
@@ -483,10 +488,9 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
     """The planned Jobs and their worst-case spend, built from the spec alone (no backend call)."""
 
     rate = spec.backend.hourly_usd if rate is None else rate
-    ledger_allowance = lg.DEFAULT_START_ALLOWANCE_SECONDS
 
     def worst(deadline: float) -> float:
-        return (deadline + ledger_allowance) / 3600.0 * rate
+        return lg.worst_case_seconds(deadline) / 3600.0 * rate
 
     jobs: List[Tuple[str, str, int]] = []
     if spec.mode == "scenario":

@@ -29,6 +29,9 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from robot_debug.ledger import provider_timeout_seconds
+from robot_debug.spec import DEFAULT_PLATFORM, DEFAULT_PRESET
+
 from . import (
     BackendError,
     JobHandle,
@@ -41,14 +44,14 @@ from . import (
 )
 
 DEFAULT_REGION = "eu-north1"
-DEFAULT_PLATFORM = "gpu-l40s-a"        # the same defaults robot_debug.spec applies to a spec
-DEFAULT_PRESET = "1gpu-16vcpu-64gb"
 GROUP_NAME = "faultline-readers"
 SERVICE_ACCOUNT_NAME = "faultline-reader"
 BUCKET_MAX_BYTES = 5 * 1024 ** 3
 CALL_TIMEOUT_SECONDS = 60.0
 SUBMIT_TIMEOUT_SECONDS = 180.0
-CANCEL_GRACE_SECONDS = 900.0
+CANCEL_GRACE_SECONDS = 300.0           # after a cancel; the provider timeout (deadline + 600 s) ends the Job anyway
+WAIT_MARGIN_SECONDS = 300.0            # beyond the watchdog limits before wait() gives up for good
+CREATE_LOOKUP_TRIES = 5
 MAX_DOWNLOAD_BYTES = 5 * 1024 ** 3
 STATE_FILE = "backend-state.json"
 
@@ -65,6 +68,7 @@ _TRANSIENT = re.compile(
     r"unavailable|i/o timeout|handshake|connection reset|connection refused|"
     r"deadline.?exceeded|temporarily|unexpected eof|\bEOF\b|tls|"
     r"\b50[234]\b|too many requests|timed out", re.IGNORECASE)
+_JOB_ID_TEXT = re.compile(r"\baijob-[a-z0-9]+\b")
 _NOT_FOUND = re.compile(r"not.?found", re.IGNORECASE)
 _EXISTS = re.compile(r"already.?exists", re.IGNORECASE)
 
@@ -216,6 +220,19 @@ def resource_id(payload: Any) -> Optional[str]:
         if isinstance(found, str) and found:
             return found
     return None
+
+
+def _job_id_from_output(text: str) -> Optional[str]:
+    """The Job id from ``ai job create`` output: JSON, or text such as ``Job ID: aijob-...``."""
+
+    try:
+        found = resource_id(json.loads(text))
+    except ValueError:
+        found = None
+    if found:
+        return found
+    match = _JOB_ID_TEXT.search(text or "")
+    return match.group(0) if match else None
 
 
 def parse_time(value: Any) -> Optional[float]:
@@ -493,6 +510,10 @@ class NebiusBackend:
             "subnet_id": state["subnet_id"], "bucket_id": state["bucket_id"],
             "hf_secret": state["hf_secret_id"], "workload_file": "workload.json",
         }
+        deadline = workload.get("deadline_seconds")
+        if type(deadline) in (int, float) and deadline > 0:
+            # The provider stops the Job at deadline + grace even if this process sleeps or dies.
+            config["timeout_seconds"] = provider_timeout_seconds(deadline)
         (job_dir / "job-config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
         argv = self._prepared_argv(job_dir)
 
@@ -513,6 +534,10 @@ class NebiusBackend:
         running_since: Optional[float] = None
         cancel_sent_at: Optional[float] = None
         failures = 0
+        # Hard ceiling: the watchdog limits, the cancel grace and a margin. Past it the API has not shown a
+        # final state for the whole worst case (unreachable, or a cancel that never goes through): stop
+        # polling and let the caller charge the worst case and try one more cancel.
+        ceiling = max(total_max_seconds, running_max_seconds) + CANCEL_GRACE_SECONDS + WAIT_MARGIN_SECONDS
         while True:
             job: Optional[Dict[str, Any]] = None
             try:
@@ -532,6 +557,10 @@ class NebiusBackend:
                     return self._result(handle.job_name, job_id, job, cancel_sent_at is not None)
                 if state == "RUNNING" and running_since is None:
                     running_since = parse_time(status.get("started_at")) or now
+            if now - (origin or entered) > ceiling:
+                raise BackendError(
+                    "gave up waiting for job %s after %d s without a final state from the API; it may still "
+                    "be running, so check the console" % (handle.job_name, now - (origin or entered)))
             if cancel_sent_at is None:
                 over_running = running_since is not None and now - running_since > running_max_seconds
                 over_total = now - (origin or entered) > total_max_seconds
@@ -781,29 +810,50 @@ class NebiusBackend:
         return [str(part) for part in argv]
 
     def _create_job(self, job_name: str, create: List[str], job_dir: Path) -> str:
-        """Create once; recover the id by name. Retry only when the Job does not exist."""
+        """Create once; recover the id from the output or by name.
+
+        The create command is retried only when it failed (nonzero exit) and the Job provably does
+        not exist. After an exit-0 create it is NEVER run again: the id is read from the output
+        (JSON, or the ``Job ID: aijob-...`` text the CLI printed on October 13) or the Job is
+        looked up by name a bounded number of times.
+        """
 
         last: Optional[BackendError] = None
         for attempt in range(3):
             if attempt:
                 self._sleep(10.0 * attempt)
-            created: Optional[str] = None
             try:
                 text = self._cli.text(create, cwd=job_dir, timeout=SUBMIT_TIMEOUT_SECONDS, tries=1)
-                try:
-                    created = resource_id(json.loads(text))
-                except ValueError:
-                    created = None  # "Job ID: ..." text: confirm by name below
             except CliError as error:
                 last = error
                 if error.kind not in ("transient", "exists"):
                     raise
+                found = self._lookup_job_id(job_name)      # may exist although the response was lost
+                if found:
+                    return found
+                continue
+            created = _job_id_from_output(text)
             if created:
                 return created
-            found = self._lookup_job_id(job_name)
+            return self._find_created(job_name)
+        raise last or BackendError("job %s could not be created" % job_name)
+
+    def _find_created(self, job_name: str) -> str:
+        """Look a just-created Job up by name (bounded); never creates anything."""
+
+        for attempt in range(CREATE_LOOKUP_TRIES):
+            if attempt:
+                self._sleep(5.0 * attempt)
+            try:
+                found = self._lookup_job_id(job_name)
+            except CliError as error:
+                if error.kind != "transient":
+                    raise
+                continue
             if found:
                 return found
-        raise last or BackendError("job %s was submitted but could not be found by name" % job_name)
+        raise BackendError("job %s was created (the create command succeeded) but could not be found by name; "
+                           "check the console" % job_name)
 
     def _lookup_job_id(self, job_name: str) -> Optional[str]:
         try:

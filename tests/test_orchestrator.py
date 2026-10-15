@@ -545,7 +545,7 @@ class CapacityAndCap(Base):
     def test_a_job_that_would_pass_the_cap_is_refused_before_submission(self):
         probe = FakeTools().screen_workload("x", "libero_10", 3, "0-49", 4)["deadline_seconds"]
         reduce_deadline = FakeTools().reduce_deadline(36)
-        worst = lambda d: (d + 240) / 3600.0 * RATE            # noqa: E731
+        worst = lambda d: lg.worst_case_seconds(d) / 3600.0 * RATE            # noqa: E731
         spec = spec_for(cap=worst(probe) + worst(reduce_deadline) + 0.01)
         script = [finished(lambda w: screen_summary(), seconds=probe),
                   finished(reduce_one(stop_reason="budget_exhausted", selection=BOTH, entity_minimal=False),
