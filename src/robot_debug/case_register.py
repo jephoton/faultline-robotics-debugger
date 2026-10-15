@@ -95,15 +95,18 @@ def _job_scenario_dirs(run_dir: Path) -> List[Path]:
         for job in sorted((p for p in jobs.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True):
             # The Nebius and local backends download a Job's export prefix straight into
             # ``evidence/``; older hand-run downloads kept ``faultline-runs/<job>/`` inside it.
-            direct = job / "evidence" / "scenario"
-            if direct.is_dir():
-                found.append(direct)
+            # Scenario Jobs export under ``scenario/``, paraphrase Jobs under ``language/``.
+            for kind in ("scenario", "language"):
+                direct = job / "evidence" / kind
+                if direct.is_dir():
+                    found.append(direct)
             evidence = job / "evidence" / "faultline-runs"
             if evidence.is_dir():
                 for run in sorted((p for p in evidence.iterdir() if p.is_dir()), key=lambda p: p.name):
-                    scenario = run / "scenario"
-                    if scenario.is_dir():
-                        found.append(scenario)
+                    for kind in ("scenario", "language"):
+                        scenario = run / kind
+                        if scenario.is_dir():
+                            found.append(scenario)
     return found
 
 

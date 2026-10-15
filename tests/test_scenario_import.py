@@ -51,7 +51,7 @@ class BuildTests(unittest.TestCase):
 
     def test_builder_rejects_bad_arguments(self):
         for kwargs in (
-            dict(suite="libero_spatial"), dict(suite=3), dict(task_id=-1), dict(task_id=True),
+            dict(suite="libero_90"), dict(suite=3), dict(task_id=-1), dict(task_id=True),
             dict(init_state_index=-1), dict(init_state_index=1.5), dict(init_state_index=True),
             dict(state=[]), dict(state=[1.0, float("nan")]), dict(state="abc"),
         ):
@@ -97,7 +97,7 @@ class ValidationTests(unittest.TestCase):
     def test_scalar_fields_fail_closed(self):
         for changes in (
             {"schema_version": 2}, {"schema_version": True}, {"schema_version": "1"}, {"schema_version": 1.0},
-            {"suite": "libero_spatial"}, {"suite": "libero_object "}, {"suite": None},
+            {"suite": "libero_90"}, {"suite": "libero_object "}, {"suite": None},
             {"task_id": -1}, {"task_id": True}, {"task_id": 1.0}, {"task_id": "3"}, {"task_id": 10 ** 6},
         ):
             with self.subTest(changes=changes), self.assertRaises(si.ScenarioImportError):

@@ -56,7 +56,7 @@ from robot_debug.scenario_import import (
 from robot_debug.scenario_reduce import run_scenario_reduction
 
 SCENARIO_MODES = ("scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay")
-SCENARIO_SUITES = ("libero_10", "libero_object")
+SCENARIO_SUITES = ("libero_10", "libero_object", "libero_spatial", "libero_goal")
 DEFAULT_SUITE = "libero_10"
 SCENARIO_WORKERS = 12
 SCENARIO_MAX_BATCH_SIZE = 12
@@ -89,7 +89,7 @@ MIN_DEADLINE_SECONDS = 1000       # the prepare script's floor for batch-style J
 
 # ---- configuration bounds ---------------------------------------------------------------
 # Both supported suites have ten tasks (ids 0 to 9).
-SUITE_TASK_COUNT = {"libero_10": 10, "libero_object": 10}
+SUITE_TASK_COUNT = {"libero_10": 10, "libero_object": 10, "libero_spatial": 10, "libero_goal": 10}
 MAX_SCREEN_TASKS = 10
 MAX_SCREEN_STARTS = 50
 MAX_START_INDEX = 49

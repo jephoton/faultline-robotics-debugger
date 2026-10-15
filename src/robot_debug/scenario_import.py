@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 from robot_debug.external_reset import ExternalResetError, state_sha256
 
 SCHEMA_VERSION = 1
-ALLOWED_SUITES = ("libero_object", "libero_10")
+ALLOWED_SUITES = ("libero_object", "libero_10", "libero_spatial", "libero_goal")
 CANDIDATE_KEYS = frozenset(
     {"schema_version", "suite", "task_id", "state", "source", "state_sha256"})
 MAX_STATE_LENGTH = 4096

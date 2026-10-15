@@ -46,7 +46,7 @@ class ConfigTests(unittest.TestCase):
             {"task_ids": list(range(11))}, {"start_indices": []}, {"start_indices": [50]},
             {"start_indices": list(range(51))}, {"attempts": 2}, {"attempts": 0},
             {"confirm_attempts": 9}, {"confirm_attempts": -1}, {"required_failures": 6},
-            {"required_failures": 1}, {"suite": "libero_goal"},
+            {"required_failures": 1}, {"suite": "libero_90"},
             {"task_ids": list(range(10)), "start_indices": list(range(50))},
         ):
             with self.subTest(changes=changes), self.assertRaises(JobRuntimeError):

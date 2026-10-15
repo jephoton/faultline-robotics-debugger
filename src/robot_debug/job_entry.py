@@ -25,6 +25,7 @@ from .job_process import (
     close_owned_process_group,
 )
 from .job_runtime import (
+    LANGUAGE_MODES,
     M6_MODES,
     SCENARIO_MODES,
     JobRuntimeError,
@@ -869,7 +870,7 @@ def main(
             ),
             model_factory=model_factory,
             evaluator_factory=evaluator_factory(
-                layout, environ, progress, single_thread_blas=config["mode"] in M6_MODES | SCENARIO_MODES),
+                layout, environ, progress, single_thread_blas=config["mode"] in M6_MODES | SCENARIO_MODES | LANGUAGE_MODES),
             exporter=exporter,
             clock=clock,
             absolute_deadline=deadline,
