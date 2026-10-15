@@ -109,7 +109,7 @@ class Launcher:
 
 
 def to_wsl_path(path: Path) -> str:
-    """``C:\a\b`` as ``/mnt/c/a/b`` for commands run inside WSL.
+    r"""``C:\a\b`` as ``/mnt/c/a/b`` for commands run inside WSL.
 
     A relative path is made absolute first: WSL starts in the Linux home directory, so a
     relative ``cd`` there fails (found by the first live ``faultline replay``, October 15).
