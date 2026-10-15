@@ -49,6 +49,7 @@ _CAMERAS = ("agentview", "wrist")
 PROBE_STEP_INTERVAL = 40
 PROBE_LAST_STEP = 280
 PROBE_MAX_BYTES = 16 * 1024
+INSTRUCTION_MAX_CHARS = 200
 
 
 class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
@@ -85,6 +86,11 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
     ``scene_perturbation`` (``{"kind": "viewpoint" | "lighting", "severity": s}``) perturbs
     the scene after the start state and before settling. The benchmark start is then
     replayed step for step as upstream does it (the same replay ``state_out`` uses).
+
+    ``instruction`` replaces the language the policy receives (the observation's
+    ``task_description``, which upstream fills from the task name in ``make_obs``);
+    ``instruction_out`` (a JSON path) records, per episode, the text the policy receives,
+    overridden or not. Without them every observation is exactly what upstream builds.
     """
 
     def __init__(
@@ -102,6 +108,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         layout_out: Optional[str] = None,
         state_out: Optional[str] = None,
         scene_perturbation: Optional[Mapping[str, Any]] = None,
+        instruction: Optional[str] = None,
+        instruction_out: Optional[str] = None,
         **kwargs: Any
     ) -> None:
         if camera_probe is not None and (not isinstance(camera_probe, str) or not camera_probe):
@@ -139,6 +147,16 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
                 raise ValueError("scene_perturbation needs at least one settling step to render the new scene")
         self._scene_rig = SceneRig()
         self._scene_applied = []  # type: List[Dict[str, Any]]
+        if instruction is not None and (
+            not isinstance(instruction, str) or not 1 <= len(instruction) <= INSTRUCTION_MAX_CHARS
+            or not instruction.isprintable()
+        ):
+            raise ValueError("instruction must be 1 to {} printable characters".format(INSTRUCTION_MAX_CHARS))
+        if instruction_out is not None and (not isinstance(instruction_out, str) or not instruction_out):
+            raise ValueError("instruction_out must be a non-empty path")
+        self.instruction = instruction
+        self.instruction_out = instruction_out
+        self._instruction_records = []  # type: List[Dict[str, Any]]
         self._exported = set()  # type: set
         self.external_reset = external_reset
         self.scenario_start = scenario_start
@@ -230,6 +248,7 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self._invalid_obs = None
         if self._scene_active():
             self._scene_rig.restore()  # the simulator is reused across episodes
+        self._record_instruction(task)
         if self.scenario_start is not None:
             return self._reset_from_scenario(task)
         if self.external_reset is not None:
@@ -447,6 +466,19 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
         self._record_scene_probe()
         return applied
 
+    def _record_instruction(self, task: Any) -> None:
+        """Append this episode's policy-facing instruction to ``instruction_out`` (atomic JSON)."""
+
+        if self.instruction_out is None:
+            return
+        used = self.instruction if self.instruction is not None else task.get("name")
+        self._instruction_records.append({
+            "episode_index": self._episode_index,
+            "instruction_used": used,
+            "overridden": self.instruction is not None,
+        })
+        self._write_json_atomically(self.instruction_out, self._instruction_records)
+
     def _record_scene_probe(self) -> None:
         """Rewrite the camera-probe sidecar with the applied scene values; a probe problem never breaks the episode."""
 
@@ -573,6 +605,8 @@ class DiagnosticLIBEROBenchmark(LIBEROBenchmark):
 
     def make_obs(self, raw_obs: Any, task: Any) -> Any:
         observation = super().make_obs(raw_obs, task)
+        if self.instruction is not None:
+            observation = dict(observation, task_description=self.instruction)
         step = self._obs_step
         self._obs_step += 1
         unperturbed = observation["images"] if self._probe_due(step) else None
