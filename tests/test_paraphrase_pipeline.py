@@ -596,3 +596,11 @@ class ReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OriginalWordingTests(unittest.TestCase):
+    def test_same_wording_ignores_case_and_spacing_only(self):
+        from robot_debug import language_experiment as le
+        self.assertTrue(le.same_wording("Pick up  the soup", "pick up the soup"))
+        self.assertFalse(le.same_wording("pick up the soup", "pick up a soup"))
+        self.assertFalse(le.same_wording(None, "pick up the soup"))

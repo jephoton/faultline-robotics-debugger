@@ -1303,6 +1303,12 @@ class Orchestrator:
         screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
                               "language_summary.json")
         screen_summary = screen.summary
+        control = screen_summary.get("control") or {}
+        if control.get("original_matches_task") is False:
+            self._write_paraphrase_report(screen_summary, None)
+            raise StopRun("original_mismatch",
+                          "the spec's original instruction differs from the task's own wording ({!r})".format(
+                              control.get("task_language")))
         chosen = choose_paraphrase(screen_summary)
         if chosen is None:
             self._write_paraphrase_report(screen_summary, None)

@@ -77,14 +77,16 @@ class InstructionSidecarTests(SceneHarnessCase):
         for episode in range(3):
             benchmark.reset(self.task(episode))
         self.assertEqual(
-            {"schema_version": 1, "instruction_used": "grab the tin", "overridden": True}, self.records(out))
+            {"schema_version": 1, "instruction_used": "grab the tin", "overridden": True,
+             "task_language": "pick the soup"}, self.records(out))
         self.assertEqual([], [name for name in os.listdir(self.root) if "partial" in name])
 
     def test_without_an_override_the_sidecar_records_the_task_language(self):
         benchmark, out = self.make_with()
         benchmark.reset(self.task())
         self.assertEqual(
-            {"schema_version": 1, "instruction_used": "pick the soup", "overridden": False}, self.records(out))
+            {"schema_version": 1, "instruction_used": "pick the soup", "overridden": False,
+             "task_language": "pick the soup"}, self.records(out))
 
     def test_the_recorded_text_is_what_make_obs_sends(self):
         benchmark, out = self.make_with(instruction="grab the tin")

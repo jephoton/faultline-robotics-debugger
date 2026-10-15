@@ -707,6 +707,8 @@ def make_scenario_evaluate(
                     record["artifacts"] = artifacts
                     if evidence.get("instruction"):
                         record["instruction"] = evidence["instruction"]
+                    if evidence.get("task_language"):
+                        record["task_language"] = evidence["task_language"]
                     if sidecar is not None:
                         record["restore"] = {key: sidecar.get(key) for key in _RESTORE_KEYS}
         except RunCancelled:

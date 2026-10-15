@@ -259,6 +259,24 @@ def read_instruction_sidecar(path: Path) -> str:
     return data["instruction_used"]
 
 
+def read_task_language(path: Path) -> Optional[str]:
+    """The task's own instruction the benchmark recorded beside the override (``None`` if absent)."""
+
+    data = json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=se._reject_constant)
+    if isinstance(data, list) and len(data) == 1:
+        data = data[0]
+    value = data.get("task_language") if isinstance(data, dict) else None
+    return value if type(value) is str else None
+
+
+def same_wording(a: Optional[str], b: Optional[str]) -> bool:
+    """Whether two instructions are the same wording, ignoring case and spacing."""
+
+    if a is None or b is None:
+        return False
+    return " ".join(a.lower().split()) == " ".join(b.lower().split())
+
+
 class InstructionChannel:
     """Wraps the shared config writer and evidence reader so each episode carries its instruction.
 
@@ -284,7 +302,8 @@ class InstructionChannel:
     def read(self, output_dir: Path, batch_root: Path) -> Dict[str, Any]:
         evidence = se.read_evidence(output_dir, batch_root)
         name = Path(output_dir).name
-        used = read_instruction_sidecar(Path(output_dir) / INSTRUCTION_FILE)
+        sidecar = Path(output_dir) / INSTRUCTION_FILE
+        used = read_instruction_sidecar(sidecar)
         with self._lock:
             wanted = self.requested.get(name)
         if wanted is None or used != wanted:
@@ -292,6 +311,7 @@ class InstructionChannel:
                 self.mismatches.append(name)
             raise ValueError("the policy did not receive the requested instruction")
         evidence["instruction"] = used
+        evidence["task_language"] = read_task_language(sidecar)
         return evidence
 
 
@@ -310,7 +330,8 @@ def _attempt_summary(record: Mapping[str, Any]) -> Dict[str, Any]:
         seconds = round(record["ended_seconds"] - record["started_seconds"], 3)
     return {"case_id": record["case_id"], "attempt": record.get("attempt"), "outcome": record["outcome"],
             "steps": record.get("steps"), "video": (record.get("artifacts") or {}).get("video"),
-            "instruction_used": record.get("instruction"), "seconds": seconds}
+            "instruction_used": record.get("instruction"), "task_language": record.get("task_language"),
+            "seconds": seconds}
 
 
 # ---- screen -------------------------------------------------------------------------
@@ -413,9 +434,16 @@ class ParaphraseScreenDriver:
             rows.append(row)
         control = rows[0]
         self.body["instructions"] = rows
+        languages = [a.get("task_language") for a in control["attempts"] if a.get("task_language")]
+        task_language = languages[0] if languages else None
         self.body["control"] = {"outcomes": control["outcomes"], "attempts": CONTROL_ATTEMPTS,
                                 "passed": len(control["outcomes"]) == CONTROL_ATTEMPTS
-                                and all(item == "success" for item in control["outcomes"])}
+                                and all(item == "success" for item in control["outcomes"]),
+                                # The spec's "original" must be the task's own wording, or a typo would
+                                # turn the control into a paraphrase (October 15 review).
+                                "task_language": task_language,
+                                "original_matches_task": None if task_language is None
+                                else same_wording(self.original, task_language)}
         reproducing = [row for row in rows[1:] if row["decision"] == "reproduces"]
         reproducing.sort(key=lambda row: (-row["failures"], row["edit_count"], row["label"]))
         self.body["reproducing"] = [row["label"] for row in reproducing]
