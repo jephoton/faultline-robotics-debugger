@@ -31,8 +31,9 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 SPEC_VERSION = 1
 MODES = ("scenario", "audit", "replay")
-SUITES = ("libero_10", "libero_object")
-FAMILIES = ("darken", "noise", "blur", "contrast")
+SUITES = ("libero_10", "libero_object", "libero_spatial", "libero_goal")
+FAMILIES = ("darken", "noise", "blur", "contrast",
+            "jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting")
 BACKEND_KINDS = ("nebius", "local")
 MAX_TASK = 9
 MAX_START = 49

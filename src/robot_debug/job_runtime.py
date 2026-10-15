@@ -25,17 +25,22 @@ _BATCH_WORKERS = (4, 8, 12)
 _BATCH_REPEATS = {"m3-batch-smoke": 2, "m3-batch": 12}
 _MAX_BATCH_PHASES = 6
 M6_FAMILIES = ("darken", "noise", "blur", "contrast")
+# ADR 0032 (breadth pack): the threshold audit also accepts these families. ``M6_FAMILIES`` stays the
+# four recorded M6 families (the fixed smoke manifest iterates it); ``AUDIT_FAMILIES`` is every family a
+# threshold workload may name, in the order a workload lists them.
+AUDIT_FAMILIES = M6_FAMILIES + (
+    "jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting")
 _M6_THRESHOLD_FIELDS = {"families", "sweep", "attempts", "required_failures", "bisection_steps"}
 # Optional audit target (M7a): which suite, task and benchmark start the threshold searches run on.
 # Absent means the recorded default (LIBERO-Object, task 0, the upstream start behaviour).
 _M6_AUDIT_TARGET_FIELDS = {"suite", "task_id", "init_state_index"}
-M6_SUITES = ("libero_object", "libero_10")
+M6_SUITES = ("libero_object", "libero_10", "libero_spatial", "libero_goal")
 _M6_TASKS_PER_SUITE = 10
 _M6_MAX_START_INDEX = 49
 _M6_MAX_SWEEP_LEVELS = 8
 _M6_MAX_ATTEMPTS = 12
 _M6_MAX_BISECTION_STEPS = 6
-_M6_MAX_TOTAL_ATTEMPTS = 400
+_M6_MAX_TOTAL_ATTEMPTS = 500
 _M6_NOMINAL_CONTROLS = 5
 _RUN_ID = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.ASCII)
 _ALLOWED_SUFFIXES = {".json", ".jsonl", ".mp4", ".sqlite", ".yaml", ".yml", ".txt", ".log"}
@@ -117,8 +122,8 @@ def _validate_m6_threshold_fields(config: Dict[str, Any]) -> Dict[str, Any]:
 
     families = config["families"]
     if (
-        type(families) is not list or not 1 <= len(families) <= len(M6_FAMILIES)
-        or any(type(name) is not str or name not in M6_FAMILIES for name in families)
+        type(families) is not list or not 1 <= len(families) <= len(AUDIT_FAMILIES)
+        or any(type(name) is not str or name not in AUDIT_FAMILIES for name in families)
         or len(set(families)) != len(families)
     ):
         _fail("m6 families must be a non-empty list of distinct known families")
@@ -614,6 +619,7 @@ def export_closed_evidence(
 __all__ = [
     "BATCH_MODES",
     "JobRuntimeError",
+    "AUDIT_FAMILIES",
     "M6_FAMILIES",
     "M6_MODES",
     "M6_SUITES",

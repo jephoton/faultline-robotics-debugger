@@ -162,7 +162,7 @@ class Refusals(unittest.TestCase):
 
     def test_suite_task_start_bounds(self):
         data = scenario_spec()
-        data["policy"]["suite"] = "libero_spatial"
+        data["policy"]["suite"] = "libero_90"
         self.assertRefused(data, "suite")
         for task in (-1, 10, True, "0", 1.0):
             data = scenario_spec(task=task)

@@ -135,7 +135,7 @@ class M6ConfigTests(unittest.TestCase):
                                  validate_workload_config(copy(THRESHOLD, **changes)))
 
     def test_the_audit_target_fields_are_bounded(self):
-        bad = (dict(suite="libero_goal"), dict(suite=None), dict(suite=3), dict(task_id=-1),
+        bad = (dict(suite="libero_90"), dict(suite=None), dict(suite=3), dict(task_id=-1),
                dict(task_id=10), dict(task_id=True), dict(task_id=1.0), dict(task_id="0"),
                dict(init_state_index=-1), dict(init_state_index=50), dict(init_state_index=True),
                dict(init_state_index=2.0), dict(init_state_index=None))
