@@ -1,7 +1,7 @@
 # M7a step 3: breadth pack
 
-**Design:** ADR 0032 (accepted October 15). **Spend cap:** US$4.00 for live
-runs, in the order below, cutting from the end. No paid run before Jethro
+**Design:** ADR 0032 (accepted October 15). **Spend cap:** US$6.00 for live
+runs (raised from US$4.00 by Jethro, October 15), in the order below, cutting from the end. No paid run before Jethro
 approves this plan.
 
 ## Units and ownership
@@ -72,7 +72,7 @@ co-author trailers.
    diversity, meaning preserved; pick by the ADR 0030 rule.
 2. CPU calibration of viewpoint and lighting bounds in the image (free).
 3. Independent review of S and L; image v15; in-image 3.8 tests.
-4. **Live runs (US$4.00 total, ledger-enforced, in order):** suite smokes for
+4. **Live runs (US$6.00 total, ledger-enforced, in order):** suite smokes for
    Spatial and Goal (one short Job each) -> catalog audit (LIBERO-Object task
    0, the four new families) -> paraphrase diagnosis (LIBERO-Object task 0)
    -> viewpoint and lighting audit. Each through `faultline diagnose`.

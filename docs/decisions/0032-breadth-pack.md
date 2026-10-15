@@ -29,7 +29,8 @@ physical-scene layers, without LIBERO-Plus.
    scene lights), searched with the existing sweep-then-bisect threshold
    engine. Bounds are calibrated on CPU before any paid run.
 
-**Spend cap:** US$4.00 for the breadth pack's live runs. Verification order,
+**Spend cap:** US$6.00 for the breadth pack's live runs (raised from US$4.00 by
+Jethro on October 15). Verification order,
 cutting from the end if the ledger runs low: suite smokes -> catalog audit ->
 paraphrase screen and reduction -> viewpoint and lighting audit.
 
