@@ -65,12 +65,16 @@ export function OcclusionSection({ detail }: { detail: Detail }) {
             <ol className="lineage__steps">
               {o.lineage.map((step, index) => (
                 <li key={index}>
-                  <span className="mono">{area(step.rectangle)} of the image</span>
-                  <span className="muted">
-                    {step.edge === 'start'
-                      ? ' starting rectangle'
-                      : ` trimmed the ${EDGE_WORD[step.edge] ?? step.edge} edge by ${Math.round(step.delta * 1000) / 10}% of the image`}
-                  </span>
+                  {step.edge === 'start' ? (
+                    <span className="muted">Starting rectangle: </span>
+                  ) : (
+                    <span className="muted">
+                      Trimmed the {EDGE_WORD[step.edge] ?? step.edge} edge by {Math.round(step.delta * 1000) / 10}% of
+                      the image; it still fails, covering{' '}
+                    </span>
+                  )}
+                  <span className="mono">{area(step.rectangle)}</span>
+                  <span className="muted"> of the image.</span>
                 </li>
               ))}
             </ol>

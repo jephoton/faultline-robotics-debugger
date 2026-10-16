@@ -64,7 +64,7 @@ export function ScenarioSection({ detail }: { detail: Detail }) {
           <>
             <p className="muted">
               Applying these shifts to the passing reference is enough to make the policy fail. Share is how far each
-              moves toward its failing value, resolved to within one eighth.
+              moves toward its failing value.
             </p>
             <div className="table-wrap">
               <table className="data">
@@ -140,7 +140,7 @@ export function ScenarioSection({ detail }: { detail: Detail }) {
                         const sufficient = tri(entity.sufficient, 'enough alone', 'not enough alone');
                         return (
                           <tr key={entity.entity}>
-                            <td>{entity.label}</td>
+                            <td className="mono">{entity.entity}</td>
                             <td>
                               <Icon name={necessary.icon} /> {necessary.text}
                             </td>

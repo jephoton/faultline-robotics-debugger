@@ -34,7 +34,7 @@ const PAGES: [string, string, () => Promise<unknown>][] = [
   ['audit case', `/case/${IDS.audit}`, async () => screen.findByRole('article', { name: 'Blur severity ladder' })],
   ['language case', `/case/${IDS.wording}`, async () => screen.findByText('Changed meaning, discarded')],
   ['language case without failure', `/case/${IDS.quiet}`, async () => screen.findByText(/No wording failed reliably/)],
-  ['occlusion case', `/case/${IDS.occlusion}`, async () => screen.findByText(/trimmed the right edge/)],
+  ['occlusion case', `/case/${IDS.occlusion}`, async () => screen.findByText(/Trimmed the right edge/)],
   ['new diagnosis, step 1', '/new', async () => screen.findByRole('radio', { name: /test rewordings/i })],
   ['run waiting for a GPU', `/run/${RUN_IDS.waiting}`, async () => screen.findByText(/No GPU is free yet/)],
   ['run, sign-in expired', `/run/${RUN_IDS.authExpired}`, async () => screen.findByRole('button', { name: /resume/i })],

@@ -139,8 +139,8 @@ describe('occlusion case (M4)', () => {
     expect(within(screen.getByRole('region', { name: 'Readout' })).getByText('FL-M-0F42')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Occlusion episodes' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Rectangle shrinking from 25% to 6\.3% of the image/ })).toBeInTheDocument();
-    expect(screen.getByText(/starting rectangle/)).toBeInTheDocument();
-    expect(screen.getByText(/trimmed the right edge/)).toBeInTheDocument();
+    expect(screen.getByText(/Starting rectangle/)).toBeInTheDocument();
+    expect(screen.getByText(/Trimmed the right edge/)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'LIBERO benchmark' });
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('No run record is stored for this case.')).toBeInTheDocument();
