@@ -129,7 +129,20 @@ class RenderTests(RunTestCase):
         text = report.render_report([summary])
         self.assertIn("Stopped early: `deadline_exhausted`", text)
         self.assertIn("incomplete (Job deadline reached)", text)
-        self.assertIn("Items that never started:", text)
+        # Whether queued items were still waiting when the deadline flipped depends on thread
+        # timing (CI on October 16 had none), so the line is checked against the summary itself.
+        if summary.get("not_started"):
+            self.assertIn("Items that never started:", text)
+        else:
+            self.assertNotIn("Items that never started:", text)
+
+    def test_items_that_never_started_are_listed_by_reason(self):
+        world = M6World(boundary_decide(BOUNDARIES), item_seconds=0.01)
+        summary = self.run_m6(world, "m6-threshold", dict(THRESHOLD_CONFIG),
+                              remaining=lambda: 1000.0 if len(world.ran) < 40 else 10.0)
+        summary = dict(summary, not_started={"deadline_skipped": 3, "cancelled": 1})
+        text = report.render_report([summary])
+        self.assertIn("Items that never started: 1 cancelled, 3 deadline_skipped.", text)
 
     def test_incomplete_conditions_show_not_completed_counts(self):
         world = M6World(smoke_decide, fail_case="wrist-mask-only-03", item_seconds=0.03)
