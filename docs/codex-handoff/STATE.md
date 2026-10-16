@@ -1,5 +1,18 @@
 # Faultline current project state
 
+## October 16 breadth pack status (Claude Code)
+
+- Breadth pack done (ADR 0032, `docs/experiments/m7-breadth-pack.md`): four
+  suites, image families jpeg / colour_cast / motion_blur / dead_pixels, scene
+  families viewpoint / lighting, paraphrase find-then-reduce mode (Nemotron 3
+  Super writes paraphrases, ADR 0030). Image v15. Suite 2397 OK.
+- Live: GR00T robust within range to every new family and to 20 paraphrases;
+  isolated failures only at the top of motion blur and viewpoint. US$2.25 of
+  the US$6.00 cap.
+- `--resume` re-attaches Jobs the tool lost contact with (expired sign-in) and
+  replaces a worst-case charge with the measured one.
+- Next: UI overhaul (M7a step 4), then the Vercel gallery, then M7b.
+
 ## October 15 `faultline diagnose` status (Claude Code)
 
 - `faultline diagnose / replay / image / cases` built (ADR 0031): spec,

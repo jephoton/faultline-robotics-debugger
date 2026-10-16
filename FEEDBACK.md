@@ -380,3 +380,15 @@ resubmitting automatically and reusing one bucket across attempts. Verdict:
 reliable once running; plan for capacity waits and keep buckets few. Token
 Factory served Nemotron 3 Ultra for the hypothesis calls without issue.
 
+### October 15–16: Serverless Jobs for the breadth pack, driven by `faultline diagnose`
+
+Seven Jobs across all four LIBERO suites (about US$2.66 including the first
+live replay) ran without provider-side defects; LIBERO-Spatial and
+LIBERO-Goal checkpoints downloaded and served like the others. Token Factory
+served Nemotron 3 Super for paraphrase generation reliably. Friction: the
+Nebius CLI's interactive sign-in expires after about a day, and an expired
+sign-in surfaces as a generic "context deadline exceeded", which a tool can
+mistake for a network blip; a long-lived, scoped credential for automation
+(or a clearer expiry error) would help. Verdict: with `faultline diagnose`
+owning the lifecycle, Serverless Jobs are routine to use.
+
