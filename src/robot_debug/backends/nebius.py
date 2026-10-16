@@ -69,6 +69,9 @@ _TRANSIENT = re.compile(
     r"deadline.?exceeded|temporarily|unexpected eof|\bEOF\b|tls|"
     r"\b50[234]\b|too many requests|timed out", re.IGNORECASE)
 _JOB_ID_TEXT = re.compile(r"\baijob-[a-z0-9]+\b")
+# An expired interactive sign-in (October 15: "get auth data ... authorize: get code: context deadline
+# exceeded") must not look transient, or wait() polls for an hour; the user has to sign in again.
+_AUTH = re.compile(r"get auth data|authorize: |unauthenticated|switch to your browser", re.IGNORECASE)
 _NOT_FOUND = re.compile(r"not.?found", re.IGNORECASE)
 _EXISTS = re.compile(r"already.?exists", re.IGNORECASE)
 
@@ -193,6 +196,9 @@ class NebiusCli:
             if result.returncode == 0:
                 return result.stdout or ""
             detail = " ".join(((result.stderr or "") + " " + (result.stdout or "")).split())
+            if _AUTH.search(detail):
+                raise CliError("the nebius CLI sign-in has expired: run any nebius command to sign in "
+                               "again, then continue with `faultline diagnose --resume RUN_DIR`", "auth")
             if _NOT_FOUND.search(detail):
                 kind = "notfound"
             elif _EXISTS.search(detail):
@@ -557,7 +563,7 @@ class NebiusBackend:
                 failures = 0
             except CliError as error:
                 failures += 1
-                if error.kind != "transient" and failures >= 5:
+                if error.kind == "auth" or (error.kind != "transient" and failures >= 5):
                     raise
             now = self._clock()
             if job is not None:

@@ -542,7 +542,17 @@ class WaitTests(NebiusCase):
         self.cli.fail(("ai", "job", "get"), "Unauthenticated: token expired", times=100)
         with self.assertRaises(BackendError) as caught:
             backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60)
-        self.assertIn("Unauthenticated", str(caught.exception))
+        self.assertIn("sign-in has expired", str(caught.exception))
+        self.assertEqual(1, self.cli.count("ai", "job", "get"))   # no hour of polling on a dead sign-in
+
+    def test_the_october_15_expired_sign_in_text_is_an_auth_error_not_transient(self):
+        backend, handle = self.start()
+        self.cli.fail(("ai", "job", "get"),
+                      "Error: get auth data on the client: get from wrapped tokener: authorize: get code: "
+                      "context deadline exceeded", times=100)
+        with self.assertRaises(BackendError) as caught:
+            backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60)
+        self.assertIn("--resume", str(caught.exception))
 
     def test_running_limit_cancels_the_job_itself(self):
         backend, handle = self.start([(0, "PROVISIONING", None), (120, "RUNNING", None)])

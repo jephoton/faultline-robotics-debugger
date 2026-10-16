@@ -143,8 +143,10 @@ class Ledger:
         """Record what the Job cost; ``None`` means it never started and costs nothing."""
 
         job = self._job(job_name)
-        if job["state"] == "settled":
+        if job["state"] == "settled" and not job.get("worst_case"):
             return job["cost_usd"]
+        if container_seconds is None and job.get("worst_case"):
+            return job["cost_usd"]          # an unconfirmed Job keeps its worst case until measured
         if container_seconds is None:
             cost = 0.0
         else:
@@ -155,6 +157,7 @@ class Ledger:
             cost = (float(container_seconds) + allowance) / 3600.0 * self.hourly_usd
         job.update(state="settled", cost_usd=_money(cost),
                    container_seconds=None if container_seconds is None else float(container_seconds))
+        job.pop("worst_case", None)
         self._save()
         return job["cost_usd"]
 
@@ -164,7 +167,8 @@ class Ledger:
         job = self._job(job_name)
         if job["state"] == "settled":
             return job["cost_usd"]
-        job.update(state="settled", cost_usd=job["reserved_usd"])
+        # Flagged so a later measurement (a resumed run that reaches the Job) can replace it.
+        job.update(state="settled", cost_usd=job["reserved_usd"], worst_case=True)
         self._save()
         return job["cost_usd"]
 

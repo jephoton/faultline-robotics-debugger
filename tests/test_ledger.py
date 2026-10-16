@@ -172,3 +172,19 @@ class LedgerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorstCaseResettlementTests(unittest.TestCase):
+    def test_a_worst_case_charge_is_replaced_by_a_later_measurement(self):
+        import tempfile
+        from pathlib import Path
+        from robot_debug import ledger as lg
+        with tempfile.TemporaryDirectory() as folder:
+            ledger = lg.Ledger(Path(folder) / "ledger.json", cap_usd=3.0, max_hours=2.0, hourly_usd=1.7468)
+            ledger.reserve("job-a", ledger.worst_case_usd(1860))
+            worst = ledger.settle_worst_case("job-a")
+            self.assertAlmostEqual(worst, ledger.spent)
+            measured = ledger.settle("job-a", 463.0)
+            self.assertLess(measured, worst)
+            self.assertAlmostEqual(measured, ledger.spent)
+            self.assertEqual(measured, ledger.settle("job-a", 999.0))   # a measured cost is final

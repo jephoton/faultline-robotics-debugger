@@ -903,7 +903,7 @@ class Orchestrator:
             if prior is not None and prior["state"] in ("capacity", "cancelled", "failed"):
                 continue
             job_dir = self.run_dir / "jobs" / job_name
-            if prior is not None and prior["state"] == "submitted":
+            if prior is not None and prior["state"] in ("submitted", "unconfirmed"):
                 handle = self._handle(job_name, prior["job_id"])
                 self.say(step, "re-attaching to {}".format(job_name))
                 self._inflight = (handle, job_name)
@@ -1021,9 +1021,12 @@ class Orchestrator:
             self._best_effort_cancel(handle)
             self.ledger.settle_worst_case(job_name)
             self._inflight = None
-            attempt["state"] = "failed"
+            # The Job may well have finished: keep it re-attachable so --resume downloads it and
+            # replaces the worst-case charge with the measured one instead of paying again.
+            attempt["state"] = "unconfirmed"
             self.steps.update(step, status="stopped")
-            raise StopRun("backend_error", "waiting failed ({})".format(type(error).__name__)) from None
+            raise StopRun("backend_error", "waiting failed ({}: {}); the Job is unconfirmed, resume to "
+                          "re-attach".format(type(error).__name__, _safe_error(error))) from None
         state = str(getattr(result, "state", "UNKNOWN"))
         reason = getattr(result, "reason", None)
         seconds = getattr(result, "container_seconds", None)
