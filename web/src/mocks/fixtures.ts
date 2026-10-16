@@ -749,7 +749,9 @@ function episode(index: number, outcome: string, video: boolean): EvidenceEpisod
     task_id: 0,
     episode_index: index,
     failure_detail: outcome === 'policy_failure' ? 'Timed out before the soup reached the basket.' : null,
-    video_path: video ? 'placeholder.webm' : null,
+    perturbation: {},
+    video_url: video ? '/media/placeholder.webm' : null,
+    trace_url: null,
   };
 }
 

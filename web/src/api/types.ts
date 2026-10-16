@@ -252,8 +252,12 @@ export interface EvidenceEpisode {
   task_id: number;
   episode_index: number;
   failure_detail: string | null;
-  /** Path under /media/, or null when no video was recorded. */
-  video_path: string | null;
+  /** perturbation as recorded (family and parameters), empty when nominal. */
+  perturbation: Record<string, unknown>;
+  /** "/media/..." URL of the recorded video, or null when none was recorded. */
+  video_url: string | null;
+  /** "/api/episodes/<id>/trace" when a trace was recorded. */
+  trace_url: string | null;
 }
 
 export interface Evidence {

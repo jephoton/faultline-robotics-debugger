@@ -33,7 +33,7 @@ function Row({ episode }: { episode: EvidenceEpisode }) {
         </td>
         <td>{shortDate(episode.created_at)}</td>
         <td>
-          {episode.video_path ? (
+          {episode.video_url ? (
             <button
               type="button"
               className="btn btn--secondary btn--small"
@@ -48,11 +48,11 @@ function Row({ episode }: { episode: EvidenceEpisode }) {
           )}
         </td>
       </tr>
-      {shown && episode.video_path && (
+      {shown && episode.video_url && (
         <tr className="evidence-video">
           <td colSpan={7}>
             <video
-              src={`/media/${episode.video_path.split('/').map(encodeURIComponent).join('/')}`}
+              src={mediaSrc(episode.video_url)}
               controls
               muted
               playsInline
@@ -185,4 +185,11 @@ function Evidence() {
       )}
     </section>
   );
+}
+
+/** The server sends "/media/<path>" unencoded; encode each path segment for the src attribute. */
+function mediaSrc(url: string): string {
+  const prefix = '/media/';
+  if (!url.startsWith(prefix)) return url;
+  return prefix + url.slice(prefix.length).split('/').map(encodeURIComponent).join('/');
 }
