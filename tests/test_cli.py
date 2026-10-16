@@ -210,7 +210,7 @@ class ReplayCommand(Fixture):
 
     def case_dir(self):
         folder = self.dir / "case"
-        folder.mkdir()
+        folder.mkdir(exist_ok=True)
         (folder / "case.json").write_text(json.dumps({"kind": "scenario_reduction", "case_id": "cd" * 32,
                                                         "suite": "libero_10"}), encoding="utf-8")
         return folder
@@ -239,6 +239,58 @@ class ReplayCommand(Fixture):
 
     def test_replay_needs_a_spec(self):
         self.assertEqual(self.run_cli(["replay", str(self.dir)]), 2)
+
+    def replay_expecting(self, verdict, expect, folder="runs"):
+        argv = ["replay", str(self.case_dir()), "--spec", str(self.spec_path),
+                "--runs-root", str(self.dir / folder)]
+        if expect is not None:
+            argv += ["--expect", expect]
+        return self.run_cli(argv, [finished(lambda w: {"verdict": verdict, "complete": True})],
+                            tools=self.Tools())
+
+    def test_expect_exits_0_when_the_verdict_matches(self):
+        self.assertEqual(self.replay_expecting("still_reproduces", "reproduces"), 0)
+        self.assertIn("Expected 'reproduces': met", self.text)
+        self.lines.clear()
+        self.assertEqual(self.replay_expecting("no_longer_reproduces", "fixed", "runs2"), 0)
+        self.assertIn("Expected 'fixed': met", self.text)
+
+    def test_expect_exits_5_when_the_verdict_is_the_other_decided_one(self):
+        self.assertEqual(self.replay_expecting("no_longer_reproduces", "reproduces"), 5)
+        self.assertIn("NOT met", self.text)
+        self.assertIn("no longer reproduces", self.text)
+        self.assertEqual(self.replay_expecting("still_reproduces", "fixed", "runs2"), 5)
+
+    def test_expect_exits_5_for_an_inconclusive_verdict_but_plain_replay_does_not_change(self):
+        for verdict in ("reference_fails", "invalid_scene"):
+            with self.subTest(verdict=verdict):
+                self.lines.clear()
+                self.assertEqual(self.replay_expecting(verdict, "reproduces", "with-" + verdict), 5)
+                self.assertIn("NOT met", self.text)
+                self.assertEqual(self.replay_expecting(verdict, None, "without-" + verdict), 3)
+
+    def test_without_expect_a_decided_verdict_exits_0_whichever_it_is(self):
+        self.assertEqual(self.replay_expecting("still_reproduces", None), 0)
+        self.assertEqual(self.replay_expecting("no_longer_reproduces", None, "runs2"), 0)
+
+    def test_expect_keeps_exit_3_when_the_replay_never_reached_a_verdict(self):
+        code = self.run_cli(
+            ["replay", str(self.case_dir()), "--spec", str(self.spec_path), "--runs-root", str(self.runs),
+             "--expect", "reproduces"],
+            [{"state": "FAILED", "reason": "ContainerFailed", "container_seconds": 100, "summary": None,
+              "summary_name": "scenario_summary.json"}], tools=self.Tools())
+        self.assertEqual(code, 3)
+        self.assertNotIn("Expected", self.text)
+
+    def test_expect_rejects_an_unknown_word_and_replay_accepts_env_file(self):
+        self.assertEqual(self.run_cli(["replay", str(self.dir), "--spec", str(self.spec_path),
+                                       "--expect", "passes"]), 2)
+        self.lines.clear()
+        code = self.run_cli(
+            ["replay", str(self.case_dir()), "--spec", str(self.spec_path), "--runs-root", str(self.runs),
+             "--env-file", str(self.dir / ".env")],
+            [finished(lambda w: {"verdict": "still_reproduces", "complete": True})], tools=self.Tools())
+        self.assertEqual(code, 0)
 
 
 class ImageCommand(Fixture):

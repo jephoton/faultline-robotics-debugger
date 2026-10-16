@@ -1,7 +1,7 @@
 """The ``faultline`` command (ADR 0031).
 
     faultline diagnose SPEC.yaml [--env-file .env] [--no-llm] [--dry-run] [--resume RUN_DIR]
-    faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env]
+    faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env] [--expect reproduces|fixed]
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
 
@@ -10,7 +10,8 @@ rewords the task instruction, one Job screens the rewordings, a second reduces t
 minimal word edits; needs the Token Factory key, so it cannot run with ``--no-llm``).
 
 Exit codes: 0 completed, 2 invalid spec or usage, 3 stopped (no failure found, a cap
-was reached, a Job failed; the run folder holds what was produced), 1 unexpected
+was reached, a Job failed; the run folder holds what was produced), 5 ``replay --expect``
+only: the verdict is not the expected one or is inconclusive (a CI gate), 1 unexpected
 error, 130 interrupted (the in-flight Job is cancelled and the message says whether the
 cancel was acknowledged; ``--resume`` continues).
 
@@ -32,6 +33,9 @@ from robot_debug import orchestrator as orch
 from robot_debug import spec as sp
 
 DEFAULT_RUNS_ROOT = Path("artifacts") / "runs"
+EXIT_UNEXPECTED_VERDICT = 5
+# ``faultline replay --expect``: the word the user gives -> the replay verdict that meets it.
+EXPECTATIONS = {"reproduces": "still_reproduces", "fixed": "no_longer_reproduces"}
 
 
 class _Parser(argparse.ArgumentParser):
@@ -54,6 +58,11 @@ def _parser() -> argparse.ArgumentParser:
     replay = commands.add_parser("replay", help="re-run a saved case and say whether the failure still reproduces")
     replay.add_argument("case", type=Path, help="a run folder (or case.json) holding a scenario case")
     replay.add_argument("--spec", type=Path, required=True)
+    replay.add_argument("--env-file", type=Path, help="dotenv file (accepted for symmetry with diagnose; "
+                        "a replay makes no Token Factory call)")
+    replay.add_argument("--expect", choices=sorted(EXPECTATIONS), help="gate on the verdict: exit 0 when it "
+                        "matches (reproduces: the failure still reproduces; fixed: it no longer does), "
+                        "exit 5 otherwise or when the verdict is inconclusive")
     replay.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
 
     image = commands.add_parser("image", help="build or push the simulator image")
@@ -157,7 +166,10 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         result = runner.diagnose() if args.command == "diagnose" else runner.replay(args.case)
         for line in _final_lines(result):
             out(line)
-        return result.exit_code
+        expect = getattr(args, "expect", None)
+        if expect is None:
+            return result.exit_code
+        return _expectation_code(result, expect, out)
     except sp.SpecError as error:
         out("error: {}".format(error))
         return 2
@@ -174,6 +186,20 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         if run_dir is not None:
             out("Run folder: {}".format(run_dir))
         return 1
+
+
+def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], None]) -> int:
+    """The exit code of ``replay --expect``: 0 when the verdict is the expected one, 5 when it is another
+    one or inconclusive, and the run's own code (3) when the replay stopped without any verdict."""
+
+    wanted = EXPECTATIONS[expect]
+    if result.status == "completed" and result.verdict == wanted:
+        out("Expected '{}': met.".format(expect))
+        return 0
+    if result.status == "completed" or result.reason == "replay_inconclusive":
+        out("Expected '{}': NOT met ({}).".format(expect, orch.replay_text(result.verdict).rstrip(".")))
+        return EXIT_UNEXPECTED_VERDICT
+    return result.exit_code
 
 
 def _load_with_text(path: Optional[Path]):
