@@ -137,7 +137,7 @@ class EndpointTests(unittest.TestCase):
         self.root = Path(directory.name)
         write_episode(self.root, "valid", success=True)
         self.catalog = ev.CachedArtifactCatalog(self.root)
-        handler = viewer_server.make_handler(self.catalog, Path(directory.name) / "web")
+        handler = viewer_server.make_handler(self.catalog)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

@@ -16,8 +16,6 @@ from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.viewer.server import make_handler
 from tests.test_case_register import CASE_ID, make_run
 
-WEB = Path(__file__).resolve().parents[1] / "src" / "robot_debug" / "viewer" / "web"
-
 
 class DiagnosisViewerTests(unittest.TestCase):
     def setUp(self):
@@ -25,7 +23,7 @@ class DiagnosisViewerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         register_run(make_run(self.root))
-        handler = make_handler(ArtifactCatalog(self.root), WEB)
+        handler = make_handler(ArtifactCatalog(self.root))
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
@@ -70,22 +68,9 @@ class DiagnosisViewerTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(self.get(path)[0], (400, 404))
 
-    def test_the_diagnoses_page_and_script_are_served(self):
-        status, headers, body = self.get("/diagnoses")
-        self.assertEqual(200, status)
-        self.assertIn("text/html", headers["Content-Type"])
-        self.assertIn(b"diagnoses.js", body)
-        status, headers, body = self.get("/diagnoses.js")
-        self.assertEqual(200, status)
-        self.assertIn("javascript", headers["Content-Type"])
-        self.assertIn(b"/api/diagnoses", body)
-
-    def test_the_main_page_links_to_the_diagnoses(self):
-        self.assertIn(b'href="/diagnoses"', self.get("/")[2])
-
     def test_an_empty_viewer_lists_nothing(self):
         with tempfile.TemporaryDirectory() as temporary:
-            handler = make_handler(ArtifactCatalog(Path(temporary)), WEB)
+            handler = make_handler(ArtifactCatalog(Path(temporary)))
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

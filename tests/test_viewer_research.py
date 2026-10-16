@@ -13,7 +13,6 @@ from urllib.request import Request, urlopen
 from robot_debug.viewer.catalog import ArtifactCatalog
 from robot_debug.viewer.server import default_research_reader, make_handler
 
-WEB_ROOT = Path(__file__).resolve().parents[1] / "src" / "robot_debug" / "viewer" / "web"
 CASE_ID = "a" * 64
 
 
@@ -53,7 +52,7 @@ class ViewerResearchServerTests(unittest.TestCase):
         self.workspace = self.base / "workspace"
         self.workspace.mkdir()
         handler = make_handler(
-            ArtifactCatalog(self.base), WEB_ROOT, self.workspace,
+            ArtifactCatalog(self.base), self.workspace,
             research_reader=lambda workspace, case_id: self.reader(workspace, case_id))
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -120,42 +119,6 @@ class ViewerResearchServerTests(unittest.TestCase):
         with patch.dict("sys.modules", {"robot_debug.research_store": None}):
             with self.assertRaises(OSError):
                 default_research_reader(self.workspace, CASE_ID)
-
-
-class ViewerResearchStaticAssetTests(unittest.TestCase):
-    def setUp(self):
-        self.html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
-        self.script = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
-
-    def research_source(self):
-        start = self.script.index("function beginResearchRequest")
-        end = self.script.index("async function refreshReduction")
-        return self.script[start:end]
-
-    def test_index_contains_research_panel_after_explanations_with_fixed_banner(self):
-        self.assertIn('<details id="case-research">', self.html)
-        self.assertLess(self.html.index('id="case-explanations"'), self.html.index('id="case-research"'))
-        self.assertIn("Related public research (context, not evidence)", self.html)
-        self.assertIn(
-            "Retrieved by Tavily from the public web. These sources do not prove why this case failed.",
-            self.html)
-
-    def test_research_rendering_never_writes_html_strings(self):
-        source = self.research_source()
-        self.assertIn("function renderResearch", source)
-        for forbidden in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "createContextualFragment"):
-            self.assertNotIn(forbidden, source)
-
-    def test_research_links_require_https_and_safe_rel(self):
-        source = self.research_source()
-        self.assertIn('protocol === "https:"', source)
-        self.assertIn('"noopener noreferrer"', source)
-        self.assertIn('target = "_blank"', source)
-        self.assertIn("/research", source)
-
-    def test_viewer_never_posts_to_a_provider(self):
-        self.assertNotIn('method: "POST"', self.research_source())
-        self.assertNotIn("tavily.com", self.script)
 
 
 if __name__ == "__main__":

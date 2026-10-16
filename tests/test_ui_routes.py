@@ -370,14 +370,18 @@ class AppServingTests(RoutesCase):
                 self.assertNotIn(b"secret", body)
                 self.assertIn(status, (200, 400, 404))
 
-    def test_without_a_bundle_the_original_pages_are_served(self):
+    def test_without_a_bundle_the_root_says_the_front_end_is_not_built(self):
         import shutil
 
         shutil.rmtree(str(self.app))
-        status, headers, body = self.get("/")
-        self.assertEqual(status, 200)
-        self.assertIn(b"html", body.lower())
-        self.assertEqual(self.get("/diagnoses")[0], 200)
+        for path in ("/", "/index.html"):
+            with self.subTest(path=path):
+                status, headers, body = self.get(path)
+                self.assertEqual(status, 503)
+                self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+                self.assertIn("npm --prefix web run build", json.loads(body)["error"])
+        self.assertEqual(self.get("/diagnoses")[0], 404)
+        self.assertEqual(self.get("/api/health")[0], 200)
         self.assertEqual(self.get("/case/anything")[0], 404)
 
 

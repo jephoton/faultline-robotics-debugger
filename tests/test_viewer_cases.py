@@ -26,8 +26,7 @@ class ViewerCaseTests(unittest.TestCase):
         fixture(self.source)
         self.workspace = self.base / "cases"
         self.case = import_m4(self.source)
-        self.web = Path(__file__).resolve().parents[1] / "src/robot_debug/viewer/web"
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(ArtifactCatalog(self.source), self.web, self.workspace))
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(ArtifactCatalog(self.source), self.workspace))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.url = f"http://127.0.0.1:{self.server.server_port}"

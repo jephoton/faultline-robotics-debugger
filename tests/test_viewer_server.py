@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 import threading
 import unittest
@@ -23,8 +22,12 @@ class ViewerServerTests(unittest.TestCase):
         self.root = Path(self.temporary_directory.name)
         write_episode(self.root, "valid", success=True)
         self.catalog = ArtifactCatalog(self.root)
-        self.web_root = Path(__file__).resolve().parents[1] / "src" / "robot_debug" / "viewer" / "web"
-        handler = make_handler(self.catalog, self.web_root)
+        self.app_root = self.root.parent / (self.root.name + "-app")
+        (self.app_root / "assets").mkdir(parents=True)
+        (self.app_root / "index.html").write_text("<!doctype html><title>Faultline</title>", encoding="utf-8")
+        (self.app_root / "assets" / "x.js").write_text("console.log(1)", encoding="utf-8")
+        self.addCleanup(shutil.rmtree, str(self.app_root), True)
+        handler = make_handler(self.catalog, app_root=self.app_root)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -86,146 +89,32 @@ class ViewerServerTests(unittest.TestCase):
         self.assertEqual(json.loads(health_body)["read_only"], True)
         self.assertEqual(unknown_status, 404)
 
-    def test_static_workbench_assets_expose_semantic_landmarks(self):
-        page_status, page_headers, page_body = self.get("/")
-        css_status, css_headers, css_body = self.get("/styles.css")
-        app_status, app_headers, app_body = self.get("/app.js")
-
-        page = page_body.decode("utf-8")
-        self.assertEqual(page_status, 200)
-        self.assertEqual(page_headers["Content-Type"], "text/html; charset=utf-8")
-        self.assertEqual(css_status, 200)
-        self.assertEqual(css_headers["Content-Type"], "text/css; charset=utf-8")
-        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css_body.decode("utf-8"))
-        self.assertEqual(app_status, 200)
-        self.assertEqual(app_headers["Content-Type"], "text/javascript; charset=utf-8")
-        app = app_body.decode("utf-8")
-        self.assertIn("refreshCatalog", app)
-        self.assertIn("representativeNominal", app)
-        self.assertIn("displayEpisodes", app)
-        for token in (
-            "perturbationPosition",
-            "perturbationPosition(episode)",
-            "perturbationPosition(perturbed)",
-            "isPerturbed",
-            "matchesPrimary",
-            "candidates.find(isPerturbed)",
-            "visible = displayEpisodes",
-            'typeof fault.x === "number"',
-            'typeof fault.y === "number"',
-            "x=",
-            "y=",
-        ):
-            self.assertIn(token, app)
-        for identifier in (
-            'id="demo-guide"',
-            'id="comparison-conclusion"',
-            'id="primary-role"',
-            'id="comparison-role"',
-            'id="link-state"',
-        ):
-            self.assertIn(identifier, page)
-        for landmark in ("<header", "<nav", "<main", "<aside", 'id="connection-status"'):
-            self.assertIn(landmark, page)
-
-    def test_case_workbench_assets_expose_read_only_journey(self):
-        _, _, page_body = self.get("/")
-        _, _, app_body = self.get("/app.js")
-        page = page_body.decode("utf-8")
-        app = app_body.decode("utf-8")
-        self.assertLess(page.index('id="case-workbench"'), page.index('id="comparison-conclusion"'))
-        for identifier in ("case-select", "case-status", "case-inspection", "case-recipe-status",
-                           "case-replay", "case-history", "case-prerequisites", "case-measurements",
-                           "case-recipe", "case-export"):
-            self.assertIn(f'id="{identifier}"', page)
-        for caption in ("Current saved source", "Required inputs", "Fresh execution", "Recorded outcome"):
-            self.assertIn(caption, page)
-        self.assertIn('value="all"', page)
-        self.assertIn('aria-live="polite"', page)
-        for token in ("/api/cases", "refreshCases", "caseEpisodeMatches", "case_id", "manage_cases.py export",
-                      "textContent", "source_reported_elapsed_seconds", "physical_episode_count",
-                      "valid_episode_count"):
-            self.assertIn(token, app)
-        self.assertNotIn("innerHTML", app)
-        self.assertIn("selected.evidence.lineage", app)
-        self.assertIn("savedRoleFor", app)
-        self.assertIn("Validated recipe unavailable", app)
-        self.assertIn("caseSignature", app)
-        self.assertIn("saved.episode_id === episode.episode_id", app)
-        self.assertNotIn("saved.stage === episode.run_name", app)
-        self.assertIn("<case-workspace-outside-source-root>", app)
-
-    def test_case_javascript_rejects_ambiguous_links_and_handles_unavailable_entry(self):
-        node = shutil.which("node")
-        if node is None:
-            self.skipTest("Node.js runtime unavailable")
-        script = r"""
-const fs = require('fs');
-const vm = require('vm');
-const assert = require('assert');
-let source = fs.readFileSync(process.argv[1], 'utf8');
-source = source.replace(/^refreshCatalog\(\)\.catch\(showFatalError\);$/m, '');
-const element = { addEventListener() {}, dataset: {} };
-const context = { document: { getElementById() { return element; } }, window: { setInterval() {} } };
-vm.runInNewContext(source + '\nglobalThis.exposed = { caseEpisodeMatches, caseSignature };', context);
-const { caseEpisodeMatches, caseSignature } = context.exposed;
-assert.strictEqual(caseEpisodeMatches({ episode_id: 'saved', stage: 'parent', task_id: 1, reset_index: 0 },
-  { episode_id: 'other', run_name: 'parent', task_id: 1, episode_index: 0 }), false);
-assert.strictEqual(caseEpisodeMatches({ episode_id: 'saved' }, { episode_id: 'saved' }), true);
-assert.strictEqual(caseSignature({ case_id: 'a'.repeat(64), status: 'unavailable' }), 'a'.repeat(64) + ':unavailable');
-"""
-        asset = self.web_root / "app.js"
-        result = subprocess.run([node, "-e", script, str(asset)],
-                                capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_case_select_container_can_shrink_on_narrow_screens(self):
-        _, _, body = self.get("/styles.css")
-        css = body.decode("utf-8")
-        self.assertIn(".case-heading > div { min-width: 0; max-width: 100%; }", css)
-
     def test_javascript_asset_uses_stable_content_type(self):
         with patch.object(
             viewer_server.mimetypes,
             "guess_type",
             return_value=("application/javascript", None),
         ):
-            status, headers, _ = self.get("/app.js")
+            status, headers, _ = self.get("/assets/x.js")
 
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
 
-    def test_reduction_lineage_fixture_contract_is_present_in_viewer_assets(self):
-        reduction = self.root / "failure-reduction"
-        reduction.mkdir()
-        (reduction / "session_summary.json").write_text(
-            json.dumps({
-                "geometry": {
-                    "parent": {"area": 0.25},
-                    "final": {"area": 0.1875},
-                },
-                "lineage": [{"rectangle": {"x": 0.5, "y": 0.0, "width": 0.375, "height": 0.5}}],
-                "stop_reason": "reduced_failure_with_nominal_controls",
-            }), encoding="utf-8"
-        )
-        (reduction / "replay_case.json").write_text(
-            json.dumps({"acceptance_rule": {"failures": 4, "attempts": 5}}),
-            encoding="utf-8",
-        )
-
-        status, _, body = self.get("/app.js")
+    def test_the_app_page_is_faultline_and_carries_the_security_headers(self):
+        status, headers, body = self.get("/")
 
         self.assertEqual(status, 200)
-        app = body.decode("utf-8")
-        for token in (
-            "replay_case.json",
-            "session_summary.json",
-            "accepted lineage",
-            "reduction-lineage",
-            "Parent area",
-            "Certification",
-        ):
-            self.assertIn(token, app)
+        self.assertIn(b"<title>Faultline</title>", body)
+        self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertEqual(headers["Referrer-Policy"], "no-referrer")
+
+    def test_unknown_paths_and_the_retired_pages_are_404(self):
+        for path in ("/api/nonsense", "/app.js", "/styles.css", "/diagnoses.js", "/assets/none.js"):
+            with self.subTest(path=path):
+                self.assertEqual(self.get(path)[0], 404)
 
     def test_reduction_endpoint_returns_validated_session_metrics(self):
         self._write_reduction_fixture()
