@@ -1,7 +1,9 @@
-"""`faultline ui` and `faultline-viewer`, the viewer's entry point (ADR 0033)."""
+"""`faultline ui` and `faultline-viewer` (the viewer's entry point) and `faultline export` (ADR 0033)."""
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from typing import List
@@ -9,6 +11,7 @@ from unittest import mock
 
 from robot_debug import cli
 from robot_debug.viewer import server as viewer_server
+from tests import ui_fixtures as fx
 
 
 class FakeGuard:
@@ -83,6 +86,60 @@ class UiCommandTests(unittest.TestCase):
     def test_the_command_is_listed_in_the_help(self):
         self.assertIn("ui", cli._parser().format_help())
 
+
+class ExportCommandTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.base = Path(directory.name)
+        self.paths = fx.build(self.base)
+        self.app = self.base / "bundle"
+        self.app.mkdir()
+        (self.app / "index.html").write_text("<!doctype html>", encoding="utf-8")
+        self.out = self.base / "gallery"
+
+    def run_export(self, *extra):
+        lines: List[str] = []
+        code = cli.main(["export", "--out", str(self.out), "--artifacts", str(self.paths["artifacts"]),
+                         "--app-root", str(self.app)] + list(extra), out=lines.append)
+        return code, lines
+
+    def test_export_writes_the_gallery(self):
+        code, lines = self.run_export("--case", "d-" + fx.AUDIT_ID, "--case", fx.PARAPHRASE_ID)
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[0], "Exported 2 case(s) and 0 video(s) to {}".format(self.out))
+        listing = json.loads((self.out / "data" / "library.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(i["id"] for i in listing["items"]),
+                         sorted(["d-" + fx.AUDIT_ID, "d-" + fx.PARAPHRASE_ID]))
+        self.assertTrue((self.out / "vercel.json").is_file())
+        self.assertIsNone(listing["items"][0]["run"])
+
+    def test_the_runs_root_defaults_to_runs_beside_the_artifacts(self):
+        self.run_export("--case", "d-" + fx.AUDIT_ID)
+        path = self.out / "data" / "library" / ("d-" + fx.AUDIT_ID + ".json")
+        detail = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(detail["audit"]["nominal"], {"failures": 0, "attempts": 5}, "the audit levels came from the run")
+
+    def test_a_refusal_exits_two_with_a_sentence(self):
+        self.out.mkdir()
+        (self.out / "x.txt").write_text("x", encoding="utf-8")
+        code, lines = self.run_export("--case", "d-" + fx.AUDIT_ID)
+        self.assertEqual(code, 2)
+        self.assertIn("--force", lines[0])
+        code, lines = self.run_export("--force", "--case", "d-" + fx.AUDIT_ID)
+        self.assertEqual(code, 0)
+
+    def test_an_unknown_case_exits_two(self):
+        code, lines = self.run_export("--case", "d-" + "0" * 64)
+        self.assertEqual(code, 2)
+        self.assertIn("No single case", lines[0])
+
+    def test_out_is_required(self):
+        self.assertEqual(cli.main(["export"], out=lambda line: None), 2)
+
+    def test_the_app_root_option_is_hidden(self):
+        parser = cli._parser()._subparsers._group_actions[0].choices["export"]
+        self.assertNotIn("app-root", parser.format_help())
 
 
 if __name__ == "__main__":

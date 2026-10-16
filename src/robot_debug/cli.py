@@ -5,6 +5,7 @@
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
     faultline stop RUN_DIR
+    faultline export --out DIR [--case ID ...] [--artifacts DIR] [--runs-root DIR] [--force]
     faultline ui [--artifacts DIR] [--runs-root DIR] [--port N] [--host ADDR] [--open]
 
 A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
@@ -85,6 +86,15 @@ def _parser() -> argparse.ArgumentParser:
 
     commands.add_parser("ui", add_help=False,           # handled in main() before parsing; listed here for --help
                         help="open the control panel in a browser (cases, new diagnoses, run progress)")
+
+    export = commands.add_parser("export", help="write the cases as a static gallery (a folder any web host can serve)")
+    export.add_argument("--out", type=Path, required=True, help="the folder to write (empty, or --force)")
+    export.add_argument("--case", action="append", default=[], metavar="ID",
+                        help="export only this case (library id, case id or a long prefix); repeatable")
+    export.add_argument("--artifacts", type=Path, default=Path("artifacts"))
+    export.add_argument("--runs-root", type=Path, help="the run folders (default: <artifacts>/runs)")
+    export.add_argument("--force", action="store_true", help="replace a previous export in a non-empty folder")
+    export.add_argument("--app-root", type=Path, help=argparse.SUPPRESS)
 
     stop = commands.add_parser("stop", help="stop a running diagnosis safely (the Job is cancelled; --resume continues)")
     stop.add_argument("run_dir", type=Path, help="the run folder (or its name under --runs-root)")
@@ -198,6 +208,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             return _image(args, image_module, out)
         if args.command == "stop":
             return _stop(args, out)
+        if args.command == "export":
+            return _export(args, out)
         tools = tools or orch.DefaultTools()
         if args.command == "diagnose":
             spec, spec_text, run_dir = _diagnose_inputs(args)
@@ -345,6 +357,25 @@ def _stop(args: argparse.Namespace, out: Callable[[str], None]) -> int:
     out("Stop requested for {}.".format(run_dir))
     out("The current Job is cancelled and charged for the time it ran; the run then ends and can be continued "
         "with: faultline diagnose --resume {}".format(run_dir))
+    return 0
+
+
+def _export(args: argparse.Namespace, out: Callable[[str], None]) -> int:
+    """``faultline export``: the public projection of the library as files; refusals exit 2."""
+
+    from robot_debug.viewer import export as gallery
+
+    try:
+        summary = gallery.export_gallery(
+            args.out, args.artifacts, runs_root=args.runs_root or Path(args.artifacts) / "runs",
+            cases=args.case, force=args.force, app_root=args.app_root)
+    except gallery.ExportError as error:
+        out("error: {}".format(error))
+        return 2
+    out("Exported {} case(s) and {} video(s) to {}".format(summary["cases"], summary["videos"], args.out))
+    if summary["skipped"]:
+        out("{} case(s) could not be read and were left out.".format(summary["skipped"]))
+    out("Serve it with any static host; vercel.json sends app routes to index.html. Publishing is a separate step.")
     return 0
 
 
