@@ -23,4 +23,4 @@ robot-debug-viewer = "robot_debug.viewer.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"robot_debug.viewer" = ["web/*"]
+"robot_debug.viewer" = ["app/*", "app/assets/*"]
