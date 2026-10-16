@@ -1,5 +1,11 @@
 # Model access status
 
+> Running `faultline diagnose` on Serverless Jobs? The short version: accept
+> the Cosmos-Reason2-2B terms below with the Hugging Face account that owns
+> your read token, then store that token as a MysteryBox secret. The full
+> sequence is in [diagnose.md](diagnose.md). The VM-era steps below remain as
+> the record of how the gated dependency was found.
+
 The selected GR00T base model and LIBERO Object policy checkpoint are public,
 not gated repositories. This was verified against the Hugging Face Hub API on
 September 13, 2026:
