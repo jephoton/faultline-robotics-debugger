@@ -3,7 +3,9 @@
 Faultline's own code is licensed under the [MIT License](LICENSE). This file
 lists the third-party software, models, services and media it uses or shows,
 and where their terms live. **Faultline does not relicense any of them**, and
-this repository contains none of their source code or weights. Where we have
+this repository contains none of their weights. The only third-party code it
+contains is the compiled control-panel bundle and its fonts (see "Control
+panel" below), shipped with their licence texts. Where we have
 not verified a licence ourselves we say so and link the project's own page
 instead of naming one: check it before you redistribute anything.
 
@@ -42,13 +44,35 @@ image and the pinned requirements in `deploy/serverless/`. Faultline's
 image is not published; if it ever is, a licence check of everything inside it
 is required first (ADR 0031).
 
+## Control panel (front end)
+
+The control panel's built bundle (`src/robot_debug/viewer/app/`, and any
+`faultline export` of it) includes compiled copies of the packages below and
+three fonts. Their full licence texts are in
+`src/robot_debug/viewer/app/THIRD-PARTY-LICENSES.txt`, generated from the
+installed packages by `web/scripts/third-party-licenses.mjs` at every build.
+
+| Component | Licence |
+| --- | --- |
+| [React](https://react.dev/) and React DOM 18.3.1, scheduler 0.23.2 | MIT |
+| [React Router](https://reactrouter.com/) 6.30.6 (with `@remix-run/router`) | MIT |
+| [marked](https://marked.js.org/) 15.0.12 (renders report Markdown) | MIT |
+| [DOMPurify](https://github.com/cure53/DOMPurify) 3.4.17 (sanitises it) | MPL-2.0 or Apache-2.0 |
+| Fonts [Barlow, Barlow Condensed](https://github.com/jpt/barlow) and [DM Mono](https://github.com/googlefonts/dm-mono) | SIL Open Font License 1.1 (texts also in `web/src/assets/fonts/`) |
+
+Build and test tools (Vite, Vitest, TypeScript, Testing Library, jsdom,
+axe-core, cross-env) are development dependencies in `web/package.json`; they
+are not part of the bundle.
+
 ## Images and media in this repository
 
 - `docs/experiments/assets/scene-family-calibration.png` shows renders from
   the LIBERO simulator (its scenes, objects and robot) at several camera and
   lighting settings. The scene content belongs to LIBERO and its asset
   authors; see the LIBERO row above.
-- Robot videos and traces produced by Faultline runs stay in the ignored
-  `artifacts/` folder and are not part of this repository.
+- `demo/root/` holds one finished diagnosis with three short robot videos
+  rendered by the LIBERO simulator during our Nebius runs (scene content as
+  above). All other robot videos and traces produced by Faultline runs stay in
+  the ignored `artifacts/` folder and are not part of this repository.
 
 If you believe a notice is missing or wrong, please open an issue.
