@@ -163,11 +163,11 @@ def public_diagnosis(entry: Mapping[str, Any], diagnoses_root: Path, artifact_ro
 
 
 def make_handler(
-    catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None,
+    catalog: ArtifactCatalog, case_workspace: Optional[Path] = None,
     research_reader: Optional[ResearchReader] = None, diagnoses_root: Optional[Path] = None,
     *, api: Optional[Api] = None, app_root: Optional[Path] = None,
 ) -> Type[BaseHTTPRequestHandler]:
-    """Create a handler closed over a catalog and the packaged static assets.
+    """Create a handler closed over a catalog and the built front end.
 
     ``research_reader`` reads stored (never fetched) research records and
     defaults to ``robot_debug.research_store.read_case_research``.
@@ -175,7 +175,7 @@ def make_handler(
     ``<artifacts>/diagnoses``, written by ``robot_debug.case_register``).
     ``api`` holds the control-panel routes (API version 1, ``robot_debug.viewer.api``); without it the handler
     is the original read-only viewer. ``app_root`` is the built front end (``viewer/app``): when it holds an
-    ``index.html`` it is served for ``/`` and every app route, ahead of the original pages in ``web_root``.
+    ``index.html`` it is served for ``/`` and every app route; without a bundle ``/`` answers 503.
     """
     read_research = research_reader or default_research_reader
     diagnoses = diagnoses_root or catalog.artifact_root / "diagnoses"
@@ -226,12 +226,8 @@ def make_handler(
                     self.send_media(unquote(path[len("/media/") :]))
                 elif self.serve_app(path):
                     pass
-                elif path in {"/", "/index.html", "/styles.css", "/app.js", "/diagnoses", "/diagnoses.js"}:
-                    asset_name = {"/": "index.html", "/diagnoses": "diagnoses.html"}.get(path, path[1:])
-                    asset = web_root / asset_name
-                    if not asset.is_file():
-                        raise FileNotFoundError(path)
-                    self.stream_file(asset, allow_range=False)
+                elif path in {"/", "/index.html"}:
+                    self.send_json(503, {"error": "the front end is not built; run: npm --prefix web run build"})
                 else:
                     self.send_json(404, {"error": "not found"})
             except (KeyError, FileNotFoundError, SanitizedCaseValidationError):
@@ -415,7 +411,6 @@ def create_server(
     artifact_root = Path(artifact_root)
     runs_root = Path(runs_root) if runs_root else artifact_root / "runs"
     catalog = CachedArtifactCatalog(artifact_root)      # the scan is slow on a full artifacts folder
-    web_root = Path(__file__).with_name("web")
     app_root = Path(app_root) if app_root else Path(__file__).with_name("app")
     guard = ControlGuard(host, port)
     api = Api(guard)
@@ -428,7 +423,7 @@ def create_server(
     if api_setup is not None:
         api_setup(api)
     server = ThreadingHTTPServer(
-        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root, api=api,
+        (host, port), make_handler(catalog, case_workspace, research_reader, diagnoses_root, api=api,
                                    app_root=app_root))
     guard.port = server.server_address[1]               # the real port, when 0 was asked for
     server.api = api
