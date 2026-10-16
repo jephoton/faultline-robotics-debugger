@@ -18,6 +18,7 @@ import time
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from . import (
+    STOPPED_BY_USER,
     BackendError,
     JobHandle,
     JobResult,
@@ -131,8 +132,8 @@ class LocalBackend:
         self._running[job_name] = _Running(process, self._clock(), log)
         return JobHandle(job_name, job_name)
 
-    def wait(self, handle: JobHandle, *, running_max_seconds: float,
-             total_max_seconds: float, poll_seconds: float = 60.0) -> JobResult:
+    def wait(self, handle: JobHandle, *, running_max_seconds: float, total_max_seconds: float,
+             poll_seconds: float = 60.0, should_stop: Optional[Callable[[], bool]] = None) -> JobResult:
         running = self._running.get(handle.job_name)
         if running is None:
             # A container started by an earlier process cannot be observed here.
@@ -140,6 +141,7 @@ class LocalBackend:
                              "not_started_by_this_process", None, None, None)
         process = running.process
         cancelled_at: Optional[float] = None
+        cancel_reason = "watchdog_cancel"
         step = max(0.1, min(float(poll_seconds), 5.0))
         while True:
             code = process.poll()
@@ -148,18 +150,20 @@ class LocalBackend:
                 break
             if cancelled_at is None:
                 elapsed = now - running.started
-                if elapsed > running_max_seconds or elapsed > total_max_seconds:
+                stopping = should_stop is not None and bool(should_stop())
+                if stopping or elapsed > running_max_seconds or elapsed > total_max_seconds:
                     cancelled_at = now
+                    cancel_reason = STOPPED_BY_USER if stopping else "watchdog_cancel"
                     self._stop(handle.job_name)
             elif now - cancelled_at > KILL_GRACE_SECONDS:
                 self._kill(handle.job_name, process)
                 self._finish_log(running)
-                return self._result(handle, running, "TIMEOUT", "watchdog_cancel", now)
+                return self._result(handle, running, "TIMEOUT", cancel_reason, now)
             self._sleep(step)
         self._finish_log(running)
         now = self._clock()
         if cancelled_at is not None:
-            return self._result(handle, running, "CANCELLED", "watchdog_cancel", now)
+            return self._result(handle, running, "CANCELLED", cancel_reason, now)
         if code == 0:
             return self._result(handle, running, "COMPLETED", None, now)
         return self._result(handle, running, "FAILED", "ContainerFailed", now)

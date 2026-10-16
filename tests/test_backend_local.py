@@ -221,6 +221,31 @@ class WaitTests(LocalBackendCase):
         self.assertEqual(result.reason, "watchdog_cancel")
         self.assertTrue(self.docker.processes[0].killed)
 
+    def test_a_stop_request_stops_the_container_and_reports_stopped_by_user(self):
+        backend = self.make(run_for=10_000)
+        handle = backend.submit("unit-a", self.workload())
+        begin = self.clock.now
+        result = backend.wait(handle, running_max_seconds=5000, total_max_seconds=9000, poll_seconds=5,
+                              should_stop=lambda: self.clock.now - begin >= 20)
+        self.assertEqual((result.state, result.reason), ("CANCELLED", "stopped_by_user"))
+        self.assertEqual(len([c for c in self.docker.calls if c[1:2] == ["stop"]]), 1)
+        self.assertGreaterEqual(result.container_seconds, 20)
+
+    def test_a_stubborn_container_is_killed_after_a_stop_and_reported_as_timeout(self):
+        backend = self.make(run_for=10_000, ignore_stop=True)
+        handle = backend.submit("unit-a", self.workload())
+        result = backend.wait(handle, running_max_seconds=5000, total_max_seconds=9000, poll_seconds=5,
+                              should_stop=lambda: True)
+        self.assertEqual((result.state, result.reason), ("TIMEOUT", "stopped_by_user"))
+        self.assertTrue(self.docker.processes[0].killed)
+
+    def test_a_container_that_finishes_before_the_stop_is_reported_as_it_ended(self):
+        backend = self.make(run_for=0)
+        handle = backend.submit("unit-a", self.workload())
+        result = backend.wait(handle, running_max_seconds=5000, total_max_seconds=9000, poll_seconds=5,
+                              should_stop=lambda: True)
+        self.assertEqual((result.state, result.reason), ("COMPLETED", None))
+
     def test_unknown_handle_is_unknown_not_a_crash(self):
         backend = self.make()
         result = backend.wait(JobHandle("ghost", "ghost"), running_max_seconds=60,

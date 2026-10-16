@@ -421,13 +421,34 @@ def render_threshold(summary: Mapping[str, Any]) -> List[str]:
     return lines + ["", *timing_lines(summary)]
 
 
+SUITE_LABELS = {"libero_object": "LIBERO-Object", "libero_10": "LIBERO-10",
+                "libero_spatial": "LIBERO-Spatial", "libero_goal": "LIBERO-Goal"}
+
+
+def scope_target(summaries: Sequence[Mapping[str, Any]]) -> str:
+    """What was audited, read from the summaries' own config: ``LIBERO-Spatial task 3, benchmark start 12``
+    (and ``, seed N`` when a summary records one). Nothing is assumed: a summary without a target says so."""
+
+    for summary in summaries:
+        config = summary.get("config")
+        if not isinstance(config, Mapping) or config.get("suite") is None:
+            continue
+        suite = str(config["suite"])
+        text = "{} task {}, benchmark start {}".format(
+            SUITE_LABELS.get(suite, suite), config.get("task_id", 0), config.get("init_state_index", 0))
+        seed = config.get("seed", summary.get("seed"))
+        return text if seed is None else "{}, seed {}".format(text, seed)
+    return "a LIBERO task (the summary does not record the suite, task or start)"
+
+
 def render_report(summaries: Sequence[Mapping[str, Any]]) -> str:
     lines = [
         "# M6 results: camera reliance and scalar image families",
         "",
-        "Scope: GR00T N1.7 on LIBERO-Object task 0 with seed 7, on one L40S. Thresholds are budget-local "
+        "Scope: GR00T N1.7 on {}, on one L40S. Thresholds are budget-local "
         "(the attempts per level and bisection steps stated below) and describe reliable failure, not the "
-        "onset of any failure. Image-space transforms approximate, not simulate, lighting and sensor effects.",
+        "onset of any failure. Image-space transforms approximate, not simulate, lighting and sensor effects."
+        .format(scope_target(summaries)),
         "",
     ]
     for summary in summaries:

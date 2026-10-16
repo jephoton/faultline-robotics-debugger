@@ -601,6 +601,65 @@ class WaitTests(NebiusCase):
         self.assertLess(self.clock.now - started, 6000 + 300 + 300 + 200)
         self.assertGreater(self.cli.count("ai", "job", "cancel"), 3)
 
+    def stop_after(self, seconds):
+        begin = self.clock.now
+        return lambda: self.clock.now - begin >= seconds
+
+    def test_a_stop_request_cancels_once_and_reports_stopped_by_user(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(100))
+        self.assertEqual((result.state, result.reason), ("CANCELLED", "stopped_by_user"))
+        self.assertEqual(self.cli.count("ai", "job", "cancel"), 1)
+        self.assertGreaterEqual(result.container_seconds, 100.0)
+        self.assertLess(result.container_seconds, 200.0)
+
+    def test_a_stop_is_noticed_between_cloud_polls(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        begin = self.clock.now
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(10))
+        self.assertEqual(result.reason, "stopped_by_user")
+        self.assertLess(self.clock.now - begin, 30, "a 60 s poll interval must not delay a stop by a minute")
+        self.assertLessEqual(self.cli.count("ai", "job", "get"), 4, "stop checks are local, not cloud calls")
+
+    def test_a_stop_before_the_job_starts_has_no_container_time(self):
+        backend, handle = self.start([(0, "PROVISIONING", None)])
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(30))
+        self.assertEqual((result.state, result.reason), ("CANCELLED", "stopped_by_user"))
+        self.assertIsNone(result.started_at)
+        self.assertIsNone(result.container_seconds)
+
+    def test_a_job_that_ignores_the_stop_cancel_ends_as_timeout_after_the_grace(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        self.cli.cancel_ignored = True
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(10))
+        self.assertEqual((result.state, result.reason), ("TIMEOUT", "stopped_by_user"))
+        self.assertEqual(self.cli.count("ai", "job", "cancel"), 1, "the cancel is sent once, not repeated")
+
+    def test_a_failed_stop_cancel_is_retried_on_later_polls(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        self.cli.fail(("ai", "job", "cancel"), "Unavailable: try later", times=2)
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(10))
+        self.assertEqual(result.reason, "stopped_by_user")
+
+    def test_a_job_that_finished_on_its_own_is_reported_as_it_ended(self):
+        backend, handle = self.start([(0, "RUNNING", None), (0, "COMPLETED", None)])
+        result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=lambda: True)
+        self.assertEqual((result.state, result.reason), ("COMPLETED", None))
+        self.assertEqual(self.cli.count("ai", "job", "cancel"), 0)
+
+    def test_the_watchdog_keeps_its_own_reason_when_it_cancelled_first(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        result = backend.wait(handle, running_max_seconds=100, total_max_seconds=6000, poll_seconds=60,
+                              should_stop=self.stop_after(150))
+        self.assertEqual(result.reason, "watchdog_cancel")
+        self.assertEqual(self.cli.count("ai", "job", "cancel"), 1)
+
     def test_the_cancel_grace_ends_before_the_provider_timeout_does(self):
         from robot_debug import ledger
         from robot_debug.backends import nebius

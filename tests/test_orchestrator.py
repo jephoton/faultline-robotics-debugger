@@ -160,6 +160,10 @@ class FakeBackend:
         self.interrupt_at_download = False
         self.cancel_error: Optional[Exception] = None
         self.lookup_error: Optional[Exception] = None
+        # What a user stop does to the Job: (final state, container seconds or None); None = the hook is ignored.
+        self.stop_outcome: Optional[tuple] = None
+        self.stop_cancels: List[str] = []
+        self.stop_hooks: List[bool] = []
 
     def prepare(self, run_dir, spec):
         self.prepared += 1
@@ -191,10 +195,16 @@ class FakeBackend:
             raise self.lookup_error
         return Handle(job_name, "id-" + job_name) if job_name in self.created else None
 
-    def wait(self, handle, *, running_max_seconds, total_max_seconds, poll_seconds=60):
+    def wait(self, handle, *, running_max_seconds, total_max_seconds, poll_seconds=60, should_stop=None):
         self.waited.append(handle.job_name)
+        self.stop_hooks.append(should_stop is not None)
         if self.on_wait is not None:
             self.on_wait()
+        if should_stop is not None and self.stop_outcome is not None and should_stop():
+            self.stop_cancels.append(handle.job_name)
+            state, seconds = self.stop_outcome
+            return Result(handle.job_name, handle.job_id, state, "stopped_by_user",
+                          None if seconds is None else MOMENT, None if seconds is None else MOMENT, seconds)
         if self.kills_at_wait is not None and len(self.waited) == self.kills_at_wait:
             raise Crash()
         if self.interrupt_at_wait is not None and len(self.waited) == self.interrupt_at_wait:
@@ -250,12 +260,15 @@ class FakeTools(orch.DefaultTools):
         self.explained: List[tuple] = []
         self.registered: List[Path] = []
         self.explain_error = explain_error
+        self.on_sleep: Optional[Callable[[], None]] = None
 
     def now(self):
         return self.clock
 
     def sleep(self, seconds):
         self.slept.append(seconds)
+        if self.on_sleep is not None:
+            self.on_sleep()
 
     def explain(self, case_path, out_path, env_file, label):
         if self.explain_error is not None:
@@ -548,7 +561,7 @@ class CapacityAndCap(Base):
         tag = runner.tag
         base = "soup-start-{}-screen".format(tag)
         self.assertEqual(backend.submitted, [base, base + "-a", base + "-b"])
-        self.assertEqual(tools.slept, [300, 300])
+        self.assertEqual(sum(tools.slept), 600, "two pauses of 300 s, slept in short slices")
         self.assertAlmostEqual(ledger.spent, cost())
         self.assertEqual(ledger.jobs[base]["cost_usd"], 0.0)
         for name in backend.submitted:
@@ -561,7 +574,7 @@ class CapacityAndCap(Base):
         self.assertEqual(result.reason, "capacity_unavailable")
         self.assertEqual(len(backend.submitted), 6)
         self.assertTrue(backend.submitted[-1].endswith("-screen-e"))
-        self.assertEqual(len(tools.slept), 5)
+        self.assertEqual(sum(tools.slept), 5 * 300)
         self.assertEqual(ledger.spent, 0.0)
 
     def test_capacity_retries_respect_the_wall_clock(self):
@@ -713,7 +726,7 @@ class Resume(Base):
         self.assertEqual(result.reason, "no_reproducible_failure", "it got past the screen")
         self.assertEqual(backend2.submitted, [base + "-f", base + "-g", base + "-h"],
                          "the letter sequence continues; no name is reused")
-        self.assertEqual(tools2.slept, [300, 300])
+        self.assertEqual(sum(tools2.slept), 600)
         self.assertAlmostEqual(ledger2.spent, cost())
 
     def test_a_second_exhausted_round_can_be_resumed_again_and_names_stay_unique(self):
@@ -1061,6 +1074,171 @@ class DryRun(unittest.TestCase):
     def test_dry_run_of_a_missing_import_file_is_refused(self):
         with self.assertRaises(orch.StopRun):
             orch.dry_run_lines(spec_for(scenario={"task": 3, "import": "x.json"}), FakeTools())
+
+
+class StopTests(Base):
+    """``faultline stop``: a request file, a backend stop hook, and a ledger that stays honest."""
+
+    def steps_of(self, runner):
+        return json.loads((runner.run_dir / "steps.json").read_text(encoding="utf-8"))
+
+    def stopping_world(self, script, outcome=("CANCELLED", 300), **options):
+        runner, backend, tools, ledger, lines = self.world(script, **options)
+        backend.stop_outcome = outcome
+        backend.on_wait = lambda: orch.request_stop(runner.run_dir)
+        return runner, backend, tools, ledger, lines
+
+    def resume_world(self, runner, script, **options):
+        """A second orchestrator over the same run folder, as `faultline diagnose --resume` builds it."""
+
+        orch.clear_stop_request(runner.run_dir)
+        backend2 = FakeBackend(script)
+        temp, runner2, backend2, tools2, ledger2, lines2 = make_world(
+            runner.spec, [], backend=backend2, run_dir=runner.run_dir, **options)
+        self.addCleanup(temp.cleanup)
+        return runner2, backend2, tools2, ledger2, lines2
+
+    def test_the_request_file_helpers(self):
+        runner, *_rest = self.world([])
+        self.assertFalse(orch.stop_requested(runner.run_dir))
+        path = orch.request_stop(runner.run_dir)
+        self.assertEqual(path.name, "stop-request.json")
+        self.assertTrue(orch.stop_requested(runner.run_dir))
+        self.assertRegex(json.loads(path.read_text(encoding="utf-8"))["requested_at"], r"^\d{4}-\d\d-\d\dT")
+        orch.clear_stop_request(runner.run_dir)
+        orch.clear_stop_request(runner.run_dir)                      # idempotent
+        self.assertFalse(orch.stop_requested(runner.run_dir))
+
+    def test_every_wait_gets_the_stop_hook(self):
+        runner, backend, *_rest = self.world(full_script())
+        runner.diagnose()
+        self.assertEqual(backend.stop_hooks, [True, True, True])
+
+    def test_a_stop_while_waiting_settles_at_measured_time_and_leaves_the_run_resumable(self):
+        runner, backend, tools, ledger, lines = self.stopping_world([finished(lambda w: screen_summary())])
+        result = runner.diagnose()
+
+        self.assertEqual((result.status, result.reason, result.exit_code), ("stopped", "stopped_by_user", 3))
+        name = backend.submitted[0]
+        self.assertEqual((backend.submitted, backend.stop_cancels), ([name], [name]))
+        self.assertAlmostEqual(ledger.jobs[name]["cost_usd"], cost(300))
+        self.assertNotIn("worst_case", ledger.jobs[name], "the container time was measured")
+        self.assertEqual((ledger.reserved, ledger.spent), (0.0, ledger.jobs[name]["cost_usd"]))
+        self.assertIsNone(runner._inflight)
+        self.assertEqual(backend.finished, 1)
+        data = self.steps_of(runner)
+        self.assertEqual(data["steps"]["screen"]["status"], "stopped")
+        self.assertEqual(data["steps"]["screen"]["attempts"][0]["state"], "cancelled")
+        self.assertEqual((data["run"]["status"], data["run"]["reason"]), ("stopped", "stopped_by_user"))
+        job_dir = runner.run_dir / "jobs" / name
+        self.assertEqual(json.loads((job_dir / "result.json").read_text(encoding="utf-8"))["reason"], "stopped_by_user")
+        self.assertFalse((job_dir / "evidence").exists(), "a cancelled Job's partial export is not downloaded")
+        self.assertTrue(any("stopped_by_user" in line for line in lines))
+
+    def test_a_stop_with_no_known_container_time_charges_the_worst_case(self):
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("CANCELLED", None))
+        result = runner.diagnose()
+        name = backend.submitted[0]
+        self.assertEqual(result.reason, "stopped_by_user")
+        job = ledger.jobs[name]
+        self.assertEqual(job["cost_usd"], job["reserved_usd"])
+        self.assertTrue(job["worst_case"])
+        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "cancelled")
+
+    def test_a_cancel_the_provider_never_confirmed_stays_re_attachable(self):
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("TIMEOUT", None))
+        result = runner.diagnose()
+        name = backend.submitted[0]
+        self.assertEqual(result.reason, "stopped_by_user")
+        self.assertTrue(ledger.jobs[name]["worst_case"])
+        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "unconfirmed")
+        self.assertIsNone(runner._inflight)
+
+        runner2, backend2, tools2, ledger2, lines2 = self.resume_world(
+            runner, [finished(lambda w: screen_summary(failing=False), seconds=900)])
+        second = runner2.diagnose()
+        self.assertEqual(second.reason, "no_reproducible_failure", "the screen finished after re-attaching")
+        self.assertEqual(backend2.submitted, [], "nothing was resubmitted")
+        self.assertEqual(backend2.waited, [name])
+        self.assertAlmostEqual(ledger2.spent, cost(900), msg="the measured cost replaced the worst case")
+        self.assertNotIn("worst_case", ledger2.jobs[name])
+
+    def test_a_stop_before_a_submit_creates_nothing(self):
+        runner, backend, tools, ledger, lines = self.world([finished(lambda w: screen_summary())])
+        orch.request_stop(runner.run_dir)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "stopped_by_user"))
+        self.assertEqual((backend.submitted, backend.waited), ([], []))
+        self.assertEqual(ledger.jobs, {})
+        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["status"], "stopped")
+        self.assertEqual(backend.finished, 1)
+
+    def test_a_stop_during_a_capacity_pause_ends_the_pause_and_submits_nothing_more(self):
+        runner, backend, tools, ledger, lines = self.world(
+            [capacity(), finished(lambda w: screen_summary(failing=False))])
+        tools.on_sleep = lambda: orch.request_stop(runner.run_dir)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "stopped_by_user")
+        self.assertEqual(len(backend.submitted), 1)
+        self.assertLessEqual(sum(tools.slept), 10, "the 300 s pause is slept in short slices and abandoned")
+        self.assertEqual(ledger.spent, 0.0)
+        data = self.steps_of(runner)
+        self.assertEqual(data["steps"]["screen"]["attempts"][0]["state"], "capacity")
+        self.assertEqual(data["steps"]["screen"]["status"], "stopped")
+
+        runner2, backend2, tools2, ledger2, _l = self.resume_world(
+            runner, [finished(lambda w: screen_summary(failing=False))])
+        self.assertEqual(runner2.diagnose().reason, "no_reproducible_failure")
+        self.assertEqual(len(backend2.submitted), 1)
+        self.assertTrue(backend2.submitted[0].endswith("-screen-a"))
+
+    def test_resume_after_a_stop_submits_under_a_fresh_name_and_the_ledger_adds_up(self):
+        runner, backend, tools, ledger, lines = self.stopping_world([finished(lambda w: screen_summary())])
+        runner.diagnose()
+        stopped = backend.submitted[0]
+
+        runner2, backend2, tools2, ledger2, lines2 = self.resume_world(
+            runner, [finished(lambda w: screen_summary(failing=False), seconds=1000)])
+        second = runner2.diagnose()
+        self.assertEqual(second.reason, "no_reproducible_failure")
+        self.assertEqual(backend2.submitted, [stopped + "-a"], "the cancelled attempt is skipped, never re-attached")
+        self.assertEqual(backend2.waited, [stopped + "-a"])
+        self.assertAlmostEqual(ledger2.spent, cost(300) + cost(1000))
+        self.assertEqual(ledger2.reserved, 0.0)
+        attempts = self.steps_of(runner)["steps"]["screen"]["attempts"]
+        self.assertEqual([a["state"] for a in attempts], ["cancelled", "settled"])
+
+    def test_a_stop_during_a_continuation_does_not_finish_the_scenario_and_resume_does(self):
+        runner, backend, tools, ledger, lines = self.stopping_world(full_script(), outcome=("CANCELLED", 200))
+        backend.on_wait = lambda: len(backend.waited) == 3 and orch.request_stop(runner.run_dir)
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "stopped_by_user")
+        self.assertEqual(len(backend.submitted), 3)
+        for name in ("report.md", "case.json", "explanation.json"):
+            self.assertFalse((runner.run_dir / name).exists(), name)
+        self.assertEqual(tools.registered, [])
+        self.assertEqual(tools.explained, [])
+
+        runner2, backend2, tools2, ledger2, _l = self.resume_world(
+            runner, [finished(reduce_one(stop_reason="budget_exhausted", selection=SOUP_ONLY, entity_minimal=True))])
+        second = runner2.diagnose()
+        self.assertEqual((second.status, second.reason), ("completed", None))
+        self.assertTrue(backend2.submitted[0].endswith("-reduce2-a"))
+        self.assertTrue((runner.run_dir / "case.json").is_file())
+        self.assertAlmostEqual(ledger2.spent, 2 * cost() + cost(200) + cost())
+
+    def test_a_job_that_ends_on_its_own_wins_and_the_run_stops_before_the_next_job(self):
+        runner, backend, tools, ledger, lines = self.world([finished(lambda w: screen_summary())])
+        backend.on_wait = lambda: orch.request_stop(runner.run_dir)         # backend ignores the hook
+        result = runner.diagnose()
+        self.assertEqual(result.reason, "stopped_by_user")
+        self.assertEqual(len(backend.submitted), 1, "no reduce Job was submitted")
+        data = self.steps_of(runner)
+        self.assertEqual(data["steps"]["screen"]["status"], "done")
+        self.assertEqual(data["steps"]["reduce"]["status"], "stopped")
+        self.assertAlmostEqual(ledger.spent, cost())
 
 
 class RunFolder(unittest.TestCase):

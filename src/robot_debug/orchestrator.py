@@ -257,6 +257,32 @@ def passing_starts(summary: Mapping[str, Any], task: int) -> List[int]:
 
 IMPORT_COPY = Path("import") / "candidate.json"
 
+# ``faultline stop`` (ADR 0033): a request file in the run folder, read while waiting and before each submit.
+STOP_REQUEST_FILE = "stop-request.json"
+STOP_CHECK_SECONDS = 5.0               # capacity pauses are slept in slices this long, checking for a stop
+STOPPED_BY_USER = "stopped_by_user"
+
+
+def request_stop(run_dir: Path) -> Path:
+    """Ask the run in ``run_dir`` to stop: writes ``stop-request.json`` (the running process reads it)."""
+
+    path = Path(run_dir) / STOP_REQUEST_FILE
+    _write_json(path, {"requested_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    return path
+
+
+def stop_requested(run_dir: Path) -> bool:
+    return (Path(run_dir) / STOP_REQUEST_FILE).is_file()
+
+
+def clear_stop_request(run_dir: Path) -> None:
+    """Remove the request (``--resume`` does this first); a missing file is fine."""
+
+    try:
+        (Path(run_dir) / STOP_REQUEST_FILE).unlink()
+    except FileNotFoundError:
+        pass
+
 
 def check_import(spec: Spec, tools: Any, run_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     """Validate ``scenario.import`` locally, before the backend or any Job exists.
@@ -1112,9 +1138,30 @@ class Orchestrator:
             except lg.TimeExhausted as error:
                 raise StopRun("max_hours", str(error)) from None
             self.say(step, "no capacity; pausing {:g} s before resubmitting".format(self.pause_seconds))
-            self.tools.sleep(self.pause_seconds)
+            self._pause(step)
         self.steps.update(step, status="stopped")
         raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions".format(last))
+
+    def _stop_requested(self) -> bool:
+        return stop_requested(self.run_dir)
+
+    def _check_stop(self, step: str) -> None:
+        """Stop the run (no Job is in flight here) when ``faultline stop`` asked for it."""
+
+        if self._stop_requested():
+            self.steps.update(step, status="stopped")
+            raise StopRun(STOPPED_BY_USER, "stop requested; the run can be resumed with --resume")
+
+    def _pause(self, step: str) -> None:
+        """The capacity pause, slept in short slices so a stop request ends it within seconds."""
+
+        left = float(self.pause_seconds)
+        while left > 0:
+            self._check_stop(step)
+            chunk = min(left, STOP_CHECK_SECONDS)
+            self.tools.sleep(chunk)
+            left -= chunk
+        self._check_stop(step)
 
     def _first_attempt_number(self, attempts: Sequence[Mapping[str, Any]]) -> int:
         """Where the attempt numbers (Job-name suffixes) of this call start.
@@ -1134,6 +1181,7 @@ class Orchestrator:
 
     def _submit(self, step: str, job_name: str, workload: Mapping[str, Any], deadline: int, job_dir: Path,
                 attempts: List[Dict[str, Any]]) -> Any:
+        self._check_stop(step)
         try:
             self.ledger.check_time(extra_seconds=deadline)
         except lg.TimeExhausted as error:
@@ -1221,7 +1269,7 @@ class Orchestrator:
         total_max = max(60.0, min(running_max + QUEUE_ALLOWANCE_SECONDS, self.ledger.remaining_seconds()))
         try:
             result = self.backend.wait(handle, running_max_seconds=running_max, total_max_seconds=total_max,
-                                       poll_seconds=self.poll_seconds)
+                                       poll_seconds=self.poll_seconds, should_stop=self._stop_requested)
         except Exception as error:               # noqa: BLE001 - polling failed after the backend's retries
             self._best_effort_cancel(handle)
             self.ledger.settle_worst_case(job_name)
@@ -1241,6 +1289,8 @@ class Orchestrator:
                 seconds = (result.finished_at - started).total_seconds()
             except (TypeError, AttributeError):
                 seconds = None
+        if reason == STOPPED_BY_USER:
+            self._settle_stopped(step, handle, job_name, job_dir, attempt, result, state, seconds, started)
         capacity = "notenoughresources" in str(reason or "").lower() and not seconds
         if capacity:
             self.ledger.settle(job_name, None)
@@ -1291,6 +1341,33 @@ class Orchestrator:
         self.say(step, "{} {}{}".format(job_name, state.lower(), " (partial summary: {})".format(
             summary.get("stop_reason")) if partial else ""))
         return JobOutcome(step, job_name, summary, path, partial, state, cost)
+
+    def _settle_stopped(self, step: str, handle: Any, job_name: str, job_dir: Path, attempt: Dict[str, Any],
+                        result: Any, state: str, seconds: Optional[float], started: Any) -> None:
+        """The user stopped the Job (``faultline stop``): settle it, leave the run resumable, end the run.
+
+        The ledger is charged the measured container time, or the whole reservation when none is known. A cancel
+        the provider never confirmed (state TIMEOUT or UNKNOWN) keeps the attempt re-attachable, so ``--resume``
+        replaces the worst-case charge with the measured one instead of forgetting a Job that may still run; a
+        confirmed one is marked ``cancelled`` and never re-attached (the next attempt gets a fresh name).
+        """
+
+        confirmed = state not in ("TIMEOUT", "UNKNOWN")
+        cost = self.ledger.settle_worst_case(job_name) if seconds is None else self.ledger.settle(job_name, seconds)
+        self._inflight = None
+        job_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(job_dir / "result.json", {
+            "job_name": job_name, "job_id": getattr(handle, "job_id", None), "state": state,
+            "reason": STOPPED_BY_USER, "started_at": started, "finished_at": getattr(result, "finished_at", None),
+            "container_seconds": seconds, "cost_usd": cost})
+        self._save_logs(handle, job_dir)
+        attempt["state"] = "cancelled" if confirmed else "unconfirmed"
+        self.steps.update(step, status="stopped")
+        self.say(step, "{} stopped by the user ({}; charged US${:.2f}{})".format(
+            job_name, "cancelled" if confirmed else "cancel not confirmed", cost,
+            "" if seconds is not None else ", the worst case: no container time is known"))
+        raise StopRun(STOPPED_BY_USER, "{} was {} and charged US${:.2f}; resume with --resume".format(
+            job_name, "cancelled" if confirmed else "asked to stop but not confirmed stopped", cost))
 
     def _stored_outcome(self, step: str, record: Mapping[str, Any]) -> JobOutcome:
         path = self.run_dir / record["summary"]
@@ -1445,8 +1522,8 @@ class Orchestrator:
                                                       **self._checkpoint_args())
                 outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "scenario_summary.json")
             except StopRun as stop:
-                if best is None and last is None:
-                    raise
+                if (best is None and last is None) or stop.reason == STOPPED_BY_USER:
+                    raise                   # a user stop leaves the report and case to the resumed run
                 return best, last, stop.reason
             last = outcome.summary
             reduction = last.get("reduction") or {}
@@ -1747,4 +1824,5 @@ __all__ = [
     "case_checkpoint", "check_candidate_budget", "check_import", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
     "paraphrase_meaning", "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
+    "STOPPED_BY_USER", "STOP_REQUEST_FILE", "clear_stop_request", "request_stop", "stop_requested",
 ]

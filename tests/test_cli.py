@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import tempfile
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import List
 
 from robot_debug import cli
+from robot_debug.orchestrator import request_stop as orch_stop
 from tests.test_orchestrator import (
     BOTH, SOUP_ONLY, Crash, FakeBackend, FakeTools, finished, full_script, reduce_one, screen_summary)
 
@@ -193,6 +195,84 @@ class Diagnose(Fixture):
         self.assertNotIn("released", self.text)
 
 
+class ProcessRecord(Fixture):
+    """``process.json`` and ``--run-dir-file``: how the control panel finds a run and its folder."""
+
+    def snapshot_during_wait(self, store):
+        def look():
+            folders = list(self.runs.iterdir())
+            store["folder"] = folders[0]
+            record = folders[0] / "process.json"
+            store["process"] = json.loads(record.read_text(encoding="utf-8")) if record.is_file() else None
+            file = store.get("file")
+            store["launch"] = file.read_text(encoding="utf-8") if file is not None and file.is_file() else None
+        return look
+
+    def test_the_running_process_is_recorded_and_removed_when_the_run_ends(self):
+        seen = {}
+        code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)], full_script(),
+                            on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(code, 0)
+        self.assertEqual(seen["process"]["pid"], os.getpid())
+        self.assertEqual(seen["process"]["command"], "diagnose")
+        self.assertRegex(seen["process"]["started_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$")
+        self.assertEqual(sorted(seen["process"]), ["command", "pid", "started_at"])
+        self.assertFalse((seen["folder"] / "process.json").exists())
+
+    def test_the_record_is_removed_after_a_stop_a_crash_and_ctrl_c(self):
+        from tests.test_orchestrator import BackendFailure
+        cases = [("stopped", [finished(lambda w: screen_summary(failing=False))], {}, 3),
+                 ("crash", [], {"fail_prepare": True}, 1),
+                 ("ctrl-c", [finished(lambda w: screen_summary())], {"interrupt_at_wait": 1}, 130)]
+        for label, script, setup, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as root:
+                runs = Path(root) / "runs"
+                self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(runs)],
+                                              script, **setup), expected)
+                self.assertEqual([p.name for p in next(runs.iterdir()).glob("process.json")], [])
+
+    def test_a_replay_records_its_own_command(self):
+        seen = {}
+        case_dir = ReplayCommand.case_dir(self)
+        self.run_cli(["replay", str(case_dir), "--spec", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: {"verdict": "still_reproduces", "complete": True})],
+                     tools=ReplayCommand.Tools(), on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(seen["process"]["command"], "replay")
+        self.assertFalse((seen["folder"] / "process.json").exists())
+
+    def test_the_run_folder_is_written_to_the_run_dir_file_as_soon_as_it_exists(self):
+        seen = {"file": self.dir / "launch" / "run-dir.txt"}
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs),
+                      "--run-dir-file", str(seen["file"])], full_script(), on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(Path(seen["launch"]).resolve(), seen["folder"].resolve())
+        self.assertTrue(Path(seen["launch"]).is_absolute())
+        self.assertTrue(seen["file"].is_file(), "the launcher can still read it after the run")
+
+    def test_resume_writes_the_resumed_folder(self):
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        target = self.dir / "resume-dir.txt"
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir), "--run-dir-file", str(target)],
+                                      script), 0)
+        self.assertEqual(Path(target.read_text(encoding="utf-8")).resolve(), run_dir.resolve())
+        self.assertFalse((run_dir / "process.json").exists())
+
+    def test_a_dry_run_creates_no_record_and_no_launch_file(self):
+        target = self.dir / "run-dir.txt"
+        self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--dry-run", "--runs-root", str(self.runs),
+                                       "--run-dir-file", str(target)]), 0)
+        self.assertFalse(target.exists())
+        self.assertFalse(self.runs.exists())
+
+    def test_the_option_is_hidden_from_the_help(self):
+        self.assertNotIn("run-dir-file", cli._parser().format_help())
+        for command in ("diagnose", "replay"):
+            parser = cli._parser()._subparsers._group_actions[0].choices[command]
+            self.assertNotIn("run-dir-file", parser.format_help())
+
+
 class Resume(Fixture):
     def test_resume_continues_without_repeating_paid_jobs(self):
         first = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
@@ -215,8 +295,89 @@ class Resume(Fixture):
         self.assertEqual(self.run_cli(["diagnose", str(other), "--resume", str(run_dir)]), 2)
         self.assertIn("differs", self.text)
 
+    def test_resume_of_a_run_that_is_still_running_is_refused(self):
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        started = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        other = {"pid": os.getppid(), "started_at": started, "command": "diagnose"}
+        (run_dir / "process.json").write_text(json.dumps(other), encoding="utf-8")
+        self.lines.clear()
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir)]), 2)
+        self.assertIn("already running", self.text)
+        self.assertEqual(len(self.backends), 1, "no second backend was built")
+
     def test_resume_of_something_that_is_not_a_run_folder(self):
         self.assertEqual(self.run_cli(["diagnose", "--resume", str(self.dir)]), 2)
+
+
+class StopCommand(Fixture):
+    def stopped_run(self):
+        """A run folder whose first Job the user stopped (the stop request is written while it waits)."""
+
+        def request():
+            orch_stop(next(self.runs.iterdir()))
+        code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                            [finished(lambda w: screen_summary())], on_wait=request,
+                            stop_outcome=("CANCELLED", 300))
+        return code, next(self.runs.iterdir())
+
+    def run_folder(self, live=True):
+        folder = self.runs / "soup-start-20261014T101530Z"
+        folder.mkdir(parents=True)
+        (folder / "steps.json").write_text("{}", encoding="utf-8")
+        if live:                                     # this very process stands in for the running diagnosis
+            stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            (folder / "process.json").write_text(json.dumps(
+                {"pid": os.getpid(), "started_at": stamp, "command": "diagnose"}), encoding="utf-8")
+        return folder
+
+    def test_stop_writes_the_request_into_a_run_folder(self):
+        folder = self.run_folder()
+        self.assertEqual(self.run_cli(["stop", str(folder)]), 0)
+        self.assertTrue((folder / "stop-request.json").is_file())
+        self.assertIn("Stop requested", self.text)
+        self.assertIn("--resume", self.text)
+
+    def test_stop_finds_a_run_by_its_folder_name_under_the_runs_root(self):
+        folder = self.run_folder()
+        self.assertEqual(self.run_cli(["stop", folder.name, "--runs-root", str(self.runs)]), 0)
+        self.assertTrue((folder / "stop-request.json").is_file())
+
+    def test_stop_of_a_run_that_is_not_running_says_so_and_writes_nothing(self):
+        folder = self.run_folder(live=False)
+        self.assertEqual(self.run_cli(["stop", str(folder)]), 2)
+        self.assertIn("nothing to stop", self.text)
+        self.assertFalse((folder / "stop-request.json").exists())
+
+    def test_stop_of_something_that_is_not_a_run_folder(self):
+        self.assertEqual(self.run_cli(["stop", str(self.dir)]), 2)
+        self.assertIn("is not a faultline run folder", self.text)
+        self.assertFalse((self.dir / "stop-request.json").exists())
+        self.assertEqual(self.run_cli(["stop"]), 2)
+
+    def test_a_user_stop_exits_three_and_names_the_resume_command(self):
+        code, folder = self.stopped_run()
+        self.assertEqual(code, 3)
+        self.assertIn("Stopped (stopped_by_user)", self.text)
+        self.assertIn("Resume with: faultline diagnose --resume {}".format(folder), self.text)
+        self.assertEqual(self.backends[0].finished, 1)
+        self.assertFalse((folder / "process.json").exists())
+
+    def test_resume_removes_the_stop_request_and_carries_on(self):
+        code, folder = self.stopped_run()
+        self.assertTrue((folder / "stop-request.json").is_file())
+        self.lines.clear()
+        script = [finished(lambda w: screen_summary(failing=False), seconds=500)]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(folder)], script), 3)
+        self.assertFalse((folder / "stop-request.json").exists())
+        self.assertIn("no_reproducible_failure", self.text, "it got past the screen on a fresh attempt")
+        self.assertTrue(self.backends[1].submitted[0].endswith("-screen-a"))
+
+    def test_a_dry_run_of_a_resume_leaves_the_request_alone(self):
+        code, folder = self.stopped_run()
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(folder), "--dry-run"]), 0)
+        self.assertTrue((folder / "stop-request.json").is_file())
 
 
 class ReplayCommand(Fixture):

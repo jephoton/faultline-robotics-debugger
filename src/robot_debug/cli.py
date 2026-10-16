@@ -4,6 +4,9 @@
     faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env] [--expect reproduces|fixed]
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
+    faultline stop RUN_DIR
+    faultline export --out DIR [--case ID ...] [--artifacts DIR] [--runs-root DIR] [--force]
+    faultline ui [--artifacts DIR] [--runs-root DIR] [--port N] [--host ADDR] [--open]
 
 A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
 rewords the task instruction, one Job screens the rewordings, a second reduces the failing wording to its
@@ -23,7 +26,9 @@ credentials stay in the Nebius CLI.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Sequence
@@ -34,6 +39,7 @@ from robot_debug import spec as sp
 
 DEFAULT_RUNS_ROOT = Path("artifacts") / "runs"
 EXIT_UNEXPECTED_VERDICT = 5
+PROCESS_FILE = "process.json"          # {"pid", "started_at", "command"} while a diagnose/replay is running
 # ``faultline replay --expect``: the word the user gives -> the replay verdict that meets it.
 EXPECTATIONS = {"reproduces": "still_reproduces", "fixed": "no_longer_reproduces"}
 
@@ -54,6 +60,7 @@ def _parser() -> argparse.ArgumentParser:
     diagnose.add_argument("--dry-run", action="store_true", help="print the planned Jobs and worst-case spend; create nothing")
     diagnose.add_argument("--resume", type=Path, metavar="RUN_DIR", help="continue an interrupted run folder")
     diagnose.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    diagnose.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     replay = commands.add_parser("replay", help="re-run a saved case and say whether the failure still reproduces")
     replay.add_argument("case", type=Path, help="a run folder (or case.json) holding a scenario case")
@@ -64,6 +71,7 @@ def _parser() -> argparse.ArgumentParser:
                         "matches (reproduces: the failure still reproduces; fixed: it no longer does), "
                         "exit 5 otherwise or when the verdict is inconclusive")
     replay.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    replay.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     image = commands.add_parser("image", help="build or push the simulator image")
     kinds = image.add_subparsers(dest="image_command", required=True, parser_class=_Parser)
@@ -75,10 +83,57 @@ def _parser() -> argparse.ArgumentParser:
 
     cases = commands.add_parser("cases", help="list finished runs and their cases")
     cases.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+
+    commands.add_parser("ui", add_help=False,           # handled in main() before parsing; listed here for --help
+                        help="open the control panel in a browser (cases, new diagnoses, run progress)")
+
+    export = commands.add_parser("export", help="write the cases as a static gallery (a folder any web host can serve)")
+    export.add_argument("--out", type=Path, required=True, help="the folder to write (empty, or --force)")
+    export.add_argument("--case", action="append", default=[], metavar="ID",
+                        help="export only this case (library id, case id or a long prefix); repeatable")
+    export.add_argument("--artifacts", type=Path, default=Path("artifacts"))
+    export.add_argument("--runs-root", type=Path, help="the run folders (default: <artifacts>/runs)")
+    export.add_argument("--force", action="store_true", help="replace a previous export in a non-empty folder")
+    export.add_argument("--app-root", type=Path, help=argparse.SUPPRESS)
+
+    stop = commands.add_parser("stop", help="stop a running diagnosis safely (the Job is cancelled; --resume continues)")
+    stop.add_argument("run_dir", type=Path, help="the run folder (or its name under --runs-root)")
+    stop.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
     return parser
 
 
 # --------------------------------------------------------------------------------------
+
+
+def _utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(str(temporary), str(path))
+
+
+def _record_process(run_dir: Path, command: str, started: dt.datetime) -> None:
+    """``process.json``: which process is running this folder, so the control panel (and ``faultline stop``)
+    can tell a live run from a finished or crashed one. Removed again by :func:`_clear_process`."""
+
+    stamp = started.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    record = {"pid": os.getpid(), "started_at": stamp, "command": command}
+    _write_atomic(Path(run_dir) / PROCESS_FILE, json.dumps(record, sort_keys=True) + "\n")
+
+
+def _clear_process(run_dir: Path) -> None:
+    """Delete our own ``process.json`` (never one that names another process)."""
+
+    path = Path(run_dir) / PROCESS_FILE
+    try:
+        if json.loads(path.read_text(encoding="utf-8")).get("pid") == os.getpid():
+            path.unlink()
+    except (OSError, ValueError, AttributeError):
+        pass
 
 
 def _lazy_backend_factory() -> Callable[[sp.Spec], Any]:
@@ -118,9 +173,11 @@ def list_runs(root: Path) -> List[str]:
     return rows
 
 
-def _final_lines(result: orch.RunResult) -> List[str]:
+def _final_lines(result: orch.RunResult, resumable: bool = True) -> List[str]:
     lines = ["{}{}".format(result.status.capitalize(), "" if result.reason is None else " ({})".format(result.reason)),
              "Run folder: {}".format(result.run_dir), "Spent: US${:.2f}".format(result.spent_usd)]
+    if result.reason == orch.STOPPED_BY_USER and resumable:
+        lines.append("Resume with: faultline diagnose --resume {}".format(result.run_dir))
     if result.case_id:
         lines.append("Case: {}".format(result.case_id[:12]))
     if result.verdict is not None or result.reproduces is not None:
@@ -134,7 +191,14 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
          poll_seconds: float = 60.0, pause_seconds: float = orch.CAPACITY_PAUSE_SECONDS) -> int:
     run_dir: Optional[Path] = None
     runner: Optional[orch.Orchestrator] = None
+    recorded: Optional[Path] = None
+    started = _utc_now()
     try:
+        words = list(sys.argv[1:] if argv is None else argv)
+        if words[:1] == ["ui"]:                       # the viewer has its own options (and --help)
+            from robot_debug.viewer.server import main as viewer_main
+
+            return viewer_main(words[1:], out=out)
         args = _parser().parse_args(argv)
         if args.command == "cases":
             for line in list_runs(args.runs_root) or ["no runs under {}".format(args.runs_root)]:
@@ -142,6 +206,10 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             return 0
         if args.command == "image":
             return _image(args, image_module, out)
+        if args.command == "stop":
+            return _stop(args, out)
+        if args.command == "export":
+            return _export(args, out)
         tools = tools or orch.DefaultTools()
         if args.command == "diagnose":
             spec, spec_text, run_dir = _diagnose_inputs(args)
@@ -157,6 +225,13 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         factory = factory or _lazy_backend_factory()
         if run_dir is None:
             run_dir = orch.create_run_dir(args.runs_root, spec, spec_text, tools.now())
+        elif args.command == "diagnose" and args.resume is not None:
+            orch.clear_stop_request(run_dir)         # a stop belongs to the process it stopped, not to the next one
+        _record_process(run_dir, args.command, started)
+        recorded = run_dir
+        launch_file = getattr(args, "run_dir_file", None)
+        if launch_file is not None:                  # hidden: the control panel learns the folder from this
+            _write_atomic(Path(launch_file), str(Path(run_dir).resolve()))
         ledger = lg.Ledger.load(run_dir / "ledger.json", cap_usd=spec.budget.max_spend_usd,
                                 max_hours=spec.budget.max_hours, hourly_usd=spec.backend.hourly_usd)
         backend = factory(spec)
@@ -166,7 +241,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
                                    poll_seconds=poll_seconds, pause_seconds=pause_seconds)
         out("Run folder: {}".format(run_dir))
         result = runner.diagnose() if args.command == "diagnose" else runner.replay(args.case)
-        for line in _final_lines(result):
+        for line in _final_lines(result, resumable=spec.mode != "replay"):
             out(line)
         expect = getattr(args, "expect", None)
         if expect is None:
@@ -188,6 +263,9 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         if run_dir is not None:
             out("Run folder: {}".format(run_dir))
         return 1
+    finally:
+        if recorded is not None:
+            _clear_process(recorded)
 
 
 def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], None]) -> int:
@@ -232,6 +310,11 @@ def _diagnose_inputs(args: argparse.Namespace):
     saved = run_dir / "spec.yaml"
     if not saved.is_file() or not (run_dir / "steps.json").is_file():
         raise sp.SpecError("usage: {} is not a faultline run folder".format(run_dir))
+    from robot_debug.viewer import processes
+
+    running = processes.recorded_process(run_dir)
+    if running is not None and running.get("pid") != os.getpid():
+        raise sp.SpecError("usage: {} is already running; stop it first (faultline stop)".format(run_dir.name))
     spec, text = _load_with_text(saved)
     if args.spec is not None and sp.load_spec(args.spec).raw != spec.raw:
         raise sp.SpecError("spec: the given spec differs from the one this run started with")
@@ -253,6 +336,46 @@ def _dry_run(spec: sp.Spec, tools: Any, factory: Optional[Callable[[sp.Spec], An
         out("Fix the backend: section before running; nothing was created or submitted.")
         return 2
     out("Backend '{}' accepted the spec. Dry run: nothing was created or submitted.".format(spec.backend.kind))
+    return 0
+
+
+def _stop(args: argparse.Namespace, out: Callable[[str], None]) -> int:
+    """``faultline stop RUN_DIR``: ask the process running that folder to stop. The request is only a file;
+    the run cancels its current Job, settles the ledger and exits, and ``--resume`` continues it."""
+
+    run_dir = Path(args.run_dir)
+    if not (run_dir / "steps.json").is_file():
+        named = Path(args.runs_root) / args.run_dir
+        if not (named / "steps.json").is_file():
+            raise sp.SpecError("usage: {} is not a faultline run folder".format(run_dir))
+        run_dir = named
+    from robot_debug.viewer import processes
+
+    if processes.recorded_process(run_dir) is None:
+        raise sp.SpecError("usage: {} has no running process; there is nothing to stop".format(run_dir.name))
+    orch.request_stop(run_dir)
+    out("Stop requested for {}.".format(run_dir))
+    out("The current Job is cancelled and charged for the time it ran; the run then ends and can be continued "
+        "with: faultline diagnose --resume {}".format(run_dir))
+    return 0
+
+
+def _export(args: argparse.Namespace, out: Callable[[str], None]) -> int:
+    """``faultline export``: the public projection of the library as files; refusals exit 2."""
+
+    from robot_debug.viewer import export as gallery
+
+    try:
+        summary = gallery.export_gallery(
+            args.out, args.artifacts, runs_root=args.runs_root or Path(args.artifacts) / "runs",
+            cases=args.case, force=args.force, app_root=args.app_root)
+    except gallery.ExportError as error:
+        out("error: {}".format(error))
+        return 2
+    out("Exported {} case(s) and {} video(s) to {}".format(summary["cases"], summary["videos"], args.out))
+    if summary["skipped"]:
+        out("{} case(s) could not be read and were left out.".format(summary["skipped"]))
+    out("Serve it with any static host; vercel.json sends app routes to index.html. Publishing is a separate step.")
     return 0
 
 
