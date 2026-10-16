@@ -31,7 +31,8 @@ class RenderTests(RunTestCase):
 
     def threshold_summary(self, **kwargs):
         world = kwargs.pop("world", None) or M6World(boundary_decide(BOUNDARIES))
-        return self.run_m6(world, "m6-threshold", dict(THRESHOLD_CONFIG), **kwargs)
+        config = kwargs.pop("config", None) or dict(THRESHOLD_CONFIG)
+        return self.run_m6(world, "m6-threshold", dict(config), **kwargs)
 
     def test_smoke_report_has_the_wrist_table_and_family_spot_checks(self):
         text = report.render_report([self.smoke_summary()])
@@ -102,6 +103,32 @@ class RenderTests(RunTestCase):
         text = report.render_report([self.threshold_summary()])
         self.assertIn("none up to 1", text)
         self.assertIn("no level up to s = 1 reached", text)
+
+    def test_scope_line_states_the_audited_spatial_suite_task_and_start(self):
+        config = dict(THRESHOLD_CONFIG, suite="libero_spatial", task_id=3, init_state_index=12)
+        text = report.render_report([self.threshold_summary(config=config)])
+
+        self.assertIn("on LIBERO-Spatial task 3, benchmark start 12", text)
+        self.assertNotIn("LIBERO-Object task 0 with seed 7", text)
+
+    def test_scope_line_states_the_audited_goal_suite(self):
+        config = dict(THRESHOLD_CONFIG, suite="libero_goal", task_id=0, init_state_index=0)
+        text = report.render_report([self.threshold_summary(config=config)])
+
+        self.assertIn("on LIBERO-Goal task 0, benchmark start 0", text)
+        self.assertNotIn("LIBERO-Spatial", text)
+
+    def test_scope_line_adds_a_seed_only_when_the_summary_records_one(self):
+        config = dict(THRESHOLD_CONFIG, suite="libero_object", task_id=1, init_state_index=2)
+        self.assertNotIn(", seed", report.render_report([self.threshold_summary(config=config)]))
+        text = report.render_report([dict(self.threshold_summary(config=config), seed=7)])
+        self.assertIn("on LIBERO-Object task 1, benchmark start 2, seed 7", text)
+
+    def test_scope_line_does_not_invent_a_target_the_summary_lacks(self):
+        text = report.render_report([self.smoke_summary()])
+
+        self.assertIn("does not record the suite, task or start", text)
+        self.assertNotIn("LIBERO-Object task 0", text)
 
     def test_both_summaries_in_one_report(self):
         text = report.render_report([self.smoke_summary(), self.threshold_summary()])
