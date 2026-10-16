@@ -56,7 +56,8 @@ def _parser() -> argparse.ArgumentParser:
     diagnose = commands.add_parser("diagnose", help="run a whole diagnosis (scenario, audit or paraphrase) from a spec file")
     diagnose.add_argument("spec", type=Path, nargs="?", help="the spec (optional with --resume)")
     diagnose.add_argument("--env-file", type=Path, help="dotenv file holding NEBIUS_API_KEY (Token Factory)")
-    diagnose.add_argument("--no-llm", action="store_true", help="no Nemotron: fixed order, no explanation")
+    diagnose.add_argument("--no-llm", action="store_true", help="no Nemotron: fixed order, no explanation "
+                          "(a resume keeps the setting its run started with; this flag turns it on)")
     diagnose.add_argument("--dry-run", action="store_true", help="print the planned Jobs and worst-case spend; create nothing")
     diagnose.add_argument("--resume", type=Path, metavar="RUN_DIR", help="continue an interrupted run folder")
     diagnose.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
@@ -215,6 +216,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             spec, spec_text, run_dir = _diagnose_inputs(args)
             if spec.mode == "replay":
                 raise sp.SpecError("mode: a replay spec is used with `faultline replay`")
+            if run_dir is not None and not args.no_llm and _recorded_no_llm(run_dir):
+                args.no_llm = True                   # a resume keeps what the run started with
         else:
             spec, spec_text = _load_with_text(args.spec)
         if args.command == "diagnose":
@@ -319,6 +322,16 @@ def _diagnose_inputs(args: argparse.Namespace):
     if args.spec is not None and sp.load_spec(args.spec).raw != spec.raw:
         raise sp.SpecError("spec: the given spec differs from the one this run started with")
     return spec, text, run_dir
+
+
+def _recorded_no_llm(run_dir: Path) -> bool:
+    """Whether the run folder's header says it was started with ``--no-llm`` (older folders say nothing)."""
+
+    try:
+        header = json.loads((Path(run_dir) / "steps.json").read_text(encoding="utf-8")).get("run")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(header, dict) and header.get("no_llm") is True
 
 
 def _dry_run(spec: sp.Spec, tools: Any, factory: Optional[Callable[[sp.Spec], Any]], out: Callable[[str], None]) -> int:

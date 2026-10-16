@@ -983,6 +983,8 @@ class Orchestrator:
         try:
             try:
                 if self.spec.mode != "replay":
+                    # Recorded first so --resume can reapply it, even when this segment ends before any Job.
+                    self.steps.set_run(no_llm=bool(self.no_llm))
                     check_candidate_budget(self.spec, self.tools)      # before the backend or any Job exists
                     check_import(self.spec, self.tools, self.run_dir)
                 self._start()

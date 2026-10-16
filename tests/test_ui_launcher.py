@@ -402,6 +402,16 @@ class StopAndResumeTests(LauncherCase):
         self.assertTrue(launch[0].name.endswith("-old-resume"))
         self.assertTrue((launch[0] / "run.log").is_file())
 
+    def test_resume_passes_on_a_recorded_no_llm(self):
+        folder = self.make_run(run={"status": "stopped", "reason": "stopped_by_user", "no_llm": True})
+        self.make().resume(folder.name)
+        self.assertIn("--no-llm", self.popen.calls[0]["argv"])
+
+    def test_resume_of_a_run_that_used_nemotron_has_no_no_llm(self):
+        folder = self.make_run(run={"status": "stopped", "reason": "stopped_by_user", "no_llm": False})
+        self.make().resume(folder.name)
+        self.assertNotIn("--no-llm", self.popen.calls[0]["argv"])
+
     def test_resume_refusals(self):
         live = self.make_run("live-20261017T000000Z", process=True)
         done = self.make_run("done-20261016T000000Z", run={"status": "completed"})

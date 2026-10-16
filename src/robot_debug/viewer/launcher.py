@@ -274,7 +274,8 @@ class Launcher:
         try:
             self._refuse_if_busy()
             launch_dir = self.specs.new_directory(progress["name"] + "-resume")
-            self._spawn(["diagnose", "--resume", str(folder.resolve())], launch_dir)
+            no_llm = (processes.read_run_header(folder) or {}).get("no_llm") is True      # as the run started
+            self._spawn(["diagnose", "--resume", str(folder.resolve())] + (["--no-llm"] if no_llm else []), launch_dir)
             return run
         finally:
             self._lock.release()

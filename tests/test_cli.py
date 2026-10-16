@@ -286,6 +286,41 @@ class Resume(Fixture):
         self.assertEqual(len(self.backends[1].submitted), 1)
         self.assertEqual(len(list(self.runs.iterdir())), 1, "no new run folder")
 
+    def test_resume_remembers_no_llm_from_the_first_segment(self):
+        tools = FakeTools()
+        self.run_cli(["diagnose", str(self.spec_path), "--no-llm", "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], tools=tools, fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        header = json.loads((run_dir / "steps.json").read_text(encoding="utf-8"))["run"]
+        self.assertIs(header["no_llm"], True, "the run folder records it")
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir)], script, tools=tools), 0)
+        backend = self.backends[1]
+        self.assertEqual(backend.workloads[backend.submitted[0]]["order_source"], "fixed_order")
+        self.assertEqual(tools.explained, [], "no Nemotron call after a resume of a --no-llm run")
+        self.assertIs(json.loads((run_dir / "steps.json").read_text(encoding="utf-8"))["run"]["no_llm"], True)
+
+    def test_resume_of_a_run_that_used_nemotron_still_uses_it(self):
+        tools = FakeTools()
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], tools=tools, fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        self.assertIs(json.loads((run_dir / "steps.json").read_text(encoding="utf-8"))["run"]["no_llm"], False)
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir)], script, tools=tools), 0)
+        backend = self.backends[1]
+        self.assertNotEqual(backend.workloads[backend.submitted[0]]["order_source"], "fixed_order")
+
+    def test_no_llm_given_on_the_resume_turns_it_on_for_the_rest_of_the_run(self):
+        tools = FakeTools()
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], tools=tools, fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir), "--no-llm"], script, tools=tools), 0)
+        self.assertEqual(tools.explained, [], "the explanation (a Nemotron call) is skipped")
+        self.assertIs(json.loads((run_dir / "steps.json").read_text(encoding="utf-8"))["run"]["no_llm"], True)
+
     def test_resume_accepts_the_matching_spec_and_refuses_a_different_one(self):
         self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
                      [finished(lambda w: screen_summary())], fail_submit_at=1)

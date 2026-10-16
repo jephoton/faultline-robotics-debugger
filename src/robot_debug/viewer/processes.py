@@ -159,6 +159,14 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def read_run_header(run_dir: Path) -> Dict[str, Any]:
+    """The ``run`` header of ``steps.json`` (status, reason, ``no_llm``...); empty when it cannot be read."""
+
+    data = _read_json(Path(run_dir) / "steps.json")
+    header = data.get("run") if isinstance(data, Mapping) else None
+    return dict(header) if isinstance(header, Mapping) else {}
+
+
 def recorded_process(run_dir: Path, probe: Probe = default_probe) -> Optional[Dict[str, Any]]:
     """The ``process.json`` record of ``run_dir`` when its process is alive, else ``None``."""
 
