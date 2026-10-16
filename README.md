@@ -12,6 +12,18 @@ The repository is
 The local checkout folder and the `robot_debug` Python package keep their
 original names for compatibility.
 
+## See a real result in one minute
+
+[`demo/`](demo/README.md) holds one finished diagnosis (the LIBERO-10 failure
+below, with its report, Nemotron explanation and the original, minimal and
+reference videos). No GPU or cloud account is needed:
+
+```bash
+python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.viewer.server import main; sys.exit(main(['--artifacts', 'demo/root', '--port', '8765']))"
+```
+
+Then open <http://127.0.0.1:8765/diagnoses>.
+
 ## Two modes, one engine
 
 | Mode | Question it answers | What you give it |
@@ -154,7 +166,9 @@ python -m robot_debug.viewer.server --artifacts artifacts --port 8765
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765). After installing the
 package, `faultline-viewer` does the same. The viewer is read-only, binds to
 loopback by default, and labels infrastructure errors separately from robot
-task failures. Evidence must first be downloaded into `artifacts/`.
+task failures. Evidence must first be downloaded into `artifacts/`; finished
+`faultline diagnose` runs appear under `/diagnoses`. To browse the shipped
+demo instead, pass `--artifacts demo/root`.
 
 ## Documentation
 

@@ -19,29 +19,20 @@ addresses or payment details here.
 | NVIDIA GR00T N1.7 and LIBERO checkpoints | The robot policy under test: the four suite checkpoints `libero_{object,10,spatial,goal}`. | 20/20 nominal baseline episodes on LIBERO-Object; repeatable recorded behaviour for the failure, reduction and breadth experiments. | The gated Cosmos-Reason2-2B dependency returned a 403 until the account holder accepted its terms (model onboarding, not a Nebius fault). Weights take about 6 minutes to download on every Job. Unperturbed GR00T passed only 2 of 5 from one LIBERO-Goal start. | Yes, with the task and simulator limits stated. |
 | AllenAI VLA evaluation harness and LIBERO image | Evaluator, simulator, recordings and the LeRobot model-server adapter. | Structured aggregates, traces, SQLite recordings and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user; generic schema warnings appeared on successful episodes; the pinned CLI can leave its Docker client child alive after the evaluator exits (an upstream lifecycle risk, not a Nebius or NVIDIA fault). | Yes for the pinned benchmark, with version and cleanup checks. |
 
-## Jethro's first-hand notes (to be filled in by Jethro)
+## Jethro's first-hand notes
 
-Left empty on purpose: the entries above are what the tools did when we drove
-them, not how onboarding felt to a new user. Jethro adds his own impressions
-before submission.
-
-- Onboarding (account, credits, first hello-world; the exact screen or
-  command, how long it took, what blocked you, what helped):
-  -
-- CLI sign-in (the daily interactive expiry, the workarounds, what you would
-  want instead):
-  -
-- Serverless capacity and quota (waiting for an L40S, quota and bucket
-  limits, how you felt about the cost controls):
-  -
-- Token Factory (key setup, model choice, speed, cost, anything surprising):
-  -
-- GR00T and Nemotron quality (where GR00T surprised you; where Nemotron's
-  explanations helped or misled):
-  -
-- Would you use these again, and one specific improvement to ask each
-  provider for:
-  -
+- **The daily CLI sign-in got in the way of long runs.** The Nebius CLI's
+  interactive sign-in expires after about a day. Twice a run stopped partway
+  because the session had lapsed, once mid-Job, so I had to come back, sign in
+  through the browser and resume. For automated, multi-hour work, a
+  longer-lived, scoped credential would help, or at least a clear "your session
+  expired" error instead of a generic timeout.
+- **Waiting for GPU capacity was the biggest time cost.** On October 13, four
+  of nine L40S Serverless submissions found no machine after about 27 minutes
+  of retries, and another took 22 minutes to start. Nothing was billed while
+  waiting, which was fair, but it stretched short experiments into hours. An
+  estimate of when capacity would free up, or a suggested alternative preset,
+  would have let me plan around it.
 
 ## October 10 first Serverless Job and evidence recovery
 
