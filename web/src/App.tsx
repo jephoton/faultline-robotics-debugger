@@ -8,7 +8,10 @@ import { usePoll } from './lib/polling';
 import { useAsync } from './lib/useAsync';
 import { CasePage } from './pages/CasePage';
 import { HomePage } from './pages/HomePage';
+import { EvidencePage } from './pages/EvidencePage';
+import { GuidePage } from './pages/GuidePage';
 import { NewDiagnosisPage } from './pages/NewDiagnosisPage';
+import { SetupPage } from './pages/SetupPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { RunPage } from './pages/RunPage';
 
@@ -25,6 +28,9 @@ export function AppRoutes({ data }: { data: AppData }) {
           <Route path="case/:id" element={<CasePage />} />
           <Route path="new" element={<NewDiagnosisPage />} />
           <Route path="run/:run" element={<RunPage />} />
+          <Route path="setup" element={<SetupPage />} />
+          <Route path="guide" element={<GuidePage />} />
+          <Route path="evidence" element={<EvidencePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

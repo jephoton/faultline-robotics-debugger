@@ -10,7 +10,7 @@ describe('App bootstrap', () => {
     expect(within(nav).getByText('FL-A-1C20')).toBeInTheDocument();
     expect(within(nav).getByText('FL-M-0F42')).toBeInTheDocument();
     expect(await within(nav).findByText('paraphrase-task1', { selector: '.nav-item__name' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /new diagnosis/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /new diagnosis/i }).length).toBeGreaterThan(0);
   });
 
   it('works as a static gallery: reads the data files and hides the controls', async () => {

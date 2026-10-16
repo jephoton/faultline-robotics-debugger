@@ -29,7 +29,10 @@ export function percent(fraction: number): string {
 /** "libero_10" becomes "LIBERO-10". */
 export function suiteLabel(suite: string | null | undefined): string {
   if (!suite) return 'suite not recorded';
-  return suite.replace(/^libero_/, 'LIBERO-').replace(/_/g, ' ');
+  const match = /^libero_(.+)$/.exec(suite);
+  if (!match) return suite.replace(/_/g, ' ');
+  const rest = (match[1] as string).replace(/_/g, ' ');
+  return `LIBERO-${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
 }
 
 export function pluralise(count: number, one: string, many = `${one}s`): string {
