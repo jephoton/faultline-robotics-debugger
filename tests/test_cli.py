@@ -193,6 +193,84 @@ class Diagnose(Fixture):
         self.assertNotIn("released", self.text)
 
 
+class ProcessRecord(Fixture):
+    """``process.json`` and ``--run-dir-file``: how the control panel finds a run and its folder."""
+
+    def snapshot_during_wait(self, store):
+        def look():
+            folders = list(self.runs.iterdir())
+            store["folder"] = folders[0]
+            record = folders[0] / "process.json"
+            store["process"] = json.loads(record.read_text(encoding="utf-8")) if record.is_file() else None
+            file = store.get("file")
+            store["launch"] = file.read_text(encoding="utf-8") if file is not None and file.is_file() else None
+        return look
+
+    def test_the_running_process_is_recorded_and_removed_when_the_run_ends(self):
+        seen = {}
+        code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)], full_script(),
+                            on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(code, 0)
+        self.assertEqual(seen["process"]["pid"], os.getpid())
+        self.assertEqual(seen["process"]["command"], "diagnose")
+        self.assertRegex(seen["process"]["started_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$")
+        self.assertEqual(sorted(seen["process"]), ["command", "pid", "started_at"])
+        self.assertFalse((seen["folder"] / "process.json").exists())
+
+    def test_the_record_is_removed_after_a_stop_a_crash_and_ctrl_c(self):
+        from tests.test_orchestrator import BackendFailure
+        cases = [("stopped", [finished(lambda w: screen_summary(failing=False))], {}, 3),
+                 ("crash", [], {"fail_prepare": True}, 1),
+                 ("ctrl-c", [finished(lambda w: screen_summary())], {"interrupt_at_wait": 1}, 130)]
+        for label, script, setup, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as root:
+                runs = Path(root) / "runs"
+                self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(runs)],
+                                              script, **setup), expected)
+                self.assertEqual([p.name for p in next(runs.iterdir()).glob("process.json")], [])
+
+    def test_a_replay_records_its_own_command(self):
+        seen = {}
+        case_dir = ReplayCommand.case_dir(self)
+        self.run_cli(["replay", str(case_dir), "--spec", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: {"verdict": "still_reproduces", "complete": True})],
+                     tools=ReplayCommand.Tools(), on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(seen["process"]["command"], "replay")
+        self.assertFalse((seen["folder"] / "process.json").exists())
+
+    def test_the_run_folder_is_written_to_the_run_dir_file_as_soon_as_it_exists(self):
+        seen = {"file": self.dir / "launch" / "run-dir.txt"}
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs),
+                      "--run-dir-file", str(seen["file"])], full_script(), on_wait=self.snapshot_during_wait(seen))
+        self.assertEqual(Path(seen["launch"]).resolve(), seen["folder"].resolve())
+        self.assertTrue(Path(seen["launch"]).is_absolute())
+        self.assertTrue(seen["file"].is_file(), "the launcher can still read it after the run")
+
+    def test_resume_writes_the_resumed_folder(self):
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        target = self.dir / "resume-dir.txt"
+        script = [finished(reduce_one(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True, reduced=True))]
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir), "--run-dir-file", str(target)],
+                                      script), 0)
+        self.assertEqual(Path(target.read_text(encoding="utf-8")).resolve(), run_dir.resolve())
+        self.assertFalse((run_dir / "process.json").exists())
+
+    def test_a_dry_run_creates_no_record_and_no_launch_file(self):
+        target = self.dir / "run-dir.txt"
+        self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--dry-run", "--runs-root", str(self.runs),
+                                       "--run-dir-file", str(target)]), 0)
+        self.assertFalse(target.exists())
+        self.assertFalse(self.runs.exists())
+
+    def test_the_option_is_hidden_from_the_help(self):
+        self.assertNotIn("run-dir-file", cli._parser().format_help())
+        for command in ("diagnose", "replay"):
+            parser = cli._parser()._subparsers._group_actions[0].choices[command]
+            self.assertNotIn("run-dir-file", parser.format_help())
+
+
 class Resume(Fixture):
     def test_resume_continues_without_repeating_paid_jobs(self):
         first = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],

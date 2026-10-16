@@ -23,7 +23,9 @@ credentials stay in the Nebius CLI.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Sequence
@@ -34,6 +36,7 @@ from robot_debug import spec as sp
 
 DEFAULT_RUNS_ROOT = Path("artifacts") / "runs"
 EXIT_UNEXPECTED_VERDICT = 5
+PROCESS_FILE = "process.json"          # {"pid", "started_at", "command"} while a diagnose/replay is running
 # ``faultline replay --expect``: the word the user gives -> the replay verdict that meets it.
 EXPECTATIONS = {"reproduces": "still_reproduces", "fixed": "no_longer_reproduces"}
 
@@ -54,6 +57,7 @@ def _parser() -> argparse.ArgumentParser:
     diagnose.add_argument("--dry-run", action="store_true", help="print the planned Jobs and worst-case spend; create nothing")
     diagnose.add_argument("--resume", type=Path, metavar="RUN_DIR", help="continue an interrupted run folder")
     diagnose.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    diagnose.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     replay = commands.add_parser("replay", help="re-run a saved case and say whether the failure still reproduces")
     replay.add_argument("case", type=Path, help="a run folder (or case.json) holding a scenario case")
@@ -64,6 +68,7 @@ def _parser() -> argparse.ArgumentParser:
                         "matches (reproduces: the failure still reproduces; fixed: it no longer does), "
                         "exit 5 otherwise or when the verdict is inconclusive")
     replay.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    replay.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     image = commands.add_parser("image", help="build or push the simulator image")
     kinds = image.add_subparsers(dest="image_command", required=True, parser_class=_Parser)
@@ -75,10 +80,42 @@ def _parser() -> argparse.ArgumentParser:
 
     cases = commands.add_parser("cases", help="list finished runs and their cases")
     cases.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+
     return parser
 
 
 # --------------------------------------------------------------------------------------
+
+
+def _utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(str(temporary), str(path))
+
+
+def _record_process(run_dir: Path, command: str, started: dt.datetime) -> None:
+    """``process.json``: which process is running this folder, so the control panel (and ``faultline stop``)
+    can tell a live run from a finished or crashed one. Removed again by :func:`_clear_process`."""
+
+    stamp = started.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    record = {"pid": os.getpid(), "started_at": stamp, "command": command}
+    _write_atomic(Path(run_dir) / PROCESS_FILE, json.dumps(record, sort_keys=True) + "\n")
+
+
+def _clear_process(run_dir: Path) -> None:
+    """Delete our own ``process.json`` (never one that names another process)."""
+
+    path = Path(run_dir) / PROCESS_FILE
+    try:
+        if json.loads(path.read_text(encoding="utf-8")).get("pid") == os.getpid():
+            path.unlink()
+    except (OSError, ValueError, AttributeError):
+        pass
 
 
 def _lazy_backend_factory() -> Callable[[sp.Spec], Any]:
@@ -134,6 +171,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
          poll_seconds: float = 60.0, pause_seconds: float = orch.CAPACITY_PAUSE_SECONDS) -> int:
     run_dir: Optional[Path] = None
     runner: Optional[orch.Orchestrator] = None
+    recorded: Optional[Path] = None
+    started = _utc_now()
     try:
         args = _parser().parse_args(argv)
         if args.command == "cases":
@@ -157,6 +196,11 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         factory = factory or _lazy_backend_factory()
         if run_dir is None:
             run_dir = orch.create_run_dir(args.runs_root, spec, spec_text, tools.now())
+        _record_process(run_dir, args.command, started)
+        recorded = run_dir
+        launch_file = getattr(args, "run_dir_file", None)
+        if launch_file is not None:                  # hidden: the control panel learns the folder from this
+            _write_atomic(Path(launch_file), str(Path(run_dir).resolve()))
         ledger = lg.Ledger.load(run_dir / "ledger.json", cap_usd=spec.budget.max_spend_usd,
                                 max_hours=spec.budget.max_hours, hourly_usd=spec.backend.hourly_usd)
         backend = factory(spec)
@@ -188,6 +232,9 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         if run_dir is not None:
             out("Run folder: {}".format(run_dir))
         return 1
+    finally:
+        if recorded is not None:
+            _clear_process(recorded)
 
 
 def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], None]) -> int:
