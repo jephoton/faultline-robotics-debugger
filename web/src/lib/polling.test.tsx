@@ -73,6 +73,21 @@ describe('usePoll', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
+  it('does not refetch when the tab flickers hidden and shown within one interval', async () => {
+    let n = 0;
+    const fn = vi.fn(async () => ++n);
+    render(<Probe fn={fn} />);
+    await act(async () => {});
+    expect(fn).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 5; i += 1) {
+      act(() => setHidden(true));
+      await act(async () => {
+        setHidden(false);
+      });
+    }
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it('stops once the data satisfies `until`', async () => {
     let n = 0;
     const fn = vi.fn(async () => ++n);

@@ -17,7 +17,8 @@ export interface PollResult<T> {
 
 /**
  * Poll an async function on a timer. Requests never overlap (the next one is scheduled only after the
- * previous one settles) and polling pauses while the tab is hidden, resuming at once when it is shown again.
+ * previous one settles) and polling pauses while the tab is hidden, resuming when it is shown again (at once
+ * if the last fetch is older than one interval).
  */
 export function usePoll<T>(fn: () => Promise<T>, intervalMs: number, options: PollOptions<T> = {}): PollResult<T> {
   const { enabled = true, key, until } = options;
@@ -35,11 +36,13 @@ export function usePoll<T>(fn: () => Promise<T>, intervalMs: number, options: Po
     let inflight = false;
     let finished = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastStarted = 0;
 
     const tick = async () => {
       if (cancelled || inflight || finished) return;
       if (document.hidden) return; // the visibilitychange handler resumes us
       inflight = true;
+      lastStarted = Date.now();
       try {
         const next = await fnRef.current();
         if (cancelled) return;
@@ -57,10 +60,13 @@ export function usePoll<T>(fn: () => Promise<T>, intervalMs: number, options: Po
     };
 
     const onVisibility = () => {
-      if (!document.hidden) {
-        clearTimeout(timer);
-        void tick();
-      }
+      if (document.hidden) return;
+      clearTimeout(timer);
+      // Shown again: fetch at once only if the data is older than one interval, so quick hide/show
+      // flicker does not turn into a burst of requests.
+      const wait = lastStarted + intervalMs - Date.now();
+      if (wait <= 0) void tick();
+      else timer = setTimeout(() => void tick(), wait);
     };
 
     tickRef.current = () => {
