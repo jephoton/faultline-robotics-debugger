@@ -36,9 +36,15 @@ class FakePopen:
     def __init__(self, runs: Path, behaviour="normal", run_name="demo-20261017T010203Z"):
         self.runs, self.behaviour, self.run_name = runs, behaviour, run_name
         self.calls: List[dict] = []
+        self.children: List[FakeProcess] = []
 
     def __call__(self, argv, **kwargs):
         self.calls.append({"argv": list(argv), **kwargs})
+        child = self._child(argv, kwargs)
+        self.children.append(child)
+        return child
+
+    def _child(self, argv, kwargs):
         if self.behaviour == "oserror":
             raise FileNotFoundError("python")
         if self.behaviour == "exit":
@@ -264,6 +270,82 @@ class StartTests(LauncherCase):
                                        stderr=subprocess.STDOUT, **lc.popen_options(sys.platform == "win32"))
         self.assertEqual(process.wait(30), 0)
         self.assertIn("detached ok", log.read_text(encoding="utf-8"))
+
+
+class SlowStartTests(LauncherCase):
+    """A start that gives up waiting (504) leaves a child that may still become a paid run (review H1)."""
+
+    def slow_start(self, launcher=None):
+        launcher = launcher or self.make("silent")
+        directory, spec = self.launch_dir("slow")
+        with self.assertRaises(ApiError) as caught:
+            launcher.start(spec, directory)
+        self.assertEqual(caught.exception.status, 504)
+        return launcher, directory, caught.exception
+
+    def test_the_timeout_names_the_launch_folder_and_keeps_its_log_findable(self):
+        _launcher, directory, error = self.slow_start()
+        self.assertEqual(error.payload()["launch"], directory.name)
+        link = json.loads((directory / processes.LAUNCH_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(Path(link["log"]), (directory / "run.log").resolve())
+
+    def test_a_start_after_a_timeout_is_refused_while_the_child_may_still_report(self):
+        launcher, _directory, _error = self.slow_start()
+        other, spec = self.launch_dir("second")
+        with self.assertRaises(ApiError) as caught:
+            launcher.start(spec, other)
+        self.assertEqual(caught.exception.status, 409)
+        self.assertEqual(len(self.popen.calls), 1, "no second run was spawned")
+
+    def test_a_resume_and_a_replay_are_refused_too(self):
+        launcher, _directory, _error = self.slow_start()
+        stopped = self.make_run(run={"status": "stopped", "reason": "stopped_by_user"})
+        with self.assertRaises(ApiError) as resumed:
+            launcher.resume(stopped.name)
+        other, spec = self.launch_dir("replay")
+        with self.assertRaises(ApiError) as replayed:
+            launcher.replay(self.root, spec, other)
+        self.assertEqual((resumed.exception.status, replayed.exception.status), (409, 409))
+        self.assertEqual(len(self.popen.calls), 1)
+
+    def test_busy_covers_a_pending_launch_that_active_runs_cannot_see(self):
+        launcher, _directory, _error = self.slow_start()
+        self.assertEqual(launcher.active(), [])
+        self.assertTrue(launcher.busy())
+
+    def test_the_launch_ends_when_the_child_exits(self):
+        launcher, _directory, _error = self.slow_start()
+        child = self.popen.children[0]
+        child.exit_code = 2
+        self.assertFalse(launcher.busy())
+        other, spec = self.launch_dir("again")
+        self.popen.behaviour = "normal"
+        launcher.start(spec, other)
+        self.assertEqual(len(self.popen.calls), 2)
+
+    def test_the_launch_ends_when_the_child_reports_its_folder_and_the_log_is_linked_then(self):
+        launcher, directory, _error = self.slow_start()
+        folder = self.make_run("late-20261017T010203Z")
+        (directory / lc.RUN_DIR_FILE).write_text(str(folder), encoding="utf-8")
+        self.assertFalse(launcher.busy(), "the run now owns its folder; process.json (if any) is what counts")
+        self.assertTrue((folder / processes.LAUNCH_FILE).is_file())
+        self.assertFalse((directory / lc.PENDING_FILE).exists())
+
+    def test_a_restarted_viewer_still_sees_the_pending_child(self):
+        _launcher, directory, _error = self.slow_start()
+        pid = json.loads((directory / lc.PENDING_FILE).read_text(encoding="utf-8"))["pid"]
+        alive = self.make("silent", probe=lambda candidate: processes.ProcessInfo(candidate == pid, None))
+        self.assertTrue(alive.busy())
+        gone = self.make("silent", probe=lambda candidate: processes.ProcessInfo(False, None))
+        self.assertFalse(gone.busy())
+
+    def test_a_child_that_never_launched_leaves_no_pending_record(self):
+        launcher = self.make("exit")
+        directory, spec = self.launch_dir()
+        with self.assertRaises(ApiError):
+            launcher.start(spec, directory)
+        self.assertFalse((directory / lc.PENDING_FILE).exists())
+        self.assertFalse(launcher.busy())
 
 
 class ReplayTests(LauncherCase):

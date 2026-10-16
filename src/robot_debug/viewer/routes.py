@@ -93,7 +93,7 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
             raise ApiError(412, "The plan changed since you reviewed it. Run the dry run again.")
 
     def refuse_if_busy() -> None:
-        if launcher.active():
+        if launcher.busy():
             raise ApiError(409, "Another run is active. Stop it or wait for it to finish before starting another.")
 
     def start_run(request: Request):

@@ -36,12 +36,14 @@ class Refusal(NamedTuple):
 class ApiError(Exception):
     """A request the server refuses with a plain sentence (and, for a spec, the field errors)."""
 
-    def __init__(self, status: int, message: str, errors: Optional[list] = None) -> None:
+    def __init__(self, status: int, message: str, errors: Optional[list] = None,
+                 extra: Optional[Mapping[str, Any]] = None) -> None:
         super().__init__(message)
         self.status, self.message, self.errors = status, message, list(errors or [])
+        self.extra = dict(extra or {})
 
     def payload(self) -> Dict[str, Any]:
-        return {"error": self.message, "errors": self.errors}
+        return {**self.extra, "error": self.message, "errors": self.errors}
 
 
 def is_loopback(host: str) -> bool:

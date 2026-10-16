@@ -12,6 +12,7 @@ writes ``stop-request.json``; the run itself cancels its Job and settles the led
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import subprocess
@@ -32,6 +33,7 @@ DISCOVER_SECONDS = 30.0          # how long a start waits for the run to report 
 DISCOVER_POLL_SECONDS = 0.1
 RUN_LOG = "run.log"
 RUN_DIR_FILE = "run-dir.txt"
+PENDING_FILE = "ui-pending.json"     # {"pid", "started_at"}: a spawned child that has not reported its run folder
 
 
 def popen_options(win32: bool) -> Dict[str, Any]:
@@ -64,14 +66,67 @@ class Launcher:
         package_src = Path(robot_debug.__file__).resolve().parents[1]
         self.source_root = Path(source_root) if source_root else package_src
         self._lock = threading.Lock()
+        self._children: Dict[str, Any] = {}              # launch folder name -> (process handle, launch folder)
+        self._children_lock = threading.Lock()
 
     # -- what is running -------------------------------------------------------------------------------
 
     def active(self) -> List[Dict[str, Any]]:
         return processes.active_runs(self.runs_root, self.probe)
 
+    def busy(self) -> bool:
+        """Whether a new run must wait: a run's process is alive, or a spawned child has not yet reported its run
+        folder (a slow start that gave up waiting, 504, can still become a paid run)."""
+
+        return bool(self.active()) or self._launching()
+
+    @staticmethod
+    def _reported(launch_dir: Path) -> Optional[str]:
+        try:
+            return (launch_dir / RUN_DIR_FILE).read_text(encoding="utf-8").strip() or None
+        except OSError:
+            return None
+
+    def _settle(self, launch_dir: Path, reported: Optional[str]) -> None:
+        """A launch is over: the child reported its folder (link its log now) or it is gone."""
+
+        if reported:
+            self._link(self.runs_root / Path(reported).name, launch_dir / RUN_LOG, launch_dir)
+        try:
+            (launch_dir / PENDING_FILE).unlink()
+        except OSError:
+            pass
+
+    def _launching(self) -> bool:
+        pending = False
+        with self._children_lock:
+            for name, (process, launch_dir) in list(self._children.items()):
+                reported = self._reported(launch_dir)
+                if reported or process.poll() is not None:
+                    del self._children[name]
+                    self._settle(launch_dir, reported)
+                else:
+                    pending = True
+            owned = set(self._children)
+        try:                                              # children of an earlier viewer process
+            records = [p for p in self.specs.specs_ui.glob("*/" + PENDING_FILE) if p.parent.name not in owned]
+        except OSError:
+            records = []
+        for record_file in records:
+            launch_dir = record_file.parent
+            reported = self._reported(launch_dir)
+            try:
+                record = json.loads(record_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                record = None
+            if reported or not processes.process_alive(record, self.probe):
+                self._settle(launch_dir, reported)
+            else:
+                pending = True
+        return pending
+
     def _refuse_if_busy(self) -> None:
-        if self.active():
+        if self.busy():
             raise ApiError(409, "Another run is active. Stop it or wait for it to finish before starting another.")
 
     # -- spawning -----------------------------------------------------------------------------------------
@@ -114,6 +169,7 @@ class Launcher:
                                      **popen_options(self.win32))
             except OSError:
                 raise ApiError(500, "The run could not be started on this machine.") from None
+        self._remember(process, launch_dir)
         deadline = self.clock() + self.discover_seconds
         while True:
             try:
@@ -122,14 +178,38 @@ class Launcher:
                 reported = ""
             if reported:
                 run = Path(reported).name
+                self._forget(launch_dir)
                 self._link(self.runs_root / run, log_path, launch_dir)
                 return run
             if process.poll() is not None:
+                self._forget(launch_dir)
                 raise ApiError(500, "The run did not start. {}".format(self._failure_line(log_path)))
             if self.clock() >= deadline:
-                raise ApiError(504, "The run was started but has not reported its folder yet; check the run page "
-                                    "in a moment.")
+                self._link(None, log_path, launch_dir)      # the log stays findable though no run folder exists yet
+                raise ApiError(504, "The run was started but has not reported its folder yet. It counts as running, "
+                                    "so nothing else can start until it reports or ends; its log is in the launch "
+                                    "folder.", extra={"launch": launch_dir.name})
             self.sleep(DISCOVER_POLL_SECONDS)
+
+    def _remember(self, process: Any, launch_dir: Path) -> None:
+        """Keep the child's handle and a pending record (for a restarted viewer) until it reports or ends."""
+
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        try:
+            (launch_dir / PENDING_FILE).write_text(
+                json.dumps({"pid": getattr(process, "pid", None), "started_at": stamp}), encoding="utf-8")
+        except OSError:
+            pass
+        with self._children_lock:
+            self._children[launch_dir.name] = (process, launch_dir)
+
+    def _forget(self, launch_dir: Path) -> None:
+        with self._children_lock:
+            self._children.pop(launch_dir.name, None)
+        try:
+            (launch_dir / PENDING_FILE).unlink()
+        except OSError:
+            pass
 
     @staticmethod
     def _failure_line(log_path: Path) -> str:
@@ -141,11 +221,12 @@ class Launcher:
         return processes.scrub_text(lines[-1])[:300] if lines else ""
 
     @staticmethod
-    def _link(run_dir: Path, log_path: Path, launch_dir: Path) -> None:
-        """Tell the run folder where its UI log is (``ui-launch.json``), so the progress page can tail it."""
+    def _link(run_dir: Optional[Path], log_path: Path, launch_dir: Path) -> None:
+        """Tell the run folder where its UI log is (``ui-launch.json``), so the progress page can tail it. With no
+        run folder yet, the record goes in the launch folder itself."""
 
         try:
-            (run_dir / processes.LAUNCH_FILE).write_text(
+            ((run_dir or launch_dir) / processes.LAUNCH_FILE).write_text(
                 json.dumps({"log": str(log_path.resolve()), "launch": str(launch_dir.resolve())}), encoding="utf-8")
         except OSError:
             pass
