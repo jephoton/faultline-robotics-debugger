@@ -1346,14 +1346,19 @@ class Orchestrator:
                         result: Any, state: str, seconds: Optional[float], started: Any) -> None:
         """The user stopped the Job (``faultline stop``): settle it, leave the run resumable, end the run.
 
-        The ledger is charged the measured container time, or the whole reservation when none is known. A cancel
+        The ledger is charged the measured container time, or the whole reservation when none is known; a Job
+        cancelled (and confirmed) before it ever started is not billed, so it settles at zero. A cancel
         the provider never confirmed (state TIMEOUT or UNKNOWN) keeps the attempt re-attachable, so ``--resume``
         replaces the worst-case charge with the measured one instead of forgetting a Job that may still run; a
         confirmed one is marked ``cancelled`` and never re-attached (the next attempt gets a fresh name).
         """
 
         confirmed = state not in ("TIMEOUT", "UNKNOWN")
-        cost = self.ledger.settle_worst_case(job_name) if seconds is None else self.ledger.settle(job_name, seconds)
+        never_ran = confirmed and seconds is None and started is None     # cancelled while queued: not billed
+        if never_ran:
+            cost = self.ledger.settle(job_name, None)
+        else:
+            cost = self.ledger.settle_worst_case(job_name) if seconds is None else self.ledger.settle(job_name, seconds)
         self._inflight = None
         job_dir.mkdir(parents=True, exist_ok=True)
         _write_json(job_dir / "result.json", {
@@ -1365,7 +1370,7 @@ class Orchestrator:
         self.steps.update(step, status="stopped")
         self.say(step, "{} stopped by the user ({}; charged US${:.2f}{})".format(
             job_name, "cancelled" if confirmed else "cancel not confirmed", cost,
-            "" if seconds is not None else ", the worst case: no container time is known"))
+            "" if seconds is not None or never_ran else ", the worst case: no container time is known"))
         raise StopRun(STOPPED_BY_USER, "{} was {} and charged US${:.2f}; resume with --resume".format(
             job_name, "cancelled" if confirmed else "asked to stop but not confirmed stopped", cost))
 

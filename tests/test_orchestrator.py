@@ -202,7 +202,9 @@ class FakeBackend:
             self.on_wait()
         if should_stop is not None and self.stop_outcome is not None and should_stop():
             self.stop_cancels.append(handle.job_name)
-            state, seconds = self.stop_outcome
+            state, seconds, *times = self.stop_outcome
+            if times:                                  # (started_at, finished_at) when the test sets them
+                return Result(handle.job_name, handle.job_id, state, "stopped_by_user", times[0][0], times[0][1], seconds)
             return Result(handle.job_name, handle.job_id, state, "stopped_by_user",
                           None if seconds is None else MOMENT, None if seconds is None else MOMENT, seconds)
         if self.kills_at_wait is not None and len(self.waited) == self.kills_at_wait:
@@ -1135,16 +1137,36 @@ class StopTests(Base):
         self.assertFalse((job_dir / "evidence").exists(), "a cancelled Job's partial export is not downloaded")
         self.assertTrue(any("stopped_by_user" in line for line in lines))
 
-    def test_a_stop_with_no_known_container_time_charges_the_worst_case(self):
+    def test_stopping_a_job_that_never_started_charges_nothing(self):
+        # A queued Job cancelled before it started: serverless does not bill queued time (the capacity path too).
         runner, backend, tools, ledger, lines = self.stopping_world(
             [finished(lambda w: screen_summary())], outcome=("CANCELLED", None))
         result = runner.diagnose()
         name = backend.submitted[0]
         self.assertEqual(result.reason, "stopped_by_user")
         job = ledger.jobs[name]
+        self.assertEqual(job["cost_usd"], 0.0)
+        self.assertNotIn("worst_case", job)
+        self.assertEqual((ledger.reserved, ledger.spent), (0.0, 0.0))
+        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "cancelled")
+        self.assertTrue(any("charged US$0.00" in line for line in lines))
+
+    def test_stopping_a_job_that_started_charges_the_time_it_ran(self):
+        started, ended = MOMENT, MOMENT + dt.timedelta(seconds=120)
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("CANCELLED", None, (started, ended)))
+        runner.diagnose()
+        job = ledger.jobs[backend.submitted[0]]
+        self.assertAlmostEqual(job["cost_usd"], cost(120), msg="the start and end times give the container seconds")
+        self.assertNotIn("worst_case", job)
+
+    def test_stopping_a_job_that_started_but_whose_time_is_unknown_charges_the_worst_case(self):
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("CANCELLED", None, (MOMENT, None)))
+        runner.diagnose()
+        job = ledger.jobs[backend.submitted[0]]
         self.assertEqual(job["cost_usd"], job["reserved_usd"])
         self.assertTrue(job["worst_case"])
-        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "cancelled")
 
     def test_a_cancel_the_provider_never_confirmed_stays_re_attachable(self):
         runner, backend, tools, ledger, lines = self.stopping_world(
