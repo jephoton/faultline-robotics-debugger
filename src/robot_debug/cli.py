@@ -4,6 +4,7 @@
     faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env] [--expect reproduces|fixed]
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
+    faultline stop RUN_DIR
 
 A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
 rewords the task instruction, one Job screens the rewordings, a second reduces the failing wording to its
@@ -81,6 +82,9 @@ def _parser() -> argparse.ArgumentParser:
     cases = commands.add_parser("cases", help="list finished runs and their cases")
     cases.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
 
+    stop = commands.add_parser("stop", help="stop a running diagnosis safely (the Job is cancelled; --resume continues)")
+    stop.add_argument("run_dir", type=Path, help="the run folder (or its name under --runs-root)")
+    stop.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
     return parser
 
 
@@ -155,9 +159,11 @@ def list_runs(root: Path) -> List[str]:
     return rows
 
 
-def _final_lines(result: orch.RunResult) -> List[str]:
+def _final_lines(result: orch.RunResult, resumable: bool = True) -> List[str]:
     lines = ["{}{}".format(result.status.capitalize(), "" if result.reason is None else " ({})".format(result.reason)),
              "Run folder: {}".format(result.run_dir), "Spent: US${:.2f}".format(result.spent_usd)]
+    if result.reason == orch.STOPPED_BY_USER and resumable:
+        lines.append("Resume with: faultline diagnose --resume {}".format(result.run_dir))
     if result.case_id:
         lines.append("Case: {}".format(result.case_id[:12]))
     if result.verdict is not None or result.reproduces is not None:
@@ -181,6 +187,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             return 0
         if args.command == "image":
             return _image(args, image_module, out)
+        if args.command == "stop":
+            return _stop(args, out)
         tools = tools or orch.DefaultTools()
         if args.command == "diagnose":
             spec, spec_text, run_dir = _diagnose_inputs(args)
@@ -196,6 +204,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         factory = factory or _lazy_backend_factory()
         if run_dir is None:
             run_dir = orch.create_run_dir(args.runs_root, spec, spec_text, tools.now())
+        elif args.command == "diagnose" and args.resume is not None:
+            orch.clear_stop_request(run_dir)         # a stop belongs to the process it stopped, not to the next one
         _record_process(run_dir, args.command, started)
         recorded = run_dir
         launch_file = getattr(args, "run_dir_file", None)
@@ -210,7 +220,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
                                    poll_seconds=poll_seconds, pause_seconds=pause_seconds)
         out("Run folder: {}".format(run_dir))
         result = runner.diagnose() if args.command == "diagnose" else runner.replay(args.case)
-        for line in _final_lines(result):
+        for line in _final_lines(result, resumable=spec.mode != "replay"):
             out(line)
         expect = getattr(args, "expect", None)
         if expect is None:
@@ -300,6 +310,23 @@ def _dry_run(spec: sp.Spec, tools: Any, factory: Optional[Callable[[sp.Spec], An
         out("Fix the backend: section before running; nothing was created or submitted.")
         return 2
     out("Backend '{}' accepted the spec. Dry run: nothing was created or submitted.".format(spec.backend.kind))
+    return 0
+
+
+def _stop(args: argparse.Namespace, out: Callable[[str], None]) -> int:
+    """``faultline stop RUN_DIR``: ask the process running that folder to stop. The request is only a file;
+    the run cancels its current Job, settles the ledger and exits, and ``--resume`` continues it."""
+
+    run_dir = Path(args.run_dir)
+    if not (run_dir / "steps.json").is_file():
+        named = Path(args.runs_root) / args.run_dir
+        if not (named / "steps.json").is_file():
+            raise sp.SpecError("usage: {} is not a faultline run folder".format(run_dir))
+        run_dir = named
+    orch.request_stop(run_dir)
+    out("Stop requested for {}.".format(run_dir))
+    out("The current Job is cancelled and charged for the time it ran; the run then ends and can be continued "
+        "with: faultline diagnose --resume {}".format(run_dir))
     return 0
 
 

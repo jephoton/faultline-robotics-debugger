@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import subprocess
-from typing import Any, List, Mapping, Optional, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, List, Mapping, Optional, Protocol, Sequence, runtime_checkable
 
 
 class BackendError(RuntimeError):
@@ -37,7 +37,7 @@ class JobResult:
     job_id: Optional[str]
     # COMPLETED | FAILED | ERROR | CANCELLED | TIMEOUT | UNKNOWN
     state: str
-    # e.g. "NotEnoughResources", "ContainerFailed", "watchdog_cancel", or None
+    # e.g. "NotEnoughResources", "ContainerFailed", "watchdog_cancel", "stopped_by_user", or None
     reason: Optional[str]
     started_at: Optional[str]    # ISO-8601 UTC, None if the Job never started
     finished_at: Optional[str]
@@ -54,9 +54,15 @@ class Backend(Protocol):
     def submit(self, job_name: str, workload: Mapping[str, Any]) -> JobHandle:
         """Start one Job; ``workload["run_id"]`` must equal ``job_name``."""
 
-    def wait(self, handle: JobHandle, *, running_max_seconds: float,
-             total_max_seconds: float, poll_seconds: float = 60.0) -> JobResult:
-        """Block until the Job is terminal, cancelling it itself past a limit."""
+    def wait(self, handle: JobHandle, *, running_max_seconds: float, total_max_seconds: float,
+             poll_seconds: float = 60.0, should_stop: Optional[Callable[[], bool]] = None) -> JobResult:
+        """Block until the Job is terminal, cancelling it itself past a limit.
+
+        ``should_stop`` (the user asked to stop the run) is checked more often than the Job is polled. When it
+        returns true the backend sends the cancel once, keeps polling to a terminal state or the cancel grace,
+        and returns a result whose reason is :data:`STOPPED_BY_USER`. A Job that ends on its own first is
+        reported as it ended.
+        """
 
     def download(self, handle: JobHandle, dest: Path) -> Path:
         """Fetch only this Job's export into ``dest`` and return ``dest``."""
@@ -83,6 +89,9 @@ class Backend(Protocol):
     def price_per_hour(self) -> float:
         """Hourly USD price used for the spend cap arithmetic."""
 
+
+STOPPED_BY_USER = "stopped_by_user"          # JobResult.reason of a Job the user stopped (faultline stop)
+STOP_CHECK_SECONDS = 2.0                     # how often wait() looks at should_stop between cloud polls
 
 TERMINAL_STATES = frozenset({"COMPLETED", "FAILED", "ERROR", "CANCELLED", "TIMEOUT"})
 

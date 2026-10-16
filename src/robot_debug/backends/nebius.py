@@ -33,6 +33,8 @@ from robot_debug.ledger import provider_timeout_seconds
 from robot_debug.spec import DEFAULT_PLATFORM, DEFAULT_PRESET
 
 from . import (
+    STOP_CHECK_SECONDS,
+    STOPPED_BY_USER,
     BackendError,
     JobHandle,
     JobResult,
@@ -51,6 +53,7 @@ CALL_TIMEOUT_SECONDS = 60.0
 SUBMIT_TIMEOUT_SECONDS = 180.0
 CANCEL_GRACE_SECONDS = 300.0           # after a cancel; the provider timeout (deadline + 600 s) ends the Job anyway
 WAIT_MARGIN_SECONDS = 300.0            # beyond the watchdog limits before wait() gives up for good
+STOP_POLL_SECONDS = 5.0                # poll pace after the user's stop cancelled a Job (a watchdog cancel keeps its own)
 CREATE_LOOKUP_TRIES = 5
 MAX_DOWNLOAD_BYTES = 5 * 1024 ** 3
 STATE_FILE = "backend-state.json"
@@ -542,8 +545,8 @@ class NebiusBackend:
         self._mark_pending(job_name)
         return JobHandle(job_name, job_id)
 
-    def wait(self, handle: JobHandle, *, running_max_seconds: float,
-             total_max_seconds: float, poll_seconds: float = 60.0) -> JobResult:
+    def wait(self, handle: JobHandle, *, running_max_seconds: float, total_max_seconds: float,
+             poll_seconds: float = 60.0, should_stop: Optional[Callable[[], bool]] = None) -> JobResult:
         job_id = handle.job_id or self._lookup_job_id(handle.job_name)
         if job_id is None:
             raise BackendError("job %s was not found" % handle.job_name)
@@ -551,6 +554,7 @@ class NebiusBackend:
         origin: Optional[float] = None
         running_since: Optional[float] = None
         cancel_sent_at: Optional[float] = None
+        cancel_reason = "watchdog_cancel"          # why the cancel was sent: a limit, or the user's stop
         failures = 0
         # Hard ceiling: the watchdog limits, the cancel grace and a margin. Past it the API has not shown a
         # final state for the whole worst case (unreachable, or a cancel that never goes through): stop
@@ -572,7 +576,7 @@ class NebiusBackend:
                 if origin is None:
                     origin = parse_time((job.get("metadata") or {}).get("created_at"))
                 if state in _TERMINAL:
-                    result = self._result(handle.job_name, job_id, job, cancel_sent_at is not None)
+                    result = self._result(handle.job_name, job_id, job, cancel_sent_at is not None, cancel_reason)
                     if result.started_at is None:
                         self._clear_pending(handle.job_name)          # it never ran: it exported nothing
                     return result
@@ -583,17 +587,36 @@ class NebiusBackend:
                     "gave up waiting for job %s after %d s without a final state from the API; it may still "
                     "be running, so check the console" % (handle.job_name, now - (origin or entered)))
             if cancel_sent_at is None:
+                stopping = should_stop is not None and bool(should_stop())
                 over_running = running_since is not None and now - running_since > running_max_seconds
                 over_total = now - (origin or entered) > total_max_seconds
-                if over_running or over_total:
+                if stopping or over_running or over_total:
                     try:
                         self._cli.text(["ai", "job", "cancel", job_id])
                         cancel_sent_at = now
+                        cancel_reason = STOPPED_BY_USER if stopping else "watchdog_cancel"
                     except BackendError:
                         pass  # try again on the next poll
             elif now - cancel_sent_at > CANCEL_GRACE_SECONDS:
-                return JobResult(handle.job_name, job_id, "TIMEOUT", "watchdog_cancel", None, None, None)
-            self._sleep(poll_seconds)
+                return JobResult(handle.job_name, job_id, "TIMEOUT", cancel_reason, None, None, None)
+            if cancel_sent_at is None:
+                self._pause(poll_seconds, should_stop)
+            else:           # after the user's stop the answer is wanted promptly; a watchdog cancel keeps the pace
+                self._sleep(min(poll_seconds, STOP_POLL_SECONDS) if cancel_reason == STOPPED_BY_USER else poll_seconds)
+
+    def _pause(self, seconds: float, should_stop: Optional[Callable[[], bool]]) -> None:
+        """Sleep until the next cloud poll; with a stop hook, in short slices that end early on a stop request."""
+
+        if should_stop is None:
+            self._sleep(seconds)
+            return
+        left = float(seconds)
+        while left > 0:
+            step = min(left, STOP_CHECK_SECONDS)
+            self._sleep(step)
+            left -= step
+            if should_stop():
+                return
 
     def download(self, handle: JobHandle, dest: Path) -> Path:
         state = self._state
@@ -949,14 +972,15 @@ class NebiusBackend:
             raise CliError("nebius ai job get returned an unexpected response", "other")
         return payload
 
-    def _result(self, job_name: str, job_id: str, job: Dict[str, Any], cancelled: bool) -> JobResult:
+    def _result(self, job_name: str, job_id: str, job: Dict[str, Any], cancelled: bool,
+                cancel_reason: str = "watchdog_cancel") -> JobResult:
         status = job.get("status") or {}
         state = _TERMINAL[str(status.get("state")).upper()]
         details = status.get("state_details") or {}
         code = details.get("code") if isinstance(details, dict) else None
         reason = str(code) if code else None
         if cancelled and state == "CANCELLED":
-            reason = "watchdog_cancel"
+            reason = cancel_reason
         started = parse_time(status.get("started_at"))
         finished = parse_time(status.get("finished_at"))
         seconds = max(0.0, finished - started) if started is not None and finished is not None else None
