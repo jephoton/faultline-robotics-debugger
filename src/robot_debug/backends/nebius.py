@@ -561,6 +561,7 @@ class NebiusBackend:
         # polling and let the caller charge the worst case and try one more cancel.
         ceiling = max(total_max_seconds, running_max_seconds) + CANCEL_GRACE_SECONDS + WAIT_MARGIN_SECONDS
         while True:
+            cancel_failed = False
             job: Optional[Dict[str, Any]] = None
             try:
                 job = self._get_job(job_id)
@@ -596,10 +597,12 @@ class NebiusBackend:
                         cancel_sent_at = now
                         cancel_reason = STOPPED_BY_USER if stopping else "watchdog_cancel"
                     except BackendError:
-                        pass  # try again on the next poll
+                        cancel_failed = True  # try again on the next poll, not sooner (a stop hook would skip the pause)
             elif now - cancel_sent_at > CANCEL_GRACE_SECONDS:
                 return JobResult(handle.job_name, job_id, "TIMEOUT", cancel_reason, None, None, None)
-            if cancel_sent_at is None:
+            if cancel_failed:
+                self._sleep(poll_seconds)           # never a busy loop of failing cancels, stop requested or not
+            elif cancel_sent_at is None:
                 self._pause(poll_seconds, should_stop)
             else:           # after the user's stop the answer is wanted promptly; a watchdog cancel keeps the pace
                 self._sleep(min(poll_seconds, STOP_POLL_SECONDS) if cancel_reason == STOPPED_BY_USER else poll_seconds)

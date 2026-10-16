@@ -36,12 +36,14 @@ class Refusal(NamedTuple):
 class ApiError(Exception):
     """A request the server refuses with a plain sentence (and, for a spec, the field errors)."""
 
-    def __init__(self, status: int, message: str, errors: Optional[list] = None) -> None:
+    def __init__(self, status: int, message: str, errors: Optional[list] = None,
+                 extra: Optional[Mapping[str, Any]] = None) -> None:
         super().__init__(message)
         self.status, self.message, self.errors = status, message, list(errors or [])
+        self.extra = dict(extra or {})
 
     def payload(self) -> Dict[str, Any]:
-        return {"error": self.message, "errors": self.errors}
+        return {**self.extra, "error": self.message, "errors": self.errors}
 
 
 def is_loopback(host: str) -> bool:
@@ -77,6 +79,33 @@ class ControlGuard:
 
     def host_ok(self, headers: Mapping[str, str]) -> bool:
         return headers.get("Host") in self.hosts
+
+    def read_host_ok(self, headers: Mapping[str, str]) -> bool:
+        """The Host rule for reads. A loopback bind answers only to its loopback names. Any other bind also answers
+        to its own address and port (a wildcard bind to any IP-literal host on its port), never to a DNS name,
+        which is what a rebinding page arrives with."""
+
+        host = headers.get("Host")
+        if not isinstance(host, str):
+            return False
+        if host in self.hosts:
+            return True
+        if self.controls:
+            return False
+        name, _, port = host.rpartition(":")
+        name = name.strip("[]")
+        if not name or port != str(self.port):
+            return False
+        bind = self.host.strip("[]")
+        if name == bind:
+            return True
+        if bind in ("", "0.0.0.0", "::"):
+            try:
+                ipaddress.ip_address(name)
+            except ValueError:
+                return False
+            return True
+        return False
 
     # -- the session --------------------------------------------------------------------------------
 

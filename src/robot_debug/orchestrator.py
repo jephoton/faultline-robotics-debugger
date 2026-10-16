@@ -983,6 +983,8 @@ class Orchestrator:
         try:
             try:
                 if self.spec.mode != "replay":
+                    # Recorded first so --resume can reapply it, even when this segment ends before any Job.
+                    self.steps.set_run(no_llm=bool(self.no_llm))
                     check_candidate_budget(self.spec, self.tools)      # before the backend or any Job exists
                     check_import(self.spec, self.tools, self.run_dir)
                 self._start()
@@ -1167,11 +1169,16 @@ class Orchestrator:
         """Where the attempt numbers (Job-name suffixes) of this call start.
 
         0 for a fresh step. When an earlier call used a whole round of ``max_attempts`` submissions and
-        every one found no capacity, ``--resume`` starts a fresh round on the next unused suffixes, so a
-        name is never reused (a Job name is only released by deleting the Job). The time cap still
-        applies to each submission."""
+        every one either found no capacity or was cancelled by the user's stop, ``--resume`` starts a fresh
+        round on the next unused suffixes, so a name is never reused (a Job name is only released by deleting
+        the Job) and repeated stop/resume cannot strand the step. A failed attempt does not restart a round.
+        The time cap still applies to each submission."""
 
-        if len(attempts) >= self.max_attempts and all(a.get("state") == "capacity" for a in attempts):
+        def spent_without_fault(attempt: Mapping[str, Any]) -> bool:
+            return attempt.get("state") == "capacity" or (
+                attempt.get("state") == "cancelled" and attempt.get("stopped_by_user") is True)
+
+        if len(attempts) >= self.max_attempts and all(spent_without_fault(a) for a in attempts):
             first = len(attempts)
             if first + self.max_attempts > len(ATTEMPT_SUFFIXES):
                 raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions and no unused "
@@ -1346,14 +1353,19 @@ class Orchestrator:
                         result: Any, state: str, seconds: Optional[float], started: Any) -> None:
         """The user stopped the Job (``faultline stop``): settle it, leave the run resumable, end the run.
 
-        The ledger is charged the measured container time, or the whole reservation when none is known. A cancel
+        The ledger is charged the measured container time, or the whole reservation when none is known; a Job
+        cancelled (and confirmed) before it ever started is not billed, so it settles at zero. A cancel
         the provider never confirmed (state TIMEOUT or UNKNOWN) keeps the attempt re-attachable, so ``--resume``
         replaces the worst-case charge with the measured one instead of forgetting a Job that may still run; a
         confirmed one is marked ``cancelled`` and never re-attached (the next attempt gets a fresh name).
         """
 
         confirmed = state not in ("TIMEOUT", "UNKNOWN")
-        cost = self.ledger.settle_worst_case(job_name) if seconds is None else self.ledger.settle(job_name, seconds)
+        never_ran = confirmed and seconds is None and started is None     # cancelled while queued: not billed
+        if never_ran:
+            cost = self.ledger.settle(job_name, None)
+        else:
+            cost = self.ledger.settle_worst_case(job_name) if seconds is None else self.ledger.settle(job_name, seconds)
         self._inflight = None
         job_dir.mkdir(parents=True, exist_ok=True)
         _write_json(job_dir / "result.json", {
@@ -1362,10 +1374,12 @@ class Orchestrator:
             "container_seconds": seconds, "cost_usd": cost})
         self._save_logs(handle, job_dir)
         attempt["state"] = "cancelled" if confirmed else "unconfirmed"
+        if confirmed:
+            attempt["stopped_by_user"] = True      # a round of these (and capacity waits) restarts on fresh names
         self.steps.update(step, status="stopped")
         self.say(step, "{} stopped by the user ({}; charged US${:.2f}{})".format(
             job_name, "cancelled" if confirmed else "cancel not confirmed", cost,
-            "" if seconds is not None else ", the worst case: no container time is known"))
+            "" if seconds is not None or never_ran else ", the worst case: no container time is known"))
         raise StopRun(STOPPED_BY_USER, "{} was {} and charged US${:.2f}; resume with --resume".format(
             job_name, "cancelled" if confirmed else "asked to stop but not confirmed stopped", cost))
 

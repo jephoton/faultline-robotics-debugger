@@ -1,7 +1,7 @@
 """The ``faultline`` command (ADR 0031).
 
-    faultline diagnose SPEC.yaml [--env-file .env] [--no-llm] [--dry-run] [--resume RUN_DIR]
-    faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env] [--expect reproduces|fixed]
+    faultline diagnose SPEC.yaml [--env-file .env] [--no-llm] [--dry-run] [--resume RUN_DIR] [--allow-parallel]
+    faultline replay CASE_DIR --spec SPEC.yaml [--env-file .env] [--expect reproduces|fixed] [--allow-parallel]
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
     faultline stop RUN_DIR
@@ -11,6 +11,9 @@
 A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
 rewords the task instruction, one Job screens the rewordings, a second reduces the failing wording to its
 minimal word edits; needs the Token Factory key, so it cannot run with ``--no-llm``).
+
+One paid run at a time: diagnose and replay (not --dry-run) refuse to start while another run under the same
+runs root has a live process; --allow-parallel overrides that.
 
 Exit codes: 0 completed, 2 invalid spec or usage, 3 stopped (no failure found, a cap
 was reached, a Job failed; the run folder holds what was produced), 5 ``replay --expect``
@@ -56,10 +59,13 @@ def _parser() -> argparse.ArgumentParser:
     diagnose = commands.add_parser("diagnose", help="run a whole diagnosis (scenario, audit or paraphrase) from a spec file")
     diagnose.add_argument("spec", type=Path, nargs="?", help="the spec (optional with --resume)")
     diagnose.add_argument("--env-file", type=Path, help="dotenv file holding NEBIUS_API_KEY (Token Factory)")
-    diagnose.add_argument("--no-llm", action="store_true", help="no Nemotron: fixed order, no explanation")
+    diagnose.add_argument("--no-llm", action="store_true", help="no Nemotron: fixed order, no explanation "
+                          "(a resume keeps the setting its run started with; this flag turns it on)")
     diagnose.add_argument("--dry-run", action="store_true", help="print the planned Jobs and worst-case spend; create nothing")
     diagnose.add_argument("--resume", type=Path, metavar="RUN_DIR", help="continue an interrupted run folder")
     diagnose.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    diagnose.add_argument("--allow-parallel", action="store_true", help="start even if another run under the "
+                          "runs root is alive (two paid runs at once; for experts)")
     diagnose.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     replay = commands.add_parser("replay", help="re-run a saved case and say whether the failure still reproduces")
@@ -71,6 +77,8 @@ def _parser() -> argparse.ArgumentParser:
                         "matches (reproduces: the failure still reproduces; fixed: it no longer does), "
                         "exit 5 otherwise or when the verdict is inconclusive")
     replay.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    replay.add_argument("--allow-parallel", action="store_true", help="start even if another run under the "
+                        "runs root is alive (two paid runs at once; for experts)")
     replay.add_argument("--run-dir-file", type=Path, help=argparse.SUPPRESS)
 
     image = commands.add_parser("image", help="build or push the simulator image")
@@ -215,6 +223,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             spec, spec_text, run_dir = _diagnose_inputs(args)
             if spec.mode == "replay":
                 raise sp.SpecError("mode: a replay spec is used with `faultline replay`")
+            if run_dir is not None and not args.no_llm and _recorded_no_llm(run_dir):
+                args.no_llm = True                   # a resume keeps what the run started with
         else:
             spec, spec_text = _load_with_text(args.spec)
         if args.command == "diagnose":
@@ -222,6 +232,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         factory = make_backend
         if args.command == "diagnose" and args.dry_run:
             return _dry_run(spec, tools, factory, out)
+        _refuse_if_parallel(args, run_dir)
         factory = factory or _lazy_backend_factory()
         if run_dir is None:
             run_dir = orch.create_run_dir(args.runs_root, spec, spec_text, tools.now())
@@ -319,6 +330,34 @@ def _diagnose_inputs(args: argparse.Namespace):
     if args.spec is not None and sp.load_spec(args.spec).raw != spec.raw:
         raise sp.SpecError("spec: the given spec differs from the one this run started with")
     return spec, text, run_dir
+
+
+def _refuse_if_parallel(args: argparse.Namespace, run_dir: Optional[Path]) -> None:
+    """One paid run at a time, as in the control panel: refuse to start beside a run whose process is alive
+    under the same runs root (a resumed run uses its own folder's parent), unless ``--allow-parallel``."""
+
+    if getattr(args, "allow_parallel", False):
+        return
+    from robot_debug.viewer import processes
+
+    root = Path(run_dir).parent if run_dir is not None else Path(args.runs_root)
+    others = [folder for folder in processes.live_runs(root)
+              if (run_dir is None or folder.resolve() != Path(run_dir).resolve())
+              and (processes.recorded_process(folder) or {}).get("pid") != os.getpid()]
+    if others:
+        raise sp.SpecError("usage: another run is active ({}); stop it (faultline stop) or wait for it to finish. "
+                           "Pass --allow-parallel to start a second paid run anyway.".format(
+                               ", ".join(folder.name for folder in others[:3])))
+
+
+def _recorded_no_llm(run_dir: Path) -> bool:
+    """Whether the run folder's header says it was started with ``--no-llm`` (older folders say nothing)."""
+
+    try:
+        header = json.loads((Path(run_dir) / "steps.json").read_text(encoding="utf-8")).get("run")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(header, dict) and header.get("no_llm") is True
 
 
 def _dry_run(spec: sp.Spec, tools: Any, factory: Optional[Callable[[sp.Spec], Any]], out: Callable[[str], None]) -> int:

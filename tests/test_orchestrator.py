@@ -202,7 +202,9 @@ class FakeBackend:
             self.on_wait()
         if should_stop is not None and self.stop_outcome is not None and should_stop():
             self.stop_cancels.append(handle.job_name)
-            state, seconds = self.stop_outcome
+            state, seconds, *times = self.stop_outcome
+            if times:                                  # (started_at, finished_at) when the test sets them
+                return Result(handle.job_name, handle.job_id, state, "stopped_by_user", times[0][0], times[0][1], seconds)
             return Result(handle.job_name, handle.job_id, state, "stopped_by_user",
                           None if seconds is None else MOMENT, None if seconds is None else MOMENT, seconds)
         if self.kills_at_wait is not None and len(self.waited) == self.kills_at_wait:
@@ -1135,16 +1137,36 @@ class StopTests(Base):
         self.assertFalse((job_dir / "evidence").exists(), "a cancelled Job's partial export is not downloaded")
         self.assertTrue(any("stopped_by_user" in line for line in lines))
 
-    def test_a_stop_with_no_known_container_time_charges_the_worst_case(self):
+    def test_stopping_a_job_that_never_started_charges_nothing(self):
+        # A queued Job cancelled before it started: serverless does not bill queued time (the capacity path too).
         runner, backend, tools, ledger, lines = self.stopping_world(
             [finished(lambda w: screen_summary())], outcome=("CANCELLED", None))
         result = runner.diagnose()
         name = backend.submitted[0]
         self.assertEqual(result.reason, "stopped_by_user")
         job = ledger.jobs[name]
+        self.assertEqual(job["cost_usd"], 0.0)
+        self.assertNotIn("worst_case", job)
+        self.assertEqual((ledger.reserved, ledger.spent), (0.0, 0.0))
+        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "cancelled")
+        self.assertTrue(any("charged US$0.00" in line for line in lines))
+
+    def test_stopping_a_job_that_started_charges_the_time_it_ran(self):
+        started, ended = MOMENT, MOMENT + dt.timedelta(seconds=120)
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("CANCELLED", None, (started, ended)))
+        runner.diagnose()
+        job = ledger.jobs[backend.submitted[0]]
+        self.assertAlmostEqual(job["cost_usd"], cost(120), msg="the start and end times give the container seconds")
+        self.assertNotIn("worst_case", job)
+
+    def test_stopping_a_job_that_started_but_whose_time_is_unknown_charges_the_worst_case(self):
+        runner, backend, tools, ledger, lines = self.stopping_world(
+            [finished(lambda w: screen_summary())], outcome=("CANCELLED", None, (MOMENT, None)))
+        runner.diagnose()
+        job = ledger.jobs[backend.submitted[0]]
         self.assertEqual(job["cost_usd"], job["reserved_usd"])
         self.assertTrue(job["worst_case"])
-        self.assertEqual(self.steps_of(runner)["steps"]["screen"]["attempts"][0]["state"], "cancelled")
 
     def test_a_cancel_the_provider_never_confirmed_stays_re_attachable(self):
         runner, backend, tools, ledger, lines = self.stopping_world(
@@ -1164,6 +1186,56 @@ class StopTests(Base):
         self.assertEqual(backend2.waited, [name])
         self.assertAlmostEqual(ledger2.spent, cost(900), msg="the measured cost replaced the worst case")
         self.assertNotIn("worst_case", ledger2.jobs[name])
+
+    def stop_again(self, runner, outcome=("CANCELLED", 300)):
+        """Resume the run and stop it again while its Job waits: one more cancelled attempt."""
+
+        runner2, backend2, tools2, ledger2, lines2 = self.resume_world(runner, [finished(lambda w: screen_summary())])
+        backend2.stop_outcome = outcome
+        backend2.on_wait = lambda: orch.request_stop(runner2.run_dir)
+        self.assertEqual(runner2.diagnose().reason, "stopped_by_user")
+        return runner2, backend2
+
+    def test_repeated_stops_do_not_strand_the_step_after_a_whole_round_of_names(self):
+        runner, backend, *_rest = self.stopping_world([finished(lambda w: screen_summary())])
+        runner.diagnose()
+        base = backend.submitted[0]
+        names = list(backend.submitted)
+        for _ in range(orch.MAX_ATTEMPTS - 1):                      # six stopped attempts in all
+            _runner, again = self.stop_again(runner)
+            names += again.submitted
+        self.assertEqual([n.rsplit("-", 1)[-1] for n in names[1:]], list("abcde"))
+        attempts = self.steps_of(runner)["steps"]["screen"]["attempts"]
+        self.assertEqual([a["state"] for a in attempts], ["cancelled"] * 6)
+
+        runner2, backend2, tools2, ledger2, _l = self.resume_world(
+            runner, [finished(lambda w: screen_summary(failing=False))])
+        result = runner2.diagnose()
+        self.assertEqual(result.reason, "no_reproducible_failure", "it got past the screen instead of capacity_unavailable")
+        self.assertEqual(backend2.submitted, [base + "-f"], "a fresh round on an unused suffix")
+        self.assertNotIn(backend2.submitted[0], names)
+
+    def test_a_round_of_capacity_waits_and_stops_starts_a_fresh_round_too(self):
+        runner, backend, *_rest = self.stopping_world(
+            [capacity(), capacity(), capacity(), finished(lambda w: screen_summary())])
+        orch.clear_stop_request(runner.run_dir)
+        backend.on_wait = lambda: len(backend.waited) == 4 and orch.request_stop(runner.run_dir)
+        self.assertEqual(runner.diagnose().reason, "stopped_by_user")
+        for _ in range(2):
+            runner, _backend = self.stop_again(runner)
+        states = [a["state"] for a in self.steps_of(runner)["steps"]["screen"]["attempts"]]
+        self.assertEqual(states, ["capacity"] * 3 + ["cancelled"] * 3)
+        runner2, backend2, *_rest2 = self.resume_world(runner, [finished(lambda w: screen_summary(failing=False))])
+        self.assertEqual(runner2.diagnose().reason, "no_reproducible_failure")
+        self.assertTrue(backend2.submitted[0].endswith("-screen-f"))
+
+    def test_a_round_with_a_failed_attempt_is_not_restarted_by_the_fresh_round_rule(self):
+        runner, *_rest = self.world([])
+        attempts = [{"job_name": "j", "state": "cancelled", "stopped_by_user": True}] * 5 + [
+            {"job_name": "k", "state": "failed"}]
+        self.assertEqual(runner._first_attempt_number(attempts), 0)
+        attempts[-1] = {"job_name": "k", "state": "cancelled"}          # cancelled for another reason (the spend cap)
+        self.assertEqual(runner._first_attempt_number(attempts), 0)
 
     def test_a_stop_before_a_submit_creates_nothing(self):
         runner, backend, tools, ledger, lines = self.world([finished(lambda w: screen_summary())])

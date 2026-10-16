@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socket
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -249,6 +250,114 @@ class HttpSecurityTests(unittest.TestCase):
             self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff", path)
             self.assertEqual(headers.get("X-Frame-Options"), "DENY", path)
             self.assertEqual(headers.get("Cache-Control"), "no-store", path)
+
+
+READ_PATHS = ("/api/library", "/api/library/d-nothing", "/api/runs/active", "/api/runs/x/progress",
+              "/api/environment", "/api/specs/template", "/api/evidence", "/api/runs", "/api/diagnoses",
+              "/api/cases", "/api/health", "/media/runs/none.mp4")
+LOCAL_ONLY_PATHS = ("/api/runs/active", "/api/runs/x/progress", "/api/environment", "/api/specs/template",
+                    "/api/evidence", "/api/runs")
+
+
+class ReadHostTests(unittest.TestCase):
+    """Reads obey the Host rule too, and the local-only reads exist only behind a loopback bind (review M1)."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.server = RunningServer(Path(directory.name))
+        self.addCleanup(self.server.close)
+
+    def test_a_forged_host_is_refused_on_every_read(self):
+        for path in READ_PATHS:
+            for host in ("evil.example:{}".format(self.server.port), "127.0.0.1", "10.0.0.5:{}".format(self.server.port)):
+                with self.subTest(path=path, host=host):
+                    status, _headers, body = self.server.request("GET", path, host=host)
+                    self.assertEqual(status, 403)
+                    self.assertEqual(set(json.loads(body)), {"error", "errors"})
+
+    def test_the_servers_own_names_still_read(self):
+        for host in ("127.0.0.1:{}", "localhost:{}"):
+            status, _headers, _body = self.server.request("GET", "/api/library", host=host.format(self.server.port))
+            self.assertEqual(status, 200)
+
+    def test_a_non_loopback_bind_answers_the_library_but_not_the_local_only_reads(self):
+        self.server.guard.host, self.server.guard.controls = "192.168.1.5", False
+        host = "192.168.1.5:{}".format(self.server.port)
+        status, _headers, _body = self.server.request("GET", "/api/library", host=host)
+        self.assertEqual(status, 200)
+        for path in LOCAL_ONLY_PATHS:
+            with self.subTest(path=path):
+                self.assertEqual(self.server.request("GET", path, host=host)[0], 404)
+        status, _headers, _body = self.server.request("GET", "/api/library", host="evil.example:{}".format(self.server.port))
+        self.assertEqual(status, 403, "a non-loopback bind still refuses a host it was not reached by")
+
+    def test_a_wildcard_bind_accepts_an_ip_literal_host_but_not_a_dns_name(self):
+        guard = ControlGuard("0.0.0.0", 8765)
+        self.assertTrue(guard.read_host_ok({"Host": "192.168.1.5:8765"}))
+        self.assertTrue(guard.read_host_ok({"Host": "127.0.0.1:8765"}))
+        self.assertFalse(guard.read_host_ok({"Host": "evil.example:8765"}))
+        self.assertFalse(guard.read_host_ok({"Host": "192.168.1.5:9999"}))
+        self.assertFalse(guard.read_host_ok({}))
+
+
+class StalledClientTests(unittest.TestCase):
+    """A client that declares a body (or a request) and never finishes it must not hold a thread (review L6)."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.server = RunningServer(Path(directory.name), request_timeout=0.5)
+        self.addCleanup(self.server.close)
+
+    def connect(self):
+        connection = socket.create_connection(("127.0.0.1", self.server.port), timeout=10)
+        self.addCleanup(connection.close)
+        return connection
+
+    def drain(self, connection):
+        """Everything the server sends until it closes the connection; fails if it never does."""
+
+        started = time.monotonic()
+        received = b""
+        connection.settimeout(8)
+        while True:
+            block = connection.recv(65536)
+            if not block:
+                break
+            received += block
+        return received, time.monotonic() - started
+
+    def test_a_declared_body_that_never_arrives_is_dropped(self):
+        connection = self.connect()
+        head = ("POST /api/specs/validate HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nOrigin: {}\r\nX-Faultline-Token: {}\r\n"
+                "Content-Type: application/json\r\nContent-Length: 500\r\n\r\n").format(
+                    self.server.port, self.server.origin, self.server.guard.token)
+        connection.sendall(head.encode("ascii"))
+        _received, waited = self.drain(connection)
+        self.assertLess(waited, 6, "the server gave up on the missing body")
+
+    def test_a_request_line_that_never_finishes_is_dropped(self):
+        connection = self.connect()
+        connection.sendall(b"GET /api/libr")
+        _received, waited = self.drain(connection)
+        self.assertLess(waited, 6)
+
+    def test_a_connection_that_sends_nothing_is_dropped(self):
+        _received, waited = self.drain(self.connect())
+        self.assertLess(waited, 6)
+
+    def test_a_normal_request_after_a_stalled_one_is_still_served(self):
+        self.connect().sendall(b"POST /api/specs/validate HTTP/1.1\r\nContent-Length: 500\r\n\r\n")
+        status, _headers, _body = self.server.request("GET", "/api/library")
+        self.assertEqual(status, 200)
+
+    def test_the_default_timeout_is_set_on_the_handler(self):
+        from robot_debug.viewer import server as viewer_server
+
+        handler = viewer_server.make_handler(viewer_server.CachedArtifactCatalog(Path(tempfile.gettempdir())))
+        self.assertEqual(handler.timeout, viewer_server.REQUEST_TIMEOUT_SECONDS)
+        self.assertGreater(handler.timeout, 0)
 
 
 class NonLoopbackBindTests(unittest.TestCase):

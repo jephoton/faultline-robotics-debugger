@@ -43,7 +43,10 @@ STEP_ORDER = {
     "replay": ["replay"],
 }
 _CONTINUATION = re.compile(r"reduce([2-9])\Z")
-_WINDOWS_PATH = re.compile(r"[A-Za-z]:[\\/][^\s\"']*")
+# A drive letter not preceded by a letter (so ``s:/`` in ``https://`` is not one), then the rest of the path:
+# folder names may hold spaces ("First Last"), so it runs to the end of the line, a quote or bracket, or a
+# ``:``/``;``/``,`` followed by a space (the sentence continuing after the path).
+_WINDOWS_PATH = re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/](?:(?![:;,](?:\s|$))[^\"'`<>|()\[\]{}\r\n])*")
 _POSIX_PATH = re.compile(r"(?<![\w.~:/-])/(?:[\w.@+-]+/)+[\w.@+-]*")
 
 
@@ -159,6 +162,14 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def read_run_header(run_dir: Path) -> Dict[str, Any]:
+    """The ``run`` header of ``steps.json`` (status, reason, ``no_llm``...); empty when it cannot be read."""
+
+    data = _read_json(Path(run_dir) / "steps.json")
+    header = data.get("run") if isinstance(data, Mapping) else None
+    return dict(header) if isinstance(header, Mapping) else {}
+
+
 def recorded_process(run_dir: Path, probe: Probe = default_probe) -> Optional[Dict[str, Any]]:
     """The ``process.json`` record of ``run_dir`` when its process is alive, else ``None``."""
 
@@ -188,6 +199,12 @@ def _run_dirs(runs_root: Path) -> List[Path]:
         return sorted(p for p in root.iterdir() if (p / PROCESS_FILE).is_file())
     except OSError:
         return []
+
+
+def live_runs(runs_root: Path, probe: Probe = default_probe) -> List[Path]:
+    """The run folders under ``runs_root`` whose recorded process is alive (cheap: only ``process.json`` is read)."""
+
+    return [folder for folder in _run_dirs(runs_root) if recorded_process(folder, probe) is not None]
 
 
 def _money(value: Any) -> Optional[float]:

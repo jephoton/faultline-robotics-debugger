@@ -646,6 +646,17 @@ class WaitTests(NebiusCase):
                               should_stop=self.stop_after(10))
         self.assertEqual(result.reason, "stopped_by_user")
 
+    def test_a_stop_whose_cancel_keeps_failing_still_waits_the_poll_interval_between_attempts(self):
+        backend, handle = self.start([(0, "RUNNING", None)])
+        self.cli.fail(("ai", "job", "cancel"), "rpc error: code = Unavailable desc = i/o timeout", times=10 ** 6)
+        started = self.clock.now
+        with self.assertRaises(BackendError):
+            backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,
+                         should_stop=lambda: True)
+        elapsed = self.clock.now - started
+        polls = self.cli.count("ai", "job", "get")
+        self.assertLessEqual(polls, elapsed / 60.0 + 3, "{} cloud polls in {:.0f} s is a busy loop".format(polls, elapsed))
+
     def test_a_job_that_finished_on_its_own_is_reported_as_it_ended(self):
         backend, handle = self.start([(0, "RUNNING", None), (0, "COMPLETED", None)])
         result = backend.wait(handle, running_max_seconds=3000, total_max_seconds=6000, poll_seconds=60,

@@ -32,6 +32,7 @@ from robot_debug.case_register import list_diagnoses, read_diagnosis
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
 DISCARD_LIMIT_BYTES = 1024 * 1024
+REQUEST_TIMEOUT_SECONDS = 30.0      # a client silent this long (headers, body, or a stalled read) is dropped
 IMMUTABLE_CACHE = "public, max-age=31536000, immutable"     # /assets/* files carry a content hash in their name
 APP_TYPES = {".woff2": "font/woff2", ".svg": "image/svg+xml", ".map": "application/json", ".ico": "image/x-icon",
              ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8"}
@@ -166,6 +167,7 @@ def make_handler(
     catalog: ArtifactCatalog, case_workspace: Optional[Path] = None,
     research_reader: Optional[ResearchReader] = None, diagnoses_root: Optional[Path] = None,
     *, api: Optional[Api] = None, app_root: Optional[Path] = None,
+    request_timeout: float = REQUEST_TIMEOUT_SECONDS,
 ) -> Type[BaseHTTPRequestHandler]:
     """Create a handler closed over a catalog and the built front end.
 
@@ -181,11 +183,15 @@ def make_handler(
     diagnoses = diagnoses_root or catalog.artifact_root / "diagnoses"
 
     class ViewerHandler(BaseHTTPRequestHandler):
+        timeout = request_timeout         # per socket operation: a stalled client cannot hold a server thread
+
         def do_GET(self) -> None:
             parts = urlsplit(self.path)
             path = parts.path
             try:
-                routed = None if api is None else api.handle_get(path, parts.query, self.headers)
+                refused = None if api is None else api.read_refusal(path, self.headers)
+                routed = refused if refused is not None else (
+                    None if api is None else api.handle_get(path, parts.query, self.headers))
                 if routed is not None:
                     self.send_response_object(routed)
                 elif path == "/api/health":
@@ -273,7 +279,7 @@ def make_handler(
                 pass
             finally:
                 try:
-                    self.connection.settimeout(None)
+                    self.connection.settimeout(self.timeout)
                 except OSError:
                     pass
 
@@ -399,6 +405,7 @@ def create_server(
     diagnoses_root: Optional[Path] = None, *, runs_root: Optional[Path] = None,
     app_root: Optional[Path] = None, specs: Optional[SpecService] = None, launcher: Optional[Launcher] = None,
     environment: Optional[Environment] = None, api_setup: Optional[Callable[[Api], None]] = None,
+    request_timeout: float = REQUEST_TIMEOUT_SECONDS,
 ) -> ThreadingHTTPServer:
     """The viewer on ``host:port`` (``port`` 0 picks a free one).
 
@@ -424,7 +431,7 @@ def create_server(
         api_setup(api)
     server = ThreadingHTTPServer(
         (host, port), make_handler(catalog, case_workspace, research_reader, diagnoses_root, api=api,
-                                   app_root=app_root))
+                                   app_root=app_root, request_timeout=request_timeout))
     guard.port = server.server_address[1]               # the real port, when 0 was asked for
     server.api = api
     server.catalog = catalog

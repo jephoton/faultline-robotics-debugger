@@ -17,6 +17,10 @@ from urllib.parse import parse_qs
 from robot_debug.viewer.security import ApiError, ControlGuard
 
 
+LEGACY_LOCAL_ONLY = ("/api/runs", "/api/evidence", "/api/reduction")       # the episode catalog: local only
+LEGACY_LOCAL_PREFIXES = ("/api/episodes/",)
+
+
 class Request(NamedTuple):
     params: Dict[str, str]                  # named groups of the route pattern
     query: Dict[str, List[str]]
@@ -61,10 +65,30 @@ class Api:
         self.guard = guard
         self.version = version or package_version()
         self._routes: Dict[str, List[Tuple[Pattern[str], Handler]]] = {"GET": [], "POST": []}
+        self._local_only: List[Pattern[str]] = []
         self.add_route("GET", r"/api/session", lambda request: (200, self.guard.session(request.headers, self.version)))
 
-    def add_route(self, method: str, pattern: str, handler: Handler) -> None:
-        self._routes[method].append((re.compile(pattern + r"\Z"), handler))
+    def add_route(self, method: str, pattern: str, handler: Handler, *, local_only: bool = False) -> None:
+        """``local_only`` reads exist only behind a loopback bind (they show this machine's runs and setup)."""
+
+        compiled = re.compile(pattern + r"\Z")
+        self._routes[method].append((compiled, handler))
+        if local_only:
+            self._local_only.append(compiled)
+
+    def read_refusal(self, path: str, headers: Mapping[str, str]) -> Optional[Tuple[int, Any]]:
+        """The refusal of a GET before it is routed, or ``None``. Every ``/api/`` and ``/media/`` read must reach
+        the server by its own name (so a DNS-rebinding page reads nothing); the session answer is shaped by the
+        Host itself and is exempt. Local-only reads are 404 when controls are off."""
+
+        if path == "/api/session" or not path.startswith(("/api/", "/media/")):
+            return None
+        if not self.guard.read_host_ok(headers):
+            return 403, ApiError(403, "This request did not reach the viewer by its own address.").payload()
+        if not self.guard.controls and (path in LEGACY_LOCAL_ONLY or path.startswith(LEGACY_LOCAL_PREFIXES)
+                                        or any(p.match(path) for p in self._local_only)):
+            return 404, ApiError(404, "There is nothing here.").payload()
+        return None
 
     def _match(self, method: str, path: str) -> Optional[Tuple[Dict[str, str], Handler]]:
         for pattern, handler in self._routes[method]:
@@ -82,6 +106,9 @@ class Api:
     def handle_get(self, path: str, query_string: str, headers: Mapping[str, str]) -> Optional[Response]:
         """The response of a GET route of this API, or ``None`` when the path is not one of its routes."""
 
+        refusal = self.read_refusal(path, headers)
+        if refusal is not None:
+            return refusal
         matched = self._match("GET", path)
         if matched is None:
             return None
@@ -114,6 +141,8 @@ class Api:
             response = handler(Request(params, self._query(query_string), body, headers))
         except ApiError as error:
             return error.status, error.payload()
+        except TimeoutError:                        # the client declared a body and stopped sending it
+            return 408, ApiError(408, "The request body did not arrive in time.").payload()
         except Exception:                           # noqa: BLE001 - never a traceback in a response
             logging.getLogger("robot_debug.viewer").exception("POST %s failed", path)
             return 500, ApiError(500, "Something went wrong in the viewer; its console has the details.").payload()

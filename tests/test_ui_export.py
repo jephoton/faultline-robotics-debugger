@@ -151,6 +151,49 @@ class PublicProjectionTests(ExportCase):
             self.assertIsNone(ex.scan_public(text), text)
 
 
+class GuardGapTests(ExportCase):
+    """More private details the last-line scan must refuse (review L4)."""
+
+    def test_more_paths_buckets_secret_names_and_emails_are_refused(self):
+        for text, label in (
+                ("saved in /private/var/folders/x", "path"), ("data at /srv/faultline/runs", "path"),
+                ("cwd /workspace/repo/artifacts", "path"), ("see ~/work/runs/demo", "path"),
+                ("bucket faultline-demo-3fa9c1 holds it", "bucket"), ('"bucket": "faultline-soup-start-0a1b2c"', "bucket"),
+                ("secret faultline-hf-token is set", "secret"), ("uses team-hf-token for access", "secret"),
+                ("mail jane.doe@example.com for access", "email"), ("owner someone+tag@mail.example.org", "email")):
+            with self.subTest(text=text):
+                self.assertIsNotNone(ex.scan_public(text), label)
+
+    def test_public_text_that_looks_close_is_still_fine(self):
+        for text in ("https://github.com/jephoton/faultline-robotics-debugger", "faultline-robotics-debugger",
+                     "Faultline finds failures", "faultline-serverless:local", "image@sha256:abcdef0123456789",
+                     "approximately ~5 cm", "a ratio of 3~4", "version pkg@1.2.3", "HF_TOKEN is read from the environment",
+                     "the /api/library endpoint", "https://example.com/private/page", "a/b/c.json"):
+            with self.subTest(text=text):
+                self.assertIsNone(ex.scan_public(text))
+
+    def test_a_secret_name_taken_from_the_runs_own_spec_is_refused(self):
+        spec = self.paths["runs"] / fx.SCENARIO_RUN / "spec.yaml"
+        spec.write_text("backend:\n  kind: nebius\n  hf_token_secret: quiet-vault-entry\n", encoding="utf-8")
+        case = fx.scenario_case()
+        case["note"] = "token from quiet-vault-entry"
+        fx.write_json(self.paths["diagnoses"] / fx.SCENARIO_ID / "case.json", case)
+        with self.assertRaises(ex.ExportError) as caught:
+            self.export()
+        self.assertIn("secret", str(caught.exception))
+        self.assertNotIn("quiet-vault-entry", str(caught.exception))
+        self.assertFalse(self.out.exists())
+
+    def test_a_copied_file_with_an_email_aborts_the_export(self):
+        case = fx.scenario_case()
+        case["note"] = "contact jane.doe@example.com"
+        fx.write_json(self.paths["diagnoses"] / fx.SCENARIO_ID / "case.json", case)
+        with self.assertRaises(ex.ExportError) as caught:
+            self.export()
+        self.assertIn("an email address", str(caught.exception))
+        self.assertNotIn("jane.doe", str(caught.exception))
+
+
 class SelectionTests(ExportCase):
     def ids(self):
         return sorted(item["id"] for item in self.read("data/library.json")["items"])
@@ -215,6 +258,43 @@ class OutputRefusalTests(ExportCase):
         self.assertFalse((self.out / "data" / "library" / "d-old.json").exists())
         self.assertEqual((self.out / "notes.txt").read_text(encoding="utf-8"), "keep me")
         self.assertEqual(len(self.read("data/library.json")["items"]), 5)
+
+    def make_foreign_folder(self, session=None):
+        self.out.mkdir()
+        mine = {"data/notes.csv": "my data", "media/holiday.txt": "my photos", "assets/logo.svg": "<svg/>",
+                "readme.txt": "mine"}
+        for name, text in mine.items():
+            (self.out / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.out / name).write_text(text, encoding="utf-8")
+        if session is not None:
+            (self.out / "data" / "session.json").write_text(session, encoding="utf-8")
+        return mine
+
+    def assert_untouched(self, mine):
+        for name, text in mine.items():
+            self.assertEqual((self.out / name).read_text(encoding="utf-8"), text, name)
+
+    def test_force_refuses_a_folder_that_is_not_a_previous_export(self):
+        mine = self.make_foreign_folder()
+        with self.assertRaises(ex.ExportError) as caught:
+            self.export(force=True)
+        self.assertIn("not a previous Faultline export", str(caught.exception))
+        self.assert_untouched(mine)
+
+    def test_force_refuses_a_session_file_that_is_not_a_static_export(self):
+        for session in ('{"mode": "local"}', "not json", "[]", '{"mode": "static"'):
+            with self.subTest(session=session):
+                shutil.rmtree(str(self.out), ignore_errors=True)
+                mine = self.make_foreign_folder(session)
+                with self.assertRaises(ex.ExportError):
+                    self.export(force=True)
+                self.assert_untouched(mine)
+
+    def test_force_accepts_an_empty_folder_and_an_earlier_export(self):
+        self.out.mkdir()
+        self.export(force=True)
+        self.assertEqual(self.read("data/session.json")["mode"], "static")
+        self.export(force=True)
 
     def test_a_file_in_place_of_the_folder_is_refused(self):
         self.out.write_text("x", encoding="utf-8")
