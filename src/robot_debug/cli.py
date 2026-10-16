@@ -150,7 +150,7 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
         else:
             spec, spec_text = _load_with_text(args.spec)
         if args.command == "diagnose":
-            _check_budget(spec, tools)
+            _precheck(spec, tools, run_dir)
         factory = make_backend
         if args.command == "diagnose" and args.dry_run:
             return _dry_run(spec, tools, factory, out)
@@ -204,11 +204,13 @@ def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], 
     return result.exit_code
 
 
-def _check_budget(spec: sp.Spec, tools: Any) -> None:
-    """A candidate budget no reduce Job can hold is a spec error (exit 2), found before any Job."""
+def _precheck(spec: sp.Spec, tools: Any, run_dir: Optional[Path] = None) -> None:
+    """What can be refused before anything exists: a candidate budget no reduce Job can hold, and an
+    imported start file that is invalid or for another suite or task. Both are spec errors (exit 2)."""
 
     try:
         orch.check_candidate_budget(spec, tools)
+        orch.check_import(spec, tools, run_dir)
     except orch.StopRun as stop:
         raise sp.SpecError(stop.detail) from None
 

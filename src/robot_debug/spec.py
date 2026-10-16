@@ -11,7 +11,9 @@ Modes:
 ``scenario`` (mode 1)
     Screen for a natural failure, reduce its scenario, report. ``scenario`` holds
     the task and exactly one of ``start`` (a known failing start), ``screen`` (a
-    range of starts to screen) or ``import`` (a validated scenario candidate file).
+    range of starts to screen) or ``import`` (the path of a scenario candidate file: a failing
+    start state you bring; its suite and task must match the spec's). ``pool`` (default ``0-19``) is
+    the range of benchmark starts screened for a passing reference with ``start`` or ``import``.
 ``audit`` (mode 2)
     One perturbation-threshold audit of a task and start.
 ``paraphrase`` (ADR 0032)
@@ -259,15 +261,15 @@ def _scenario(value: Any) -> Scenario:
     start = screen_starts = screen_text = import_path = None
     confirm = DEFAULT_CONFIRM
     pool_text = "0-19"
-    if "pool" in data and chosen[0] != "start":
-        _fail("scenario.pool", "only applies with scenario.start")
+    if "pool" in data and chosen[0] == "screen":
+        _fail("scenario.pool", "only applies with scenario.start or scenario.import")
+    if "pool" in data:
+        pool_text = data["pool"]
+        parse_starts(pool_text, "scenario.pool")
     if chosen[0] == "start":
         start = _int(data["start"], "scenario.start", 0, MAX_START)
         if reference == start:
             _fail("scenario.reference", "must differ from scenario.start")
-        if "pool" in data:
-            pool_text = data["pool"]
-            parse_starts(pool_text, "scenario.pool")
     elif chosen[0] == "screen":
         screen = _exact(data["screen"], "scenario.screen", ("starts",), ("confirm",))
         screen_text = screen["starts"]

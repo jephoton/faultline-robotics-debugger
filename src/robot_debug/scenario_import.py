@@ -110,10 +110,11 @@ def _validate_source(source: Any) -> Dict[str, Any]:
         if type(applied) is not list or len(applied) > MAX_APPLIED:
             _fail()
         _check_json_value(applied, 1, [0])
+        # ``failing`` is None when the failing start was imported and is not a benchmark start.
         return {
             "kind": "hybrid",
             "reference": _index(source["reference"], MAX_INDEX),
-            "failing": _index(source["failing"], MAX_INDEX),
+            "failing": None if source["failing"] is None else _index(source["failing"], MAX_INDEX),
             "applied": copy.deepcopy(applied),
         }
     _fail()

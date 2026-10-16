@@ -91,7 +91,8 @@ class ValidSpecs(unittest.TestCase):
         self.assertEqual(sp.parse_spec(data).scenario.reference, 15)
 
     def test_example_specs_load(self):
-        for name in ("scenario-start.yaml", "scenario-screen.yaml", "audit.yaml", "replay.yaml"):
+        for name in ("scenario-start.yaml", "scenario-screen.yaml", "scenario-import.yaml", "audit.yaml",
+                     "replay.yaml"):
             with self.subTest(name=name):
                 spec = sp.load_spec(ROOT / "configs" / "specs" / name)
                 self.assertIn(spec.mode, sp.MODES)
@@ -289,6 +290,16 @@ if __name__ == "__main__":
 
 
 class PoolTests(unittest.TestCase):
+    def test_import_mode_takes_a_pool_and_a_pinned_reference(self):
+        from robot_debug import spec as sp
+        scenario = sp._scenario({"task": 0, "import": "f.json"})
+        self.assertEqual(("f.json", "0-19", "auto"), (scenario.import_path, scenario.pool_text, scenario.reference))
+        scenario = sp._scenario({"task": 0, "import": "f.json", "pool": "20 - 29", "reference": 22})
+        self.assertEqual(("20-29", 22), (scenario.pool_text, scenario.reference))
+        with self.assertRaises(sp.SpecError):
+            sp._scenario({"task": 0, "import": "f.json", "pool": "20-99"})
+
+
     def test_start_mode_takes_an_optional_pool(self):
         from robot_debug import spec as sp
         self.assertEqual(sp._scenario({"task": 0, "start": 14}).pool_text, "0-19")

@@ -176,7 +176,8 @@ def _validate(packet: object) -> Dict[str, Any]:
     reference = task["reference_start"]
     checked_task = {"suite": _name(task["suite"]), "task_id": _int(task["task_id"], 0, 1000),
                     "instruction": _text(task["instruction"], 400),
-                    "failing_start": _int(task["failing_start"], 0, 100_000),
+                    "failing_start": None if task["failing_start"] is None  # an imported failing start
+                    else _int(task["failing_start"], 0, 100_000),
                     "reference_start": None if reference is None else _int(reference, 0, 100_000)}
     differences = value["differences"]
     _require(type(differences) is list and 1 <= len(differences) <= MAX_DIFFERENCES)

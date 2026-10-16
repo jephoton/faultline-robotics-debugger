@@ -277,6 +277,20 @@ def hypothesis_vs_result_section(summary: Mapping[str, Any]) -> List[str]:
     return lines
 
 
+def _failing_text(plan: Mapping[str, Any]) -> str:
+    """The failing start: its benchmark index, or the imported file it came from."""
+
+    if plan.get("failing_start") is not None:
+        return str(plan["failing_start"])
+    imported = plan.get("failing_import") or {}
+    source = plan.get("failing_source") or {}
+    where = ""
+    if source.get("kind") == "benchmark":
+        where = ", from benchmark start {}".format(source.get("init_state_index"))
+    return "imported (file sha256 {}, state sha256 {}{})".format(
+        str(imported.get("file_sha256"))[:12], str(imported.get("state_sha256"))[:12], where)
+
+
 def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) -> List[str]:
     plan, reduction = summary["plan"], summary.get("reduction") or {}
     selection = reduction.get("final_selection")
@@ -288,7 +302,7 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
     lines = ["## Result", "",
              "- Stop reason: `{}`".format(reduction.get("stop_reason")),
              "- Failing start: {}; reference (nearest passing start): {}; candidate references tried: {}".format(
-                 plan["failing_start"], reference,
+                 _failing_text(plan), reference,
                  ", ".join("{} ({})".format(r["id"], r["decision"]) for r in reduction.get("references_tried") or []) or "-"),
              "- Entity-minimal: {}".format("yes" if reduction.get("entity_minimal") else "no"),
              "- Checkpoint: {}".format(_checkpoint_text(summary.get("checkpoint"))), "",

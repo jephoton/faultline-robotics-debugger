@@ -514,11 +514,11 @@ class Mode1EndToEnd(Base):
         self.assertTrue(any("start 3:" in line for line in lines))
         self.assertEqual(backend.finished, 1)
 
-    def test_import_is_reported_as_unsupported_before_any_job(self):
+    def test_a_missing_import_file_is_refused_before_any_job(self):
         spec = spec_for(scenario={"task": 3, "import": "candidate.json"})
         runner, backend, *_ = self.world([], spec=spec)
         result = runner.diagnose()
-        self.assertEqual(result.reason, "import_unsupported")
+        self.assertEqual(result.reason, "import_invalid")
         self.assertEqual(backend.submitted, [])
 
     def test_a_failed_explanation_does_not_fail_the_run(self):
@@ -1058,7 +1058,7 @@ class DryRun(unittest.TestCase):
             orch.dry_run_lines(spec, FakeTools())
         self.assertEqual(caught.exception.reason, "candidates_too_large")
 
-    def test_dry_run_of_import_is_refused(self):
+    def test_dry_run_of_a_missing_import_file_is_refused(self):
         with self.assertRaises(orch.StopRun):
             orch.dry_run_lines(spec_for(scenario={"task": 3, "import": "x.json"}), FakeTools())
 

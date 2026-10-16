@@ -163,8 +163,16 @@ def build_plan_with_reply(
     references: int = 3,
     request: Callable[..., dict] = request_scenario_hypothesis,
     load_key: Callable[[Optional[Path]], str] = load_api_key,
+    imported: Optional[Mapping[str, Any]] = None,
 ):
-    """``(config, full model reply or None)``; the config carries only the sanitised reply."""
+    """``(config, full model reply or None)``; the config carries only the sanitised reply.
+
+    ``imported`` plans a failing start the user brought instead of one from the screen: a mapping with
+    ``state`` (the flat start state), ``source`` (the scenario candidate's source) and the digests
+    ``file_sha256`` and ``state_sha256``. ``start_index`` must then be ``None``. The imported start has not
+    been screened (the reduce Job's own failing gate decides whether it fails), so ``failing.outcomes`` is
+    empty, ``failing.start_index`` is ``None``, and the nearest passing screened start is its reference.
+    """
 
     if not 1 <= references <= 5:
         raise PlanError("references must be between 1 and 5")
@@ -178,15 +186,20 @@ def build_plan_with_reply(
         layout = ss.validate_layout(task.get("layout"))
     except ss.ScenarioStateError:
         raise PlanError("the task layout is invalid") from None
-    failing = _get(task["starts"], start_index)
-    if type(failing) is not dict:
-        raise PlanError("the failing start is not in the screen summary")
-    if failing.get("validity") == "invalid_scene":
-        raise PlanError("the failing start is an interpenetrating scene, not a policy failure")
-    outcomes = failing.get("outcomes")
-    if not isinstance(outcomes, list) or len(outcomes) < SCREEN_ATTEMPTS \
-            or outcomes[:SCREEN_ATTEMPTS].count("policy_failure") < REQUIRED_FAILURES:
-        raise PlanError("the start did not fail at least 4 of 5 screen attempts")
+    if imported is None:
+        failing = _get(task["starts"], start_index)
+        if type(failing) is not dict:
+            raise PlanError("the failing start is not in the screen summary")
+        if failing.get("validity") == "invalid_scene":
+            raise PlanError("the failing start is an interpenetrating scene, not a policy failure")
+        outcomes = failing.get("outcomes")
+        if not isinstance(outcomes, list) or len(outcomes) < SCREEN_ATTEMPTS \
+                or outcomes[:SCREEN_ATTEMPTS].count("policy_failure") < REQUIRED_FAILURES:
+            raise PlanError("the start did not fail at least 4 of 5 screen attempts")
+    else:
+        if start_index is not None:
+            raise PlanError("an imported start has no start index")
+        failing, outcomes = {"state": imported.get("state")}, []
 
     # A start whose recorded contact scan found interpenetrating bodies cannot be a reference.
     results = {task_id: {k: v.get("outcomes") for k, v in task["starts"].items()
@@ -195,8 +208,14 @@ def build_plan_with_reply(
                         if isinstance(v, dict)}}
     try:
         failing_state = ss.validate_state(failing.get("state"), layout)
+    except (ss.ScenarioStateError, ValueError):
+        if imported is not None:
+            raise PlanError("the imported start's state does not fit this task's scene (wrong task or suite?)") \
+                from None
+        raise PlanError("start states do not match the task layout") from None
+    try:
         ranked = nearest_reference(task_id, start_index, results, states, layout,
-                                   count=references + 5)
+                                   count=references + 5, failing_state=failing_state)
     except (ss.ScenarioStateError, ValueError):
         raise PlanError("start states do not match the task layout") from None
     chosen = []
@@ -231,8 +250,7 @@ def build_plan_with_reply(
         "task_id": task_id,
         "instruction": instruction.strip(),
         "layout": layout,
-        "failing": {"start_index": start_index, "outcomes": list(outcomes),
-                    "state": failing_state.tolist()},
+        "failing": _failing_block(start_index, outcomes, failing_state, imported),
         "references": chosen,
         "order": list(hypothesis["ranking"]),
         "order_source": hypothesis["source"],
@@ -245,6 +263,15 @@ def build_plan_with_reply(
         },
     }
     return config, raw_full
+
+
+def _failing_block(start_index: Optional[int], outcomes: Any, state: Any,
+                   imported: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    block = {"start_index": start_index, "outcomes": list(outcomes), "state": state.tolist()}
+    if imported is not None:
+        block["source"] = dict(imported["source"])
+        block["import"] = {"file_sha256": imported["file_sha256"], "state_sha256": imported["state_sha256"]}
+    return block
 
 
 def _fixed_hypothesis(order, reason: str) -> Dict[str, Any]:

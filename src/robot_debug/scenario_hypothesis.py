@@ -73,13 +73,17 @@ def _outcomes_of(entry: Any) -> List[str]:
 
 def nearest_reference(
     task_id: int,
-    failing_index: int,
+    failing_index: Optional[int],
     screen_results: Mapping[Any, Any],
     states: Mapping[Any, Any],
     layout: Mapping[str, Any],
     count: int = 3,
+    failing_state: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Passing starts of ``task_id`` ranked by distance to the failing start.
+
+    ``failing_state`` is the failing start's flat state when it is not one of the screened starts (an
+    imported start): ``failing_index`` may then be ``None`` and nothing is skipped by index.
 
     ``screen_results[task_id][start_index]`` holds the screen outcomes of a start
     (a list, or ``{"outcomes": [...]}``) and ``states[task_id][start_index]`` its
@@ -96,7 +100,8 @@ def nearest_reference(
     task_states = _lookup(states, task_id)
     if not isinstance(results, Mapping) or not isinstance(task_states, Mapping):
         raise ValueError("the task has no screen results or states")
-    failing_state = _lookup(task_states, failing_index)
+    if failing_state is None:
+        failing_state = _lookup(task_states, failing_index)
     if failing_state is None:
         raise ValueError("the failing start has no state")
     failing_state = validate_state(failing_state, layout)

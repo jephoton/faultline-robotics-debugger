@@ -35,6 +35,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from dataclasses import dataclass, field
@@ -241,6 +242,42 @@ def choose_start(summary: Mapping[str, Any], task: int, given: Optional[int]) ->
     return None if best is None else best[1]
 
 
+def passing_starts(summary: Mapping[str, Any], task: int) -> List[int]:
+    """Screened starts of ``task`` that passed every attempt, are valid scenes and carry a state."""
+
+    entry = summary.get("tasks", {}).get(str(task)) or summary.get("tasks", {}).get(task) or {}
+    found = []
+    for index, record in (entry.get("starts") or {}).items():
+        outcomes = record.get("outcomes") or []
+        if outcomes and all(item == "success" for item in outcomes) and record.get("validity") != "invalid_scene" \
+                and record.get("state") is not None:
+            found.append(int(index))
+    return sorted(found)
+
+
+IMPORT_COPY = Path("import") / "candidate.json"
+
+
+def check_import(spec: Spec, tools: Any, run_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Validate ``scenario.import`` locally, before the backend or any Job exists.
+
+    Returns ``{"candidate", "file_sha256"}`` (``None`` for a spec without an import). The file must be a
+    valid scenario candidate for the spec's suite and task. A run folder that already holds its copy of the
+    file (a resumed run) is read from there, so the original may have moved.
+    """
+
+    if spec.mode != "scenario" or not spec.scenario.import_path:
+        return None
+    stored = None if run_dir is None else Path(run_dir) / IMPORT_COPY
+    path = stored if stored is not None and stored.is_file() else spec.scenario.import_path
+    loaded = tools.load_import(path)
+    candidate = loaded["candidate"]
+    if candidate["suite"] != spec.suite or candidate["task_id"] != spec.scenario.task:
+        raise StopRun("import_mismatch", "scenario.import is a start of {} task {}, but the spec is for {} task {}"
+                      .format(candidate["suite"], candidate["task_id"], spec.suite, spec.scenario.task))
+    return loaded
+
+
 def screen_table(summary: Mapping[str, Any], task: int) -> List[str]:
     """Starts that failed at least once, as ``start N: F S F F F (decision)`` lines."""
 
@@ -279,8 +316,8 @@ def continuation_plan(plan: Mapping[str, Any], reduction: Mapping[str, Any]) -> 
     if not survivors:
         raise StopRun("no_continuation", "the surviving scene no longer differs from the reference")
     result = copy.deepcopy(dict(plan))
-    result["failing"] = {"start_index": plan["failing"]["start_index"], "outcomes": ["policy_failure"] * 4,
-                         "state": state.tolist()}
+    # Keeps start_index (None for an imported start) and, for one, its source and import record.
+    result["failing"] = dict(plan["failing"], outcomes=["policy_failure"] * 4, state=state.tolist())
     result["references"] = [{
         "start_index": reference_id, "distance": float(ss.scenario_distance(state, reference_state, layout)),
         "outcomes": list(entry["outcomes"]), "state": reference_state.tolist(), "differences": table}]
@@ -722,11 +759,28 @@ class DefaultTools:
             raise StopRun("workload_too_large", "the workload exceeds 64 KiB")
         return workload
 
+    def load_import(self, path: Any) -> Dict[str, Any]:
+        """The validated scenario candidate in a file and the SHA-256 of the file's bytes."""
+
+        from robot_debug.scenario_import import ScenarioImportError, load_scenario_candidate
+
+        try:
+            candidate = load_scenario_candidate(Path(path))
+            digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        except ScenarioImportError as error:
+            raise StopRun("import_invalid", "scenario.import is not a valid scenario candidate ({})".format(
+                error)) from None
+        except OSError:
+            raise StopRun("import_invalid", "scenario.import could not be read") from None
+        return {"candidate": candidate, "file_sha256": digest}
+
     # planning
-    def plan(self, summary: Mapping[str, Any], task: int, start: int, *, use_llm: bool,
-             env_file: Optional[Path], references: int):
+    def plan(self, summary: Mapping[str, Any], task: int, start: Optional[int], *, use_llm: bool,
+             env_file: Optional[Path], references: int, imported: Optional[Mapping[str, Any]] = None):
         module = _load_script("plan_scenario_reduction")
         kwargs: Dict[str, Any] = {}
+        if imported is not None:
+            kwargs["imported"] = imported
         if self.request is not None:
             kwargs["request"] = self.request
         if self.load_key is not None:
@@ -794,13 +848,15 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
     if spec.mode == "scenario":
         sc = spec.scenario
         if sc.import_path:
-            raise StopRun("import_unsupported", "scenario.import is not supported yet; use start or screen")
+            check_import(spec, tools)
+            preface = ["The imported start is validated on this machine; it is not screened (the reduce Job's own "
+                       "gate checks that it fails 4 of 5 attempts)."]
         starts = _screen_starts(spec)
         screen = tools.screen_workload("dry-run", spec.suite, sc.task, starts, sc.confirm)
         reduce_deadline = tools.reduce_deadline(spec.budget.max_candidates)
         jobs.append(("screen", "screen task {} starts {}".format(sc.task, starts), int(screen["deadline_seconds"])))
-        jobs.append(("reduce", "reduce the chosen failing start ({} candidates)".format(spec.budget.max_candidates),
-                     reduce_deadline))
+        jobs.append(("reduce", "reduce the {} failing start ({} candidates)".format(
+            "imported" if sc.import_path else "chosen", spec.budget.max_candidates), reduce_deadline))
         for number in range(1, MAX_CONTINUATIONS + 1):
             jobs.append(("reduce{}".format(number + 1), "continuation {} (only if not entity-minimal)".format(number),
                          reduce_deadline))
@@ -841,6 +897,13 @@ def _screen_starts(spec: Spec) -> str:
     sc = spec.scenario
     if sc.screen_text is not None:
         return sc.screen_text.replace(" ", "")
+    if sc.import_path:
+        # The imported start is not screened: only benchmark starts that can serve as the passing reference.
+        from robot_debug.spec import parse_starts
+
+        if sc.reference != "auto":
+            return str(sc.reference)
+        return ",".join(str(i) for i in parse_starts(sc.pool_text, "scenario.pool"))
     if sc.reference != "auto":
         return ",".join(str(i) for i in sorted({sc.start, sc.reference}))
     # The failing start plus a pool of benchmark starts to choose the nearest passing
@@ -895,6 +958,7 @@ class Orchestrator:
             try:
                 if self.spec.mode != "replay":
                     check_candidate_budget(self.spec, self.tools)      # before the backend or any Job exists
+                    check_import(self.spec, self.tools, self.run_dir)
                 self._start()
                 result = body()
             except StopRun as stop:
@@ -1251,20 +1315,57 @@ class Orchestrator:
 
     def _scenario(self) -> RunResult:
         spec, sc = self.spec, self.spec.scenario
-        if sc.import_path:
-            raise StopRun("import_unsupported", "scenario.import is not supported yet; use start or screen")
+        imported = self._import_record() if sc.import_path else None
         screen_workload = self.tools.screen_workload(
             self.job_name("screen", 0), spec.suite, sc.task, _screen_starts(spec), sc.confirm,
             **self._checkpoint_args())
         screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
                               "scenario_summary.json")
         screen_summary = screen.summary
+        if imported is not None:
+            return self._scenario_import(screen_summary, imported)
         start = choose_start(screen_summary, sc.task, sc.start)
         if start is None:
             self._write_screen_only_report(screen_summary, sc.task)
             raise StopRun("no_reproducible_failure",
                           "no start failed 4 of 5 attempts. " + "; ".join(screen_table(screen_summary, sc.task)))
         plan = self._plan(screen_summary, sc.task, start)
+        best, last, reason = self._reduce_loop(plan)
+        return self._finish_scenario(best, last, reason, screen_summary)
+
+    def _import_record(self) -> Dict[str, Any]:
+        """Keep a copy of the imported file in the run folder and note what it is (once per run)."""
+
+        copy_path = self.run_dir / IMPORT_COPY
+        if not copy_path.is_file():
+            copy_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(str(self.spec.scenario.import_path), str(copy_path))
+        loaded = check_import(self.spec, self.tools, self.run_dir)
+        candidate = loaded["candidate"]
+        record = {"state": list(candidate["state"]), "source": candidate["source"],
+                  "file_sha256": loaded["file_sha256"], "state_sha256": candidate["state_sha256"]}
+        if not self.steps.is_done("import"):
+            self.steps.update("import", status="done", file_sha256=record["file_sha256"],
+                              state_sha256=record["state_sha256"], source=record["source"])
+            self.say("import", "start state {} of {} task {} (file sha256 {})".format(
+                record["state_sha256"][:12], candidate["suite"], candidate["task_id"], record["file_sha256"][:12]))
+        return record
+
+    def _scenario_import(self, screen_summary: Mapping[str, Any], imported: Mapping[str, Any]) -> RunResult:
+        """Mode 1 for a failing start the user brought: the screen only supplies passing references."""
+
+        sc = self.spec.scenario
+        passing = passing_starts(screen_summary, sc.task)
+        if sc.reference != "auto" and sc.reference not in passing:
+            self._write_screen_only_report(screen_summary, sc.task)
+            raise StopRun("reference_not_passing",
+                          "the pinned reference start {} did not pass the screen".format(sc.reference))
+        if not passing:
+            self._write_screen_only_report(screen_summary, sc.task)
+            raise StopRun("no_reference", "no benchmark start of the pool passed its screen attempt, so the "
+                          "imported start has nothing to be compared with. " + "; ".join(
+                              screen_table(screen_summary, sc.task)))
+        plan = self._plan(screen_summary, sc.task, None, imported=imported)
         best, last, reason = self._reduce_loop(plan)
         return self._finish_scenario(best, last, reason, screen_summary)
 
@@ -1277,7 +1378,8 @@ class Orchestrator:
         for line in screen_table(screen_summary, task):
             self.out("  " + line)
 
-    def _plan(self, screen_summary: Mapping[str, Any], task: int, start: int) -> Dict[str, Any]:
+    def _plan(self, screen_summary: Mapping[str, Any], task: int, start: Optional[int],
+              imported: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
         path = self.run_dir / "plans" / "plan.json"
         if self.steps.is_done("plan"):
             return _read_json(path)
@@ -1289,9 +1391,10 @@ class Orchestrator:
             references = 1
         use_llm = self.spec.nemotron.hypothesis and not self.no_llm
         self.say("plan", "asking Nemotron for a hypothesis" if use_llm else "using the fixed order")
+        plan_args = {} if imported is None else {"imported": imported}
         try:
             config, raw = self.tools.plan(summary, task, start, use_llm=use_llm, env_file=self.env_file,
-                                          references=references)
+                                          references=references, **plan_args)
         except StopRun:
             raise
         except ValueError as error:
@@ -1303,8 +1406,8 @@ class Orchestrator:
         self.steps.update("plan", status="done", task=task, start=start, order_source=config.get("order_source"),
                           references=[r["start_index"] for r in config["references"]],
                           fallback_reason=hypothesis.get("fallback_reason"))
-        self.say("plan", "start {} against reference {} ({} order{})".format(
-            start, ",".join(str(r["start_index"]) for r in config["references"]), config.get("order_source"),
+        self.say("plan", "{} against reference {} ({} order{})".format(
+            "the imported start" if start is None else "start {}".format(start), ",".join(str(r["start_index"]) for r in config["references"]), config.get("order_source"),
             "" if not hypothesis.get("fallback_reason") else ": " + str(hypothesis["fallback_reason"])))
         return config
 
@@ -1315,7 +1418,7 @@ class Orchestrator:
         result = copy.deepcopy(dict(summary))
         key = str(task) if str(task) in result["tasks"] else task
         starts = result["tasks"][key]["starts"]
-        keep = {str(start), str(reference)}
+        keep = {str(reference)} | (set() if start is None else {str(start)})
         result["tasks"][key]["starts"] = {k: v for k, v in starts.items() if str(k) in keep}
         record = result["tasks"][key]["starts"].get(str(reference))
         outcomes = (record or {}).get("outcomes") or []
@@ -1641,7 +1744,7 @@ class Orchestrator:
 
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
-    "case_checkpoint", "check_candidate_budget", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
+    "case_checkpoint", "check_candidate_budget", "check_import", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
     "paraphrase_meaning", "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

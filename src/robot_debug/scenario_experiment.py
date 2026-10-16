@@ -52,7 +52,7 @@ from robot_debug.job_process import InfrastructureError, RunCancelled
 from robot_debug.m6_experiment import ASSUMED_OVERHEAD_SECONDS, DEADLINE_ROUNDING_SECONDS, EvaluatorPool
 from robot_debug.scenario_hypothesis import compact_differences, hypothesis_verdict, measure_hypothesis
 from robot_debug.scenario_import import (
-    build_candidate, load_scenario_candidate, write_scenario_candidate)
+    ScenarioImportError, _validate_source, build_candidate, load_scenario_candidate, write_scenario_candidate)
 from robot_debug.scenario_reduce import run_scenario_reduction
 
 SCENARIO_MODES = ("scenario-smoke", "scenario-screen", "scenario-reduce", "scenario-replay")
@@ -271,6 +271,19 @@ def _validate_replay_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, 
     return fields
 
 
+def _validate_import_record(value: Any) -> Dict[str, str]:
+    """``{"file_sha256", "state_sha256"}``: what identifies the imported file and its start state."""
+
+    keys = ("file_sha256", "state_sha256")
+    if type(value) is not dict or set(value) != set(keys):
+        _fail("the import record needs exactly file_sha256 and state_sha256")
+    for key in keys:
+        digest = value[key]
+        if type(digest) is not str or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            _fail("the import record's digests must be 64 lowercase hex characters")
+    return {key: value[key] for key in keys}
+
+
 def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, Any]:
     fields = {}  # type: Dict[str, Any]
     fields["task_id"], layout = _checked_layout(suite, config)
@@ -285,17 +298,28 @@ def _validate_reduce_fields(suite: str, config: Mapping[str, Any]) -> Dict[str, 
         raise AssertionError("unreachable")
 
     failing = config["failing"]
-    if type(failing) is not dict or set(failing) != {"start_index", "outcomes", "state"}:
-        _fail("failing needs exactly start_index, outcomes and state")
+    if type(failing) is not dict or not {"start_index", "outcomes", "state"} <= set(failing) <= {
+            "start_index", "outcomes", "state", "source", "import"}:
+        _fail("failing needs start_index, outcomes and state (and source and import for an imported start)")
+    imported = failing["start_index"] is None
+    if imported != ("source" in failing) or imported != ("import" in failing):
+        _fail("an imported failing start (start_index null) needs source and import; a benchmark start has neither")
     fields["failing"] = {
-        "start_index": _int(failing["start_index"], "failing start_index", 0, MAX_START_INDEX),
+        "start_index": None if imported else _int(failing["start_index"], "failing start_index", 0,
+                                                  MAX_START_INDEX),
         "outcomes": _validate_outcomes(failing["outcomes"], "failing outcomes"),
         "state": state_of(failing["state"]),
     }
+    if imported:
+        try:
+            fields["failing"]["source"] = _validate_source(failing["source"])
+        except ScenarioImportError:
+            _fail("the imported start's source is invalid")
+        fields["failing"]["import"] = _validate_import_record(failing["import"])
     references = config["references"]
     if type(references) is not list or not 1 <= len(references) <= MAX_REFERENCES_IN_PLAN:
         _fail("references must be a short non-empty list")
-    seen = {fields["failing"]["start_index"]}
+    seen = set() if imported else {fields["failing"]["start_index"]}
     checked = []
     for entry in references:
         if type(entry) is not dict or set(entry) != {
@@ -1078,7 +1102,9 @@ class ReduceDriver:
         self.config, self.suite, self.batch_root = config, suite, Path(batch_root)
         self.layout = config["layout"]
         self.task_id = config["task_id"]
-        self.failing_index = config["failing"]["start_index"]
+        self.failing_index = config["failing"]["start_index"]      # None for an imported failing start
+        self.failing_source = config["failing"].get("source")      # the imported file's own source, then
+        self.failing_import = config["failing"].get("import")
         self.failing_state = ss.validate_state(config["failing"]["state"], self.layout)
         self.reference_states = {ref["start_index"]: ss.validate_state(ref["state"], self.layout)
                                  for ref in config["references"]}
@@ -1110,7 +1136,8 @@ class ReduceDriver:
             return key, copy.deepcopy(item)
         if role == "failing":
             key, path = self._write("failing", self.failing_state.tolist(),
-                                    {"kind": "benchmark", "init_state_index": self.failing_index})
+                                    copy.deepcopy(self.failing_source) if self.failing_index is None
+                                    else {"kind": "benchmark", "init_state_index": self.failing_index})
             case, meta = "fail-" + _hash_name(key), {"role": "failing", "key": key}
         elif role == "reference":
             rid = spec["reference"]
@@ -1174,6 +1201,9 @@ class ReduceDriver:
             "order": list(self.config["order"]), "order_source": self.config["order_source"],
             "hypothesis": copy.deepcopy(self.config["hypothesis"]),
         }
+        if self.failing_index is None:
+            plan["failing_source"] = copy.deepcopy(self.failing_source)
+            plan["failing_import"] = copy.deepcopy(self.failing_import)
         self.body.update(plan=plan, differences_match_plan=self.differences_match_plan,
                          videos={}, minimal_candidate=None, differences=None, hypothesis_verdict=None,
                          hypothesis_measurement=None)
@@ -1713,12 +1743,14 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
     ranking = (plan["hypothesis"].get("ranking") or plan.get("order") or [])
     verdict = verdict_for(plan, reduction)
     measurement = measurement_for(plan, reduction)
+    imported = plan.get("failing_import") if plan["failing_start"] is None else None
+    failing = plan["failing_start"] if imported is None else "import:" + imported["state_sha256"]
     identity = json.dumps(
-        {"suite": plan["suite"], "task_id": plan["task_id"], "failing": plan["failing_start"],
+        {"suite": plan["suite"], "task_id": plan["task_id"], "failing": failing,
          "reference": reference, "selection": selection}, sort_keys=True, separators=(",", ":"))
     candidate = summary.get("minimal_candidate")
     hypothesis = plan["hypothesis"]
-    return {
+    case = {
         "schema_version": CASE_SCHEMA_VERSION,
         "kind": "scenario_reduction",
         "case_id": hashlib.sha256(identity.encode("utf-8")).hexdigest(),
@@ -1765,6 +1797,12 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
             "total_seconds": summary.get("total_seconds"),
         },
     }
+    if imported is not None:
+        # Only a case from an imported failing start carries this: where the start came from.
+        case["failing_import"] = {
+            "file_sha256": imported["file_sha256"], "state_sha256": imported["state_sha256"],
+            "source": copy.deepcopy(plan.get("failing_source"))}
+    return case
 
 
 # ---------------------------------------------------------------------------
