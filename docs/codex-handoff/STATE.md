@@ -1,5 +1,26 @@
 # Faultline current project state
 
+## October 17 control panel (M7a step 4, Claude Code)
+
+- The UI overhaul is done (ADR 0033; spec and plan under
+  `docs/superpowers/specs/` and `plans/2026-10-17-*`). `faultline ui` serves a
+  React + Vite app (source `web/`, built bundle committed in
+  `src/robot_debug/viewer/app/`, CI checks it is fresh): a sidebar of runs and
+  cases with fault codes, New diagnosis (form or YAML, validation, dry run,
+  confirm), a live run page with safe Stop and Resume, case pages for
+  scenario, audit, paraphrase and the M4 occlusion case, Replay, Setup checks,
+  a guide and All evidence. Look: alarm-first control-room greys with a
+  scan-tool readout header.
+- New CLI: `faultline stop RUN_DIR` (cancels the Job, settles measured time or
+  zero if it never started, resumable), `faultline export --out DIR` (static
+  gallery, guarded against ids, paths and secret names), and a one-paid-run
+  rule (`--allow-parallel` to override).
+- The September viewer pages are retired; their data APIs remain.
+- Independent security review: no cross-origin control found; its 14
+  findings fixed. Python suite 2843 OK (60 skips); web suite 173 OK.
+- Not yet done: the one real run started from the panel (needs Jethro's go
+  and a Nebius sign-in), and publishing the gallery (M7a step 5, needs go).
+
 ## October 16 review fixes and import replication (Claude Code)
 
 - Independent whole-project review: claims scoped to evidence, FEEDBACK
