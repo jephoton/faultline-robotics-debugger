@@ -206,23 +206,23 @@ class SpecTests(unittest.TestCase):
 
 class HelperTests(unittest.TestCase):
     def test_choose_prefers_most_failures_then_fewest_edits_then_label(self):
-        summary = lang_screen(failing=("p01", "p02", "p03"), outcomes={
+        summary = lang_screen(failing=("p01", "p02", "p04"), outcomes={
             "p01": ["policy_failure"] * 4 + ["success"], "p02": ["policy_failure"] * 5,
-            "p03": ["policy_failure"] * 5})
+            "p04": ["policy_failure"] * 5})
         edits = {row["label"]: row["edit_count"] for row in summary["instructions"][1:]}
         chosen = orch.choose_paraphrase(summary)
-        expected = sorted(("p02", "p03"), key=lambda label: (edits[label], label))[0]
+        expected = sorted(("p02", "p04"), key=lambda label: (edits[label], label))[0]
         self.assertEqual(expected, chosen["label"])
         summary["instructions"][2]["outcomes"] = ["policy_failure"] * 4 + ["success"]
-        summary["instructions"][3]["outcomes"] = ["policy_failure"] * 4 + ["success"]
+        summary["instructions"][4]["outcomes"] = ["policy_failure"] * 4 + ["success"]
         summary["instructions"][2]["outcomes"] = ["policy_failure"] * 5
         self.assertEqual("p02", orch.choose_paraphrase(summary)["label"])
 
     def test_ties_on_failures_go_to_the_smaller_edit_set(self):
-        summary = lang_screen(failing=("p01", "p03"))
+        summary = lang_screen(failing=("p01", "p04"))
         summary["instructions"][1]["edit_count"] = 5
-        summary["instructions"][3]["edit_count"] = 2
-        self.assertEqual("p03", orch.choose_paraphrase(summary)["label"])
+        summary["instructions"][4]["edit_count"] = 2
+        self.assertEqual("p04", orch.choose_paraphrase(summary)["label"])
 
     def test_only_reproducing_paraphrases_with_four_failures_qualify(self):
         self.assertIsNone(orch.choose_paraphrase(lang_screen(failing=())))
@@ -241,6 +241,29 @@ class HelperTests(unittest.TestCase):
         summary["instructions"][0]["outcomes"] = ["policy_failure"] * 5
         self.assertEqual("p01", orch.choose_paraphrase(summary)["label"], "the control is never chosen")
         self.assertIsNone(orch.choose_paraphrase({}))
+
+    def test_a_paraphrase_that_dropped_the_object_or_target_is_never_chosen(self):
+        # p03 ("move the soup into the basket") lost "alphabet"; it fails more often and with fewer edits.
+        summary = lang_screen(failing=("p01", "p03"), outcomes={
+            "p01": ["policy_failure"] * 4 + ["success"], "p03": ["policy_failure"] * 5})
+        summary["instructions"][1]["edit_count"] = 9
+        summary["instructions"][3]["edit_count"] = 1
+        self.assertEqual("p01", orch.choose_paraphrase(summary)["label"])
+        self.assertEqual("p03", orch.choose_paraphrase(summary, include_dropped=True)["label"])
+        self.assertEqual("object_or_target_dropped", orch.paraphrase_meaning(summary, summary["instructions"][3]))
+        self.assertEqual("kept", orch.paraphrase_meaning(summary, summary["instructions"][1]))
+        self.assertIsNone(orch.paraphrase_meaning({}, summary["instructions"][1]))
+
+    def test_the_october_15_nano_example_is_not_chosen(self):
+        summary = lang_screen(paraphrases=["pick up the alphabet soup and place it in the container"],
+                              failing=("p01",))
+        self.assertIsNone(orch.choose_paraphrase(summary))
+        self.assertIsNotNone(orch.choose_paraphrase(summary, include_dropped=True))
+
+    def test_the_table_marks_the_flagged_paraphrases(self):
+        lines = orch.paraphrase_table(lang_screen(failing=("p01", "p03")))
+        self.assertNotIn("dropped", lines[0])
+        self.assertIn("[dropped object/target]", lines[1])
 
     def test_the_table_lists_only_instructions_that_failed(self):
         lines = orch.paraphrase_table(lang_screen(failing=("p02",)))
@@ -300,6 +323,40 @@ class EndToEnd(Base):
         self.assertEqual(1, backend.finished)
         self.assertTrue(any("choose" in line and "p01" in line for line in lines))
         self.assertTrue(all("spent US$" in line for line in lines))
+
+    def test_a_flagged_paraphrase_is_screened_but_the_reduction_takes_the_next_one(self):
+        paraphrases = [PARAPHRASES[2], PARAPHRASES[0], PARAPHRASES[1], PARAPHRASES[3]]      # p01 dropped "alphabet"
+        tools = ParaphraseTools(paraphrases=paraphrases)
+        runner, backend, tools, ledger, lines = self.world(
+            [screen_step(paraphrases=paraphrases, failing=("p01", "p02"), outcomes={
+                "p01": ["policy_failure"] * 5, "p02": ["policy_failure"] * 4 + ["success"]}), reduce_step()],
+            tools=tools)
+        result = runner.diagnose()
+        self.assertEqual("completed", result.status)
+        screen, reduce_ = (backend.workloads[name] for name in backend.submitted)
+        self.assertEqual(paraphrases, screen["paraphrases"], "the flagged one is still screened")
+        self.assertEqual(paraphrases[1], reduce_["paraphrase"], "but not reduced")
+        stored = json.loads((runner.run_dir / "paraphrases.json").read_text())
+        self.assertEqual(["object_or_target_dropped", "kept", "kept", "kept"],
+                         [item["meaning_check"] for item in stored["meaning_checks"]])
+        self.assertTrue(any("1 of 4 paraphrases dropped an object or target word" in line for line in lines))
+        report = (runner.run_dir / "report.md").read_text()
+        self.assertIn("Flagged in this screen: p01.", report)
+        self.assertIn("Failed 4 of 5 but flagged, so not reduced: p01.", report)
+        case = json.loads((runner.run_dir / "case.json").read_text())
+        self.assertEqual("kept", case["paraphrase_meaning_check"])
+
+    def test_when_every_failure_dropped_something_the_run_stops_before_the_reduction(self):
+        paraphrases = ["pick up the alphabet soup and place it in the container", PARAPHRASES[0]]
+        tools = ParaphraseTools(paraphrases=paraphrases)
+        runner, backend, tools, ledger, lines = self.world(
+            [screen_step(paraphrases=paraphrases, failing=("p01",))], tools=tools)
+        result = runner.diagnose()
+        self.assertEqual(("stopped", "no_faithful_failure"), (result.status, result.reason))
+        self.assertEqual(1, len(backend.submitted), "no reduce Job")
+        report = (runner.run_dir / "report.md").read_text()
+        self.assertIn("each of them dropped an object or target word", report)
+        self.assertTrue(any("[dropped object/target]" in line for line in lines))
 
     def test_the_spec_candidate_budget_and_model_reach_the_jobs_and_the_request(self):
         spec = sp.parse_spec(dict(paraphrase_spec(model="nvidia/other-model").raw, budget={
@@ -553,6 +610,32 @@ class ReportTests(unittest.TestCase):
             self.assertIn(row["text"], text)
         for candidate in self.reduction["reduction"]["candidates"]:
             self.assertIn(candidate["text"], text)
+
+    def test_the_report_flags_a_paraphrase_that_dropped_the_object_or_target(self):
+        screen = lang_screen(paraphrases=PARAPHRASES[:2] + ["pick up the alphabet soup and place it in the container"],
+                             failing=("p01", "p03"))
+        text = self.module.build_report(screen, None, None)
+        self.assertIn("meaning check", text)
+        self.assertIn("Flagged in this screen: p03.", text)
+        self.assertIn("Failed 4 of 5 but flagged, so not reduced: p03.", text)
+        self.assertIn("object_or_target_dropped", text)
+        self.assertNotIn("each of them dropped", text, "p01 kept its meaning")
+
+    def test_a_screen_whose_only_failures_dropped_something_is_not_called_robust(self):
+        screen = lang_screen(paraphrases=["pick up the alphabet soup and place it in the container"],
+                             failing=("p01",))
+        text = self.module.build_report(screen, None, None)
+        self.assertIn("each of them dropped an object or target word", text)
+        self.assertNotIn("was robust", text)
+
+    def test_the_case_records_the_meaning_check_of_every_wording(self):
+        screen = lang_screen(paraphrases=PARAPHRASES[:2] + ["pick up the alphabet soup and place it in the container"],
+                             failing=("p01",))
+        case = self.module.build_case_record(screen, self.reduction)
+        self.assertEqual("kept", case["paraphrase_meaning_check"])
+        self.assertEqual("kept", case["minimal"]["meaning_check"])
+        checks = {row["label"]: row["meaning_check"] for row in case["screen"]}
+        self.assertEqual({"orig": None, "p01": "kept", "p02": "kept", "p03": "object_or_target_dropped"}, checks)
 
     def test_the_screen_only_report_says_the_policy_was_robust(self):
         text = self.module.build_report(lang_screen(failing=()), None, None)

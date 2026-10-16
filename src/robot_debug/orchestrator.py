@@ -412,9 +412,25 @@ def paraphrase_failures(row: Mapping[str, Any]) -> int:
     return count if count >= 4 else 0
 
 
-def choose_paraphrase(summary: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
+def paraphrase_meaning(summary: Mapping[str, Any], row: Mapping[str, Any]) -> Optional[str]:
+    """``kept`` or ``object_or_target_dropped`` for a screened paraphrase against the screen's original
+    wording (``paraphrase.meaning_check``); ``None`` when the summary does not carry both texts."""
+
+    from robot_debug import paraphrase as pp
+
+    original, text = summary.get("original"), row.get("text")
+    if not isinstance(original, str) or not isinstance(text, str):
+        return None
+    return pp.meaning_check(original, text)
+
+
+def choose_paraphrase(summary: Mapping[str, Any], *, include_dropped: bool = False) -> Optional[Mapping[str, Any]]:
     """The reproducing paraphrase to reduce: most failures, then fewest word edits, then the lowest label;
-    ``None`` when no paraphrase met the 4-of-5 gate."""
+    ``None`` when no paraphrase met the 4-of-5 gate.
+
+    A paraphrase that dropped an object or target word of the original (``meaning_check``) is screened
+    but never chosen, unless ``include_dropped`` (used to say that such failures existed): the failure may
+    come from a changed task, not from the wording."""
 
     best = None
     for row in summary.get("instructions") or ():
@@ -422,6 +438,8 @@ def choose_paraphrase(summary: Mapping[str, Any]) -> Optional[Mapping[str, Any]]
             continue
         count = paraphrase_failures(row)
         if not count:
+            continue
+        if not include_dropped and paraphrase_meaning(summary, row) == "object_or_target_dropped":
             continue
         edits = row.get("edit_count")
         key = (-count, edits if type(edits) is int else 10 ** 6, str(row.get("label")))
@@ -431,16 +449,18 @@ def choose_paraphrase(summary: Mapping[str, Any]) -> Optional[Mapping[str, Any]]
 
 
 def paraphrase_table(summary: Mapping[str, Any]) -> List[str]:
-    """Instructions that failed at least once, as ``p03: F S F F F (reproduces) - text`` lines."""
+    """Instructions that failed at least once, as ``p03: F S F F F (reproduces) - text`` lines; a paraphrase
+    that dropped an object or target word of the original is marked ``[dropped object/target]``."""
 
     letters = {"success": "S", "policy_failure": "F", "invalid_scene": "I"}
     lines = []
     for row in summary.get("instructions") or ():
         outcomes = row.get("outcomes") or []
         if any(item != "success" for item in outcomes):
-            lines.append("{}: {} ({}) - {}".format(
+            dropped = row.get("kind") == "paraphrase" and paraphrase_meaning(summary, row) == "object_or_target_dropped"
+            lines.append("{}: {} ({}){} - {}".format(
                 row.get("label"), " ".join(letters.get(item, "?") for item in outcomes), row.get("decision") or "-",
-                row.get("text")))
+                " [dropped object/target]" if dropped else "", row.get("text")))
     return lines or ["every instruction passed"]
 
 
@@ -1387,6 +1407,10 @@ class Orchestrator:
         chosen = choose_paraphrase(screen_summary)
         if chosen is None:
             self._write_paraphrase_report(screen_summary, None)
+            if choose_paraphrase(screen_summary, include_dropped=True) is not None:
+                raise StopRun("no_faithful_failure", "paraphrases failed 4 of 5 attempts, but each dropped an "
+                              "object or target word of the instruction, so the failure may come from a changed "
+                              "task rather than the wording. " + "; ".join(paraphrase_table(screen_summary)))
             raise StopRun("no_reproducible_failure", "no paraphrase failed 4 of 5 attempts. "
                           + "; ".join(paraphrase_table(screen_summary)))
         if not (screen_summary.get("control") or {}).get("passed"):
@@ -1416,8 +1440,18 @@ class Orchestrator:
         if not result.get("paraphrases"):
             raise StopRun("paraphrase_failed", "no usable paraphrases ({})".format(
                 result.get("fallback_reason") or "none returned"))
-        _write_json(path, {key: result.get(key) for key in (
-            "original", "paraphrases", "rejected", "model", "provenance", "raw_content")})
+        from robot_debug import paraphrase as pp
+
+        stored = {key: result.get(key) for key in (
+            "original", "paraphrases", "rejected", "model", "provenance", "raw_content")}
+        # Flagged paraphrases are still screened (the failure is information) but never reduced.
+        stored["meaning_checks"] = [{"text": text, "meaning_check": pp.meaning_check(original, text)}
+                                    for text in result["paraphrases"]]
+        _write_json(path, stored)
+        dropped = sum(1 for item in stored["meaning_checks"] if item["meaning_check"] != pp.MEANING_KEPT)
+        if dropped:
+            self.say("paraphrase", "{} of {} paraphrases dropped an object or target word of the instruction; "
+                     "they are screened but will not be reduced".format(dropped, len(result["paraphrases"])))
         self.steps.update("paraphrase", status="done", count=len(result["paraphrases"]), model=result.get("model"))
         self.say("paraphrase", "{} paraphrases (paraphrases.json)".format(len(result["paraphrases"])))
         return list(result["paraphrases"])
@@ -1536,6 +1570,6 @@ class Orchestrator:
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
     "check_candidate_budget", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
-    "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
+    "paraphrase_meaning", "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

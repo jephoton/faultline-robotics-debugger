@@ -99,23 +99,51 @@ def _cost(seconds: Any, rate: Optional[float]) -> str:
     return " (about US${:.2f} at US${:.4f}/h)".format(seconds / 3600.0 * rate, rate)
 
 
+def _faithful(screen: Mapping[str, Any]) -> bool:
+    """Whether some reproducing paraphrase kept every object and target word of the original."""
+
+    original = screen.get("original")
+    for row in screen.get("instructions") or []:
+        if row.get("kind") == "paraphrase" and row.get("label") in (screen.get("reproducing") or []):
+            if not isinstance(original, str) or pp.meaning_check(original, str(row.get("text"))) == pp.MEANING_KEPT:
+                return True
+    return False
+
+
 def screen_section(screen: Mapping[str, Any]) -> List[str]:
     lines = ["## Screen", "",
              "Outcomes per instruction: S success, F policy failure. The original wording is the control "
              "(two attempts). Each paraphrase had one attempt; a paraphrase that failed was confirmed "
              "(it reproduces when at least 4 of 5 attempts fail).", ""]
     rows = []
+    original = screen.get("original")
+    dropped = []  # type: List[str]
     for row in screen.get("instructions") or []:
+        meaning = "-"
+        if row.get("kind") == "paraphrase" and isinstance(original, str) and isinstance(row.get("text"), str):
+            meaning = pp.meaning_check(original, row["text"])
+            if meaning == pp.MEANING_DROPPED:
+                dropped.append(str(row.get("label")))
         rows.append([row.get("label"), row.get("kind"), _letters(row.get("outcomes") or []),
                      row.get("decision") or ("control" if row.get("kind") == "original" else "passed"),
-                     row.get("edit_count") if row.get("edit_count") is not None else "-", row.get("text")])
-    lines += _table(["label", "kind", "outcomes", "decision", "word edits", "instruction"], rows)
+                     row.get("edit_count") if row.get("edit_count") is not None else "-", meaning,
+                     row.get("text")])
+    lines += _table(["label", "kind", "outcomes", "decision", "word edits", "meaning check", "instruction"], rows)
     control = screen.get("control") or {}
     reproducing = screen.get("reproducing") or []
     lines += ["", "Control (original wording): {} ({}).".format(
         _letters(control.get("outcomes") or []), "passed" if control.get("passed") else "did NOT pass both attempts"),
         "Paraphrases that failed at least 4 of 5 attempts: {}.".format(", ".join(reproducing) or "none"),
         "Attempts skipped by early decisions: {}.".format((screen.get("confirm") or {}).get("skipped_attempts", 0)), ""]
+    lines += ["Meaning check: `kept` means every object or target word of the original (a word of four or more "
+              "letters that is not an action verb, preposition or article) is still in the paraphrase; "
+              "`object_or_target_dropped` means one is missing. Flagged paraphrases are screened but never chosen "
+              "for reduction, because a failure there may come from a changed task, not from the wording.",
+              "Flagged in this screen: {}.".format(", ".join(dropped) or "none")]
+    flagged_failures = [label for label in reproducing if label in dropped]
+    if flagged_failures:
+        lines.append("Failed 4 of 5 but flagged, so not reduced: {}.".format(", ".join(flagged_failures)))
+    lines.append("")
     return lines
 
 
@@ -133,10 +161,12 @@ def reduction_section(summary: Mapping[str, Any], rate: Optional[float]) -> List
     lines += ["- Gates: the full paraphrase {} ; the original wording {}.".format(
         gates.get("paraphrase") or "not run", gates.get("original") or "not run"), ""]
     if isinstance(minimal, Mapping):
+        meaning = pp.meaning_check(original, minimal.get("text", "")) if isinstance(original, str) else "-"
         lines += ["### Minimal failing wording", "",
                   "- Original: `{}`".format(original),
                   "- Minimal: `{}`".format(minimal.get("text")),
                   "- Marked: {}".format(mark_edits(original, minimal.get("edits") or [])),
+                  "- Meaning check of the minimal wording: `{}`".format(meaning),
                   "- Edits kept ({} of {}): {}".format(len(minimal.get("edits") or []), len(summary.get("edits") or []),
                                                        "; ".join(minimal.get("labels") or []) or "none"),
                   "- {}".format("1-minimal: removing any one remaining edit makes the failure stop reproducing "
@@ -185,6 +215,10 @@ def build_report(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any
             original, minimal.get("text", ""), minimal.get("labels") or [], reduced=reduced,
             required_failures=(reduction.get("reduction") or {}).get("required_failures", 4),
             attempts=(reduction.get("reduction") or {}).get("attempts", 5)), ""]
+    elif screen.get("reproducing") and reduction is None and not _faithful(screen):
+        lines += ["Paraphrases of \"{}\" made the policy fail at least 4 of 5 attempts, but each of them dropped "
+                  "an object or target word of the instruction, so none was reduced: the failure may come from a "
+                  "changed task rather than from the wording alone.".format(original), ""]
     elif not screen.get("reproducing"):
         lines += ["No paraphrase of \"{}\" made the policy fail at least 4 of 5 attempts in this screen: the "
                   "policy was robust to these {} rewordings at this start (a valid result, not a bug).".format(
@@ -212,7 +246,10 @@ def build_report(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any
               "cover other tasks, starts, seeds or kinds of language change.",
               "- The minimal wording is a local minimum found by reruns: no single remaining edit can be "
               "removed, but a different, smaller change might exist.",
-              "- It is not a causal proof, and the paraphrases were not checked by a person for meaning.", ""]
+              "- It is not a causal proof. The paraphrases were not checked by a person for meaning; the mechanical "
+              "check only confirms that every object or target word of the original is still present, so a "
+              "synonym for an object is flagged and a changed relation (for example, a different place to put "
+              "it) is not.", ""]
     return "\n".join(lines)
 
 

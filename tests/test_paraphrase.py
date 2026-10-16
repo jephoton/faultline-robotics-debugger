@@ -312,6 +312,42 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(reply, result["raw_content"])
 
 
+class MeaningCheckTests(unittest.TestCase):
+    def test_every_recorded_good_paraphrase_keeps_its_meaning(self):
+        for text in GOOD:
+            with self.subTest(text=text):
+                self.assertEqual(pp.MEANING_KEPT, pp.meaning_check(ORIGINAL, text))
+
+    def test_the_october_15_nano_example_dropped_the_target(self):
+        verdict = pp.meaning_check(ORIGINAL, "Pick up the alphabet soup and place it in the container.")
+        self.assertEqual("object_or_target_dropped", verdict)
+
+    def test_a_dropped_object_word_is_flagged(self):
+        self.assertEqual(pp.MEANING_DROPPED, pp.meaning_check(ORIGINAL, "pick up the soup and place it in the basket"))
+        self.assertEqual(pp.MEANING_DROPPED, pp.meaning_check(ORIGINAL, "pick up the alphabet and place it in the basket"))
+
+    def test_case_and_a_trailing_s_do_not_matter_in_either_direction(self):
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check(ORIGINAL, "PICK UP THE ALPHABET SOUP AND PLACE IT IN THE BASKET"))
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check(ORIGINAL, "put alphabet soups in the baskets"))
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check("put the tomato sauces in the baskets",
+                                                           "put the tomato sauce in the basket"))
+
+    def test_action_verbs_prepositions_articles_and_short_words_are_free_to_change(self):
+        original = "put both the alphabet soup and the tomato sauce in the basket"
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check(
+            original, "grab the tomato sauce plus the alphabet soup, then drop them inside the basket"))
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check("take it", "grab it"))      # no content words at all
+
+    def test_a_word_inside_a_longer_word_is_not_a_match(self):
+        self.assertEqual(pp.MEANING_DROPPED, pp.meaning_check(ORIGINAL, "pick up the alphabet soup and place it in the basketball"))
+
+    def test_hyphenated_words_are_compared_by_their_parts(self):
+        self.assertEqual(pp.MEANING_KEPT, pp.meaning_check("put the cream-cheese box in the basket",
+                                                           "put the cream cheese box in the basket"))
+        self.assertEqual(pp.MEANING_DROPPED, pp.meaning_check("put the cream-cheese box in the basket",
+                                                              "put the cream box in the basket"))
+
+
 class JobSafetyTests(unittest.TestCase):
     def test_the_module_parses_as_python_38_and_loads_only_the_standard_library(self):
         path = ROOT / "src" / "robot_debug" / "paraphrase.py"

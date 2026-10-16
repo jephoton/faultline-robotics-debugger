@@ -201,6 +201,55 @@ def edit_label(edit: Mapping[str, Any]) -> str:
     return '"{}" -> "{}"'.format(before, after)
 
 
+# --- meaning check (Job-safe, pure) --------------------------------------------------------------
+
+MEANING_KEPT = "kept"
+MEANING_DROPPED = "object_or_target_dropped"
+# Words of four or more letters that are not objects or targets: action verbs, prepositions, articles
+# and fillers. A paraphrase may reword these freely; every other long word of the original (the object,
+# its qualifiers, the target) must still be there. October 15, 2026: a Nemotron Nano paraphrase said
+# "container" for "basket" and failed, which proved nothing about wording.
+MEANING_STOPWORDS = frozenset((
+    "pick", "place", "put", "move", "take", "grab", "lift", "open", "close", "turn", "push", "pull",
+    "carry", "drop", "bring", "give", "both", "into", "inside", "onto", "over", "with", "from", "then",
+    "and", "the", "them", "that", "this", "those", "these", "next", "also", "each", "please", "kindly",
+    "would", "could", "will", "your", "have", "there", "their", "they",
+))
+_WORD_PARTS = re.compile(r"[a-z0-9]+")
+
+
+def _content_words(text: str) -> List[str]:
+    words = []  # type: List[str]
+    for token in tokenize(text.lower()):
+        for part in _WORD_PARTS.findall(token):
+            if len(part) >= 4 and part not in MEANING_STOPWORDS and part not in words:
+                words.append(part)
+    return words
+
+
+def _present(word: str, available: Sequence[str]) -> bool:
+    return any(item == word or item == word + "s" or item + "s" == word for item in available)
+
+
+def meaning_check(original: str, paraphrase: str) -> str:
+    """``"kept"``, or ``"object_or_target_dropped"`` when a content word of ``original`` is missing.
+
+    A content word is a word of four or more letters that is not in :data:`MEANING_STOPWORDS`. It
+    counts as present when the paraphrase has it, case-insensitively and allowing a trailing "s" on
+    either side (hyphenated words are compared by their parts). A cheap guard against a "failure" that
+    comes from a changed task (a different object or target) rather than from the wording alone; it
+    cannot tell a synonym from a different object, so a flagged paraphrase may be a harmless reword.
+    """
+
+    available = []  # type: List[str]
+    for token in tokenize(paraphrase.lower()):
+        available.extend(_WORD_PARTS.findall(token))
+    for word in _content_words(original):
+        if not _present(word, available):
+            return MEANING_DROPPED
+    return MEANING_KEPT
+
+
 # --- local: validation and generation ---------------------------------------------------------------
 
 
@@ -341,7 +390,8 @@ def request_paraphrases(instruction: str, count: int, api_key: str, model: str =
 
 
 __all__ = [
-    "DEFAULT_COUNT", "KNOWN_INSTRUCTIONS", "MAX_CHARS", "MAX_COUNT", "PARAPHRASE_MODEL", "has_words", "ParaphraseError", "SYSTEM_PROMPT",
+    "DEFAULT_COUNT", "KNOWN_INSTRUCTIONS", "MAX_CHARS", "MAX_COUNT", "MEANING_DROPPED", "MEANING_KEPT",
+    "MEANING_STOPWORDS", "PARAPHRASE_MODEL", "has_words", "meaning_check", "ParaphraseError", "SYSTEM_PROMPT",
     "apply_edits", "build_prompt", "clean_instruction", "edit_label", "normalize", "parse_reply",
     "request_paraphrases", "tokenize", "validate_edits", "validate_paraphrases", "word_edits",
 ]

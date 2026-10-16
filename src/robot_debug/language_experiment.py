@@ -952,8 +952,11 @@ def build_case(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]] =
                          "decision": candidate.get("decision")})
     screen_rows = []
     for row in (screen or {}).get("instructions") or []:
-        screen_rows.append({key: row.get(key) for key in (
-            "label", "kind", "text", "outcomes", "failures", "decision", "edit_count")})
+        entry = {key: row.get(key) for key in (
+            "label", "kind", "text", "outcomes", "failures", "decision", "edit_count")}
+        entry["meaning_check"] = (pp.meaning_check(summary["original"], row["text"])
+                                  if row.get("kind") == "paraphrase" and type(row.get("text")) is str else None)
+        screen_rows.append(entry)
     return {
         "schema_version": CASE_SCHEMA_VERSION,
         "kind": "paraphrase_reduction",
@@ -964,6 +967,7 @@ def build_case(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]] =
         "start_index": summary["init_state_index"],
         "instruction": summary["original"],
         "paraphrase": summary["paraphrase"],
+        "paraphrase_meaning_check": pp.meaning_check(summary["original"], summary["paraphrase"]),
         "stop_reason": reduction.get("stop_reason"),
         "reduced": reduced,
         "minimal": {
@@ -974,6 +978,7 @@ def build_case(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]] =
                 summary["original"], minimal["text"], minimal["labels"], reduced=reduced,
                 required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5)),
             "edit_minimal": bool(minimal.get("edit_minimal")),
+            "meaning_check": pp.meaning_check(summary["original"], minimal["text"]),
         },
         "replay": {
             "config": {"suite": summary["suite"], "task_id": summary["task_id"],
