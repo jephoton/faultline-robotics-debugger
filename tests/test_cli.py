@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import tempfile
@@ -294,6 +295,18 @@ class Resume(Fixture):
         self.assertEqual(self.run_cli(["diagnose", str(other), "--resume", str(run_dir)]), 2)
         self.assertIn("differs", self.text)
 
+    def test_resume_of_a_run_that_is_still_running_is_refused(self):
+        self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)],
+                     [finished(lambda w: screen_summary())], fail_submit_at=1)
+        run_dir = next(self.runs.iterdir())
+        started = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        other = {"pid": os.getppid(), "started_at": started, "command": "diagnose"}
+        (run_dir / "process.json").write_text(json.dumps(other), encoding="utf-8")
+        self.lines.clear()
+        self.assertEqual(self.run_cli(["diagnose", "--resume", str(run_dir)]), 2)
+        self.assertIn("already running", self.text)
+        self.assertEqual(len(self.backends), 1, "no second backend was built")
+
     def test_resume_of_something_that_is_not_a_run_folder(self):
         self.assertEqual(self.run_cli(["diagnose", "--resume", str(self.dir)]), 2)
 
@@ -309,21 +322,33 @@ class StopCommand(Fixture):
                             stop_outcome=("CANCELLED", 300))
         return code, next(self.runs.iterdir())
 
-    def test_stop_writes_the_request_into_a_run_folder(self):
+    def run_folder(self, live=True):
         folder = self.runs / "soup-start-20261014T101530Z"
         folder.mkdir(parents=True)
         (folder / "steps.json").write_text("{}", encoding="utf-8")
+        if live:                                     # this very process stands in for the running diagnosis
+            stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            (folder / "process.json").write_text(json.dumps(
+                {"pid": os.getpid(), "started_at": stamp, "command": "diagnose"}), encoding="utf-8")
+        return folder
+
+    def test_stop_writes_the_request_into_a_run_folder(self):
+        folder = self.run_folder()
         self.assertEqual(self.run_cli(["stop", str(folder)]), 0)
         self.assertTrue((folder / "stop-request.json").is_file())
         self.assertIn("Stop requested", self.text)
         self.assertIn("--resume", self.text)
 
     def test_stop_finds_a_run_by_its_folder_name_under_the_runs_root(self):
-        folder = self.runs / "soup-start-20261014T101530Z"
-        folder.mkdir(parents=True)
-        (folder / "steps.json").write_text("{}", encoding="utf-8")
+        folder = self.run_folder()
         self.assertEqual(self.run_cli(["stop", folder.name, "--runs-root", str(self.runs)]), 0)
         self.assertTrue((folder / "stop-request.json").is_file())
+
+    def test_stop_of_a_run_that_is_not_running_says_so_and_writes_nothing(self):
+        folder = self.run_folder(live=False)
+        self.assertEqual(self.run_cli(["stop", str(folder)]), 2)
+        self.assertIn("nothing to stop", self.text)
+        self.assertFalse((folder / "stop-request.json").exists())
 
     def test_stop_of_something_that_is_not_a_run_folder(self):
         self.assertEqual(self.run_cli(["stop", str(self.dir)]), 2)

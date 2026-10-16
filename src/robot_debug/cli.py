@@ -289,6 +289,11 @@ def _diagnose_inputs(args: argparse.Namespace):
     saved = run_dir / "spec.yaml"
     if not saved.is_file() or not (run_dir / "steps.json").is_file():
         raise sp.SpecError("usage: {} is not a faultline run folder".format(run_dir))
+    from robot_debug.viewer import processes
+
+    running = processes.recorded_process(run_dir)
+    if running is not None and running.get("pid") != os.getpid():
+        raise sp.SpecError("usage: {} is already running; stop it first (faultline stop)".format(run_dir.name))
     spec, text = _load_with_text(saved)
     if args.spec is not None and sp.load_spec(args.spec).raw != spec.raw:
         raise sp.SpecError("spec: the given spec differs from the one this run started with")
@@ -323,6 +328,10 @@ def _stop(args: argparse.Namespace, out: Callable[[str], None]) -> int:
         if not (named / "steps.json").is_file():
             raise sp.SpecError("usage: {} is not a faultline run folder".format(run_dir))
         run_dir = named
+    from robot_debug.viewer import processes
+
+    if processes.recorded_process(run_dir) is None:
+        raise sp.SpecError("usage: {} has no running process; there is nothing to stop".format(run_dir.name))
     orch.request_stop(run_dir)
     out("Stop requested for {}.".format(run_dir))
     out("The current Job is cancelled and charged for the time it ran; the run then ends and can be continued "
