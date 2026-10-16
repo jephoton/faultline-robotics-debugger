@@ -1,5 +1,18 @@
 # Faultline current project state
 
+## October 16 review fixes and import replication (Claude Code)
+
+- Independent whole-project review: claims scoped to evidence, FEEDBACK
+  rewritten with Jethro's first-hand notes, quickstart completed, Python
+  3.10–3.11, NOTICE.md, docs index, `demo/` (one real diagnosis the viewer
+  shows offline). Code: `scenario.import`, `policy.checkpoint` override, pinned
+  Cosmos-Reason2, capacity retry on resume, candidate-budget check (36/42),
+  paraphrase meaning check, `replay --expect`, Job names to the second.
+  Image v16 `eeec427750bf`. Suite 2511 OK; CI green.
+- Live `scenario.import` check replicated the October 13 five-shift
+  conjunction independently (US$1.80).
+- Next: UI overhaul checkpoint (M7a step 4), Vercel gallery, M7b.
+
 ## October 16 breadth pack status (Claude Code)
 
 - Breadth pack done (ADR 0032, `docs/experiments/m7-breadth-pack.md`): four

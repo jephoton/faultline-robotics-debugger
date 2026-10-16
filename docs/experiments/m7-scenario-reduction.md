@@ -160,3 +160,21 @@ reservation US$1.08). Two earlier attempts stopped before creating a Job
 (US$0): a WSL path bug in the backend, fixed in `718fbf2`, which also proved
 the clean-up path (access key and empty bucket deleted).
 
+## Independent replication through `scenario.import` (October 16)
+
+The same failing state (start 14), brought in as a user's start-state file
+through `faultline diagnose` with `scenario.import`, image v16. The tool
+validated the file locally, screened starts 24–33 for a reference (start 28
+again nearest, then 33 and 31), asked Nemotron 3 Ultra for an order (it ranked
+the robot arm first this time), ran one reduction (24 candidates, budget
+reached at 6 entities) and continued automatically from those 6.
+
+Result: **entity-minimal at the same five shifts** as on October 13 (alphabet
+soup, orange juice, milk, cream cheese, robot joint offset), with different
+policy sampling, entry path and candidate order. Sizes were not shrunk this
+time (budget reached), so all five are recorded at 100 %. Measured
+hypothesis check: the robot offset is necessary but not sufficient. Cost
+US$1.80 (screen US$0.43, two reduction Jobs), cap US$2.80; the case
+(`afb56ff6b142`) records `failing_start: null` and the imported file's and
+state's SHA-256.
+
