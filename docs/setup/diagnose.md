@@ -43,11 +43,18 @@ that the Job's first observation fails with an HTTP 403.
 3. Store the token as a **MysteryBox secret** in your Nebius project. The
    secret's name is what the spec calls `hf_token_secret` (for example
    `faultline-hf-token`), and its value is the token. Create it in the Nebius
-   console (MysteryBox, Secrets) or with `nebius mysterybox secret create`
-   (`nebius mysterybox secret create --help` shows the current payload flags).
-   Enter the token in the console or from a local file; never put it in a
-   spec, a shell history line you share, or a chat. Faultline looks the
-   secret up by name and hands the Job only its id, injected as `HF_TOKEN`.
+   console (MysteryBox, Secrets), or from a bash shell without the token
+   touching your history:
+
+   ```bash
+   read -rs HF_TOKEN_VALUE   # paste the token, press Enter (nothing is shown)
+   nebius mysterybox secret create --parent-id <your-project-id> --name faultline-hf-token      --secret-version-payload "[{\"key\":\"HF_TOKEN\",\"string_value\":\"$HF_TOKEN_VALUE\"}]"
+   unset HF_TOKEN_VALUE
+   ```
+
+   Never put the token in a spec or a chat. Faultline looks the secret up by
+   name and hands the Job only its id, injected as the `HF_TOKEN` environment
+   variable (`--env-secret HF_TOKEN=<secret>`).
 
 The GR00T checkpoints are public and the Cosmos revision is pinned by
 Faultline; the token only needs read access.
