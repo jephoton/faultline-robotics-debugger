@@ -19,3 +19,7 @@
 *.zip binary
 *.woff binary
 *.woff2 binary
+
+# The committed front-end bundle is build output (web/ is the source).
+src/robot_debug/viewer/app/** linguist-generated=true
+*.webm binary

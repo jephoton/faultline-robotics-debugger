@@ -1,0 +1,224 @@
+/* Workspace shell: persistent sidebar and main area; the sidebar becomes a drawer under 760px. */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.topbar {
+  display: none;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) 0 var(--space-3);
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+  text-decoration: none;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sidebar__brand svg {
+  flex: none;
+}
+
+.sidebar__new {
+  margin: 0 var(--space-4) var(--space-4);
+}
+
+.sidebar__nav {
+  flex: 1;
+}
+
+.nav-section {
+  margin: 0 0 var(--space-3);
+}
+
+.nav-label {
+  font-family: var(--font-head);
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-1);
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  display: block;
+  position: relative;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  border-left: 5px solid transparent;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.25;
+}
+.nav-item:hover {
+  background: var(--bg-raised);
+}
+.nav-item[aria-current='page'] {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.nav-item--alarm {
+  border-left-color: var(--alarm);
+}
+.nav-item--attention {
+  border-left-color: var(--attention);
+}
+.nav-item__name {
+  display: block;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-item__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+.nav-item__code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.nav-item__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav-item--alarm .nav-item__status {
+  color: var(--alarm-text);
+  font-weight: 500;
+}
+.nav-item--attention .nav-item__status {
+  color: var(--attention-text);
+  font-weight: 500;
+}
+.nav-empty {
+  padding: var(--space-1) var(--space-4);
+  color: var(--text-2);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.sidebar__foot {
+  border-top: 1px solid var(--line-strong);
+  padding-top: var(--space-2);
+  margin-top: var(--space-3);
+}
+.sidebar__foot .nav-item {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+.nav-item--plain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.theme-toggle {
+  margin: var(--space-2) var(--space-4) 0;
+}
+
+.main {
+  min-width: 0;
+  padding: var(--space-5) var(--space-6) var(--space-7);
+  background: var(--bg-page);
+}
+.main:focus {
+  outline: none;
+}
+.main__inner {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.scrim {
+  display: none;
+}
+
+@media (max-width: 759px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--line-strong);
+    padding: var(--space-2) var(--space-4);
+  }
+  .topbar__title {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 1.35rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 40;
+    inset: 0 auto 0 0;
+    width: min(320px, 88vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.18s ease,
+      visibility 0s linear 0.18s;
+  }
+  .sidebar[data-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 0.18s ease,
+      visibility 0s;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgb(0 0 0 / 0.45);
+  }
+  .scrim[data-open='true'] {
+    display: block;
+  }
+  .main {
+    padding: var(--space-4) var(--space-4) var(--space-6);
+  }
+}
+
+.boot {
+  max-width: 560px;
+  margin: 15vh auto 0;
+  padding: 0 var(--space-4);
+}

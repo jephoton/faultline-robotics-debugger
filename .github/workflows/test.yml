@@ -21,3 +21,29 @@ jobs:
           python -m pip install ".[serverless]"
       - name: Run unit tests
         run: PYTHONPATH=src python -B -m unittest discover -s tests -v
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install front-end dependencies
+        run: npm ci
+      - name: Type-check
+        run: npm run typecheck
+      - name: Run front-end tests
+        run: npm test -- --run
+      - name: Build the bundle
+        run: npm run build
+      - name: Check the committed bundle is current
+        working-directory: .
+        run: |
+          git status --porcelain -- src/robot_debug/viewer/app
+          test -z "$(git status --porcelain -- src/robot_debug/viewer/app)"
