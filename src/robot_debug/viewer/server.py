@@ -14,6 +14,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Type
 from urllib.parse import unquote, urlsplit
 
 from robot_debug.viewer.catalog import ArtifactCatalog
+from robot_debug.viewer.evidence import CachedArtifactCatalog, evidence_payload
 from robot_debug.case_io import SanitizedCaseValidationError
 from robot_debug.case_store import inspect_case, list_cases
 from robot_debug.explanation_store import read_case_reports
@@ -169,6 +170,8 @@ def make_handler(
                     self.send_json(200, {"status": "ok", "read_only": True})
                 elif path == "/api/runs":
                     self.send_json(200, catalog.snapshot().to_dict())
+                elif path == "/api/evidence":
+                    self.send_json(200, evidence_payload(catalog.snapshot()))
                 elif path == "/api/reduction":
                     self.send_json(200, catalog.load_reduction())
                 elif path == "/api/cases":
@@ -290,7 +293,7 @@ def create_server(
     case_workspace: Optional[Path] = None, research_reader: Optional[ResearchReader] = None,
     diagnoses_root: Optional[Path] = None,
 ) -> ThreadingHTTPServer:
-    catalog = ArtifactCatalog(artifact_root)
+    catalog = CachedArtifactCatalog(artifact_root)      # the scan is slow on a full artifacts folder
     web_root = Path(__file__).with_name("web")
     return ThreadingHTTPServer(
         (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root))
