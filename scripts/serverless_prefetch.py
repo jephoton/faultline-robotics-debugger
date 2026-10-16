@@ -3,8 +3,8 @@
 Runs only in the image's model environment, before the offline model server.
 Pinned repositories are fetched by commit and the private cache's ``main``
 reference is pointed at that commit, matching the historical VM's offline
-``local_files_only`` check. Cosmos was never pinned historically, so its
-current ``main`` is fetched and its resolved commit recorded.
+``local_files_only`` check. Cosmos-Reason2-2B is pinned too, to the commit every Job
+recorded before it was pinned.
 
 One Job serves one suite from one model server, so ``--suite`` selects which
 suite checkpoint is fetched (default ``libero_object``, the historical set);
@@ -39,7 +39,11 @@ PINNED_REVISIONS = {
     "nvidia/gr00t17-lerobot-libero_goal-640": "436c57c0eb7a90be54270abf3977668b2084ad75",
     BASE_MODEL: "2fc962b973bccdd5d8ce4f67cc63b264d6886495",
 }
-RESOLVED_REPOSITORIES = ("nvidia/Cosmos-Reason2-2B",)
+# Fetched for every suite. Kept apart from PINNED_REVISIONS, which lists the per-suite model inputs
+# (a test compares those with the design record); fetched and recorded the same way, as pinned.
+SHARED_PINNED_REVISIONS = {
+    "nvidia/Cosmos-Reason2-2B": "9ce19a195e423419c349abfc86fd07178b230561",
+}
 
 
 def pinned_for_suite(suite: Optional[str]) -> Dict[str, str]:
@@ -63,7 +67,9 @@ def _repository_dir(cache: Path, repository: str) -> Path:
 
 def fetch(hub: ModuleType, cache: Path, suite: Optional[str] = None) -> Dict[str, Dict[str, object]]:
     resolution: Dict[str, Dict[str, object]] = {}
-    for repository, revision in pinned_for_suite(suite).items():
+    pins = dict(pinned_for_suite(suite))
+    pins.update(SHARED_PINNED_REVISIONS)
+    for repository, revision in pins.items():
         downloaded = Path(hub.snapshot_download(repo_id=repository, revision=revision))
         if downloaded.name != revision:
             raise RuntimeError("pinned snapshot did not match its revision: " + repository)
@@ -74,12 +80,6 @@ def fetch(hub: ModuleType, cache: Path, suite: Optional[str] = None) -> Dict[str
         if offline.name != revision:
             raise RuntimeError("offline resolution did not match the pinned revision: " + repository)
         resolution[repository] = {"revision": revision, "pinned": True}
-    for repository in RESOLVED_REPOSITORIES:
-        downloaded = Path(hub.snapshot_download(repo_id=repository, revision="main"))
-        offline = Path(hub.snapshot_download(repo_id=repository, local_files_only=True))
-        if offline.name != downloaded.name:
-            raise RuntimeError("offline resolution did not match the fetched revision: " + repository)
-        resolution[repository] = {"revision": downloaded.name, "pinned": False}
     return resolution
 
 

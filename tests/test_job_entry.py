@@ -245,7 +245,21 @@ class _FakeHub:
         return str(snapshot)
 
 
+COSMOS_PIN = "9ce19a195e423419c349abfc86fd07178b230561"     # the revision every Job recorded so far
+
+
 class PrefetchScriptTests(unittest.TestCase):
+    def test_cosmos_is_pinned_to_the_recorded_revision_for_every_suite(self) -> None:
+        self.assertEqual({"nvidia/Cosmos-Reason2-2B": COSMOS_PIN}, serverless_prefetch.SHARED_PINNED_REVISIONS)
+        for suite in list(serverless_prefetch.SUITE_CHECKPOINTS) + ["all"]:
+            with self.subTest(suite=suite), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                hub = _FakeHub(root / "hub", {"nvidia/Cosmos-Reason2-2B": "c" * 40})   # main has moved on
+                resolution = serverless_prefetch.fetch(hub, root / "hub", suite)
+                self.assertEqual({"revision": COSMOS_PIN, "pinned": True}, resolution["nvidia/Cosmos-Reason2-2B"])
+                offline = hub.snapshot_download(repo_id="nvidia/Cosmos-Reason2-2B", local_files_only=True)
+                self.assertEqual(COSMOS_PIN, Path(offline).name)
+
     def test_pins_main_to_approved_commit_and_records_cosmos(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -265,7 +279,9 @@ class PrefetchScriptTests(unittest.TestCase):
             for repo, revision in serverless_prefetch.pinned_for_suite("libero_object").items():
                 self.assertEqual(repositories[repo], {"revision": revision, "pinned": True})
                 self.assertEqual(Path(hub.snapshot_download(repo_id=repo, local_files_only=True)).name, revision)
-            self.assertEqual(repositories["nvidia/Cosmos-Reason2-2B"], {"revision": cosmos, "pinned": False})
+            self.assertEqual(repositories["nvidia/Cosmos-Reason2-2B"],
+                             {"revision": COSMOS_PIN, "pinned": True})
+            self.assertNotEqual(COSMOS_PIN, cosmos, "the pin must not follow the moved main")
             with self.assertRaises(FileExistsError):
                 serverless_prefetch.main(["--output", str(output)], hub=hub)
 
