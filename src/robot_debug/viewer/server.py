@@ -13,7 +13,9 @@ import re
 from typing import Any, Callable, Mapping, Optional, Sequence, Type
 from urllib.parse import unquote, urlsplit
 
+from robot_debug.viewer.api import Api, FileResponse
 from robot_debug.viewer.catalog import ArtifactCatalog
+from robot_debug.viewer.security import MAX_BODY_BYTES, ControlGuard
 from robot_debug.viewer.evidence import CachedArtifactCatalog, evidence_payload
 from robot_debug.case_io import SanitizedCaseValidationError
 from robot_debug.case_store import inspect_case, list_cases
@@ -22,6 +24,7 @@ from robot_debug.case_register import list_diagnoses, read_diagnosis
 
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
+DISCARD_LIMIT_BYTES = 1024 * 1024
 
 ResearchReader = Callable[[Path, str], Mapping[str, Any]]
 
@@ -151,6 +154,7 @@ def public_diagnosis(entry: Mapping[str, Any], diagnoses_root: Path, artifact_ro
 def make_handler(
     catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None,
     research_reader: Optional[ResearchReader] = None, diagnoses_root: Optional[Path] = None,
+    *, api: Optional[Api] = None,
 ) -> Type[BaseHTTPRequestHandler]:
     """Create a handler closed over a catalog and the packaged static assets.
 
@@ -158,15 +162,21 @@ def make_handler(
     defaults to ``robot_debug.research_store.read_case_research``.
     ``diagnoses_root`` is the folder of registered diagnoses (default
     ``<artifacts>/diagnoses``, written by ``robot_debug.case_register``).
+    ``api`` holds the control-panel routes (API version 1, ``robot_debug.viewer.api``); without it the handler
+    is the original read-only viewer.
     """
     read_research = research_reader or default_research_reader
     diagnoses = diagnoses_root or catalog.artifact_root / "diagnoses"
 
     class ViewerHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            path = urlsplit(self.path).path
+            parts = urlsplit(self.path)
+            path = parts.path
             try:
-                if path == "/api/health":
+                routed = None if api is None else api.handle_get(path, parts.query, self.headers)
+                if routed is not None:
+                    self.send_response_object(routed)
+                elif path == "/api/health":
                     self.send_json(200, {"status": "ok", "read_only": True})
                 elif path == "/api/runs":
                     self.send_json(200, catalog.snapshot().to_dict())
@@ -217,20 +227,71 @@ def make_handler(
             except OSError:
                 self.send_json(503, {"error": "evidence temporarily unavailable"})
 
+        def do_POST(self) -> None:
+            parts = urlsplit(self.path)
+            if api is None:                           # the original read-only viewer has no write method at all
+                self.send_error(501, "Unsupported method ('POST')")
+                return
+            declared = self.headers.get("Content-Length", "")
+            declared = int(declared) if declared.isdigit() else 0
+            consumed = [0]
+
+            def read(count: int) -> bytes:
+                data = self.rfile.read(count)
+                consumed[0] += len(data)
+                return data
+
+            status, payload = api.handle_post(parts.path, parts.query, self.headers, read)
+            self.close_connection = True              # never reuse a connection whose body may be half read
+            if declared <= MAX_BODY_BYTES:
+                self.discard(declared - consumed[0])  # a refusal does not read the body; closing on unread data resets
+            self.send_json(status, payload)
+            if declared > MAX_BODY_BYTES:
+                self.discard(DISCARD_LIMIT_BYTES)
+
+        def discard(self, count: int) -> None:
+            """Read and drop up to ``count`` bytes the client is still sending, so closing does not reset it."""
+
+            try:
+                self.connection.settimeout(1.0)
+                while count > 0:
+                    block = self.rfile.read(min(65536, count))
+                    if not block:
+                        break
+                    count -= len(block)
+            except OSError:
+                pass
+            finally:
+                try:
+                    self.connection.settimeout(None)
+                except OSError:
+                    pass
+
+        def send_response_object(self, response: Any) -> None:
+            if isinstance(response, FileResponse):
+                self.stream_file(response.path, allow_range=False, content_type=response.content_type)
+            else:
+                self.send_json(*response)
+
+        def send_security_headers(self) -> None:
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+
         def send_json(self, status: int, payload: Mapping[str, Any]) -> None:
             body = json.dumps(payload).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_security_headers()
             self.end_headers()
             self.wfile.write(body)
 
         def send_media(self, relative_path: str) -> None:
             self.stream_file(catalog.resolve_media(relative_path), allow_range=True)
 
-        def stream_file(self, path: Path, allow_range: bool) -> None:
+        def stream_file(self, path: Path, allow_range: bool, content_type: Optional[str] = None) -> None:
             size = path.stat().st_size
             start, end, status = 0, size - 1, 200
             range_header = self.headers.get("Range") if allow_range else None
@@ -252,7 +313,7 @@ def make_handler(
 
             length = max(0, end - start + 1)
             suffix = path.suffix.lower()
-            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            content_type = content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
             if suffix == ".js":
                 content_type = "text/javascript"
             if suffix in {".html", ".css", ".js"}:
@@ -261,8 +322,7 @@ def make_handler(
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(length))
             self.send_header("Accept-Ranges", "bytes" if allow_range else "none")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_security_headers()
             if status == 206:
                 self.send_header("Content-Range", "bytes {}-{}/{}".format(start, end, size))
             self.end_headers()
@@ -291,12 +351,22 @@ def make_handler(
 def create_server(
     artifact_root: Path, host: str = "127.0.0.1", port: int = 8765,
     case_workspace: Optional[Path] = None, research_reader: Optional[ResearchReader] = None,
-    diagnoses_root: Optional[Path] = None,
+    diagnoses_root: Optional[Path] = None, *, api_setup: Optional[Callable[[Api], None]] = None,
 ) -> ThreadingHTTPServer:
+    """The viewer on ``host:port`` (``port`` 0 picks a free one). ``server.api`` is its control-panel API;
+    ``api_setup`` may add routes to it before the first request (the real routes are added here)."""
+
     catalog = CachedArtifactCatalog(artifact_root)      # the scan is slow on a full artifacts folder
     web_root = Path(__file__).with_name("web")
-    return ThreadingHTTPServer(
-        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root))
+    guard = ControlGuard(host, port)
+    api = Api(guard)
+    if api_setup is not None:
+        api_setup(api)
+    server = ThreadingHTTPServer(
+        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root, api=api))
+    guard.port = server.server_address[1]               # the real port, when 0 was asked for
+    server.api = api
+    return server
 
 
 def build_parser() -> argparse.ArgumentParser:
