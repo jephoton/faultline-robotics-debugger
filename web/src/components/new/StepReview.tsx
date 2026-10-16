@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { useApi, useAppData } from '../../api/context';
-import type { ImportFile } from '../../api/types';
+import type { DryRun, ImportFile } from '../../api/types';
 import { usd } from '../../lib/format';
 import { MODE_LABEL } from '../../lib/status';
 import { useAsync } from '../../lib/useAsync';
@@ -13,6 +13,12 @@ import { DryRunTable, EnvironmentList } from './Review';
 interface Props {
   yaml: string;
   importFile: ImportFile | null;
+  /** Starts the run for a fresh dry run of the same spec; resolves with the run folder name. */
+  launch: (plan: DryRun) => Promise<{ run: string }>;
+  /** Heading level-3 text for the confirm button, for example "Start diagnosis" or "Start replay". */
+  startLabel?: string;
+  /** The sentence above the confirm button about cost. */
+  consequence?: string;
 }
 
 function usesNemotron(yaml: string): boolean {
@@ -21,7 +27,13 @@ function usesNemotron(yaml: string): boolean {
   return /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml);
 }
 
-export function StepReview({ yaml, importFile }: Props) {
+export function StepReview({
+  yaml,
+  importFile,
+  launch,
+  startLabel = 'Start diagnosis',
+  consequence = 'Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any time.',
+}: Props) {
   const api = useApi();
   const navigate = useNavigate();
   const { refreshRuns } = useAppData();
@@ -63,12 +75,7 @@ export function StepReview({ yaml, importFile }: Props) {
     if (found.length > 0 || !plan.data) return;
     setStarting(true);
     try {
-      const result = await api.startRun({
-        yaml,
-        plan_hash: plan.data.plan_hash,
-        ...(importFile ? { import_file: importFile } : {}),
-        ...(mode === 'scenario' && !usesNemotron(yaml) ? { no_llm: true } : {}),
-      });
+      const result = await launch(plan.data);
       refreshRuns();
       navigate(`/run/${encodeURIComponent(result.run)}`);
     } catch (error) {
@@ -86,10 +93,14 @@ export function StepReview({ yaml, importFile }: Props) {
           <dd className="mono">{yamlValue(yaml, 'name') ?? 'not set'}</dd>
           <dt>Kind</dt>
           <dd>{MODE_LABEL[mode] ?? mode}</dd>
-          <dt>Suite and task</dt>
-          <dd>
-            {/suite:\s*(\w+)/.exec(yaml)?.[1] ?? 'not set'}, task {yamlValue(yaml, 'task') ?? '?'}
-          </dd>
+          {/suite:\s*(\w+)/.exec(yaml) && (
+            <>
+              <dt>Suite and task</dt>
+              <dd>
+                {/suite:\s*(\w+)/.exec(yaml)?.[1]}, task {yamlValue(yaml, 'task') ?? '?'}
+              </dd>
+            </>
+          )}
         </dl>
         <details>
           <summary>Show the spec</summary>
@@ -148,11 +159,10 @@ export function StepReview({ yaml, importFile }: Props) {
       )}
 
       <p className="review__confirm">
-        Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any
-        time.
+        {consequence}
       </p>
       <button type="button" className="btn" onClick={() => void start()} aria-busy={starting} data-testid="start-diagnosis">
-        <Icon name="play" /> Start diagnosis
+        <Icon name="play" /> {startLabel}
       </button>
     </div>
   );

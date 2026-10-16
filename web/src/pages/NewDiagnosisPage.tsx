@@ -159,7 +159,18 @@ function NewDiagnosis() {
 
       {step === 3 && (
         <>
-          <StepReview yaml={yaml} importFile={form.importFile} />
+          <StepReview
+            yaml={yaml}
+            importFile={form.importFile}
+            launch={(plan) =>
+              api.startRun({
+                yaml,
+                plan_hash: plan.plan_hash,
+                ...(form.importFile ? { import_file: form.importFile } : {}),
+                ...(choice.startsWith('scenario') && !/nemotron:\s*\{[^}]*:\s*true/.test(yaml) ? { no_llm: true } : {}),
+              })
+            }
+          />
           <div className="actions">
             <button type="button" className="btn btn--secondary" onClick={() => setStep(2)}>
               Back to settings

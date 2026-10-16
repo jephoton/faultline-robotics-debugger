@@ -129,3 +129,26 @@ export function errorsByField(errors: FieldError[]): { byField: Partial<Record<F
   }
   return { byField, other };
 }
+
+export interface ReplayForm {
+  spend: string;
+  hours: string;
+  checkpointId: string;
+  checkpointRevision: string;
+}
+
+export const REPLAY_DEFAULTS: ReplayForm = { spend: '1', hours: '1', checkpointId: '', checkpointRevision: '' };
+
+/** A replay spec for `faultline replay`: budget, an optional checkpoint override and the template's backend. */
+export function buildReplayYaml(caseName: string, form: ReplayForm, backend: string | null): string {
+  const slug = `replay-${caseName}`.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+$/, '');
+  const lines = ['faultline: 1', `name: ${slug}`, 'mode: replay'];
+  const id = form.checkpointId.trim();
+  const revision = form.checkpointRevision.trim();
+  if (id || revision) {
+    lines.push('policy:', `  checkpoint: {id: ${JSON.stringify(id)}, revision: ${JSON.stringify(revision)}}`);
+  }
+  lines.push('budget:', `  max_spend_usd: ${num(form.spend, '0')}`, `  max_hours: ${num(form.hours, '0')}`);
+  if (backend) lines.push(backend);
+  return `${lines.join('\n')}\n`;
+}

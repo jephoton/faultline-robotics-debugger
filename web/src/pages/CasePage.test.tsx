@@ -73,8 +73,8 @@ describe('scenario case', () => {
 
   it('lists the replay history and renders the report', async () => {
     await openCase(IDS.soup);
-    expect(screen.getByText('Still reproduces')).toBeInTheDocument();
-    expect(screen.getByText('Fixed')).toBeInTheDocument();
+    expect(screen.getByText('Still reproduces', { selector: '.badge' })).toBeInTheDocument();
+    expect(screen.getByText('Fixed', { selector: '.badge' })).toBeInTheDocument();
     const report = screen.getByRole('heading', { name: /Scenario reduction: put both the alphabet soup/ });
     expect(report.tagName).toBe('H3');
   });

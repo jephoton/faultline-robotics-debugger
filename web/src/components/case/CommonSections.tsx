@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Detail, HistoryStep } from '../../api/types';
 import { duration, shortDate, usd } from '../../lib/format';
 import { Icon, type IconName } from '../Icon';
@@ -157,7 +158,7 @@ export function replayLabel(verdict: string): { icon: IconName; label: string; t
   return { icon: 'dash', label: verdict.replace(/_/g, ' '), tone: 'neutral' };
 }
 
-export function ReplayHistory({ detail }: { detail: Detail }) {
+export function ReplayHistory({ detail, slot }: { detail: Detail; slot?: (run: string | null) => ReactNode }) {
   if (detail.replays.length === 0) {
     return <Empty>This case has not been replayed yet.</Empty>;
   }
@@ -176,6 +177,7 @@ export function ReplayHistory({ detail }: { detail: Detail }) {
               {shortDate(replay.created)}
               {replay.cost_usd !== null ? `, ${usd(replay.cost_usd)}` : ''}
             </span>
+            {slot?.(replay.run)}
           </li>
         );
       })}

@@ -1,4 +1,13 @@
-import { buildYaml, defaultsFor, errorsByField, extractBackend, fieldForPath, yamlValue } from './specYaml';
+import {
+  REPLAY_DEFAULTS,
+  buildReplayYaml,
+  buildYaml,
+  defaultsFor,
+  errorsByField,
+  extractBackend,
+  fieldForPath,
+  yamlValue,
+} from './specYaml';
 
 const BACKEND = `backend:
   kind: nebius
@@ -50,6 +59,23 @@ describe('buildYaml', () => {
 
   it('leaves out the backend block when the template has none', () => {
     expect(buildYaml('audit', defaultsFor('audit'), null)).not.toContain('backend:');
+  });
+});
+
+describe('buildReplayYaml', () => {
+  it('builds a replay spec with the template backend', () => {
+    const yaml = buildReplayYaml('soup-start14', REPLAY_DEFAULTS, BACKEND);
+    expect(yaml).toContain('mode: replay');
+    expect(yaml).toContain('name: replay-soup-start14');
+    expect(yaml).toContain('max_spend_usd: 1');
+    expect(yaml).not.toContain('policy:');
+    expect(yaml.trimEnd().endsWith('sha256:0000')).toBe(true);
+  });
+
+  it('adds a checkpoint override only when one is given', () => {
+    const yaml = buildReplayYaml('x y', { ...REPLAY_DEFAULTS, checkpointId: 'org/ckpt', checkpointRevision: 'abc123' }, null);
+    expect(yaml).toContain('name: replay-x-y');
+    expect(yaml).toContain('checkpoint: {id: "org/ckpt", revision: "abc123"}');
   });
 });
 

@@ -7,16 +7,15 @@ import {
   FilesSection,
   HistorySection,
   ExplanationSection,
-  ReplayHistory,
   ReportSection,
   ResearchSection,
 } from '../components/case/CommonSections';
 import { OcclusionSection } from '../components/case/OcclusionSection';
+import { ReplaySection } from '../components/case/ReplaySection';
 import { ParaphraseSection } from '../components/case/ParaphraseSection';
 import { ScenarioSection } from '../components/case/ScenarioSection';
 import { Icon } from '../components/Icon';
 import { ReadoutHeader } from '../components/ReadoutHeader';
-import { Section } from '../components/Section';
 import { shortDate, suiteLabel } from '../lib/format';
 import { KIND_LABEL, statusFor } from '../lib/status';
 import { useAsync } from '../lib/useAsync';
@@ -87,11 +86,7 @@ export function CaseView({ detail }: { detail: Detail }) {
       <HistorySection detail={detail} />
       <ExplanationSection detail={detail} />
       <ResearchSection detail={detail} />
-      {detail.kind === 'scenario' && (
-        <Section title="Replays">
-          <ReplayHistory detail={detail} />
-        </Section>
-      )}
+      {detail.kind === 'scenario' && <ReplaySection detail={detail} />}
       <ReportSection detail={detail} />
       <FilesSection detail={detail} />
     </article>
