@@ -55,6 +55,20 @@ InspectCase = Callable[[Path, str], Mapping[str, Any]]
 # --------------------------------------------------------------------------------------
 
 
+def _inside_folder(folder: Path, relative: str) -> Optional[Path]:
+    """``relative`` resolved under ``folder``, or ``None`` when it names anything outside it (``..`` in either
+    slash style, an absolute path, a drive letter, a link out)."""
+
+    if "\x00" in relative:
+        return None
+    try:
+        base = Path(folder).resolve()
+        resolved = (base / relative).resolve()
+    except (OSError, ValueError):
+        return None
+    return resolved if base in resolved.parents else None
+
+
 def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     try:
         if not path.is_file() or path.stat().st_size > _MAX_JSON_BYTES:
@@ -533,8 +547,9 @@ class Library:
     def _audit_block(self, case: Mapping[str, Any], run_dir: Optional[Path]) -> Dict[str, Any]:
         summary = None
         relative = _str(case.get("summary"))
-        if run_dir is not None and relative and ".." not in relative.split("/") and not relative.startswith("/"):
-            summary = _read_json(run_dir / relative)
+        inside = _inside_folder(run_dir, relative) if run_dir is not None and relative else None
+        if inside is not None:
+            summary = _read_json(inside)
         summary_families = _mapping(_mapping(summary).get("families"))
         config = _mapping(_mapping(summary).get("config"))
         order = [f for f in _list(config.get("families")) if isinstance(f, str)]

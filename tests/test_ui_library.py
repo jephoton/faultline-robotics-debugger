@@ -309,6 +309,21 @@ class OtherKindsDetailTests(LibraryCase):
         fx.write_json(self.paths["diagnoses"] / fx.AUDIT_ID / "case.json", case)
         self.assertIsNone(self.library.detail("d-" + fx.AUDIT_ID)["audit"]["nominal"])
 
+    def test_summary_paths_in_any_spelling_cannot_leave_the_run_folder(self):
+        outside = self.paths["runs"] / "outside.json"
+        fx.write_json(outside, fx.audit_summary())
+        spellings = [r"..\outside.json", r"..\..\outside.json", "../outside.json", str(outside),
+                     str(outside.resolve()), outside.as_posix(), "jobs/../../outside.json",
+                     r"jobs\..\..\outside.json"]
+        for spelling in spellings:
+            with self.subTest(summary=spelling):
+                fx.write_json(self.paths["diagnoses"] / fx.AUDIT_ID / "case.json", dict(fx.audit_case(), summary=spelling))
+                self.assertIsNone(self.make().detail("d-" + fx.AUDIT_ID)["audit"]["nominal"])
+
+    def test_a_summary_inside_the_run_folder_is_still_read(self):
+        audit = self.make().detail("d-" + fx.AUDIT_ID)["audit"]
+        self.assertEqual(audit["nominal"], {"failures": 0, "attempts": 5})
+
     def test_paraphrase_rows_with_the_meaning_check_and_the_minimal_edit(self):
         block = self.library.detail("d-" + fx.PARAPHRASE_ID)["paraphrase"]
         self.assertEqual(block["original"], fx.INSTRUCTION)
