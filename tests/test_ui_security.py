@@ -251,6 +251,55 @@ class HttpSecurityTests(unittest.TestCase):
             self.assertEqual(headers.get("Cache-Control"), "no-store", path)
 
 
+READ_PATHS = ("/api/library", "/api/library/d-nothing", "/api/runs/active", "/api/runs/x/progress",
+              "/api/environment", "/api/specs/template", "/api/evidence", "/api/runs", "/api/diagnoses",
+              "/api/cases", "/api/health", "/media/runs/none.mp4")
+LOCAL_ONLY_PATHS = ("/api/runs/active", "/api/runs/x/progress", "/api/environment", "/api/specs/template",
+                    "/api/evidence", "/api/runs")
+
+
+class ReadHostTests(unittest.TestCase):
+    """Reads obey the Host rule too, and the local-only reads exist only behind a loopback bind (review M1)."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.server = RunningServer(Path(directory.name))
+        self.addCleanup(self.server.close)
+
+    def test_a_forged_host_is_refused_on_every_read(self):
+        for path in READ_PATHS:
+            for host in ("evil.example:{}".format(self.server.port), "127.0.0.1", "10.0.0.5:{}".format(self.server.port)):
+                with self.subTest(path=path, host=host):
+                    status, _headers, body = self.server.request("GET", path, host=host)
+                    self.assertEqual(status, 403)
+                    self.assertEqual(set(json.loads(body)), {"error", "errors"})
+
+    def test_the_servers_own_names_still_read(self):
+        for host in ("127.0.0.1:{}", "localhost:{}"):
+            status, _headers, _body = self.server.request("GET", "/api/library", host=host.format(self.server.port))
+            self.assertEqual(status, 200)
+
+    def test_a_non_loopback_bind_answers_the_library_but_not_the_local_only_reads(self):
+        self.server.guard.host, self.server.guard.controls = "192.168.1.5", False
+        host = "192.168.1.5:{}".format(self.server.port)
+        status, _headers, _body = self.server.request("GET", "/api/library", host=host)
+        self.assertEqual(status, 200)
+        for path in LOCAL_ONLY_PATHS:
+            with self.subTest(path=path):
+                self.assertEqual(self.server.request("GET", path, host=host)[0], 404)
+        status, _headers, _body = self.server.request("GET", "/api/library", host="evil.example:{}".format(self.server.port))
+        self.assertEqual(status, 403, "a non-loopback bind still refuses a host it was not reached by")
+
+    def test_a_wildcard_bind_accepts_an_ip_literal_host_but_not_a_dns_name(self):
+        guard = ControlGuard("0.0.0.0", 8765)
+        self.assertTrue(guard.read_host_ok({"Host": "192.168.1.5:8765"}))
+        self.assertTrue(guard.read_host_ok({"Host": "127.0.0.1:8765"}))
+        self.assertFalse(guard.read_host_ok({"Host": "evil.example:8765"}))
+        self.assertFalse(guard.read_host_ok({"Host": "192.168.1.5:9999"}))
+        self.assertFalse(guard.read_host_ok({}))
+
+
 class NonLoopbackBindTests(unittest.TestCase):
     def test_controls_are_disabled_when_the_guard_is_for_a_public_bind(self):
         with tempfile.TemporaryDirectory() as directory:

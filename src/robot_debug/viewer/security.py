@@ -80,6 +80,33 @@ class ControlGuard:
     def host_ok(self, headers: Mapping[str, str]) -> bool:
         return headers.get("Host") in self.hosts
 
+    def read_host_ok(self, headers: Mapping[str, str]) -> bool:
+        """The Host rule for reads. A loopback bind answers only to its loopback names. Any other bind also answers
+        to its own address and port (a wildcard bind to any IP-literal host on its port), never to a DNS name,
+        which is what a rebinding page arrives with."""
+
+        host = headers.get("Host")
+        if not isinstance(host, str):
+            return False
+        if host in self.hosts:
+            return True
+        if self.controls:
+            return False
+        name, _, port = host.rpartition(":")
+        name = name.strip("[]")
+        if not name or port != str(self.port):
+            return False
+        bind = self.host.strip("[]")
+        if name == bind:
+            return True
+        if bind in ("", "0.0.0.0", "::"):
+            try:
+                ipaddress.ip_address(name)
+            except ValueError:
+                return False
+            return True
+        return False
+
     # -- the session --------------------------------------------------------------------------------
 
     def session(self, headers: Mapping[str, str], version: str) -> Dict[str, Any]:

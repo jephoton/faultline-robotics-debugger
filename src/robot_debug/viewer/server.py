@@ -185,7 +185,9 @@ def make_handler(
             parts = urlsplit(self.path)
             path = parts.path
             try:
-                routed = None if api is None else api.handle_get(path, parts.query, self.headers)
+                refused = None if api is None else api.read_refusal(path, self.headers)
+                routed = refused if refused is not None else (
+                    None if api is None else api.handle_get(path, parts.query, self.headers))
                 if routed is not None:
                     self.send_response_object(routed)
                 elif path == "/api/health":

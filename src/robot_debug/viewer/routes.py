@@ -64,7 +64,8 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
 
     api.add_route("GET", r"/api/library/(?P<id>[^/]+)/files/(?P<name>[^/]+)", case_file)
 
-    api.add_route("GET", r"/api/runs/active", lambda request: (200, {"runs": launcher.active()}))
+    api.add_route("GET", r"/api/runs/active", lambda request: (200, {"runs": launcher.active()}),
+                  local_only=True)
 
     def progress(request: Request):
         try:
@@ -72,9 +73,10 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
         except (ValueError, FileNotFoundError):
             raise ApiError(404, "There is no such run.") from None
 
-    api.add_route("GET", r"/api/runs/(?P<run>[^/]+)/progress", progress)
-    api.add_route("GET", r"/api/environment", lambda request: (200, environment.check()))
-    api.add_route("GET", r"/api/specs/template", lambda request: (200, specs.template(request.first("mode"))))
+    api.add_route("GET", r"/api/runs/(?P<run>[^/]+)/progress", progress, local_only=True)
+    api.add_route("GET", r"/api/environment", lambda request: (200, environment.check()), local_only=True)
+    api.add_route("GET", r"/api/specs/template", lambda request: (200, specs.template(request.first("mode"))),
+                  local_only=True)
 
     # -- controls -----------------------------------------------------------------------------------------
 
