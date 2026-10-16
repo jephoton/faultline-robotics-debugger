@@ -272,6 +272,59 @@ class StartTests(LauncherCase):
         self.assertIn("detached ok", log.read_text(encoding="utf-8"))
 
 
+class RelativePathTests(LauncherCase):
+    """The child runs in the project folder, so every path it is given must be absolute (review M4)."""
+
+    def relative_world(self):
+        cwd = Path.cwd()
+        os.chdir(str(self.root.parent))
+        self.addCleanup(os.chdir, str(cwd))
+        relative_root, relative_runs = Path("artifacts"), Path("artifacts") / "runs"
+        specs = SpecService(relative_root, clock=lambda: NOW)
+        self.popen = FakePopen(relative_runs)
+        launcher = lc.Launcher(relative_root, relative_runs, specs, popen=self.popen, env={"PATH": "/bin"},
+                               env_file=Path("project.env"), sleep=self.ticker.sleep, clock=self.ticker.clock,
+                               discover_seconds=5.0, win32=False, source_root=SOURCE)
+        (self.root.parent / "project.env").write_text("NEBIUS_API_KEY=x\n", encoding="utf-8")
+        directory = specs.new_directory("rel")
+        (directory / "spec.yaml").write_text("faultline: 1\n", encoding="utf-8")
+        return launcher, specs, directory
+
+    def assert_absolute(self, argv, *flags):
+        for flag in flags:
+            value = Path(argv[argv.index(flag) + 1])
+            self.assertTrue(value.is_absolute(), "{} {}".format(flag, value))
+
+    def test_a_start_with_relative_paths_gives_the_child_absolute_ones(self):
+        launcher, _specs, directory = self.relative_world()
+        launcher.start(directory / "spec.yaml", directory)
+        argv = self.popen.calls[0]["argv"]
+        self.assertTrue(Path(argv[argv.index("diagnose") + 1]).is_absolute())
+        self.assert_absolute(argv, "--env-file", "--runs-root", "--run-dir-file")
+        self.assertEqual(Path(argv[argv.index("diagnose") + 1]), (directory / "spec.yaml").resolve())
+        self.assertEqual(Path(argv[argv.index("--env-file") + 1]), (self.root.parent / "project.env").resolve())
+
+    def test_a_replay_with_relative_paths_gives_the_child_absolute_ones(self):
+        launcher, _specs, directory = self.relative_world()
+        launcher.replay(Path("artifacts") / "diagnoses" / ("ab" * 32), directory / "spec.yaml", directory,
+                        expect="fixed")
+        argv = self.popen.calls[0]["argv"]
+        self.assertEqual(Path(argv[argv.index("replay") + 1]),
+                         (self.root / "diagnoses" / ("ab" * 32)).resolve())
+        self.assertTrue(Path(argv[argv.index("--spec") + 1]).is_absolute())
+        self.assert_absolute(argv, "--env-file", "--runs-root", "--run-dir-file")
+
+    def test_the_paths_do_not_change_if_the_viewer_later_changes_directory(self):
+        launcher, _specs, directory = self.relative_world()
+        elsewhere = self.root.parent / "elsewhere"
+        elsewhere.mkdir()
+        os.chdir(str(elsewhere))
+        launcher.start((self.root / "specs-ui" / directory.name / "spec.yaml"), self.root / "specs-ui" / directory.name)
+        argv = self.popen.calls[0]["argv"]
+        self.assertEqual(Path(argv[argv.index("--runs-root") + 1]), self.runs.resolve())
+        self.assertEqual(Path(argv[argv.index("--env-file") + 1]), (self.root.parent / "project.env").resolve())
+
+
 class SlowStartTests(LauncherCase):
     """A start that gives up waiting (504) leaves a child that may still become a paid run (review H1)."""
 

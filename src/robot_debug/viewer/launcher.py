@@ -57,10 +57,12 @@ class Launcher:
                  probe: Probe = processes.default_probe, win32: Optional[bool] = None,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
                  discover_seconds: float = DISCOVER_SECONDS, source_root: Optional[Path] = None) -> None:
-        self.artifact_root, self.runs_root, self.specs = Path(artifact_root), Path(runs_root), specs
+        # The child runs in the project folder, not here: every path it is given must be absolute, and must not
+        # change if this process later changes directory.
+        self.artifact_root, self.runs_root, self.specs = Path(artifact_root).resolve(), Path(runs_root).resolve(), specs
         self.popen, self.python = popen, python or sys.executable
         self.base_env = dict(os.environ if env is None else env)
-        self.env_file, self.probe = None if env_file is None else Path(env_file), probe
+        self.env_file, self.probe = None if env_file is None else Path(env_file).resolve(), probe
         self.win32 = (sys.platform == "win32") if win32 is None else win32
         self.sleep, self.clock, self.discover_seconds = sleep, clock, discover_seconds
         package_src = Path(robot_debug.__file__).resolve().parents[1]
@@ -159,6 +161,7 @@ class Launcher:
         """Start ``python -m robot_debug.cli <args>`` detached, wait for it to report its run folder and return
         the folder's name. The caller holds the start lock."""
 
+        launch_dir = Path(launch_dir).resolve()
         launch_file = launch_dir / RUN_DIR_FILE
         log_path = launch_dir / RUN_LOG
         argv = [self.python, "-m", "robot_debug.cli"] + args + self._env_file_args() + [
@@ -240,7 +243,8 @@ class Launcher:
             raise ApiError(409, "Another run is being started.")
         try:
             self._refuse_if_busy()
-            return self._spawn(["diagnose", str(spec_path)] + (["--no-llm"] if no_llm else []), launch_dir)
+            return self._spawn(["diagnose", str(Path(spec_path).resolve())] + (["--no-llm"] if no_llm else []),
+                               launch_dir)
         finally:
             self._lock.release()
 
@@ -253,7 +257,8 @@ class Launcher:
             raise ApiError(409, "Another run is being started.")
         try:
             self._refuse_if_busy()
-            args = ["replay", str(case_dir), "--spec", str(spec_path)] + (["--expect", expect] if expect else [])
+            args = ["replay", str(Path(case_dir).resolve()), "--spec", str(Path(spec_path).resolve())] + (
+                ["--expect", expect] if expect else [])
             return self._spawn(args, launch_dir)
         finally:
             self._lock.release()
