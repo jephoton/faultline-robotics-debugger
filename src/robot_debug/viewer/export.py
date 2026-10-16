@@ -28,7 +28,8 @@ VERCEL_CONFIG = {"rewrites": [{"source": "/((?!assets/|data/|media/).*)", "desti
 FORBIDDEN = {
     # A UNC path is \\server\share (JSON doubles each backslash); a lone "\(" in a LaTeX title is not one.
     "an absolute path": re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/](?!/)|\\{2,}[A-Za-z0-9._$-]+\\+[A-Za-z0-9._$-]|"
-                                   r"(?<![\w.])/(?:home|Users|tmp|var|mnt|opt|root)/"),
+                                   r"(?<![\w.])/(?:home|Users|tmp|var|mnt|opt|root|private|srv|workspace)/|"
+                                   r"(?<![\w.~/])~/[A-Za-z0-9._-]"),
     "a Job id": re.compile(r"\baijob-[a-z0-9]{6,}"),
     "a project id": re.compile(r"\bproject-[a-z0-9]{6,}"),
     "a registry, subnet or account id": re.compile(
@@ -36,7 +37,13 @@ FORBIDDEN = {
     "a registry address": re.compile(r"nebius\.cloud"),
     "a run folder name": re.compile(r"-\d{8}T\d{6}Z\b"),
     "backend state": re.compile(r"backend-state|\"bucket_name\"|\"access_key"),
+    # The results bucket is named faultline-<diagnosis name>-<6 hex digits> (backends.nebius).
+    "a results bucket name": re.compile(r"(?<![\w-])faultline-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{6}(?![\w-])"),
+    # The Hugging Face secret: the usual names (<prefix>-hf-token); the specs' own names are added per export.
+    "a secret name": re.compile(r"(?<![\w-])(?:[a-z0-9]+(?:-[a-z0-9]+)*-)?hf-token(?![\w-])"),
+    "an email address": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"),
 }
+_SECRET_KEY = re.compile(r"^\s*hf_token_secret:\s*[\"']?([A-Za-z0-9._-]+)", re.MULTILINE)
 TEXT_SUFFIXES = (".json", ".md")
 
 
@@ -64,19 +71,37 @@ def check_output(out: Path, force: bool) -> None:
         raise ExportError("The output folder is not empty; use --force to replace a previous export in it.")
 
 
-def scan_public(text: str) -> Optional[str]:
-    """The name of the first kind of private detail found in ``text``, else ``None``."""
+def scan_public(text: str, secret_names: Sequence[str] = ()) -> Optional[str]:
+    """The name of the first kind of private detail found in ``text``, else ``None``. ``secret_names`` are
+    the Hugging Face secret names of this machine's specs (see :func:`local_secret_names`)."""
 
     for label, pattern in FORBIDDEN.items():
         if pattern.search(text):
             return label
+    for name in secret_names:
+        if name and name in text:
+            return "a secret name"
     return None
 
 
-def _write_json(path: Path, value: Any) -> None:
+def local_secret_names(artifact_root: Path, runs_root: Path) -> List[str]:
+    """The ``backend.hf_token_secret`` values of the specs kept on this machine (run folders and the panel's
+    saved specs), so a name that does not look like ``*-hf-token`` is still refused."""
+
+    names = set()
+    candidates = list(Path(runs_root).glob("*/spec.yaml")) + list((Path(artifact_root) / "specs-ui").glob("*/spec.yaml"))
+    for path in candidates:
+        try:
+            names.update(_SECRET_KEY.findall(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError):
+            continue
+    return sorted(names)
+
+
+def _write_json(path: Path, value: Any, secrets: Sequence[str] = ()) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(value, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-    leak = scan_public(text)
+    leak = scan_public(text, secrets)
     if leak is not None:
         raise ExportError("Refused: {} would be exported in {}.".format(leak, path.name))
     path.write_text(text, encoding="utf-8", newline="\n")
@@ -106,14 +131,14 @@ def public_id(item_id: str) -> str:
     return item_id
 
 
-def _copy(source: Optional[Path], target: Path, scrub: bool = False) -> bool:
+def _copy(source: Optional[Path], target: Path, scrub: bool = False, secrets: Sequence[str] = ()) -> bool:
     if source is None or not source.is_file():
         return False
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.suffix in TEXT_SUFFIXES:
         text = source.read_text(encoding="utf-8")
         text = processes.scrub_text(text) if scrub else text
-        leak = scan_public(text)
+        leak = scan_public(text, secrets)
         if leak is not None:
             raise ExportError("Refused: {} would be exported in {}.".format(leak, target.name))
         target.write_text(text, encoding="utf-8", newline="\n")
@@ -131,18 +156,20 @@ def _media_source(library: Library, url: Optional[str]) -> Optional[Path]:
     return candidate if _inside(candidate, library.artifact_root) and candidate.is_file() else None
 
 
-def _rewrite_media(library: Library, detail: Dict[str, Any], out: Path, identifier: str) -> None:
+def _rewrite_media(library: Library, detail: Dict[str, Any], out: Path, identifier: str,
+                   secrets: Sequence[str] = ()) -> None:
     """Copy this item's videos and files into ``media/<id>/`` and point the JSON at the copies."""
 
     base = out / "media" / identifier
     for video in detail.get("videos") or []:
-        copied = _copy(_media_source(library, video.get("url")), base / "videos" / (video["role"] + ".mp4"))
+        copied = _copy(_media_source(library, video.get("url")), base / "videos" / (video["role"] + ".mp4"),
+                       secrets=secrets)
         video["url"] = "/media/{}/videos/{}.mp4".format(identifier, video["role"]) if copied else None
     block = detail.get("occlusion")
     if block:
         for episode in block["episodes"]:
             name = "episodes/{}.mp4".format(episode["episode_id"])
-            copied = _copy(_media_source(library, episode.get("url")), base / name)
+            copied = _copy(_media_source(library, episode.get("url")), base / name, secrets=secrets)
             episode["url"] = "/media/{}/{}".format(identifier, name) if copied else None
     kept = []
     for entry in detail.get("files") or []:
@@ -150,7 +177,7 @@ def _rewrite_media(library: Library, detail: Dict[str, Any], out: Path, identifi
             source = library.file_path(detail["id"], entry["name"])
         except (KeyError, ValueError, FileNotFoundError):
             continue
-        if _copy(source, base / "files" / entry["name"], scrub=entry["name"] == "report.md"):
+        if _copy(source, base / "files" / entry["name"], scrub=entry["name"] == "report.md", secrets=secrets):
             kept.append({"name": entry["name"], "url": "/media/{}/files/{}".format(identifier, entry["name"])})
     detail["files"] = kept
 
@@ -167,6 +194,7 @@ def export_gallery(out: Path, artifact_root: Path, *, runs_root: Optional[Path] 
     check_output(out, force)
     library = library or Library(Path(artifact_root), runs_root=runs_root, local=False)
     selected = _select(library, list(cases))
+    secrets = local_secret_names(Path(artifact_root), Path(runs_root) if runs_root else Path(artifact_root) / "runs")
     if force and out.is_dir():
         for entry in list(app.iterdir()) + [Path(n) for n in ("data", "media", "vercel.json")]:
             target = out / entry.name
@@ -188,13 +216,13 @@ def export_gallery(out: Path, artifact_root: Path, *, runs_root: Optional[Path] 
                 warnings.append("A case could not be read and was left out of the export.")
                 continue
             identifier = public_id(item["id"])
-            _rewrite_media(library, detail, out, identifier)       # while detail["id"] still names the source
+            _rewrite_media(library, detail, out, identifier, secrets)       # while detail["id"] still names the source
             detail["id"] = identifier
             detail["run"] = None
-            _write_json(out / "data" / "library" / (identifier + ".json"), detail)
+            _write_json(out / "data" / "library" / (identifier + ".json"), detail, secrets)
             summary = {k: v for k, v in detail.items() if k in item}
             listing.append(summary)
-        _write_json(out / "data" / "library.json", {"items": listing, "warnings": warnings})
+        _write_json(out / "data" / "library.json", {"items": listing, "warnings": warnings}, secrets)
         _write_json(out / "vercel.json", VERCEL_CONFIG)
     except BaseException:
         if created_out:
