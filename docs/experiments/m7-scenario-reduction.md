@@ -82,8 +82,11 @@ juice 3.7 cm, alphabet soup 2.9, milk 2.4, basket 2.2, butter 1.5, ketchup
   the failure disappear.
 
 **Reading.** The failure is a conjunction: five small shifts together, three
-of them distractors, each needed at nearly full size. It is a narrow,
-arrangement-specific failure rather than one misplaced object. Early-decided
+of them distractors. Shrinking reached three of the five (soup and robot at
+least 87.5% of their shift, orange juice 100%); the milk and cream cheese were
+not shrunk because the candidate budget ran out, so their needed size is
+unknown. It is a narrow, arrangement-specific failure rather than one
+misplaced object. Early-decided
 gates skipped 31 and 33 attempts in the two reduction Jobs.
 
 **Predictions.** Jethro predicted a distractor (three of the five causes are
@@ -134,8 +137,11 @@ critical robot joints).
   machine; an automatic resubmitter (reusing one bucket) worked around it.
 - The tenant hit the bucket access-policy quota (`iam.storageaccesspolicy.count`)
   at 10 buckets; old M3/M6 buckets still hold objects and need emptying.
-- The 30-candidate default was too small for a conjunction failure; the cap is
-  now 60 (`80326ce`).
+- The 30-candidate default was too small for a conjunction failure; the
+  validator's upper bound was raised to 60 (`80326ce`). That bound is not a
+  usable budget on LIBERO-10: the reduce Job's deadline is capped at 3000 s,
+  which fits at most 36 candidates (37 or more are refused at planning time),
+  so the follow-up run stopped at 36.
 
 ## Evidence
 

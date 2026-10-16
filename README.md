@@ -4,7 +4,8 @@ Built for the Nebius × NVIDIA hackathon. Faultline is a debugger for
 simulated robot-manipulation policies (vision-language-action models such as
 NVIDIA GR00T). It finds a failure, confirms that it repeats, reduces it to
 its minimal trigger, and saves it as a replayable regression test, with the
-evidence, an explanation and related research beside it.
+evidence beside it. Scenario and occlusion cases also get a Nemotron
+explanation, and the earlier occlusion cases have Tavily research context.
 
 The repository is
 [`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).
@@ -13,15 +14,21 @@ original names for compatibility.
 
 ## Two modes, one engine
 
-| Mode | Question it answers | Status |
+| Mode | Question it answers | What you give it |
 | --- | --- | --- |
-| **1. Debug a failure you bring** | "My policy failed from this start. What is the minimal cause?" | **Works end to end:** screen for or bring a failing start, confirm it repeats, then delta-debug its differences from the nearest passing start down to the shifts that are needed together. Nemotron proposes the order and a hypothesis; the simulator decides. |
-| **2. Audit a policy** | "What is the smallest disturbance that breaks this policy?" | **Works end to end:** occlusion (either camera), eight image families, camera viewpoint and lighting in the simulator, and instruction paraphrases reduced to the minimal wording change. |
+| **1. Debug a failure you bring** | "My policy failed from this start. What is the minimal cause?" | A failing start: let Faultline **screen** benchmark starts for one that fails reliably, name a **benchmark start**, or **import your own failing start-state file** (`scenario.import`). It confirms the failure repeats, then delta-debugs its differences from the nearest passing start down to the shifts that are needed together. Nemotron proposes the order and a hypothesis; the simulator decides. Demonstrated on one case (LIBERO-10 task 0, start 14). |
+| **2. Audit a policy** | "What is the smallest disturbance that breaks this policy?" | A passing start and a list of families. **Audit families:** the eight image families (blur, noise, darken, contrast, JPEG compression, colour cast, motion blur, dead pixels) plus camera viewpoint and lighting, which change the simulated scene. **Paraphrase** is the language mode: Nemotron rewords the instruction and a failing wording is reduced to the minimal word change. |
+
+Occlusion (a black rectangle over a camera) is not an audit family. It ran
+through the earlier experiment modes (M4 to M6) and its results are listed
+below.
 
 Both modes share the same loop: a fixed compute budget, a repeatability gate
 (a failure must reproduce in at least 4 of 5 attempts while unperturbed
-controls succeed), a reducer, and a saved case that can be replayed against
-a changed policy.
+controls succeed), a reducer, and a saved case. `faultline replay` re-runs a
+saved **scenario** case (audit and paraphrase cases are not replayed yet) and
+can aim at a different checkpoint through `policy.checkpoint` in the replay
+spec, so you can test a retrained policy against the failure you found.
 
 ## What it has found so far
 
@@ -33,11 +40,13 @@ family, not a general claim.
   ("put both the alphabet soup and the tomato sauce in the basket"), start 14
   fails reliably while the nearby start 28 passes. No single difference
   causes it: the failure needs **five small shifts together** (the soup,
-  three distractor objects and a tiny arm offset), each at nearly full size.
-  Nemotron 3 Ultra predicted the soup; the reruns showed it is necessary but
-  not sufficient. Replaying the case two days later with `faultline replay`
-  still reproduced it
-  ([mode 1](docs/experiments/m7-scenario-reduction.md)).
+  three distractor objects and a tiny arm offset). The size search reached
+  three of the five: the soup and the arm offset each needed at least 87.5%
+  of their shift and the orange juice all of it; the milk and cream cheese
+  were not shrunk because the candidate budget ran out. Nemotron 3 Ultra
+  predicted the soup; the reruns showed it is necessary but not sufficient.
+  Replaying the case two days later with `faultline replay` still reproduced
+  it ([mode 1](docs/experiments/m7-scenario-reduction.md)).
 
 - **Minimal occlusion:** a black rectangle over the upper-right 14% of the
   third-person camera reproducibly breaks the task (reduced from 25%). The
@@ -52,12 +61,22 @@ family, not a general claim.
 - **Thresholds:** the policy fails reliably from a blur of sigma 3.9 px and
   from Gaussian noise of sigma 95 (of 255), but never under darkening down to
   5% brightness or contrast down to 10% (M6).
-- **Robust within range (breadth pack):** across all four LIBERO suites,
-  GR00T kept succeeding under JPEG compression down to quality 5, a strong
-  colour cast, 20% dead pixels, scene lights at 10%, and 20 Nemotron-written
-  paraphrases of its instructions; motion blur and camera viewpoint failed
-  only occasionally at the top of their ranges
+- **Robust within the tested ranges (breadth pack, one task and start per
+  family):** GR00T N1.7 kept succeeding in every case below; the breadth
+  pack is a robustness check, not a failure find
   ([breadth pack](docs/experiments/m7-breadth-pack.md)).
+  - *Image catalog* on LIBERO-Spatial task 0, start 0: JPEG compression down
+    to quality 5, a strong colour cast and 20% dead pixels never failed;
+    motion blur failed once in five attempts, only at its strongest setting.
+  - *Lighting and viewpoint* on LIBERO-Object task 0, start 0: lights at 10%
+    never failed; the viewpoint failed once in five at 80% and at 100% of its
+    range. The same audit on LIBERO-Goal task 0 stopped before testing
+    anything, because unperturbed GR00T passed only 2 of 5 from that start.
+  - *Paraphrases*: 10 Nemotron-written rewordings each on LIBERO-Object
+    task 0, start 0 and LIBERO-10 task 0, start 7; all 20 succeeded.
+
+  Separately, all four LIBERO suites (Object, 10, Spatial, Goal) now run end
+  to end through `faultline diagnose`.
 - **Cheaper runs:** batching concurrent inference requests on one GR00T server
   gave +18% throughput at 12 parallel workers in two runs, and no gain at 8,
   where the GPU was not yet the bottleneck
@@ -69,14 +88,17 @@ family, not a general claim.
   under test, served on Nebius AI Cloud GPUs.
 - **NVIDIA Nemotron on Nebius Token Factory**, each model chosen by a measured
   comparison ([ADR 0030](docs/decisions/0030-nemotron-model-per-task.md)):
-  Nemotron 3 Ultra ranks a failure's differences and states a hypothesis
-  before any rerun, and explains each verified case; Nemotron 3 Super writes
-  instruction paraphrases; Nemotron 3 Nano summarises related research.
-  Model output is kept separate from measured evidence: "the model proposes,
-  the simulator verifies".
+  Nemotron 3 Ultra ranks a scenario failure's differences and states a
+  hypothesis before any rerun, and explains each verified scenario and
+  occlusion case; Nemotron 3 Super writes instruction paraphrases; Nemotron 3
+  Nano summarises research. Audit and paraphrase cases have no Nemotron
+  explanation yet. Model output is kept separate from measured evidence: "the
+  model proposes, the simulator verifies".
 - **Nebius AI Cloud Serverless Jobs** run every diagnosis, replay and audit
   (one L40S each), with evidence exported to private Object Storage.
-- **Tavily** finds source-linked public research for each case
+- **Tavily** finds source-linked public research. It is run by hand with
+  `scripts/research_case.py` and has been used on the earlier occlusion cases
+  only, not on scenario, audit or paraphrase cases
   ([M5D](docs/experiments/m5d-tavily-research.md)).
 
 ## How it runs
@@ -89,13 +111,17 @@ family, not a general claim.
   Nebius Serverless (or, untested, a local NVIDIA GPU): it creates and cleans
   up the results bucket and download key, submits each Job, waits under a
   watchdog, resubmits when no GPU is free, downloads only that Job's
-  evidence, writes the report and case, and enforces a spend cap whose worst
-  case is a real upper bound. `faultline replay CASE` re-runs a saved case as
-  a regression test ([quickstart](docs/setup/diagnose.md)).
+  evidence, writes the report and case, and enforces a spend cap. Before each
+  Job it reserves a worst case: the provider timeout (deadline plus ten
+  minutes) plus a four-minute start allowance, at the hourly rate, which is
+  our understanding of how Serverless bills. That has not yet been reconciled
+  against the Nebius bill. `faultline replay CASE` re-runs a saved scenario
+  case as a regression test ([quickstart](docs/setup/diagnose.md)).
 - **Cost:** a typical Job is US$0.3–0.9 on one L40S; the dry run prints every
   planned Job's worst case before anything is created.
-- **Locally:** specs, the spend ledger, Nemotron calls, reports, the viewer and
-  Tavily research run on the workstation; keys never enter a Job.
+- **Locally:** specs, the spend ledger, Nemotron calls, reports and the viewer
+  run on the workstation, as does Tavily research when you run it; keys never
+  enter a Job.
 
 ## Roadmap
 

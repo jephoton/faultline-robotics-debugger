@@ -506,9 +506,12 @@ task and seed were tested.
 On LIBERO-10, one start made GR00T fail reliably while a nearby start passed.
 Testing each difference alone found nothing: no single moved object caused
 it. Delta debugging over combinations showed the failure needs five small
-shifts together, each at nearly full size. Real failures are often like this,
-which is why a debugger has to search combinations, and why it needs a
-bigger budget for them (the first reduction ran out at 30 candidates).
+shifts together. Shrinking reached three of them: the soup and the robot's
+arm offset each needed at least 87.5% of their shift, the orange juice all of
+it; the milk and cream cheese were never shrunk because the budget ran out.
+Real failures are often like this, which is why a debugger has to search
+combinations, and why it needs a bigger budget for them (the first reduction
+ran out at 30 candidates).
 
 ### Necessary is not the same as sufficient
 
@@ -530,15 +533,19 @@ formatting rules). Clearer input mattered as much as the model.
 ### Budgets need a worst case you can trust
 
 A cloud run can outlive your laptop, your network or your sign-in. Faultline
-reserves each Job's true worst case before submitting it (the provider stops
-the Job at a fixed timeout no matter what) and, when it loses contact, keeps
+reserves each Job's worst case before submitting it (the provider stops
+the Job at a fixed timeout no matter what; the reservation covers that
+timeout plus a start allowance, under our understanding of Serverless
+billing, which is not yet reconciled with the Nebius bill) and, when it loses
+contact, keeps
 the Job resumable so a later run reads what really happened and corrects the
 charge instead of paying twice.
 
 ### "No failure" is a result too
 
-The breadth pack found GR00T robust to JPEG compression, colour casts, dead
-pixels, very dim lighting and twenty rewordings of its instructions within
-the tested ranges. For a robotics team that is useful evidence, reported per
+The breadth pack found GR00T robust to JPEG compression, colour casts and
+dead pixels (LIBERO-Spatial task 0, start 0), very dim lighting (LIBERO-Object
+task 0, start 0) and twenty rewordings of its instructions (LIBERO-Object
+task 0, start 0 and LIBERO-10 task 0, start 7) within the tested ranges. For a robotics team that is useful evidence, reported per
 task and range, as long as it is not stretched into a general claim.
 
