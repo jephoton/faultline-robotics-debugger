@@ -13,18 +13,15 @@ from robot_debug.viewer.server import make_handler
 
 
 class FaultlineBrandingTests(unittest.TestCase):
-    def test_homepage_uses_faultline_title_and_heading(self):
+    def test_homepage_uses_faultline_title(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            web_root = (
-                Path(__file__).resolve().parents[1]
-                / "src"
-                / "robot_debug"
-                / "viewer"
-                / "web"
-            )
+            app_root = root / "app"
+            app_root.mkdir()
+            (app_root / "index.html").write_text(
+                "<!doctype html><title>Faultline</title>", encoding="utf-8")
             server = ThreadingHTTPServer(
-                ("127.0.0.1", 0), make_handler(ArtifactCatalog(root), web_root)
+                ("127.0.0.1", 0), make_handler(ArtifactCatalog(root), app_root=app_root)
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -37,8 +34,16 @@ class FaultlineBrandingTests(unittest.TestCase):
                 thread.join()
 
         self.assertIn("<title>Faultline</title>", page)
-        self.assertIn("<h1>Faultline</h1>", page)
         self.assertNotIn("Robot Debug Console", page)
+
+    def test_the_shipped_app_bundle_is_titled_faultline(self):
+        index = (
+            Path(__file__).resolve().parents[1]
+            / "src" / "robot_debug" / "viewer" / "app" / "index.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("<title>Faultline</title>", index)
+        self.assertNotIn("Robot Debug Console", index)
 
     def test_distribution_and_console_scripts_use_faultline_brand(self):
         pyproject = (
