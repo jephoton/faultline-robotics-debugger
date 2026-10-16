@@ -50,6 +50,17 @@ class FaultCodeTests(unittest.TestCase):
         self.assertEqual([i["fault_code"] for i in items], ["FL-S-AFB5AA", "FL-S-AFB5BB", "FL-A-AFB5"])
 
 
+class MagnitudeTests(unittest.TestCase):
+    def test_rounds_half_up_like_the_report(self) -> None:
+        # 3.65 is stored just below 3.65, so "{:.1f}" gives 3.6 while the report says 3.7.
+        self.assertEqual(lib._magnitude({"position_cm": 3.65}, "position", 1.0), "3.7 cm")
+        self.assertEqual(lib._magnitude({"position_cm": 2.89}, "position", 0.5), "1.4 cm")
+
+    def test_joints_name_the_largest_offset(self) -> None:
+        row = {"joints": [{"name": "j1", "offset": -1.469, "unit": "deg"}, {"name": "j2", "offset": 2.65, "unit": "deg"}]}
+        self.assertEqual(lib._magnitude(row, "joints", 1.0), "2 joints, up to 2.7°")
+
+
 class ListTests(LibraryCase):
     def test_every_source_is_listed_once(self):
         items = self.items()

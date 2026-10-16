@@ -14,6 +14,7 @@ to the static export (``faultline export``), so the gallery and the local tool s
 from __future__ import annotations
 
 import datetime as dt
+from decimal import ROUND_HALF_UP, Decimal
 import hashlib
 import json
 import re
@@ -143,11 +144,17 @@ def _percent(value: float) -> str:
 # --------------------------------------------------------------------------------------
 
 
+def _one_decimal(value: float) -> str:
+    """Round half away from zero, as people (and the report's 3.65 -> 3.7) expect, not to the nearest float."""
+
+    return str(Decimal(repr(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
 def _magnitude(row: Mapping[str, Any], part: str, fraction: float) -> str:
     if part == "position" and _number(row.get("position_cm")) is not None:
-        return "{:.1f} cm".format(row["position_cm"] * fraction)
+        return "{} cm".format(_one_decimal(row["position_cm"] * fraction))
     if part == "rotation" and _number(row.get("rotation_deg")) is not None:
-        return "{:.1f}°".format(row["rotation_deg"] * fraction)
+        return "{}°".format(_one_decimal(row["rotation_deg"] * fraction))
     if part == "joints":
         joints = [j for j in _list(row.get("joints")) if isinstance(j, Mapping) and _number(j.get("offset")) is not None]
         if not joints:
@@ -155,7 +162,7 @@ def _magnitude(row: Mapping[str, Any], part: str, fraction: float) -> str:
         biggest = max(joints, key=lambda j: abs(j["offset"]))
         unit = biggest.get("unit")
         size = abs(biggest["offset"]) * fraction
-        text = "{:.1f}°".format(size) if unit == "deg" else "{:.3g} {}".format(size, unit or "").strip()
+        text = "{}°".format(_one_decimal(size)) if unit == "deg" else "{:.3g} {}".format(size, unit or "").strip()
         return "{}, up to {}".format(_plural(len(joints), "joint"), text)
     return "changed"
 
