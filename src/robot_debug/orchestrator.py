@@ -1169,11 +1169,16 @@ class Orchestrator:
         """Where the attempt numbers (Job-name suffixes) of this call start.
 
         0 for a fresh step. When an earlier call used a whole round of ``max_attempts`` submissions and
-        every one found no capacity, ``--resume`` starts a fresh round on the next unused suffixes, so a
-        name is never reused (a Job name is only released by deleting the Job). The time cap still
-        applies to each submission."""
+        every one either found no capacity or was cancelled by the user's stop, ``--resume`` starts a fresh
+        round on the next unused suffixes, so a name is never reused (a Job name is only released by deleting
+        the Job) and repeated stop/resume cannot strand the step. A failed attempt does not restart a round.
+        The time cap still applies to each submission."""
 
-        if len(attempts) >= self.max_attempts and all(a.get("state") == "capacity" for a in attempts):
+        def spent_without_fault(attempt: Mapping[str, Any]) -> bool:
+            return attempt.get("state") == "capacity" or (
+                attempt.get("state") == "cancelled" and attempt.get("stopped_by_user") is True)
+
+        if len(attempts) >= self.max_attempts and all(spent_without_fault(a) for a in attempts):
             first = len(attempts)
             if first + self.max_attempts > len(ATTEMPT_SUFFIXES):
                 raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions and no unused "
@@ -1369,6 +1374,8 @@ class Orchestrator:
             "container_seconds": seconds, "cost_usd": cost})
         self._save_logs(handle, job_dir)
         attempt["state"] = "cancelled" if confirmed else "unconfirmed"
+        if confirmed:
+            attempt["stopped_by_user"] = True      # a round of these (and capacity waits) restarts on fresh names
         self.steps.update(step, status="stopped")
         self.say(step, "{} stopped by the user ({}; charged US${:.2f}{})".format(
             job_name, "cancelled" if confirmed else "cancel not confirmed", cost,
