@@ -898,7 +898,9 @@ class Orchestrator:
         if record.get("status") == "done":
             return self._stored_outcome(step, record)
         attempts: List[Dict[str, Any]] = self.steps.update(step, status="running").setdefault("attempts", [])
-        for number in range(self.max_attempts):
+        first = self._first_attempt_number(attempts)
+        last = first + self.max_attempts
+        for number in range(first, last):
             job_name = self.job_name(step, number)
             prior = next((a for a in attempts if a["job_name"] == job_name), None)
             if prior is not None and prior["state"] in ("capacity", "cancelled", "failed"):
@@ -917,7 +919,7 @@ class Orchestrator:
             outcome = self._await(step, handle, job_name, deadline, job_dir, attempts, summary_name)
             if outcome is not None:
                 return outcome
-            if number + 1 >= self.max_attempts:
+            if number + 1 >= last:
                 break
             try:
                 self.ledger.check_time(extra_seconds=self.pause_seconds + deadline)
@@ -926,7 +928,23 @@ class Orchestrator:
             self.say(step, "no capacity; pausing {:g} s before resubmitting".format(self.pause_seconds))
             self.tools.sleep(self.pause_seconds)
         self.steps.update(step, status="stopped")
-        raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions".format(self.max_attempts))
+        raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions".format(last))
+
+    def _first_attempt_number(self, attempts: Sequence[Mapping[str, Any]]) -> int:
+        """Where the attempt numbers (Job-name suffixes) of this call start.
+
+        0 for a fresh step. When an earlier call used a whole round of ``max_attempts`` submissions and
+        every one found no capacity, ``--resume`` starts a fresh round on the next unused suffixes, so a
+        name is never reused (a Job name is only released by deleting the Job). The time cap still
+        applies to each submission."""
+
+        if len(attempts) >= self.max_attempts and all(a.get("state") == "capacity" for a in attempts):
+            first = len(attempts)
+            if first + self.max_attempts > len(ATTEMPT_SUFFIXES):
+                raise StopRun("capacity_unavailable", "no GPU capacity after {} submissions and no unused "
+                              "Job-name suffixes are left; start a new run".format(first))
+            return first
+        return 0
 
     def _submit(self, step: str, job_name: str, workload: Mapping[str, Any], deadline: int, job_dir: Path,
                 attempts: List[Dict[str, Any]]) -> Any:

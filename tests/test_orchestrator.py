@@ -699,6 +699,63 @@ class Resume(Base):
         self.assertAlmostEqual(ledger2.spent, spent_before + cost())
         self.assertTrue(any("already done" in line and "screen" in line for line in lines2))
 
+    def test_resume_after_capacity_exhaustion_starts_a_fresh_round_on_new_names(self):
+        spec = spec_for()
+        runner1, backend1, tools1, ledger1, _l = self.world([capacity() for _ in range(6)], spec=spec)
+        self.assertEqual(runner1.diagnose().reason, "capacity_unavailable")
+        base = "soup-start-{}-screen".format(runner1.tag)
+        self.assertEqual(backend1.submitted, [base] + [base + "-" + c for c in "abcde"])
+        backend2 = FakeBackend([capacity(), capacity(), finished(lambda w: screen_summary(failing=False))])
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(
+            spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual(result.reason, "no_reproducible_failure", "it got past the screen")
+        self.assertEqual(backend2.submitted, [base + "-f", base + "-g", base + "-h"],
+                         "the letter sequence continues; no name is reused")
+        self.assertEqual(tools2.slept, [300, 300])
+        self.assertAlmostEqual(ledger2.spent, cost())
+
+    def test_a_second_exhausted_round_can_be_resumed_again_and_names_stay_unique(self):
+        spec = spec_for()
+        runner1, backend1, *_ = self.world([capacity() for _ in range(6)], spec=spec)
+        runner1.diagnose()
+        run_dir, seen = runner1.run_dir, list(backend1.submitted)
+        for expected_suffixes in ("fghijk", "lmnopq"):
+            backend = FakeBackend([capacity() for _ in range(6)])
+            _t, runner, backend, *_rest = make_world(spec, [], backend=backend, run_dir=run_dir)
+            self.addCleanup(_t.cleanup)
+            self.assertEqual(runner.diagnose().reason, "capacity_unavailable")
+            self.assertEqual([name.rsplit("-", 1)[1] for name in backend.submitted], list(expected_suffixes))
+            seen += backend.submitted
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_resume_after_a_partly_used_round_does_not_get_a_whole_new_one(self):
+        """Three capacity failures then a failed submission: two names are left in the round, not six."""
+
+        spec = spec_for()
+        backend1 = FakeBackend([capacity(), capacity(), capacity()])
+        backend1.fail_submit_at = 3
+        _t, runner1, backend1, *_rest = make_world(spec, [], backend=backend1)
+        self.addCleanup(_t.cleanup)
+        runner1.diagnose()
+        backend2 = FakeBackend([capacity() for _ in range(6)])
+        _t2, runner2, backend2, *_rest2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t2.cleanup)
+        runner2.diagnose()
+        self.assertEqual(len(backend2.submitted), 2)
+
+    def test_resume_after_exhaustion_still_respects_the_time_cap(self):
+        spec = spec_for(hours=1.0)
+        runner1, backend1, *_ = self.world([capacity() for _ in range(6)], spec=spec)
+        runner1.diagnose()
+        backend2 = FakeBackend([capacity() for _ in range(6)])
+        _t, runner2, backend2, *_rest = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        backend2.on_wait = lambda: runner2.test_clock.__setitem__(0, runner2.test_clock[0] + 2000)
+        self.assertEqual(runner2.diagnose().reason, "max_hours")
+        self.assertEqual(len(backend2.submitted), 1)
+
     def test_resume_of_a_finished_run_submits_nothing(self):
         runner, backend, tools, ledger, lines = self.world(full_script())
         runner.diagnose()
