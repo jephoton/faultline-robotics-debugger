@@ -718,6 +718,7 @@ class DownloadTests(NebiusCase):
         finally:
             builtins.__import__ = real_import
         self.assertIn("boto3", str(caught.exception))
+        self.assertIn('pip install "faultline[cloud]"', str(caught.exception))   # the name in pyproject.toml
 
 
 class LifecycleTests(NebiusCase):

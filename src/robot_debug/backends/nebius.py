@@ -295,7 +295,7 @@ def default_s3_factory(endpoint: str, region: str, key_id: str, secret: str) -> 
         from botocore.config import Config
     except ImportError as exc:
         raise BackendError(
-            "downloading results needs boto3: pip install 'robot-debug[cloud]' (or pip install boto3 truststore)"
+            "downloading results needs boto3: pip install \"faultline[cloud]\" (or pip install boto3 truststore)"
         ) from exc
     return boto3.client(
         "s3", endpoint_url=endpoint, region_name=region,
