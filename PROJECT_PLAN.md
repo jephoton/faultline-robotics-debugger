@@ -2,7 +2,7 @@
 
 # Faultline Project Roadmap
 
-## Current status — October 13, 2026
+## Current status — October 16, 2026
 
 Faultline finds a robot-policy failure, confirms that it repeats, reduces it to
 a minimal trigger and saves it as a replayable regression case. The
@@ -14,15 +14,16 @@ a minimal trigger and saves it as a replayable regression case. The
 | M1 reproducible runner, M2 first failure | Complete (September) |
 | M3 parallel replay | Complete: 3.715× with four workers (September 29) |
 | M3 batched inference | Complete: +18% at 12 workers, none at 8 ([ADR 0025](docs/decisions/0025-m3-batched-inference-experiment.md)) |
-| M3 latency | Accepted: early-decided gates (with mode 1), Job startup cut from about 12 minutes (with `diagnose`); warm Endpoint as a stretch near judging ([ADR 0029](docs/decisions/0029-m3-latency-startup-and-early-decided-gates.md)) |
+| M3 latency | Early-decided gates are done (with mode 1). The Job startup cut was deferred by Jethro at the `faultline diagnose` checkpoint ([ADR 0031](docs/decisions/0031-faultline-diagnose.md), amendment in [ADR 0029](docs/decisions/0029-m3-latency-startup-and-early-decided-gates.md)); a warm Endpoint stays a stretch near judging |
 | M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
-| **M7a product consolidation** | **In progress (3 of 5).** Mode 1 scenario reduction on LIBERO-10 ([experiment](docs/experiments/m7-scenario-reduction.md)); `faultline diagnose` ([ADR 0031](docs/decisions/0031-faultline-diagnose.md)); breadth pack across four suites and image, scene and language families ([experiment](docs/experiments/m7-breadth-pack.md)). Next: `faultline diagnose`, automatic cases, breadth pack, UI overhaul, access options, website deployment ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)) |
+| **M7a product consolidation** | **In progress: steps 1–3 done.** Mode 1 scenario reduction on LIBERO-10 ([experiment](docs/experiments/m7-scenario-reduction.md)); `faultline diagnose` and `faultline replay` ([ADR 0031](docs/decisions/0031-faultline-diagnose.md)); breadth pack across four suites and image, scene and language families ([experiment](docs/experiments/m7-breadth-pack.md)). Next: the **UI overhaul** around import → diagnose → reduced case → replay, then the public **gallery** and website ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)). Also being added: import of your own failing start-state file, a checkpoint override and `replay --expect` |
 | M7b submission | Due October 30, 10:00 PT (target October 29) |
 
-Spend so far is tracked per experiment note; the Nebius AI Cloud balance was
-about US$5.3 on October 13 (estimate pending billing). Roadmap order and
+Spend so far is tracked per experiment note; every figure there is an estimate
+pending billing reconciliation, and the current Nebius balance is in the
+billing console (see billing, not this file). Roadmap order and
 timeboxes: [ADR 0023](docs/decisions/0023-post-m5-roadmap-order.md).
 
 **Everything below is the original September 12 startup plan, kept for
