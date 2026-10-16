@@ -201,6 +201,12 @@ def _run_dirs(runs_root: Path) -> List[Path]:
         return []
 
 
+def live_runs(runs_root: Path, probe: Probe = default_probe) -> List[Path]:
+    """The run folders under ``runs_root`` whose recorded process is alive (cheap: only ``process.json`` is read)."""
+
+    return [folder for folder in _run_dirs(runs_root) if recorded_process(folder, probe) is not None]
+
+
 def _money(value: Any) -> Optional[float]:
     return float(value) if type(value) in (int, float) else None
 
