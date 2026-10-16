@@ -57,6 +57,7 @@ RUNNING_GRACE_SECONDS = 300            # beyond the Job's own deadline before th
 QUEUE_ALLOWANCE_SECONDS = 2400         # waiting for a machine, pulling the image
 PRICE_TOLERANCE = 1.05
 REPLAY_ATTEMPTS = 5
+MAX_JOB_DEADLINE_SECONDS = 3000        # the Job runtime's hard cap on a workload's deadline (job_runtime)
 REPLAY_REQUIRED_FAILURES = 4
 MAX_WORKLOAD_BYTES = 64 * 1024
 ATTEMPT_SUFFIXES = "abcdefghijklmnopqrstuvwxyz"
@@ -365,6 +366,27 @@ def replay_text(verdict: Optional[str]) -> str:
     return REPLAY_TEXT.get(verdict, "Inconclusive: the replay ended with the verdict '{}'.".format(verdict))
 
 
+def _too_many_candidates(wanted: int, limit: int) -> str:
+    return ("budget.max_candidates {} does not fit in one reduce Job (its deadline would pass the {} s limit "
+            "of the runtime); the largest that fits is {}".format(wanted, MAX_JOB_DEADLINE_SECONDS, limit))
+
+
+def check_candidate_budget(spec: Spec, tools: Any) -> None:
+    """Refuse a candidate budget the reduce Job's deadline cannot hold, before any Job is created.
+
+    Raises :class:`StopRun` (``candidates_too_large``) naming the largest budget that fits. A mode without
+    a reduce Job (audit, replay) and tools that cannot say are not checked here.
+    """
+
+    limit_of = getattr(tools, "candidate_limit", None)
+    limit = limit_of(spec) if callable(limit_of) else None
+    if limit is None:
+        return
+    wanted = paraphrase_candidates(spec) if spec.mode == "paraphrase" else spec.budget.max_candidates
+    if wanted > limit:
+        raise StopRun("candidates_too_large", _too_many_candidates(wanted, limit))
+
+
 PARAPHRASE_DEFAULT_CANDIDATES = 24
 
 
@@ -485,8 +507,35 @@ class DefaultTools:
 
         try:
             return se.recommended_deadline_seconds("scenario-reduce", {"max_candidates": max_candidates})
-        except ValueError as error:
-            raise StopRun("candidates_too_large", "budget.max_candidates {}: {}".format(max_candidates, error)) from None
+        except ValueError:
+            raise StopRun("candidates_too_large", _too_many_candidates(max_candidates, self.candidate_limit_for(
+                "scenario"))) from None
+
+    def candidate_limit_for(self, mode: str) -> int:
+        """The largest ``budget.max_candidates`` whose reduce Job fits the runtime's deadline cap, for the
+        ``scenario`` or ``paraphrase`` mode (0 if none does)."""
+
+        from robot_debug import language_experiment as le
+        from robot_debug import scenario_experiment as se
+        from robot_debug.spec import MAX_CANDIDATES
+
+        recommended, name = ((se.recommended_deadline_seconds, "scenario-reduce") if mode == "scenario"
+                             else (le.recommended_deadline_seconds, "paraphrase-reduce"))
+        for count in range(MAX_CANDIDATES, 0, -1):
+            try:
+                recommended(name, {"max_candidates": count})
+            except ValueError:
+                continue
+            return count
+        return 0
+
+    def candidate_limit(self, spec: Spec) -> Optional[int]:
+        """The largest candidate budget the spec's mode can run in one reduce Job, or ``None`` for a mode
+        with no reduce Job (audit, replay)."""
+
+        if spec.mode in ("scenario", "paraphrase"):
+            return self.candidate_limit_for(spec.mode)
+        return None
 
     def audit_workload(self, spec: Spec, run_id: str) -> Dict[str, Any]:
         from robot_debug.workloads import audit_workload
@@ -558,8 +607,9 @@ class DefaultTools:
             workload = le.build_reduce_workload(
                 run_id=run_id, suite=spec.suite, task_id=pc.task, start=pc.start, original=original,
                 paraphrase=paraphrase, max_candidates=paraphrase_candidates(spec))
-        except ValueError as error:
-            raise StopRun("candidates_too_large", str(error)) from None
+        except ValueError:
+            raise StopRun("candidates_too_large", _too_many_candidates(
+                paraphrase_candidates(spec), self.candidate_limit_for("paraphrase"))) from None
         return self._checked(self._valid(workload))
 
     def paraphrase_deadlines(self, spec: Spec) -> Tuple[int, int]:
@@ -572,8 +622,9 @@ class DefaultTools:
             screen = le.recommended_deadline_seconds("paraphrase-screen", {"paraphrases": ["x"] * pc.count})
             reduce_ = le.recommended_deadline_seconds(
                 "paraphrase-reduce", {"max_candidates": paraphrase_candidates(spec)})
-        except ValueError as error:
-            raise StopRun("candidates_too_large", str(error)) from None
+        except ValueError:
+            raise StopRun("candidates_too_large", _too_many_candidates(
+                paraphrase_candidates(spec), self.candidate_limit_for("paraphrase"))) from None
         return screen, reduce_
 
     @staticmethod
@@ -773,6 +824,8 @@ class Orchestrator:
     def _guarded(self, body: Callable[[], RunResult]) -> RunResult:
         try:
             try:
+                if self.spec.mode != "replay":
+                    check_candidate_budget(self.spec, self.tools)      # before the backend or any Job exists
                 self._start()
                 result = body()
             except StopRun as stop:
@@ -1482,7 +1535,7 @@ class Orchestrator:
 
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
-    "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
+    "check_candidate_budget", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
     "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

@@ -149,6 +149,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
                 raise sp.SpecError("mode: a replay spec is used with `faultline replay`")
         else:
             spec, spec_text = _load_with_text(args.spec)
+        if args.command == "diagnose":
+            _check_budget(spec, tools)
         factory = make_backend
         if args.command == "diagnose" and args.dry_run:
             return _dry_run(spec, tools, factory, out)
@@ -200,6 +202,15 @@ def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], 
         out("Expected '{}': NOT met ({}).".format(expect, orch.replay_text(result.verdict).rstrip(".")))
         return EXIT_UNEXPECTED_VERDICT
     return result.exit_code
+
+
+def _check_budget(spec: sp.Spec, tools: Any) -> None:
+    """A candidate budget no reduce Job can hold is a spec error (exit 2), found before any Job."""
+
+    try:
+        orch.check_candidate_budget(spec, tools)
+    except orch.StopRun as stop:
+        raise sp.SpecError(stop.detail) from None
 
 
 def _load_with_text(path: Optional[Path]):

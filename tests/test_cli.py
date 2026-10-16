@@ -93,6 +93,25 @@ class DryRun(Fixture):
         self.assertIn("Backend not checked", self.text)
 
 
+class CandidateBudget(Fixture):
+    def test_a_budget_the_reduce_job_cannot_hold_is_a_spec_error_before_anything_exists(self):
+        self.spec_path.write_text(SPEC.replace("max_candidates: 36", "max_candidates: 40"), encoding="utf-8")
+        for extra in ([], ["--dry-run"]):
+            with self.subTest(extra=extra):
+                self.lines.clear()
+                code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)] + extra)
+                self.assertEqual(code, 2)
+                self.assertIn("largest that fits is 36", self.text)
+                self.assertIn("budget.max_candidates 40", self.text)
+                self.assertNotIn("Planned Jobs", self.text)
+                self.assertEqual(self.backends, [], "no backend was even constructed")
+                self.assertFalse(self.runs.exists())
+
+    def test_the_largest_fitting_budget_is_accepted(self):
+        self.spec_path.write_text(SPEC.replace("max_candidates: 36", "max_candidates: 36"), encoding="utf-8")
+        self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--dry-run"]), 0)
+
+
 class Diagnose(Fixture):
     def test_full_run_exit_code_and_summary(self):
         code = self.run_cli(["diagnose", str(self.spec_path), "--runs-root", str(self.runs)], full_script())
