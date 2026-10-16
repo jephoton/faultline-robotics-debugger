@@ -124,7 +124,7 @@ describe('language case', () => {
 
   it('explains a run that found no failing wording', async () => {
     await openCase(IDS.quiet);
-    expect(screen.getByRole('heading', { level: 1, name: 'paraphrase-task2' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'paraphrase-task4' })).toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('No failure repeated 4 of 5 times.');
     expect(screen.getByText(/No wording failed reliably/)).toBeInTheDocument();
     const readout = screen.getByRole('region', { name: 'Readout' });

@@ -1,0 +1,159 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ApiError } from '../../api/client';
+import { useApi, useAppData } from '../../api/context';
+import type { ImportFile } from '../../api/types';
+import { usd } from '../../lib/format';
+import { MODE_LABEL } from '../../lib/status';
+import { useAsync } from '../../lib/useAsync';
+import { yamlValue } from '../../lib/specYaml';
+import { Icon } from '../Icon';
+import { DryRunTable, EnvironmentList } from './Review';
+
+interface Props {
+  yaml: string;
+  importFile: ImportFile | null;
+}
+
+function usesNemotron(yaml: string): boolean {
+  const mode = yamlValue(yaml, 'mode');
+  if (mode === 'paraphrase') return true;
+  return /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml);
+}
+
+export function StepReview({ yaml, importFile }: Props) {
+  const api = useApi();
+  const navigate = useNavigate();
+  const { refreshRuns } = useAppData();
+  const plan = useAsync(() => api.dryRun(yaml, importFile ?? undefined), [api, yaml, importFile?.content]);
+  const env = useAsync(() => api.environment(), [api]);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [starting, setStarting] = useState(false);
+
+  const mode = yamlValue(yaml, 'mode') ?? 'scenario';
+  const check = (key: string) => env.data?.checks.find((entry) => entry.key === key);
+
+  function blockers(): string[] {
+    const list: string[] = [];
+    if (plan.loading) list.push('The dry run is still running. Wait a moment and try again.');
+    else if (plan.error) {
+      list.push(plan.error.message);
+      if (plan.error instanceof ApiError) for (const error of plan.error.errors) list.push(`${error.path || 'spec'}: ${error.message}`);
+    } else if (plan.data && plan.data.worst_case_total_usd > plan.data.cap_usd) {
+      list.push(
+        `The required Jobs could cost up to ${usd(plan.data.worst_case_total_usd)}, above your ${usd(plan.data.cap_usd)} cap. Raise the spend cap or choose a smaller test.`,
+      );
+    }
+    const nebius = check('nebius_cli');
+    if (nebius && !nebius.ok) list.push('You are not signed in to Nebius. Sign in, then start (see Setup for how).');
+    const key = check('token_factory_key');
+    if (key && !key.ok && usesNemotron(yaml)) {
+      list.push(
+        mode === 'paraphrase'
+          ? 'Rewordings are written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup).'
+          : 'Nemotron needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Nemotron off.',
+      );
+    }
+    return list;
+  }
+
+  async function start() {
+    const found = blockers();
+    setProblems(found);
+    if (found.length > 0 || !plan.data) return;
+    setStarting(true);
+    try {
+      const result = await api.startRun({
+        yaml,
+        plan_hash: plan.data.plan_hash,
+        ...(importFile ? { import_file: importFile } : {}),
+        ...(mode === 'scenario' && !usesNemotron(yaml) ? { no_llm: true } : {}),
+      });
+      refreshRuns();
+      navigate(`/run/${encodeURIComponent(result.run)}`);
+    } catch (error) {
+      setProblems([error instanceof ApiError ? error.message : 'The run could not be started.']);
+      setStarting(false);
+    }
+  }
+
+  return (
+    <div className="review">
+      <section aria-labelledby="review-what">
+        <h3 id="review-what">What will run</h3>
+        <dl className="facts">
+          <dt>Name</dt>
+          <dd className="mono">{yamlValue(yaml, 'name') ?? 'not set'}</dd>
+          <dt>Kind</dt>
+          <dd>{MODE_LABEL[mode] ?? mode}</dd>
+          <dt>Suite and task</dt>
+          <dd>
+            {/suite:\s*(\w+)/.exec(yaml)?.[1] ?? 'not set'}, task {yamlValue(yaml, 'task') ?? '?'}
+          </dd>
+        </dl>
+        <details>
+          <summary>Show the spec</summary>
+          <pre>{yaml}</pre>
+        </details>
+      </section>
+
+      <section aria-labelledby="review-plan">
+        <h3 id="review-plan">Dry run</h3>
+        <div aria-live="polite">
+          {plan.loading && <p className="muted">Working out the plan.</p>}
+          {plan.error && (
+            <div className="notice notice--alarm" role="alert">
+              <Icon name="alarm" />
+              <div className="notice__body">
+                <p className="notice__title">The dry run could not be made</p>
+                <p>{plan.error.message}</p>
+                {plan.error instanceof ApiError && plan.error.errors.length > 0 && (
+                  <ul>
+                    {plan.error.errors.map((error) => (
+                      <li key={`${error.path}-${error.message}`}>
+                        <code>{error.path || 'spec'}</code> {error.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+          {plan.data && <DryRunTable plan={plan.data} />}
+        </div>
+      </section>
+
+      <section aria-labelledby="review-env">
+        <h3 id="review-env">This machine</h3>
+        {env.loading && <p className="muted">Checking sign-in and keys.</p>}
+        {env.error && <p className="muted">The environment could not be checked ({env.error.message}). You can still try to start.</p>}
+        {env.data && <EnvironmentList environment={env.data} />}
+        <p className="muted">
+          <Link to="/setup">Open Setup</Link> for how to fix anything above.
+        </p>
+      </section>
+
+      {problems.length > 0 && (
+        <div className="notice notice--attention" role="alert">
+          <Icon name="attention" />
+          <div className="notice__body">
+            <p className="notice__title">Not started yet</p>
+            <ul>
+              {problems.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <p className="review__confirm">
+        Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any
+        time.
+      </p>
+      <button type="button" className="btn" onClick={() => void start()} aria-busy={starting} data-testid="start-diagnosis">
+        <Icon name="play" /> Start diagnosis
+      </button>
+    </div>
+  );
+}

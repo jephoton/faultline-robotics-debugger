@@ -1,6 +1,6 @@
 // A small in-memory implementation of the API contract, shared by the Vite dev middleware
 // (VITE_MOCK=1) and the tests. It is never imported by the production bundle.
-import type { DryRun, FieldError, Progress, ValidateResult } from '../api/types';
+import type { DryRun, Environment as EnvironmentChecks, FieldError, Progress, ValidateResult } from '../api/types';
 import {
   IDS,
   RUN_IDS,
@@ -34,6 +34,8 @@ export interface MockOptions {
   mode?: 'local' | 'static';
   /** Show one active run (the waiting-for-GPU fixture) in the sidebar. */
   activeDemo?: boolean;
+  /** Replace the environment checks (tests). */
+  environment?: EnvironmentChecks;
 }
 
 export const MOCK_TOKEN = sessionLocal.token as string;
@@ -193,7 +195,7 @@ export function createMockServer(options: MockOptions = {}) {
         const found = progressFor(decodeURIComponent(progress[1] as string));
         return found ? json(200, found) : failure(404, 'That run was not found.');
       }
-      if (path === '/api/environment') return json(200, environment);
+      if (path === '/api/environment') return json(200, options.environment ?? environment);
       if (path === '/api/evidence') return json(200, evidence);
       if (path === '/api/specs/template') {
         const template = specTemplates[parsed.searchParams.get('mode') ?? ''];
