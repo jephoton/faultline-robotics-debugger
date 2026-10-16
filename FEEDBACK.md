@@ -1,17 +1,47 @@
 # Faultline — hackathon tool feedback log
 
-Working notes for the required submission feedback. Distinguish observed tool
-behavior from our own configuration mistakes; verify current product details
-and add Jethro's first-hand impressions before submitting. Do not put account
-identifiers, tokens, private addresses, or payment details here.
+Working notes for the required submission feedback, written from the dated
+sections below. They distinguish observed tool behaviour from our own
+configuration mistakes. Every cost in this file is an **estimate** (published
+rates times measured time or tokens) and has not yet been reconciled with
+posted Nebius billing. Do not put account identifiers, tokens, private
+addresses or payment details here.
+
+## Summary
 
 | Tool | What we used it for | What worked | Friction and attribution | Would we use it again? |
 | --- | --- | --- | --- | --- |
-| Nebius AI Cloud Compute | One L40S VM hosted the pinned GR00T server and LIBERO evaluators for baseline, search, reduction, and M3 parallel replay. | GPU capacity, model caching, and a stoppable VM enabled bounded experiments with video and trace evidence. M3 completed 48/48 valid equal-work episodes and measured 3.715× warm throughput at four evaluator workers versus one on the same VM. | The CLI's authenticated profile lacked `parent-id`, so commands needed an explicit discovered project ID. A prior control-plane lookup timed out. During M3, local OAuth expired while waiting on a start request, although the start had reached Nebius; the console provided a stop fallback. Exact-shape capacity briefly showed no available count. Usage posting lags, so M3 cost is estimated pending billing. | Provisionally yes for reproducible GPU evaluation; final answer after billing and Jethro's own onboarding assessment. |
-| NVIDIA GR00T N1.7 and LIBERO checkpoint | Produced robot actions from agent-view and wrist images plus state. | The pinned policy completed 20/20 nominal baseline episodes. It also supplied repeatable, recorded behavior for the controlled failure and reduction experiments. | The first pilot hit a 403 on the transitive gated Cosmos dependency until account-holder access was granted. Model startup took time even with cached weights. These are model/dependency onboarding observations, not Nebius faults. | Provisionally yes for this manipulation-policy test; document task and simulator limits. |
-| AllenAI VLA evaluation harness and LIBERO image | Hosted the evaluator, simulator, recordings, and model-server adapter. | Structured aggregates, traces, SQLite recordings, and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user. Generic schema warnings appeared even on successful episodes. M3 local review also found that the pinned CLI can leave its Docker client child alive after the evaluator exits; this is an upstream process-lifecycle integration risk, not evidence of a Nebius or NVIDIA fault. | Yes for the pinned benchmark, with explicit version, compatibility, and process-cleanup checks. |
-| Nebius Token Factory / Nemotron | Authenticated catalog and two real text-only M5C generation attempts. | The separately approved4096-token attempt returned valid JSON and exact episode IDs, readable in the viewer; usage and latency support auditing. | Our600-token limit was inadequate for the first attempt. The successful prose is shallow; its mask caveat cites nominal episodes rather than supporting reduction evidence. Posted billing remains unknown. | Provisionally for human-reviewed summaries, not autonomous diagnosis; final choice needs Jethro's review. |
-| Nebius Serverless Jobs | One single-L40S Job launched pinned GR00T and two simulator episodes. | Private image pull, model loading and request serving worked; exact-ID status/logs identified terminal failure. Existing bucket-scoped read-only S3 credentials recovered the partial log. | The first Job failed in our exporter, which assumed local inode/rename semantics on a bucket mount. No valid videos/traces/manifest were recovered. A dry-run rejected an @sha256 image reference because an internal label exceeded its limit; a private tag with an independently verified expected digest worked. Local Docker startup/TLS issues are workstation friction, not Nebius faults. | Provisionally useful for finite evaluations; end-to-end migration remains unproven until closed evidence is downloaded and verified. |
+| Nebius AI Cloud Serverless Jobs | The main runtime from October 10: about 20 single-L40S Jobs (pilot, M5B re-run, M3 batching, M6, M7 mode 1, breadth pack, replay), most of them driven by `faultline diagnose`. About US$9 estimated for the October 12–16 Jobs. | Private-registry pulls, GR00T serving on one L40S, exact-ID status and logs, `get-by-name` recovery, dry-run validation, and a bucket policy plus lifecycle expiry for narrow read-only download keys all worked. Startup was consistent (image pull about 3 minutes, our model download 337–347 s). All four LIBERO suite checkpoints served the same way. | Provider side: L40S capacity waits (four of nine submissions in one M7 session found no machine after about 27 minutes; nothing billed), a tenant bucket access-policy quota of 10, `job create --format json` and `--async` sometimes returning non-JSON, an `@sha256` image reference rejected by a 64-character label limit, a completed Job still showing its instance as `RUNNING`, and an expired CLI sign-in surfacing as a generic "context deadline exceeded". Ours: the first export assumed local inode and rename semantics on a bucket mount; one workload deadline was too short for our own runtime. | Yes, for bounded single-GPU evaluation. Plan for capacity waits and keep buckets few. |
+| Nebius AI Cloud Compute (VM) | Before Serverless: one L40S VM, and a snapshot-cloned H100, for the baseline, search, reduction and M3 parallel-replay work. | GPU capacity, a stoppable VM, snapshot cloning and serial logs. M3 completed 48/48 valid equal-work episodes and measured 3.715× warm throughput at four evaluator workers versus one. | Provider side: exact-shape capacity advice showed `LOW` or zero slots and two starts timed out with `NotEnoughResources`; OAuth expired during a start request; the tenant's non-GPU vCPU quota was 0. Ours: project-selection, SSH-rule and key-path mistakes. | Yes for reproducible GPU evaluation, though we moved to Serverless for cost and lifecycle reasons. |
+| Nebius Container Registry, Object Storage and Secret Stash (MysteryBox) | Private image registry, results buckets with one-day expiry and a stored Hugging Face token for Jobs. | The registry was one CLI command and documented as free; same-project pulls needed no credentials; bucket policies and lifecycle expiry made retention and scoped download keys easy. | The bucket mount lacks inode identity and atomic rename (documenting this would help); the 10-bucket policy quota forced us to reuse one bucket per diagnosis. | Yes. |
+| Nebius Token Factory with NVIDIA Nemotron 3 Nano, Super and Ultra | Text-only calls: Nano for early explanations and research summaries, Ultra for scenario hypotheses and explanations, Super for instruction paraphrases (model per task chosen by measurement, ADR 0030). Each call cost well under one cent (estimated). | Fast (7–35 s), cheap, OpenAI-compatible; usage and latency reporting supported auditing; `chat_template_kwargs: {"enable_thinking": false}` was honoured, cutting output from 4096 reasoning tokens to about 950. | Provider side: the model cookbook and quickstart disagree on identifier case and base URL. Ours: a 600-token limit was too small for the first attempt; we had to precompute counts because the models miscount. Model quality: Nano mislabelled applied entities as "reverted", Super inverted a correct prediction, Ultra stated the checked facts correctly. | Yes, for human-reviewed summaries, hypotheses and wording, with outputs checked against measured evidence; not as an autonomous root-cause authority. |
+| Tavily Search | Source-linked public research for the earlier occlusion cases (run by hand, three fixed queries per case). | Onboarding was an API key and one endpoint; 3 credits of the free monthly plan per case; the generic occlusion query surfaced a directly relevant paper and a GR00T LIBERO issue. | The narrow numeric query drifted to unrelated industrial pages. Descriptive queries beat literal measurements. | Yes, for source discovery; summaries still need human review. |
+| NVIDIA GR00T N1.7 and LIBERO checkpoints | The robot policy under test: the four suite checkpoints `libero_{object,10,spatial,goal}`. | 20/20 nominal baseline episodes on LIBERO-Object; repeatable recorded behaviour for the failure, reduction and breadth experiments. | The gated Cosmos-Reason2-2B dependency returned a 403 until the account holder accepted its terms (model onboarding, not a Nebius fault). Weights take about 6 minutes to download on every Job. Unperturbed GR00T passed only 2 of 5 from one LIBERO-Goal start. | Yes, with the task and simulator limits stated. |
+| AllenAI VLA evaluation harness and LIBERO image | Evaluator, simulator, recordings and the LeRobot model-server adapter. | Structured aggregates, traces, SQLite recordings and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user; generic schema warnings appeared on successful episodes; the pinned CLI can leave its Docker client child alive after the evaluator exits (an upstream lifecycle risk, not a Nebius or NVIDIA fault). | Yes for the pinned benchmark, with version and cleanup checks. |
+
+## Jethro's first-hand notes (to be filled in by Jethro)
+
+Left empty on purpose: the entries above are what the tools did when we drove
+them, not how onboarding felt to a new user. Jethro adds his own impressions
+before submission.
+
+- Onboarding (account, credits, first hello-world; the exact screen or
+  command, how long it took, what blocked you, what helped):
+  -
+- CLI sign-in (the daily interactive expiry, the workarounds, what you would
+  want instead):
+  -
+- Serverless capacity and quota (waiting for an L40S, quota and bucket
+  limits, how you felt about the cost controls):
+  -
+- Token Factory (key setup, model choice, speed, cost, anything surprising):
+  -
+- GR00T and Nemotron quality (where GR00T surprised you; where Nemotron's
+  explanations helped or misled):
+  -
+- Would you use these again, and one specific improvement to ask each
+  provider for:
+  -
 
 ## October 10 first Serverless Job and evidence recovery
 
@@ -205,11 +235,11 @@ included in this log.
 
 The reviewed CLI authenticated with a locally configured ignored inference
 key, sent only deidentified evidence metadata/IDs, and stored an immutable
-factual fallback. The global endpoint returned1,096input and600output tokens
-in8.703seconds. Usage reporting and exact model discovery were useful for
+factual fallback. The global endpoint returned 1,096 input and 600 output tokens
+in 8.703 seconds. Usage reporting and exact model discovery were useful for
 auditing the request without exposing credentials or robot recordings.
 
-No interpretation passed validation. Hitting our600-token ceiling suggests
+No interpretation passed validation. Hitting our 600-token ceiling suggests
 truncation, but the retained record does not establish finish reason or hosted
 reasoning behaviour. This is not evidence of an API outage or low model quality.
 The onboarding distinction remains important: AI Cloud CLI sign-in and an
@@ -217,7 +247,7 @@ inference key are separate. Documentation did not establish the exact hosted
 thinking toggle in our reviewed sources; do not substitute self-hosted options.
 
 Estimated cost was US$0.00020976 at published rates; actual billing is unknown.
-The conservativeUS$0.02 reservation remains consumed with no automatic retry.
+The conservative US$0.02 reservation remains consumed with no automatic retry.
 We cannot yet recommend reuse based on explanation quality; a useful follow-up
 output and Jethro's first-hand feedback remain needed. See the
 [pilot record](docs/experiments/m5-nemotron-pilot.md). Local parser, test-fixture,
@@ -225,9 +255,9 @@ asset-resolution and viewer defects are logged separately in `docs/dev-log.md`.
 
 ### October 6: Separately approved longer attempt
 
-Same model, prompt, metadata packet and JSON mode; fixed4096-token output
-limit and90-second socket timeout. The request completed with1096input and
-2142output tokens in20.656seconds. EstimatedUS$0.00057984; posted billing is
+Same model, prompt, metadata packet and JSON mode; fixed 4096-token output
+limit and 90-second socket timeout. The request completed with 1096 input and
+2142 output tokens in 20.656 seconds. Estimated US$0.00057984; posted billing is
 unknown. No videos were sent, no original evidence changed, no GPU started.
 
 The endpoint supplied locally valid structured output and IDs that navigate
