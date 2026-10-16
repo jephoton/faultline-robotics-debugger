@@ -1,4 +1,4 @@
-"""The static gallery: ``faultline export`` (ADR 0033, M7a step 5 prepares it; publishing needs Jethro's go).
+"""The static gallery: ``faultline export`` (ADR 0033; this prepares the files, publishing them is a separate decision).
 
 The export is a folder of plain files that any static host can serve: the front-end bundle, the library as JSON
 (``data/session.json``, ``data/library.json``, ``data/library/<id>.json``, the same shapes the local server
