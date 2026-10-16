@@ -10,6 +10,7 @@ import { CasePage } from './pages/CasePage';
 import { HomePage } from './pages/HomePage';
 import { NewDiagnosisPage } from './pages/NewDiagnosisPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { RunPage } from './pages/RunPage';
 
 export const ROUTER_FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true } as const;
 
@@ -23,6 +24,7 @@ export function AppRoutes({ data }: { data: AppData }) {
           <Route index element={<HomePage />} />
           <Route path="case/:id" element={<CasePage />} />
           <Route path="new" element={<NewDiagnosisPage />} />
+          <Route path="run/:run" element={<RunPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

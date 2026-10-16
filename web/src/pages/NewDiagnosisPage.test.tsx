@@ -180,6 +180,8 @@ describe('step 3: review and start', () => {
     expect((init.headers as Record<string, string>)['X-Faultline-Token']).toBeTruthy();
     const dry = postsTo(view, '/api/specs/dry-run')[0] as [string, RequestInit];
     expect(JSON.parse(dry[1].body as string).yaml).toBe(body.yaml);
+    // ...and lands on the live run page.
+    expect(await screen.findByRole('heading', { level: 1, name: 'new-diagnosis' })).toBeInTheDocument();
   });
 
   it('does not start a Nemotron run without a key, and says what to do', async () => {
