@@ -158,6 +158,9 @@ task failures. Evidence must first be downloaded into `artifacts/`.
 
 ## Documentation
 
+- [Where to look](docs/README.md): an index of the quickstart, results,
+  decisions and internal history.
+- [Quickstart: run a diagnosis](docs/setup/diagnose.md) (Python 3.10 or 3.11).
 - [Project plan and milestones](PROJECT_PLAN.md) and the
   [current handoff state](docs/codex-handoff/STATE.md).
 - [Decision records](docs/decisions/) (ADRs) for every accepted design choice.
@@ -180,4 +183,6 @@ effects. Model training and formal verification are out of scope.
 
 Original project code is licensed under the [MIT License](LICENSE).
 External models, datasets and other third-party assets keep their own terms;
-this repository does not relicense model weights or assets.
+this repository does not relicense model weights or assets. See
+[NOTICE.md](NOTICE.md) for the third-party components and where their terms
+live.
