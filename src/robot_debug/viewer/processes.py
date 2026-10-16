@@ -43,7 +43,10 @@ STEP_ORDER = {
     "replay": ["replay"],
 }
 _CONTINUATION = re.compile(r"reduce([2-9])\Z")
-_WINDOWS_PATH = re.compile(r"[A-Za-z]:[\\/][^\s\"']*")
+# A drive letter not preceded by a letter (so ``s:/`` in ``https://`` is not one), then the rest of the path:
+# folder names may hold spaces ("First Last"), so it runs to the end of the line, a quote or bracket, or a
+# ``:``/``;``/``,`` followed by a space (the sentence continuing after the path).
+_WINDOWS_PATH = re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/](?:(?![:;,](?:\s|$))[^\"'`<>|()\[\]{}\r\n])*")
 _POSIX_PATH = re.compile(r"(?<![\w.~:/-])/(?:[\w.@+-]+/)+[\w.@+-]*")
 
 

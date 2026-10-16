@@ -331,6 +331,49 @@ class ProgressTests(Folders):
             px.run_progress(self.root, folder.name, probe_for())
 
 
+class ScrubTextTests(unittest.TestCase):
+    """The text scrubber hides local paths without damaging URLs (review L3)."""
+
+    OMITTED = "[local path omitted]"
+
+    def test_https_urls_are_left_alone(self):
+        for text in ("see https://example.invalid/docs/page", "http://example.invalid:8080/a/b", "ftp://host/x",
+                     "fetched https://example.invalid/a/b.json ok", "file:///not-a-path"):
+            with self.subTest(text=text):
+                scrubbed = px.scrub_text(text)
+                self.assertNotIn("local path", scrubbed)
+                self.assertIn("//", scrubbed)
+
+    def test_windows_paths_with_spaces_are_removed_whole(self):
+        for text, hidden in (
+                (r"Run folder: C:\Users\First Last\Documents\runs\demo", ("First", "Last", "Documents")),
+                ("loaded D:/Work Files/Jane Doe/spec.yaml", ("Work", "Jane", "Doe", "spec.yaml")),
+                (r"error in 'C:\Users\First Last\x.json' while", ("First", "Last")),
+                (r'open "C:\Program Files\Faultline\a.log"', ("Program", "Faultline"))):
+            with self.subTest(text=text):
+                scrubbed = px.scrub_text(text)
+                self.assertIn(self.OMITTED, scrubbed)
+                for word in hidden:
+                    self.assertNotIn(word, scrubbed)
+
+    def test_text_around_a_quoted_path_survives(self):
+        scrubbed = px.scrub_text(r"error in 'C:\Users\First Last\x.json' while loading")
+        self.assertTrue(scrubbed.endswith("' while loading"), scrubbed)
+
+    def test_posix_home_paths_are_removed(self):
+        for text in ("saved to /home/someone/work/runs/demo", "at /Users/someone/Library/x.json done",
+                     "log /tmp/pytest-of-someone/run1/log.txt"):
+            with self.subTest(text=text):
+                scrubbed = px.scrub_text(text)
+                self.assertIn(self.OMITTED, scrubbed)
+                self.assertNotIn("someone", scrubbed)
+
+    def test_a_url_next_to_a_path_keeps_the_url(self):
+        scrubbed = px.scrub_text("fetched https://example.invalid/a/b to /home/someone/x/y")
+        self.assertIn("https://example.invalid/a/b", scrubbed)
+        self.assertNotIn("someone", scrubbed)
+
+
 class StopTextTests(unittest.TestCase):
     def test_the_table_has_the_contract_sentences(self):
         self.assertEqual(stop_text("budget_exhausted"),
