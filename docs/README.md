@@ -9,6 +9,9 @@ suite, task, start and perturbation family; none is a general claim.
   NVIDIA and Nebius are used.
 - [Quickstart: run a diagnosis](setup/diagnose.md): setup, specs, dry run,
   resume, replay.
+- The control panel: `faultline ui` (README, "Control panel"), a browser UI
+  over the same commands; its design is
+  [ADR 0033](decisions/0033-control-panel-ui.md).
 - [Hackathon tool feedback](../FEEDBACK.md) and
   [third-party notices](../NOTICE.md).
 - [Learning guide](../PROJECT-LEARNING-GUIDE.md) in plain language, and the
@@ -55,6 +58,7 @@ All in [decisions/](decisions/). The ones that shape the product:
 | [0030](decisions/0030-nemotron-model-per-task.md) | Which Nemotron model does which job, chosen by measurement |
 | [0031](decisions/0031-faultline-diagnose.md) | One command that owns the whole cloud lifecycle and spend cap |
 | [0032](decisions/0032-breadth-pack.md) | Four suites, image catalog, paraphrase and scene families |
+| [0033](decisions/0033-control-panel-ui.md) | The control panel: a browser UI over the CLI, and the static gallery |
 | [0026](decisions/0026-m6-camera-reliance-and-scalar-families.md) | Camera reliance and scalar image families (M6) |
 | [0025](decisions/0025-m3-batched-inference-experiment.md) | The batched-inference experiment |
 | [0024](decisions/0024-m5d-tavily-research-context.md) | Tavily research context |

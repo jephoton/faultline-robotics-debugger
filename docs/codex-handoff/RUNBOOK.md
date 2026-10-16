@@ -11,44 +11,49 @@ source path for direct module execution:
 export PYTHONPATH=src
 ```
 
-## Viewer
+## Control panel (viewer)
 
-Faultline is the official name. Updated package installs expose
-`faultline-viewer`; the existing `robot-debug-viewer` command is retained as
-a compatibility alias. Direct `robot_debug.viewer.server` module commands
-below remain valid. The GitHub repository is now
+Faultline is the official name. The GitHub repository is
 `https://github.com/jephoton/faultline-robotics-debugger`; the local directory
-remains `nebius-nvidia-hackathon`.
-
-Confirm the configured remote without changing it:
+remains `nebius-nvidia-hackathon`. Confirm the remote without changing it:
 
 ```powershell
 git remote get-url origin
 ```
 
-Current Windows main viewer with registered case explanations:
-
-```powershell
-$env:PYTHONPATH = Join-Path (Get-Location) 'src'
-C:/Windows/py.exe -3.11 -m robot_debug.viewer.server --artifacts artifacts --cases artifacts/cases --host 127.0.0.1 --port 8765
-```
-
-Reports are local immutable sidecars; opening or refreshing the viewer never
-calls the provider. An absent interpretation is an honest factual fallback,
-not a successful model explanation. API checks do not replace visual browser QA.
+Start the control panel (React app served by the standard-library server;
+ADR 0033). `faultline-viewer` and `robot-debug-viewer` remain aliases.
 
 ```bash
-.venv/bin/python -m robot_debug.viewer.server \
-  --artifacts artifacts \
-  --port 8765
+PYTHONPATH=src python -B -m robot_debug.cli ui --artifacts artifacts --port 8765
+# the shipped demo case only:
+PYTHONPATH=src python -B -m robot_debug.cli ui --artifacts demo/root --port 8765
 ```
+
+It binds 127.0.0.1; controls (start, stop, resume, replay) need the page's
+session token and a same-origin request, and one paid run runs at a time.
+Opening or refreshing a page never calls a cloud provider; only Start, Stop,
+Resume and Replay do, through the CLI. Reports are local sidecars; an absent
+interpretation is an honest fallback, not a model explanation.
 
 Verify:
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8765/api/health
-Invoke-RestMethod http://127.0.0.1:8765/api/runs -TimeoutSec 30
+```bash
+curl -s http://127.0.0.1:8765/api/health
+curl -s http://127.0.0.1:8765/api/library | head -c 300
 ```
+
+Front end (`web/`, Node 24): `npm --prefix web ci`, then
+`npm --prefix web run typecheck`, `npm --prefix web test -- --run`, and
+`npm --prefix web run build`, which rewrites the committed bundle in
+`src/robot_debug/viewer/app/` (CI fails if it is stale). `npm --prefix web run
+dev:mock` runs the app on mock data without the Python server.
+
+Stop a run from a terminal: `faultline stop artifacts/runs/<run-folder>`, then
+`faultline diagnose --resume artifacts/runs/<run-folder>`.
+
+Static gallery: `faultline export --out <folder>` (then serve the folder with
+any static host; publishing needs Jethro's go).
 
 ## Tests
 
