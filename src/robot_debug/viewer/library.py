@@ -18,7 +18,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from robot_debug.case_register import list_diagnoses, read_diagnosis
 from robot_debug.viewer import processes
