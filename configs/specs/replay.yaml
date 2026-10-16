@@ -1,5 +1,7 @@
 # For `faultline replay CASE_DIR --spec replay.yaml`: one small Job re-runs a saved case.
 # Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+# To replay against a different checkpoint (for example a retrained policy), add `policy.checkpoint`;
+# see docs/setup/diagnose.md. `faultline replay CASE --spec this-file --expect fixed|reproduces` sets the verdict you expect.
 faultline: 1
 name: replay-soup
 mode: replay

@@ -1,4 +1,6 @@
 # Mode 1, a known failing start: screen a reference pool, reduce the failure, report.
+# To bring your own failing start instead of a benchmark start, replace `start: 14` with
+#   import: my-failing-start.json   (a start-state file for this suite and task; see docs/setup/diagnose.md)
 # Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
 faultline: 1
 name: soup-start14
@@ -9,9 +11,11 @@ scenario:
   start: 14
   reference: auto
 budget:
-  max_spend_usd: 3.0
+  # `faultline diagnose --dry-run` puts the worst case of the required Jobs (screen + first reduction) at US$3.09;
+  # up to three optional continuations come on top, each only if the spend cap allows it.
+  max_spend_usd: 3.5
   max_hours: 2
-  max_candidates: 36
+  max_candidates: 36            # the most the 3000 s reduce deadline fits on LIBERO-10 (the validator allows up to 60)
 nemotron: {hypothesis: true, explain: true}
 backend:
   kind: nebius

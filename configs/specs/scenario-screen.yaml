@@ -9,9 +9,10 @@ scenario:
   screen: {starts: "10-49", confirm: 4}
   reference: auto
 budget:
+  # Dry-run worst case of the required Jobs is US$3.23; continuations are optional and capped by this value.
   max_spend_usd: 4.0
   max_hours: 3
-  max_candidates: 36
+  max_candidates: 36            # the most the 3000 s reduce deadline fits on LIBERO-10 (the validator allows up to 60)
 nemotron: {hypothesis: true, explain: true}
 backend:
   kind: nebius
