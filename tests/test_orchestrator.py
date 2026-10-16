@@ -392,6 +392,26 @@ def _write(config):
     return Path(handle.name)
 
 
+class JobNaming(Base):
+    def test_job_tag_includes_the_seconds_so_runs_in_one_minute_do_not_collide(self):
+        first, _b, _t, _l, _o = self.world([], run_dir=None)
+        later = MOMENT + dt.timedelta(seconds=7)
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        spec = spec_for()
+        other_dir = orch.create_run_dir(Path(temp.name), spec, None, later)
+        other, *_rest = self.world([], run_dir=other_dir)
+        self.assertEqual(first.tag, "261014101530")
+        self.assertEqual(other.tag, "261014101537")
+        self.assertNotEqual(first.job_name("screen", 0), other.job_name("screen", 0))
+
+    def test_the_longest_job_name_still_fits_the_provider_limit(self):
+        spec = spec_for(name="a" * 40)
+        runner, *_rest = self.world([], spec=spec)
+        longest = runner.job_name("reduce4", 5)
+        self.assertLessEqual(len(longest), 63)
+
+
 class Mode1EndToEnd(Base):
     def test_screen_reduce_one_continuation_report_case_explanation_register(self):
         runner, backend, tools, ledger, lines = self.world(full_script())

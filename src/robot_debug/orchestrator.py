@@ -749,7 +749,8 @@ class Orchestrator:
         self._inflight: Optional[Tuple[Any, str]] = None
         self.cancel_outcome: Optional[Tuple[str, str]] = None
         match = _STAMP.search(self.run_dir.name)
-        self.tag = (match.group(1)[2:] + match.group(2)[:4]) if match else "000000" + "0000"
+        # YYMMDDHHMMSS: to the second, so two runs of one spec in the same minute cannot share Job names.
+        self.tag = (match.group(1)[2:] + match.group(2)) if match else "000000" + "000000"
         self.notes: List[str] = []
 
     # -- output -------------------------------------------------------------------------
