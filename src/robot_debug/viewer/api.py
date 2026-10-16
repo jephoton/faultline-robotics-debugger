@@ -141,6 +141,8 @@ class Api:
             response = handler(Request(params, self._query(query_string), body, headers))
         except ApiError as error:
             return error.status, error.payload()
+        except TimeoutError:                        # the client declared a body and stopped sending it
+            return 408, ApiError(408, "The request body did not arrive in time.").payload()
         except Exception:                           # noqa: BLE001 - never a traceback in a response
             logging.getLogger("robot_debug.viewer").exception("POST %s failed", path)
             return 500, ApiError(500, "Something went wrong in the viewer; its console has the details.").payload()
