@@ -15,10 +15,12 @@ interface Props {
   importFile: ImportFile | null;
   /** Starts the run for a fresh dry run of the same spec; resolves with the run folder name. */
   launch: (plan: DryRun) => Promise<{ run: string }>;
-  /** Heading level-3 text for the confirm button, for example "Start diagnosis" or "Start replay". */
+  /** Label of the confirm button, for example "Start diagnosis" or "Start replay". */
   startLabel?: string;
   /** The sentence above the confirm button about cost. */
   consequence?: string;
+  /** Heading level of the three sections, so the page's outline stays in order. */
+  headingLevel?: 2 | 3 | 4;
 }
 
 function usesNemotron(yaml: string): boolean {
@@ -33,7 +35,9 @@ export function StepReview({
   launch,
   startLabel = 'Start diagnosis',
   consequence = 'Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any time.',
+  headingLevel = 2,
 }: Props) {
+  const Heading = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
   const api = useApi();
   const navigate = useNavigate();
   const { refreshRuns } = useAppData();
@@ -87,7 +91,7 @@ export function StepReview({
   return (
     <div className="review">
       <section aria-labelledby="review-what">
-        <h3 id="review-what">What will run</h3>
+        <Heading id="review-what">What will run</Heading>
         <dl className="facts">
           <dt>Name</dt>
           <dd className="mono">{yamlValue(yaml, 'name') ?? 'not set'}</dd>
@@ -109,7 +113,7 @@ export function StepReview({
       </section>
 
       <section aria-labelledby="review-plan">
-        <h3 id="review-plan">Dry run</h3>
+        <Heading id="review-plan">Dry run</Heading>
         <div aria-live="polite">
           {plan.loading && <p className="muted">Working out the plan.</p>}
           {plan.error && (
@@ -135,7 +139,7 @@ export function StepReview({
       </section>
 
       <section aria-labelledby="review-env">
-        <h3 id="review-env">This machine</h3>
+        <Heading id="review-env">This machine</Heading>
         {env.loading && <p className="muted">Checking sign-in and keys.</p>}
         {env.error && <p className="muted">The environment could not be checked ({env.error.message}). You can still try to start.</p>}
         {env.data && <EnvironmentList environment={env.data} />}

@@ -153,7 +153,7 @@
 .review section {
   margin-bottom: var(--space-5);
 }
-.review h3 {
+.review :is(h2, h3, h4) {
   margin-bottom: var(--space-2);
 }
 .review__confirm {

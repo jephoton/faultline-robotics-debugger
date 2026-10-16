@@ -144,7 +144,7 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code
         <p>
           Every spec needs <code>budget.max_spend_usd</code> and <code>budget.max_hours</code>. Two options are worth knowing:
         </p>
-        <h4>Bring your own failing start</h4>
+        <h3>Bring your own failing start</h3>
         <p>
           Scenario mode takes exactly one of <code>start</code> (a benchmark start index), <code>screen</code> (a range to search) or{' '}
           <code>import</code> (a file of your own):
@@ -157,7 +157,7 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code
           a different scene, confirms your start fails at least 4 of 5 attempts, finds the nearest benchmark start that passes, and
           reduces the differences between them.
         </p>
-        <h4>Test a different checkpoint</h4>
+        <h3>Test a different checkpoint</h3>
         <p>By default a Job serves the pinned GR00T N1.7 checkpoint for the spec&rsquo;s suite. To test a retrained policy, name it:</p>
         <Code>{`policy:
   suite: libero_10

@@ -84,7 +84,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
       )}
       <nav className="sidebar__nav" aria-label="Runs and cases">
         {local && (
-          <section className="nav-section" aria-labelledby="nav-running">
+          <div className="nav-section" role="group" aria-labelledby="nav-running">
             <h2 className="nav-label" id="nav-running">
               Running
             </h2>
@@ -97,7 +97,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
                 ))}
               </ul>
             )}
-          </section>
+          </div>
         )}
         {libraryState === 'loading' && <p className="nav-empty">Loading cases.</p>}
         {libraryState === 'error' && <p className="nav-empty">Cases could not be loaded.</p>}
@@ -107,7 +107,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
           if (rows.length === 0) return null;
           const id = `nav-${group.kind}`;
           return (
-            <section className="nav-section" aria-labelledby={id} key={group.kind}>
+            <div className="nav-section" role="group" aria-labelledby={id} key={group.kind}>
               <h2 className="nav-label" id={id}>
                 {group.title}
               </h2>
@@ -116,7 +116,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
                   <CaseRow key={item.id} item={item} onNavigate={onNavigate} />
                 ))}
               </ul>
-            </section>
+            </div>
           );
         })}
       </nav>

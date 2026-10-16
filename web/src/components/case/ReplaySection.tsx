@@ -104,6 +104,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
             yaml={yaml}
             importFile={null}
             startLabel="Start replay"
+            headingLevel={4}
             consequence="A replay creates one cloud Job on your Nebius account and spends real credit, up to the worst case above."
             launch={(plan) => api.startReplay(detail.id, { yaml, plan_hash: plan.plan_hash, ...(expect ? { expect } : {}) })}
           />
