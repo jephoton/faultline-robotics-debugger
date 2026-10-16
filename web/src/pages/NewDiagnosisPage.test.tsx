@@ -222,6 +222,27 @@ describe('step 3: review and start', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('A run is already active. Wait for it to finish or stop it first.');
   });
 
+  it('never offers Start again after a start that may have launched the run (504)', async () => {
+    const user = userEvent.setup();
+    const view = await openNew({ launchStatus: 504 });
+    await toReview(user);
+    await screen.findByText('Total worst case');
+    await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/may have started/);
+    expect(screen.queryByRole('button', { name: /start diagnosis/i })).not.toBeInTheDocument();
+    expect(postsTo(view, '/api/runs')).toHaveLength(1);
+  });
+
+  it('sends one start for a double click', async () => {
+    const user = userEvent.setup();
+    const view = await openNew();
+    await toReview(user);
+    await screen.findByText('Total worst case');
+    const button = screen.getByRole('button', { name: /start diagnosis/i });
+    await user.dblClick(button);
+    await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
+  });
+
   it('goes back to the settings without losing them', async () => {
     const user = userEvent.setup();
     await openNew();

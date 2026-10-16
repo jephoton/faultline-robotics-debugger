@@ -36,6 +36,8 @@ export interface MockOptions {
   activeDemo?: boolean;
   /** Replace the environment checks (tests). */
   environment?: EnvironmentChecks;
+  /** Answer POST /api/runs with this error status (tests of an ambiguous start, such as a 504). */
+  launchStatus?: number;
 }
 
 export const MOCK_TOKEN = sessionLocal.token as string;
@@ -116,6 +118,7 @@ function failure(status: number, error: string, errors: FieldError[] = []): Mock
 export function createMockServer(options: MockOptions = {}) {
   const mode = options.mode ?? 'local';
   const activeDemo = options.activeDemo ?? true;
+  const launchStatus = options.launchStatus;
   const started = new Map<string, number>();
   const stopped = new Set<string>();
   let counter = 0;
@@ -217,6 +220,7 @@ export function createMockServer(options: MockOptions = {}) {
         return json(200, mockDryRun(yaml, file?.content));
       }
       if (path === '/api/runs') {
+        if (launchStatus) return failure(launchStatus, 'The run did not report its folder in time.');
         const yaml = String(body.yaml ?? '');
         const file = body.import_file as { content?: string } | undefined;
         const fresh = mockDryRun(yaml, file?.content);

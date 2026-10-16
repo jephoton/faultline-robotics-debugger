@@ -45,6 +45,9 @@ export function StepReview({
   const env = useAsync(() => api.environment(), [api]);
   const [problems, setProblems] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);
+  // A start that timed out or failed on the server may still have launched the run: never offer Start again
+  // from this page, so one click cannot become two paid runs.
+  const [uncertain, setUncertain] = useState(false);
 
   const mode = yamlValue(yaml, 'mode') ?? 'scenario';
   const check = (key: string) => env.data?.checks.find((entry) => entry.key === key);
@@ -74,6 +77,7 @@ export function StepReview({
   }
 
   async function start() {
+    if (starting || uncertain) return;
     const found = blockers();
     setProblems(found);
     if (found.length > 0 || !plan.data) return;
@@ -83,6 +87,15 @@ export function StepReview({
       refreshRuns();
       navigate(`/run/${encodeURIComponent(result.run)}`);
     } catch (error) {
+      refreshRuns();
+      if (mayHaveStarted(error)) {
+        setUncertain(true);
+        setProblems([
+          'The run may have started even though this page did not hear back. Check Running in the sidebar ' +
+            'before starting anything again; it appears there within a minute if it started.',
+        ]);
+        return;
+      }
       setProblems([error instanceof ApiError ? error.message : 'The run could not be started.']);
       setStarting(false);
     }
@@ -165,9 +178,19 @@ export function StepReview({
       <p className="review__confirm">
         {consequence}
       </p>
-      <button type="button" className="btn" onClick={() => void start()} aria-busy={starting} data-testid="start-diagnosis">
-        <Icon name="play" /> {startLabel}
-      </button>
+      {uncertain ? (
+        <p className="muted">Start is off on this page for safety. Open Running in the sidebar to follow the run.</p>
+      ) : (
+        <button type="button" className="btn" onClick={() => void start()} aria-busy={starting} data-testid="start-diagnosis">
+          <Icon name="play" /> {startLabel}
+        </button>
+      )}
     </div>
   );
+}
+
+/** A refusal (4xx) means nothing started; a timeout, a lost connection or a server error might not. */
+function mayHaveStarted(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 0 || error.status >= 500;
 }
