@@ -1,8 +1,9 @@
 # Two robot projects: what you would learn and build
 
-**October 13 update:** Idea B (failure diagnosis) became **Faultline**.
-Sections 1–7 are the original September 12 decision guide. **Section 8** is
-new: the main ideas learned while building Faultline, in plain language.
+**October 13 update (extended October 16):** Idea B (failure diagnosis)
+became **Faultline**. Sections 1–7 are the original September 12 decision
+guide. **Section 8** is new: the main ideas learned while building Faultline,
+in plain language.
 
 Written September 12, 2026. This is a beginner-oriented decision guide, not a finalized architecture.
 
@@ -499,3 +500,45 @@ grasp entirely; covering the same patch on the wrist camera alone did
 nothing. The working hypothesis is that the wrist view drives grasping and
 the third-person view drives transport. It is a hypothesis because only one
 task and seed were tested.
+
+### Some failures need several causes at once
+
+On LIBERO-10, one start made GR00T fail reliably while a nearby start passed.
+Testing each difference alone found nothing: no single moved object caused
+it. Delta debugging over combinations showed the failure needs five small
+shifts together, each at nearly full size. Real failures are often like this,
+which is why a debugger has to search combinations, and why it needs a
+bigger budget for them (the first reduction ran out at 30 candidates).
+
+### Necessary is not the same as sufficient
+
+Nemotron predicted that the soup's position caused that failure. Two
+measured questions settle such a claim: is it **necessary** (does the task
+pass when you put the soup back)? Yes. Is it **sufficient** (does moving only
+the soup make it fail)? No. The prediction was half right, and saying so
+precisely is more useful than "confirmed" or "refuted".
+
+### Choose a model by measuring it
+
+Bigger is not automatically better. Running Nemotron Nano, Super and Ultra on
+the same input and checking each answer against known facts picked Ultra to
+explain cases (Nano confused "moved" with "put back"), Super to write
+paraphrases (Nano changed the target object, Ultra's rewordings were too
+similar), and Nano for research summaries (the bigger models broke the
+formatting rules). Clearer input mattered as much as the model.
+
+### Budgets need a worst case you can trust
+
+A cloud run can outlive your laptop, your network or your sign-in. Faultline
+reserves each Job's true worst case before submitting it (the provider stops
+the Job at a fixed timeout no matter what) and, when it loses contact, keeps
+the Job resumable so a later run reads what really happened and corrects the
+charge instead of paying twice.
+
+### "No failure" is a result too
+
+The breadth pack found GR00T robust to JPEG compression, colour casts, dead
+pixels, very dim lighting and twenty rewordings of its instructions within
+the tested ranges. For a robotics team that is useful evidence, reported per
+task and range, as long as it is not stretched into a general claim.
+
