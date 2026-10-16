@@ -48,17 +48,17 @@ family, not a general claim.
   Replaying the case two days later with `faultline replay` still reproduced
   it ([mode 1](docs/experiments/m7-scenario-reduction.md)).
 
-- **Minimal occlusion:** a black rectangle over the upper-right 14% of the
+- **Minimal occlusion (LIBERO-Object task 0, start 0):** a black rectangle over the upper-right 14% of the
   third-person camera reproducibly breaks the task (reduced from 25%). The
   robot still grasps the soup but times out carrying it
   ([M4](docs/experiments/m4-reducer.md)). The same reduction was reproduced
   from an imported external demonstration
   ([M5B](docs/experiments/m5b-external-replay.md)).
-- **Camera roles (hypothesis):** blacking out the wrist camera as well stops
+- **Camera roles (hypothesis, same task):** blacking out the wrist camera as well stops
   the grasp entirely, while the same rectangle on the wrist camera alone is
   harmless. The wrist view appears to drive grasping and the third-person
   view the carry ([M6](docs/experiments/m6-camera-and-scalar-families.md)).
-- **Thresholds:** the policy fails reliably from a blur of sigma 3.9 px and
+- **Thresholds (same LIBERO-Object task 0):** the policy fails reliably from a blur of sigma 3.9 px and
   from Gaussian noise of sigma 95 (of 255), but never under darkening down to
   5% brightness or contrast down to 10% (M6).
 - **Robust within the tested ranges (breadth pack, one task and start per
