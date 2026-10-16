@@ -6,6 +6,7 @@ import type { Session } from './api/types';
 import { Shell } from './components/Shell';
 import { usePoll } from './lib/polling';
 import { useAsync } from './lib/useAsync';
+import { CasePage } from './pages/CasePage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -19,6 +20,7 @@ export function AppRoutes({ data }: { data: AppData }) {
       <Routes>
         <Route element={<Shell session={data.session} items={data.items} runs={data.runs} libraryState={data.libraryState} />}>
           <Route index element={<HomePage />} />
+          <Route path="case/:id" element={<CasePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

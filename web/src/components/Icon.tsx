@@ -27,6 +27,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8 12h8" />
     </>
   ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.7v.3" />
+    </>
+  ),
+  tick: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  minus: <path d="M6 12h12" />,
   stop: <rect x="5" y="5" width="14" height="14" rx="1.5" />,
   clock: (
     <>
