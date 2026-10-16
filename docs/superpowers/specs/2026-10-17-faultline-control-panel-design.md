@@ -51,8 +51,8 @@ the home page's run list takes about two minutes to load on a full
 | Endpoint | Returns |
 | --- | --- |
 | `GET /api/session` | `mode` (`local`), whether controls are enabled, the per-session control token, version |
-| `GET /api/cases` | Every case: registered diagnoses plus the converted M4 case, with fault code, kind, verdict, suite, task |
-| `GET /api/cases/{id}` | The case, its diagnosis entry, explanation, `report.md` text, the run's step timeline and ledger summary when the run folder exists, and replay results |
+| `GET /api/library` | Every case: registered diagnoses plus the converted M4 case, with fault code, kind, verdict, suite, task |
+| `GET /api/library/{id}` | The case, its diagnosis entry, explanation, `report.md` text, the run's step timeline and ledger summary when the run folder exists, and replay results |
 | `GET /api/runs/active` | Runs whose process is alive (started from the UI or a terminal) |
 | `GET /api/runs/{run}/progress` | Steps, current Job state, spend (spent, reserved, cap), elapsed against the hour limit, last log lines |
 | `GET /api/evidence` | The old episode catalog, cached by folder modification time; never two scans at once |
@@ -60,7 +60,7 @@ the home page's run list takes about two minutes to load on a full
 | `GET /media/...` | Videos under the artifact root, as now |
 
 The static export writes the same shapes to `data/session.json`
-(`mode: static`, no controls), `data/cases.json` and `data/cases/{id}.json`.
+(`mode: static`, no controls), `data/library.json` and `data/library/{id}.json`.
 The app reads `/api/session` and falls back to `data/session.json`.
 
 ### Control APIs
@@ -74,7 +74,7 @@ All are `POST`, enabled only in local mode, and mirror a CLI command:
 | `/api/runs` (YAML text, plan hash, optional import file) | `diagnose`; refused unless the plan hash matches a fresh dry run of the same spec |
 | `/api/runs/{run}/resume` | `diagnose --resume` |
 | `/api/runs/{run}/stop` | New `faultline stop RUN_DIR` (below) |
-| `/api/cases/{id}/replay` (replay spec, expect, plan hash) | `replay --spec ... --expect ...`, with its own dry run and confirm |
+| `/api/library/{id}/replay` (replay spec, expect, plan hash) | `replay --spec ... --expect ...`, with its own dry run and confirm |
 
 The UI writes each spec (and an uploaded import file, size-limited as in
 `scenario_import.py`) into an ignored folder, `artifacts/specs-ui/`, and runs
@@ -93,8 +93,8 @@ cancels the current Nebius Job through the backend, waits until the provider
 reports a terminal state, settles that attempt in the ledger at measured
 cost (or keeps it `unconfirmed` for `--resume` to settle, as after a sign-in
 expiry), records the step as `stopped_by_user` and exits. The run stays
-resumable. The cancel command and its terminal states are verified against
-the Nebius CLI before implementation.
+resumable. The backend already cancels with `nebius ai job cancel` (the
+watchdog path), so Stop reuses it through a stop hook in `wait`.
 
 ### Safety boundaries
 
