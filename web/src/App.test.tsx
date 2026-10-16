@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { App } from './App';
 
-describe('App scaffold', () => {
+describe('App', () => {
   it('renders the product name', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Faultline' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Faultline' })).toBeInTheDocument();
   });
 });
