@@ -26,7 +26,8 @@ from robot_debug.viewer.library import Library
 
 VERCEL_CONFIG = {"rewrites": [{"source": "/((?!assets/|data/|media/).*)", "destination": "/index.html"}]}
 FORBIDDEN = {
-    "an absolute path": re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/](?!/)|\\{2,}[A-Za-z]|"
+    # A UNC path is \\server\share (JSON doubles each backslash); a lone "\(" in a LaTeX title is not one.
+    "an absolute path": re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/](?!/)|\\{2,}[A-Za-z0-9._$-]+\\+[A-Za-z0-9._$-]|"
                                    r"(?<![\w.])/(?:home|Users|tmp|var|mnt|opt|root)/"),
     "a Job id": re.compile(r"\baijob-[a-z0-9]{6,}"),
     "a project id": re.compile(r"\bproject-[a-z0-9]{6,}"),

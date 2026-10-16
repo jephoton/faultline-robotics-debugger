@@ -145,7 +145,9 @@ class PublicProjectionTests(ExportCase):
                      '"bucket_name": "x"', "\\\\server\\share"):
             self.assertIsNotNone(ex.scan_public(text), text)
         for text in ("https://example.com/home/page", "http://x.y/a/b", "plain text", "2026-10-16T06:45:28Z",
-                     "afb5" + "0123456789abcdef" * 3, "e00a" + "1" * 60, "S: success"):
+                     "afb5" + "0123456789abcdef" * 3, "e00a" + "1" * 60, "S: success",
+                     # A paper title in LaTeX, as JSON writes it: not a network path.
+                     '"title": "Evaluating \\\\( \\\\pi_0 \\\\) in the Wild"'):
             self.assertIsNone(ex.scan_public(text), text)
 
 
