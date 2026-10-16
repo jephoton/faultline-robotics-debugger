@@ -1,7 +1,7 @@
 # Demo: one real Faultline diagnosis, viewable without a cloud account
 
 This folder holds one finished mode 1 diagnosis from October 13, 2026, in the
-same format `faultline diagnose` registers for the viewer, so you can see a
+same format `faultline diagnose` registers for the control panel, so you can see a
 real result without a GPU, a Nebius account or any paid run.
 
 **Case.** GR00T N1.7 (`nvidia/gr00t17-lerobot-libero_10-640`, pinned revision
@@ -22,10 +22,12 @@ still reproduced the failure. Full write-up:
 From the repository root (Python 3.10 or 3.11):
 
 ```bash
-python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.viewer.server import main; sys.exit(main(['--artifacts', 'demo/root', '--port', '8765']))"
+python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.cli import main; sys.exit(main(['ui', '--artifacts', 'demo/root']))"
 ```
 
-Open <http://127.0.0.1:8765/diagnoses> and select **soup-start14-demo**.
+Open <http://127.0.0.1:8765> and select **soup-start14-demo** in the sidebar.
+The control panel's New diagnosis and Setup pages need a cloud account; the
+case page does not.
 
 ## What is inside `root/diagnoses/<case id>/`
 

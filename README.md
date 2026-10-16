@@ -19,10 +19,10 @@ below, with its report, Nemotron explanation and the original, minimal and
 reference videos). No GPU or cloud account is needed:
 
 ```bash
-python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.viewer.server import main; sys.exit(main(['--artifacts', 'demo/root', '--port', '8765']))"
+python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.cli import main; sys.exit(main(['ui', '--artifacts', 'demo/root']))"
 ```
 
-Then open <http://127.0.0.1:8765/diagnoses>.
+Then open <http://127.0.0.1:8765> and select the case in the sidebar.
 
 ## Two modes, one engine
 
@@ -131,7 +131,7 @@ family, not a general claim.
   case as a regression test ([quickstart](docs/setup/diagnose.md)).
 - **Cost:** a typical Job is US$0.3–0.9 on one L40S; the dry run prints every
   planned Job's worst case before anything is created.
-- **Locally:** specs, the spend ledger, Nemotron calls, reports and the viewer
+- **Locally:** specs, the spend ledger, Nemotron calls, reports and the control panel
   run on the workstation, as does Tavily research when you run it; keys never
   enter a Job.
 
@@ -140,9 +140,10 @@ family, not a general claim.
 M1–M6 are complete. **M7a** turns the engine into a product
 ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)):
 scenario reduction (mode 1), `faultline diagnose / replay`, and the breadth
-pack (four suites; image, scene and language families) are done. Next are a
-**UI overhaul** around import → diagnose → reduced case → replay, and a
-public **gallery** of finished cases.
+pack (four suites; image, scene and language families) and the **control
+panel** (a browser UI over the same commands,
+[ADR 0033](docs/decisions/0033-control-panel-ui.md)) are done. Next is
+publishing the static **gallery** of finished cases.
 
 M7b is the submission (demo video and write-up). LIBERO-Plus integration is a
 post-M7 stretch goal.
@@ -153,22 +154,39 @@ post-M7 stretch goal.
 PYTHONPATH=src python -B -m unittest discover -s tests
 ```
 
-The suite (about 2400 tests, 60 platform skips on Windows) uses fakes for the
-simulator, model and cloud; it does not start paid work.
+The suite (about 2800 tests, 60 platform skips on Windows) uses fakes for the
+simulator, model and cloud; it does not start paid work. The control panel's
+front end has its own checks (Node 24):
 
-## Viewer
-
-```powershell
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
-python -m robot_debug.viewer.server --artifacts artifacts --port 8765
+```bash
+npm --prefix web ci
+npm --prefix web test -- --run
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). After installing the
-package, `faultline-viewer` does the same. The viewer is read-only, binds to
-loopback by default, and labels infrastructure errors separately from robot
-task failures. Evidence must first be downloaded into `artifacts/`; finished
-`faultline diagnose` runs appear under `/diagnoses`. To browse the shipped
-demo instead, pass `--artifacts demo/root`.
+## Control panel
+
+```bash
+faultline ui --open
+```
+
+(From a source checkout without installing: `PYTHONPATH=src python -m
+robot_debug.cli ui --open`.) The control panel is a browser UI over the same
+commands: a sidebar of runs and cases, a **New diagnosis** form that writes
+the spec, shows the dry run's Jobs and worst-case cost and starts the run
+only after you confirm, a live run page with a safe **Stop** (the current Job
+is cancelled and charged for the time it ran; `--resume` continues) and
+**Resume**, case pages for every kind (minimal cause with the original,
+minimal and reference videos in step, severity ladders, rewordings, the step
+timeline and cost, Nemotron's reading labelled for review), **Replay**, and a
+**Setup** page that checks the Nebius sign-in, keys and image.
+
+It listens on 127.0.0.1 only; every action needs the page's session token and
+a same-origin request, and one paid run runs at a time. Everything it does can
+be done from the terminal (`faultline diagnose`, `stop`, `replay`), and every
+spec it writes is kept under `artifacts/specs-ui/`.
+
+`faultline export --out site/` writes the finished cases as a static gallery
+(no controls, no run folders, ids or local paths) for any static host.
 
 ## Documentation
 

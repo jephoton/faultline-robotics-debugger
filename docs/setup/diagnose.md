@@ -2,7 +2,8 @@
 
 `faultline diagnose SPEC.yaml` runs one whole diagnosis on Nebius AI Cloud
 Serverless Jobs (or, untested, on a local NVIDIA GPU) and leaves a report, a
-case for the viewer, and a spend ledger. Design: ADR 0031.
+case for the control panel, and a spend ledger. Design: ADR 0031. Everything
+below can also be done from the control panel (`faultline ui`, step 7).
 
 The first-time setup is mostly the roughly 20 GB image build and push. The dry
 run (step 5) prints every Job's worst-case cost before anything is created.
@@ -174,14 +175,31 @@ or `--expect fixed` states which verdict you are hoping for, so the exit code
 tells a script whether you got it (use `fixed` after a change meant to cure
 the failure).
 
-## 7. View the results
+## 7. The control panel
 
-```powershell
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.').Path 'src')
-python -m robot_debug.viewer.server --artifacts artifacts --port 8765
+```bash
+faultline ui --open
 ```
 
-Finished diagnoses appear under `/diagnoses` with their report and videos.
+The control panel at <http://127.0.0.1:8765> wraps these commands:
+
+- **Setup** checks the Nebius sign-in, the Token Factory key (presence only)
+  and the backend block of a local spec (image and secret name).
+- **New diagnosis** builds the spec from a form (or edit its YAML directly),
+  validates it, shows the dry run and starts the run only after you confirm.
+  It reuses the `backend` block of a spec in `artifacts/specs-local/`, and
+  saves each spec it writes under `artifacts/specs-ui/`.
+- **The run page** follows a run live (steps, the Job's state, spend against
+  the cap, time against the limit) with **Stop** and **Resume**. Stop is the
+  same as `faultline stop <run-folder>`: the current Job is cancelled, charged
+  for the time it ran, and `--resume` continues on a new Job.
+- **Case pages** show each finished diagnosis: the result, the evidence for
+  its kind, how it was made, Nemotron's reading, the report and files, and
+  **Replay** for scenario cases.
+
+The panel listens on 127.0.0.1 only and starts one paid run at a time.
+`faultline export --out <folder>` writes the finished cases as a static
+gallery with no controls.
 
 ## Notes
 
