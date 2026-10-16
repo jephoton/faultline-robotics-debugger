@@ -127,6 +127,12 @@ class ExportCommandTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--force", lines[0])
         code, lines = self.run_export("--force", "--case", "d-" + fx.AUDIT_ID)
+        self.assertEqual(code, 2, "--force only replaces a previous Faultline export")
+        self.assertIn("not a previous Faultline export", lines[0])
+        self.assertEqual((self.out / "x.txt").read_text(encoding="utf-8"), "x")
+        (self.out / "data").mkdir()
+        (self.out / "data" / "session.json").write_text('{"mode": "static"}', encoding="utf-8")
+        code, lines = self.run_export("--force", "--case", "d-" + fx.AUDIT_ID)
         self.assertEqual(code, 0)
 
     def test_an_unknown_case_exits_two(self):

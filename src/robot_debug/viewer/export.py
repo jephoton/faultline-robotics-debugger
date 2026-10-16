@@ -67,8 +67,23 @@ def check_output(out: Path, force: bool) -> None:
         raise ExportError("The output folder is inside the package's src folder; choose a folder outside the source tree.")
     if out.exists() and not out.is_dir():
         raise ExportError("The output path exists and is not a folder.")
-    if out.is_dir() and any(out.iterdir()) and not force:
-        raise ExportError("The output folder is not empty; use --force to replace a previous export in it.")
+    if out.is_dir() and any(out.iterdir()):
+        if not force:
+            raise ExportError("The output folder is not empty; use --force to replace a previous export in it.")
+        if not is_previous_export(out):
+            raise ExportError("The output folder is not a previous Faultline export (it has no data/session.json "
+                              "marked mode static), so --force would not delete anything in it; choose an empty "
+                              "folder or a previous export.")
+
+
+def is_previous_export(folder: Path) -> bool:
+    """Whether ``folder`` holds an earlier export: the ``data/session.json`` that :func:`export_gallery` writes."""
+
+    try:
+        session = json.loads((Path(folder) / "data" / "session.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(session, dict) and session.get("mode") == "static"
 
 
 def scan_public(text: str, secret_names: Sequence[str] = ()) -> Optional[str]:

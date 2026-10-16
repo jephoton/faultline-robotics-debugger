@@ -259,6 +259,43 @@ class OutputRefusalTests(ExportCase):
         self.assertEqual((self.out / "notes.txt").read_text(encoding="utf-8"), "keep me")
         self.assertEqual(len(self.read("data/library.json")["items"]), 5)
 
+    def make_foreign_folder(self, session=None):
+        self.out.mkdir()
+        mine = {"data/notes.csv": "my data", "media/holiday.txt": "my photos", "assets/logo.svg": "<svg/>",
+                "readme.txt": "mine"}
+        for name, text in mine.items():
+            (self.out / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.out / name).write_text(text, encoding="utf-8")
+        if session is not None:
+            (self.out / "data" / "session.json").write_text(session, encoding="utf-8")
+        return mine
+
+    def assert_untouched(self, mine):
+        for name, text in mine.items():
+            self.assertEqual((self.out / name).read_text(encoding="utf-8"), text, name)
+
+    def test_force_refuses_a_folder_that_is_not_a_previous_export(self):
+        mine = self.make_foreign_folder()
+        with self.assertRaises(ex.ExportError) as caught:
+            self.export(force=True)
+        self.assertIn("not a previous Faultline export", str(caught.exception))
+        self.assert_untouched(mine)
+
+    def test_force_refuses_a_session_file_that_is_not_a_static_export(self):
+        for session in ('{"mode": "local"}', "not json", "[]", '{"mode": "static"'):
+            with self.subTest(session=session):
+                shutil.rmtree(str(self.out), ignore_errors=True)
+                mine = self.make_foreign_folder(session)
+                with self.assertRaises(ex.ExportError):
+                    self.export(force=True)
+                self.assert_untouched(mine)
+
+    def test_force_accepts_an_empty_folder_and_an_earlier_export(self):
+        self.out.mkdir()
+        self.export(force=True)
+        self.assertEqual(self.read("data/session.json")["mode"], "static")
+        self.export(force=True)
+
     def test_a_file_in_place_of_the_folder_is_refused(self):
         self.out.write_text("x", encoding="utf-8")
         with self.assertRaises(ex.ExportError):
