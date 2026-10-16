@@ -7,16 +7,23 @@ import json
 import logging
 import math
 import mimetypes
+import threading
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
 from typing import Any, Callable, Mapping, Optional, Sequence, Type
 from urllib.parse import unquote, urlsplit
 
-from robot_debug.viewer.api import Api, FileResponse
+from robot_debug.viewer.api import Api, FileResponse, TextResponse
 from robot_debug.viewer.catalog import ArtifactCatalog
-from robot_debug.viewer.security import MAX_BODY_BYTES, ControlGuard
+from robot_debug.viewer.environment import Environment
 from robot_debug.viewer.evidence import CachedArtifactCatalog, evidence_payload
+from robot_debug.viewer.launcher import Launcher
+from robot_debug.viewer.library import Library
+from robot_debug.viewer.routes import register_routes
+from robot_debug.viewer.security import MAX_BODY_BYTES, ControlGuard
+from robot_debug.viewer.specs import SpecService
 from robot_debug.case_io import SanitizedCaseValidationError
 from robot_debug.case_store import inspect_case, list_cases
 from robot_debug.explanation_store import read_case_reports
@@ -25,6 +32,10 @@ from robot_debug.case_register import list_diagnoses, read_diagnosis
 
 CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
 DISCARD_LIMIT_BYTES = 1024 * 1024
+IMMUTABLE_CACHE = "public, max-age=31536000, immutable"     # /assets/* files carry a content hash in their name
+APP_TYPES = {".woff2": "font/woff2", ".svg": "image/svg+xml", ".map": "application/json", ".ico": "image/x-icon",
+             ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8"}
+NOT_APP_ROUTES = ("/api/", "/media/", "/data/", "/assets/")
 
 ResearchReader = Callable[[Path, str], Mapping[str, Any]]
 
@@ -154,7 +165,7 @@ def public_diagnosis(entry: Mapping[str, Any], diagnoses_root: Path, artifact_ro
 def make_handler(
     catalog: ArtifactCatalog, web_root: Path, case_workspace: Optional[Path] = None,
     research_reader: Optional[ResearchReader] = None, diagnoses_root: Optional[Path] = None,
-    *, api: Optional[Api] = None,
+    *, api: Optional[Api] = None, app_root: Optional[Path] = None,
 ) -> Type[BaseHTTPRequestHandler]:
     """Create a handler closed over a catalog and the packaged static assets.
 
@@ -163,7 +174,8 @@ def make_handler(
     ``diagnoses_root`` is the folder of registered diagnoses (default
     ``<artifacts>/diagnoses``, written by ``robot_debug.case_register``).
     ``api`` holds the control-panel routes (API version 1, ``robot_debug.viewer.api``); without it the handler
-    is the original read-only viewer.
+    is the original read-only viewer. ``app_root`` is the built front end (``viewer/app``): when it holds an
+    ``index.html`` it is served for ``/`` and every app route, ahead of the original pages in ``web_root``.
     """
     read_research = research_reader or default_research_reader
     diagnoses = diagnoses_root or catalog.artifact_root / "diagnoses"
@@ -212,6 +224,8 @@ def make_handler(
                     self.send_json(200, catalog.load_trace(episode_id))
                 elif path.startswith("/media/"):
                     self.send_media(unquote(path[len("/media/") :]))
+                elif self.serve_app(path):
+                    pass
                 elif path in {"/", "/index.html", "/styles.css", "/app.js", "/diagnoses", "/diagnoses.js"}:
                     asset_name = {"/": "index.html", "/diagnoses": "diagnoses.html"}.get(path, path[1:])
                     asset = web_root / asset_name
@@ -267,14 +281,48 @@ def make_handler(
                 except OSError:
                     pass
 
+        def serve_app(self, path: str) -> bool:
+            """The built front end: a file of the bundle, else ``index.html`` for an app route (a path with no
+            file extension that is not an API, media, data or asset path). ``False`` when there is no bundle or
+            nothing matches, so the caller carries on."""
+
+            if app_root is None or not (app_root / "index.html").is_file():
+                return False
+            if "\\" in path or ".." in path.split("/") or "\x00" in path:
+                return False
+            relative = unquote(path).lstrip("/")
+            candidate = app_root / (relative or "index.html")
+            try:
+                inside = candidate.resolve().relative_to(app_root.resolve()) is not None
+            except (ValueError, OSError):
+                inside = False
+            if inside and candidate.is_file():
+                immutable = path.startswith("/assets/")
+                self.stream_file(candidate, allow_range=False, content_type=APP_TYPES.get(candidate.suffix.lower()),
+                                 cache_control=IMMUTABLE_CACHE if immutable else None)
+                return True
+            last = relative.rsplit("/", 1)[-1]
+            if not path.startswith(NOT_APP_ROUTES) and "." not in last:
+                self.stream_file(app_root / "index.html", allow_range=False)
+                return True
+            return False
+
         def send_response_object(self, response: Any) -> None:
             if isinstance(response, FileResponse):
                 self.stream_file(response.path, allow_range=False, content_type=response.content_type)
+            elif isinstance(response, TextResponse):
+                body = response.text.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", response.content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_security_headers()
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self.send_json(*response)
 
-        def send_security_headers(self) -> None:
-            self.send_header("Cache-Control", "no-store")
+        def send_security_headers(self, cache_control: str = "no-store") -> None:
+            self.send_header("Cache-Control", cache_control)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "no-referrer")
@@ -291,7 +339,8 @@ def make_handler(
         def send_media(self, relative_path: str) -> None:
             self.stream_file(catalog.resolve_media(relative_path), allow_range=True)
 
-        def stream_file(self, path: Path, allow_range: bool, content_type: Optional[str] = None) -> None:
+        def stream_file(self, path: Path, allow_range: bool, content_type: Optional[str] = None,
+                        cache_control: Optional[str] = None) -> None:
             size = path.stat().st_size
             start, end, status = 0, size - 1, 200
             range_header = self.headers.get("Range") if allow_range else None
@@ -322,7 +371,7 @@ def make_handler(
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(length))
             self.send_header("Accept-Ranges", "bytes" if allow_range else "none")
-            self.send_security_headers()
+            self.send_security_headers(cache_control or "no-store")
             if status == 206:
                 self.send_header("Content-Range", "bytes {}-{}/{}".format(start, end, size))
             self.end_headers()
@@ -351,38 +400,70 @@ def make_handler(
 def create_server(
     artifact_root: Path, host: str = "127.0.0.1", port: int = 8765,
     case_workspace: Optional[Path] = None, research_reader: Optional[ResearchReader] = None,
-    diagnoses_root: Optional[Path] = None, *, api_setup: Optional[Callable[[Api], None]] = None,
+    diagnoses_root: Optional[Path] = None, *, runs_root: Optional[Path] = None,
+    app_root: Optional[Path] = None, specs: Optional[SpecService] = None, launcher: Optional[Launcher] = None,
+    environment: Optional[Environment] = None, api_setup: Optional[Callable[[Api], None]] = None,
 ) -> ThreadingHTTPServer:
-    """The viewer on ``host:port`` (``port`` 0 picks a free one). ``server.api`` is its control-panel API;
-    ``api_setup`` may add routes to it before the first request (the real routes are added here)."""
+    """The viewer on ``host:port`` (``port`` 0 picks a free one).
 
+    ``server.api`` is the control-panel API (the routes of ``robot_debug.viewer.routes``; controls are enabled
+    only when ``host`` is a loopback address). ``specs``, ``launcher`` and ``environment`` default to the real
+    services for ``artifact_root`` and ``runs_root`` (default ``<artifacts>/runs``); ``api_setup`` may add
+    routes before the first request.
+    """
+
+    artifact_root = Path(artifact_root)
+    runs_root = Path(runs_root) if runs_root else artifact_root / "runs"
     catalog = CachedArtifactCatalog(artifact_root)      # the scan is slow on a full artifacts folder
     web_root = Path(__file__).with_name("web")
+    app_root = Path(app_root) if app_root else Path(__file__).with_name("app")
     guard = ControlGuard(host, port)
     api = Api(guard)
+    library = Library(artifact_root, runs_root=runs_root, diagnoses_root=diagnoses_root, case_workspace=case_workspace)
+    specs = specs or SpecService(artifact_root)
+    launcher = launcher or Launcher(artifact_root, runs_root, specs)
+    environment = environment or Environment(specs, env_file=launcher.env_path())
+    register_routes(api, library=library, runs_root=runs_root, specs=specs, launcher=launcher,
+                    environment=environment)
     if api_setup is not None:
         api_setup(api)
     server = ThreadingHTTPServer(
-        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root, api=api))
+        (host, port), make_handler(catalog, web_root, case_workspace, research_reader, diagnoses_root, api=api,
+                                   app_root=app_root))
     guard.port = server.server_address[1]               # the real port, when 0 was asked for
     server.api = api
+    server.catalog = catalog
     return server
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Read-only robot episode evidence viewer")
-    parser.add_argument("--artifacts", default="artifacts")
-    parser.add_argument("--cases")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser = argparse.ArgumentParser(prog="faultline ui", description="The Faultline control panel")
+    parser.add_argument("--artifacts", default="artifacts", help="the artifacts folder (default: artifacts)")
+    parser.add_argument("--runs-root", help="the run folders (default: <artifacts>/runs)")
+    parser.add_argument("--cases", help="the occlusion case workspace (default: <artifacts>/cases)")
+    parser.add_argument("--host", default="127.0.0.1", help="bind address; controls need a loopback address")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--open", action="store_true", help="open the page in the default browser")
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Optional[Sequence[str]] = None, out: Optional[Callable[[str], None]] = None) -> int:
+    out = out or print
     args = build_parser().parse_args(argv)
-    server = create_server(Path(args.artifacts), args.host, args.port, Path(args.cases) if args.cases else None)
-    print("Faultline Viewer: http://{}:{}".format(*server.server_address))
+    server = create_server(Path(args.artifacts), args.host, args.port, Path(args.cases) if args.cases else None,
+                           runs_root=Path(args.runs_root) if args.runs_root else None)
+    host, port = server.server_address[:2]
+    url = "http://{}:{}".format(host if host not in ("0.0.0.0", "::") else "127.0.0.1", port)
+    out("Faultline Viewer: {}".format(url))
+    guard = getattr(getattr(server, "api", None), "guard", None)
+    if guard is not None and not guard.controls:
+        out("Controls are off: the viewer is bound to {}, not to localhost. Cases are shown read-only.".format(host))
+    catalog = getattr(server, "catalog", None)
+    if catalog is not None:                                 # warm the evidence scan so All evidence opens quickly
+        threading.Thread(target=catalog.snapshot, daemon=True).start()
     try:
+        if args.open:
+            webbrowser.open(url)
         server.serve_forever()
     except KeyboardInterrupt:
         pass

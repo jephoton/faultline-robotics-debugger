@@ -5,6 +5,7 @@
     faultline image build [--tag TAG] [--push REGISTRY] | faultline image push REGISTRY
     faultline cases [--runs-root DIR]
     faultline stop RUN_DIR
+    faultline ui [--artifacts DIR] [--runs-root DIR] [--port N] [--host ADDR] [--open]
 
 A spec's ``mode`` picks the diagnosis: ``scenario`` (mode 1), ``audit`` (mode 2) or ``paraphrase`` (Nemotron
 rewords the task instruction, one Job screens the rewordings, a second reduces the failing wording to its
@@ -81,6 +82,9 @@ def _parser() -> argparse.ArgumentParser:
 
     cases = commands.add_parser("cases", help="list finished runs and their cases")
     cases.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+
+    commands.add_parser("ui", add_help=False,           # handled in main() before parsing; listed here for --help
+                        help="open the control panel in a browser (cases, new diagnoses, run progress)")
 
     stop = commands.add_parser("stop", help="stop a running diagnosis safely (the Job is cancelled; --resume continues)")
     stop.add_argument("run_dir", type=Path, help="the run folder (or its name under --runs-root)")
@@ -180,6 +184,11 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
     recorded: Optional[Path] = None
     started = _utc_now()
     try:
+        words = list(sys.argv[1:] if argv is None else argv)
+        if words[:1] == ["ui"]:                       # the viewer has its own options (and --help)
+            from robot_debug.viewer.server import main as viewer_main
+
+            return viewer_main(words[1:], out=out)
         args = _parser().parse_args(argv)
         if args.command == "cases":
             for line in list_runs(args.runs_root) or ["no runs under {}".format(args.runs_root)]:

@@ -33,7 +33,12 @@ class FileResponse(NamedTuple):
     content_type: str
 
 
-Response = Union[Tuple[int, Any], FileResponse]
+class TextResponse(NamedTuple):
+    text: str
+    content_type: str
+
+
+Response = Union[Tuple[int, Any], FileResponse, TextResponse]
 Handler = Callable[[Request], Response]
 
 
@@ -112,6 +117,6 @@ class Api:
         except Exception:                           # noqa: BLE001 - never a traceback in a response
             logging.getLogger("robot_debug.viewer").exception("POST %s failed", path)
             return 500, ApiError(500, "Something went wrong in the viewer; its console has the details.").payload()
-        if isinstance(response, FileResponse):
+        if isinstance(response, (FileResponse, TextResponse)):
             raise TypeError("a POST route returns JSON")
         return response
