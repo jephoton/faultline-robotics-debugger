@@ -17,6 +17,7 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import uuid
 
+from . import checkpoint_override
 from .job_model import ModelProcess
 from .job_process import (
     CleanupUnconfirmed,
@@ -130,6 +131,15 @@ def _checkpoint_for(suite: Any) -> str:
     return SUITE_CHECKPOINTS[suite]
 
 
+def _checkpoint_id(suite: Any, checkpoint: Optional[Sequence[str]]) -> str:
+    """The model repository a Job serves: the workload's override when it has one, else the suite's own."""
+
+    default = _checkpoint_for(suite)
+    if checkpoint is None:
+        return default
+    return checkpoint_override.validate_pair(checkpoint[0], checkpoint[1])[0]
+
+
 def faultline_server_script(layout: ImageLayout) -> Path:
     """The batch-capable, instrumented server shipped with the project scripts."""
 
@@ -144,12 +154,14 @@ def model_server_argv(
     max_batch_size: int = 1,
     timing_log: Optional[Path] = None,
     suite: str = DEFAULT_SUITE,
+    checkpoint: Optional[Sequence[str]] = None,
 ) -> List[str]:
     """Same server invocation as the historical ``model-launch.sh``.
 
     ``server="faultline"`` swaps in the instrumented batch server and appends
     ``--args.max_batch_size`` (and ``--args.timing_log`` when given); the model
-    flags are shared. The default is byte-identical to the historical argv.
+    flags are shared. The default is byte-identical to the historical argv. ``checkpoint`` is an
+    ``(id, revision)`` override of the suite's model repository (the revision is pinned by the prefetch).
     """
 
     if server not in SERVER_VARIANTS:
@@ -158,7 +170,7 @@ def model_server_argv(
         raise ValueError("max_batch_size must be an integer from 1 to 64")
     if server == "upstream" and (max_batch_size != 1 or timing_log is not None):
         raise ValueError("batching and timing logs need the faultline server variant")
-    argv = _model_flags(layout, port, server, suite)
+    argv = _model_flags(layout, port, server, suite, checkpoint)
     if server == "faultline":
         argv.append("--args.max_batch_size={}".format(max_batch_size))
         if timing_log is not None:
@@ -170,15 +182,18 @@ def model_server_argv(
 
 
 def model_flags_for_scripts(
-    layout: ImageLayout, max_batch_size: int = 1, suite: str = DEFAULT_SUITE
+    layout: ImageLayout, max_batch_size: int = 1, suite: str = DEFAULT_SUITE,
+    checkpoint: Optional[Sequence[str]] = None,
 ) -> List[str]:
     """The ``--args.*`` flags of the faultline server, without interpreter, script or port."""
 
-    return model_server_argv(layout, server="faultline", max_batch_size=max_batch_size, suite=suite)[3:]
+    return model_server_argv(
+        layout, server="faultline", max_batch_size=max_batch_size, suite=suite, checkpoint=checkpoint)[3:]
 
 
-def _model_flags(layout: ImageLayout, port: int, server: str, suite: str = DEFAULT_SUITE) -> List[str]:
-    checkpoint = _checkpoint_for(suite)
+def _model_flags(layout: ImageLayout, port: int, server: str, suite: str = DEFAULT_SUITE,
+                 override: Optional[Sequence[str]] = None) -> List[str]:
+    checkpoint = _checkpoint_id(suite, override)
     script = (
         (layout.upstream_root / "src" / "vla_eval" / "model_servers" / "lerobot.py")
         if server == "upstream"
@@ -238,10 +253,13 @@ def evaluator_environment(
     return child_environment(base, PYTHONPATH=pythonpath, **overrides)
 
 
-def prefetch_command(layout: ImageLayout, output: Path, *, suite: str = DEFAULT_SUITE) -> List[str]:
-    """The prefetch argv; the suite is named only when it is not the historical default."""
+def prefetch_command(layout: ImageLayout, output: Path, *, suite: str = DEFAULT_SUITE,
+                     checkpoint: Optional[Sequence[str]] = None) -> List[str]:
+    """The prefetch argv; the suite is named only when it is not the historical default, the checkpoint
+    only when the workload overrides it (the prefetch then fetches that id at that revision instead of
+    the suite's pinned checkpoint)."""
 
-    _checkpoint_for(suite)
+    _checkpoint_id(suite, checkpoint)
     argv = [
         str(layout.model_python),
         "-I",
@@ -251,6 +269,9 @@ def prefetch_command(layout: ImageLayout, output: Path, *, suite: str = DEFAULT_
     ]
     if suite != DEFAULT_SUITE:
         argv.extend(["--suite", suite])
+    if checkpoint is not None:
+        checkpoint_id, revision = checkpoint_override.validate_pair(checkpoint[0], checkpoint[1])
+        argv.extend(["--checkpoint-id", checkpoint_id, "--checkpoint-revision", revision])
     return argv
 
 
@@ -262,6 +283,7 @@ def prefetch_models(
     log_root: Path,
     timeout_seconds: float,
     suite: str = DEFAULT_SUITE,
+    checkpoint: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """Run the pinned prefetch as one owned process group with a hard timeout."""
 
@@ -273,7 +295,7 @@ def prefetch_models(
     token = hf_token(base_env)
     if token:
         env[TOKEN_VARIABLE] = token
-    argv = prefetch_command(layout, output, suite=suite)
+    argv = prefetch_command(layout, output, suite=suite, checkpoint=checkpoint)
     log_root.mkdir(parents=True, exist_ok=True)
     ident = "prefetch-" + uuid.uuid4().hex
     with (log_root / (ident + ".stdout.log")).open("xb") as stdout, (
@@ -376,9 +398,11 @@ class ProductionModelFactory:
         clock: Callable[[], float] = time.monotonic,
         progress: Progress = _no_progress,
         suite: str = DEFAULT_SUITE,
+        checkpoint: Optional[Sequence[str]] = None,
     ) -> None:
-        _checkpoint_for(suite)
+        _checkpoint_id(suite, checkpoint)
         self._suite = suite
+        self._checkpoint = None if checkpoint is None else tuple(checkpoint)
         self._layout = layout
         self._base_env = dict(base_env)
         self._deadline = deadline
@@ -402,7 +426,7 @@ class ProductionModelFactory:
 
         argv = model_server_argv(
             self._layout, server=server, max_batch_size=max_batch_size, timing_log=timing_log,
-            suite=self._suite,
+            suite=self._suite, checkpoint=self._checkpoint,
         )
         log_root = Path(log_root)
         self.ensure_prefetched(log_root, argv=argv)
@@ -431,7 +455,8 @@ class ProductionModelFactory:
         _require_posix("parity check")
         log_root = Path(log_root)
         argv = model_server_argv(
-            self._layout, server="faultline", max_batch_size=max_batch_size, suite=self._suite)
+            self._layout, server="faultline", max_batch_size=max_batch_size, suite=self._suite,
+            checkpoint=self._checkpoint)
         try:
             self.ensure_prefetched(log_root, argv=argv)
         except subprocess.TimeoutExpired as error:
@@ -441,7 +466,7 @@ class ProductionModelFactory:
         command = [
             str(self._layout.model_python),
             str(self._layout.project_root / "scripts" / "model_servers" / "groot_batch_parity.py"),
-            *model_flags_for_scripts(self._layout, max_batch_size, self._suite),
+            *model_flags_for_scripts(self._layout, max_batch_size, self._suite, self._checkpoint),
             "--output={}".format(Path(output).as_posix()),
         ]
         log_root.mkdir(parents=True, exist_ok=True)
@@ -484,7 +509,9 @@ class ProductionModelFactory:
 
         self.ensure_prefetched(
             Path(log_root),
-            argv=model_server_argv(self._layout, server="faultline", max_batch_size=1, suite=self._suite),
+            argv=model_server_argv(
+                self._layout, server="faultline", max_batch_size=1, suite=self._suite,
+                checkpoint=self._checkpoint),
         )
 
     def ensure_prefetched(self, log_root: Path, *, argv: Optional[Sequence[str]] = None) -> None:
@@ -505,6 +532,7 @@ class ProductionModelFactory:
                 log_root=log_root,
                 timeout_seconds=min(PREFETCH_CAP_SECONDS, budget),
                 **({} if self._suite == DEFAULT_SUITE else {"suite": self._suite}),
+                **({} if self._checkpoint is None else {"checkpoint": self._checkpoint}),
             )
         except BaseException as error:
             self._progress("prefetch_failed", error=type(error).__name__,
@@ -859,6 +887,7 @@ def main(
         model_factory = ProductionModelFactory(
             layout, base_env=environ, deadline=deadline, clock=clock, progress=progress,
             suite=config.get("suite", DEFAULT_SUITE),
+            checkpoint=checkpoint_override.from_config(config),
         )
         summary = runner(
             config,

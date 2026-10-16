@@ -852,7 +852,7 @@ def run_language(
             state["warm_elapsed_seconds"] = be._round(max(warm_elapsed, 1e-6))
             if launch_t is not None:
                 state["timing"] = be.timing_stats(timing_path, state["warm_elapsed_seconds"], min_t=launch_t)
-        state["checkpoint"] = se.checkpoint_record(suite, batch_root.parent)
+        state["checkpoint"] = se.checkpoint_record(suite, batch_root.parent, config.get("checkpoint_id"))
         driver.finish(state["stop_reason"], state["records"])
         summary = save()
     progress("language_summary", mode=mode, stop_reason=summary["stop_reason"],

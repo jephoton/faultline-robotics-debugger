@@ -366,6 +366,33 @@ def replay_text(verdict: Optional[str]) -> str:
     return REPLAY_TEXT.get(verdict, "Inconclusive: the replay ended with the verdict '{}'.".format(verdict))
 
 
+def _spec_checkpoint(spec: Spec) -> Optional[Tuple[str, str]]:
+    """The spec's ``policy.checkpoint`` as ``(id, revision)``, or ``None`` for the suite's own checkpoint."""
+
+    checkpoint = getattr(spec, "checkpoint", None)
+    return None if checkpoint is None else checkpoint.pair
+
+
+def _default_checkpoint_id(suite: Any) -> Optional[str]:
+    from robot_debug.job_entry import SUITE_CHECKPOINTS
+
+    return SUITE_CHECKPOINTS.get(suite) if isinstance(suite, str) else None
+
+
+def case_checkpoint(case: Mapping[str, Any]) -> Optional[Tuple[str, str]]:
+    """The ``(id, revision)`` a saved case was found with when that was not the suite's own checkpoint
+    (a case from a ``policy.checkpoint`` run), else ``None``."""
+
+    recorded = case.get("checkpoint")
+    if not isinstance(recorded, Mapping):
+        return None
+    identifier, revision = recorded.get("id"), recorded.get("revision")
+    if (not isinstance(identifier, str) or not isinstance(revision, str)
+            or identifier == _default_checkpoint_id(case.get("suite"))):
+        return None
+    return identifier, revision
+
+
 def _too_many_candidates(wanted: int, limit: int) -> str:
     return ("budget.max_candidates {} does not fit in one reduce Job (its deadline would pass the {} s limit "
             "of the runtime); the largest that fits is {}".format(wanted, MAX_JOB_DEADLINE_SECONDS, limit))
@@ -504,15 +531,17 @@ class DefaultTools:
         time.sleep(seconds)
 
     # workloads
-    def screen_workload(self, run_id: str, suite: str, task: int, starts: str, confirm: int) -> Dict[str, Any]:
+    def screen_workload(self, run_id: str, suite: str, task: int, starts: str, confirm: int,
+                        checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
         import argparse
 
         module = _load_script("make_scenario_workload")
         args = argparse.Namespace(mode="screen", run_id=run_id, out=None, deadline=None, force=False,
                                   suite=suite, tasks=str(task), starts=starts, confirm_attempts=confirm)
-        return self._checked(module.build(args))
+        return self._checked(self._with_checkpoint(module.build(args), checkpoint))
 
-    def reduce_workload(self, run_id: str, plan_path: Path, max_candidates: int) -> Dict[str, Any]:
+    def reduce_workload(self, run_id: str, plan_path: Path, max_candidates: int,
+                        checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
         import argparse
 
         module = _load_script("make_scenario_workload")
@@ -520,7 +549,21 @@ class DefaultTools:
         args = argparse.Namespace(mode="reduce", run_id=run_id, out=None, deadline=deadline, force=False,
                                   plan=Path(plan_path), max_candidates=max_candidates, concurrency=None,
                                   bisection_steps=None, no_speculative_bisection=False)
-        return self._checked(module.build(args))
+        return self._checked(self._with_checkpoint(module.build(args), checkpoint))
+
+    @classmethod
+    def _with_checkpoint(cls, workload: Dict[str, Any], checkpoint: Optional[Sequence[str]]) -> Dict[str, Any]:
+        """The workload with the spec's ``policy.checkpoint`` added (validated again); unchanged without one."""
+
+        if checkpoint is None:
+            return workload
+        from robot_debug import checkpoint_override
+
+        try:
+            fields = checkpoint_override.as_fields(tuple(checkpoint))
+        except checkpoint_override.CheckpointOverrideError as error:
+            raise StopRun("workload_invalid", "policy.checkpoint: {}".format(error)) from None
+        return cls._valid(dict(workload, **fields))
 
     def reduce_deadline(self, max_candidates: int) -> int:
         from robot_debug import scenario_experiment as se
@@ -617,7 +660,7 @@ class DefaultTools:
                                                 original=original, paraphrases=paraphrases)
         except ValueError as error:
             raise StopRun("workload_invalid", str(error)) from None
-        return self._checked(self._valid(workload))
+        return self._checked(self._with_checkpoint(self._valid(workload), _spec_checkpoint(spec)))
 
     def paraphrase_reduce_workload(self, run_id: str, spec: Spec, original: str, paraphrase: str) -> Dict[str, Any]:
         from robot_debug import language_experiment as le
@@ -630,7 +673,7 @@ class DefaultTools:
         except ValueError:
             raise StopRun("candidates_too_large", _too_many_candidates(
                 paraphrase_candidates(spec), self.candidate_limit_for("paraphrase"))) from None
-        return self._checked(self._valid(workload))
+        return self._checked(self._with_checkpoint(self._valid(workload), _spec_checkpoint(spec)))
 
     def paraphrase_deadlines(self, spec: Spec) -> Tuple[int, int]:
         """The (screen, reduce) Job deadlines the spec plans, without needing the paraphrases yet."""
@@ -819,10 +862,16 @@ class Orchestrator:
         self.steps = StepLog(self.run_dir / "steps.json", {"name": spec.name, "mode": spec.mode})
         self._inflight: Optional[Tuple[Any, str]] = None
         self.cancel_outcome: Optional[Tuple[str, str]] = None
+        self.checkpoint = _spec_checkpoint(spec)         # policy.checkpoint override, if the spec has one
         match = _STAMP.search(self.run_dir.name)
         # YYMMDDHHMMSS: to the second, so two runs of one spec in the same minute cannot share Job names.
         self.tag = (match.group(1)[2:] + match.group(2)) if match else "000000" + "000000"
         self.notes: List[str] = []
+
+    def _checkpoint_args(self) -> Dict[str, Any]:
+        """Keyword arguments for the workload builders: the override, or nothing at all."""
+
+        return {} if self.checkpoint is None else {"checkpoint": self.checkpoint}
 
     # -- output -------------------------------------------------------------------------
 
@@ -1205,7 +1254,8 @@ class Orchestrator:
         if sc.import_path:
             raise StopRun("import_unsupported", "scenario.import is not supported yet; use start or screen")
         screen_workload = self.tools.screen_workload(
-            self.job_name("screen", 0), spec.suite, sc.task, _screen_starts(spec), sc.confirm)
+            self.job_name("screen", 0), spec.suite, sc.task, _screen_starts(spec), sc.confirm,
+            **self._checkpoint_args())
         screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
                               "scenario_summary.json")
         screen_summary = screen.summary
@@ -1288,7 +1338,8 @@ class Orchestrator:
             elif not path.exists():
                 _write_json(path, plan)
             try:
-                workload = self.tools.reduce_workload(self.job_name(step, 0), path, self.spec.budget.max_candidates)
+                workload = self.tools.reduce_workload(self.job_name(step, 0), path, self.spec.budget.max_candidates,
+                                                      **self._checkpoint_args())
                 outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "scenario_summary.json")
             except StopRun as stop:
                 if best is None and last is None:
@@ -1525,7 +1576,7 @@ class Orchestrator:
         identity = json.dumps({"suite": self.spec.suite, "task": audit.task, "start": audit.start,
                                "families": list(audit.families), "run": self.run_dir.name},
                               sort_keys=True, separators=(",", ":"))
-        return {
+        case = {
             "schema_version": 1, "kind": "audit",
             "case_id": hashlib.sha256(identity.encode("utf-8")).hexdigest(),
             "suite": self.spec.suite, "task_id": audit.task, "start_index": audit.start,
@@ -1534,8 +1585,23 @@ class Orchestrator:
             "job_name": outcome.job_name,
             "summary": outcome.summary_path.relative_to(self.run_dir).as_posix(),
         }
+        if self.checkpoint is not None:         # only a run with a checkpoint override records one
+            case["checkpoint"] = {"id": self.checkpoint[0], "revision": self.checkpoint[1], "pinned": True}
+        return case
 
     # -- replay --------------------------------------------------------------------------------
+
+    def _replay_checkpoint(self, case: Mapping[str, Any]) -> Optional[Tuple[str, str]]:
+        """The checkpoint to replay against: the spec's override (a changed policy), else the one the case
+        was found with when that was not the suite's own, else ``None`` (the suite's pinned checkpoint)."""
+
+        if self.checkpoint is not None:
+            self.say("replay", "using the spec's checkpoint {} at {}".format(*self.checkpoint))
+            return self.checkpoint
+        recorded = case_checkpoint(case)
+        if recorded is not None:
+            self.say("replay", "the case was found with checkpoint {} at {}; replaying against it".format(*recorded))
+        return recorded
 
     def _replay(self, case_dir: Path) -> RunResult:
         case_path = case_dir if case_dir.is_file() else case_dir / "case.json"
@@ -1552,13 +1618,19 @@ class Orchestrator:
         if inputs is None:
             raise StopRun("replay_inputs_missing",
                           "no replay-inputs.json and no scenario-reduce workload beside the case")
+        checkpoint = self._replay_checkpoint(case)
+        if checkpoint is not None:
+            inputs = dict(inputs, checkpoint=checkpoint)
         workload = self.tools.replay_workload(case, self.job_name("replay", 0), REPLAY_ATTEMPTS, inputs)
         outcome = self.run_job("replay", workload, int(workload["deadline_seconds"]), "scenario_summary.json")
         verdict = replay_verdict(outcome.summary)
         key = replay_verdict_key(outcome.summary or {})
-        _write_json(self.run_dir / "replay-result.json", {
+        replay_result = {
             "case_id": case.get("case_id"), "reproduces": verdict, "verdict": key, "job_name": outcome.job_name,
-            "summary": outcome.summary_path.relative_to(self.run_dir).as_posix()})
+            "summary": outcome.summary_path.relative_to(self.run_dir).as_posix()}
+        if checkpoint is not None or case_checkpoint(case) is not None:
+            replay_result["checkpoint"] = (outcome.summary or {}).get("checkpoint")
+        _write_json(self.run_dir / "replay-result.json", replay_result)
         self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
                            verdict=key)
         self.say("replay", replay_text(key))
@@ -1569,7 +1641,7 @@ class Orchestrator:
 
 __all__ = [
     "DefaultTools", "JobOutcome", "Orchestrator", "OrchestratorError", "RunResult", "StepLog", "StopRun",
-    "check_candidate_budget", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
+    "case_checkpoint", "check_candidate_budget", "choose_paraphrase", "choose_start", "continuation_plan", "paraphrase_candidates", "paraphrase_failures",
     "paraphrase_meaning", "paraphrase_table", "create_run_dir", "dry_run_lines", "failures_of", "find_file",
     "replay_text", "replay_verdict", "replay_verdict_key", "screen_table", "utc_stamp", "verified_selection",
 ]

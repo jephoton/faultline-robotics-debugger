@@ -1325,16 +1325,17 @@ DRIVERS = {"scenario-smoke": SmokeDriver, "scenario-screen": ScreenDriver, "scen
 # ---------------------------------------------------------------------------
 
 
-def checkpoint_record(suite: str, run_root: Path) -> Dict[str, Any]:
+def checkpoint_record(suite: str, run_root: Path, checkpoint_id: Optional[str] = None) -> Dict[str, Any]:
     """The model checkpoint behind a run: repository id, the commit the prefetch resolved, pinned or not.
 
     The revision comes from ``model-resolution.json`` beside the scenario folder (written by the
-    prefetch); ``None`` when the run had no prefetch record.
+    prefetch); ``None`` when the run had no prefetch record. ``checkpoint_id`` is the workload's
+    override of the suite's checkpoint, when it had one.
     """
 
     from robot_debug.job_entry import SUITE_CHECKPOINTS
 
-    identifier = SUITE_CHECKPOINTS[suite]
+    identifier = checkpoint_id or SUITE_CHECKPOINTS[suite]
     revision, pinned = None, None
     try:
         resolution = _load_json(Path(run_root) / "model-resolution.json")
@@ -1526,7 +1527,7 @@ def run_scenario(
             state["warm_elapsed_seconds"] = be._round(max(warm_elapsed, 1e-6))
             if launch_t is not None:
                 state["timing"] = be.timing_stats(timing_path, state["warm_elapsed_seconds"], min_t=launch_t)
-        state["checkpoint"] = checkpoint_record(suite, batch_root.parent)
+        state["checkpoint"] = checkpoint_record(suite, batch_root.parent, config.get("checkpoint_id"))
         if isinstance(driver, ScreenDriver):
             driver.finish(state["stop_reason"])
         elif isinstance(driver, (ReduceDriver, ReplayDriver)):

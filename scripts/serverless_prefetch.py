@@ -8,7 +8,9 @@ recorded before it was pinned.
 
 One Job serves one suite from one model server, so ``--suite`` selects which
 suite checkpoint is fetched (default ``libero_object``, the historical set);
-``--suite all`` fetches every pinned checkpoint.
+``--suite all`` fetches every pinned checkpoint. ``--checkpoint-id`` with ``--checkpoint-revision`` (both or
+neither) fetches that exact repository at that commit instead of the suite's pinned checkpoint, for a spec
+that tests another policy (``policy.checkpoint``); the base model and Cosmos stay pinned.
 """
 
 from __future__ import annotations
@@ -16,9 +18,10 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 from types import ModuleType
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional, Sequence, Tuple
 
 
 # Must equal ``robot_debug.job_entry.SUITE_CHECKPOINTS`` (a test enforces it).
@@ -65,9 +68,16 @@ def _repository_dir(cache: Path, repository: str) -> Path:
     return cache / ("models--" + repository.replace("/", "--"))
 
 
-def fetch(hub: ModuleType, cache: Path, suite: Optional[str] = None) -> Dict[str, Dict[str, object]]:
+def fetch(hub: ModuleType, cache: Path, suite: Optional[str] = None,
+          checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Dict[str, object]]:
     resolution: Dict[str, Dict[str, object]] = {}
     pins = dict(pinned_for_suite(suite))
+    if checkpoint is not None:
+        identifier, revision = checkpoint
+        if identifier == BASE_MODEL or identifier in SHARED_PINNED_REVISIONS:
+            raise ValueError("a checkpoint override cannot replace a separately pinned model: " + identifier)
+        # The override replaces the suite's own checkpoint; the base model stays pinned.
+        pins = {BASE_MODEL: PINNED_REVISIONS[BASE_MODEL], identifier: revision}
     pins.update(SHARED_PINNED_REVISIONS)
     for repository, revision in pins.items():
         downloaded = Path(hub.snapshot_download(repo_id=repository, revision=revision))
@@ -87,12 +97,26 @@ def main(argv: Optional[Sequence[str]] = None, hub: Optional[ModuleType] = None)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--suite", choices=sorted(SUITE_CHECKPOINTS) + ["all"], default=DEFAULT_SUITE)
+    parser.add_argument("--checkpoint-id", help="serve this repository instead of the suite's checkpoint")
+    parser.add_argument("--checkpoint-revision", help="the 40-character commit of --checkpoint-id")
     args = parser.parse_args(argv)
+    checkpoint = None
+    if args.checkpoint_id is not None or args.checkpoint_revision is not None:
+        if args.checkpoint_id is None or args.checkpoint_revision is None:
+            parser.error("--checkpoint-id and --checkpoint-revision go together")
+        if re.fullmatch(r"[0-9a-f]{40}", args.checkpoint_revision) is None or re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9._\-]{0,95}/[A-Za-z0-9][A-Za-z0-9._\-]{0,95}", args.checkpoint_id) is None \
+                or ".." in args.checkpoint_id:
+            parser.error("--checkpoint-id must look like org/name and --checkpoint-revision be a full commit")
+        checkpoint = (args.checkpoint_id, args.checkpoint_revision)
     if hub is None:
         import huggingface_hub as hub  # type: ignore[no-redef]
         import huggingface_hub.constants  # noqa: F401
     cache = Path(hub.constants.HF_HUB_CACHE)
-    resolution = fetch(hub, cache, args.suite)
+    try:
+        resolution = fetch(hub, cache, args.suite, checkpoint)
+    except ValueError as error:
+        parser.error(str(error))
     payload = json.dumps({"schema_version": 1, "repositories": resolution}, sort_keys=True, indent=2)
     with args.output.open("x", encoding="utf-8") as output:
         output.write(payload + "\n")

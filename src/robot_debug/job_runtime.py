@@ -11,6 +11,8 @@ import stat
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+from robot_debug import checkpoint_override
+
 
 _CONFIG_FIELDS = {"schema_version", "mode", "run_id", "deadline_seconds"}
 BATCH_MODES = {"m3-batch-smoke", "m3-batch"}
@@ -75,14 +77,16 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         expected_fields = _CONFIG_FIELDS | _BATCH_FIELDS
     elif mode_name == "m6-threshold":
         required_fields = _CONFIG_FIELDS | _M6_THRESHOLD_FIELDS
-        if not required_fields <= set(config) <= required_fields | _M6_AUDIT_TARGET_FIELDS:
+        if not required_fields <= set(config) <= (
+                required_fields | _M6_AUDIT_TARGET_FIELDS | set(checkpoint_override.FIELDS)):
             _fail("workload configuration must contain exactly the required fields")
         expected_fields = set(config)
     elif mode_name in SCENARIO_MODES:
         from robot_debug import scenario_experiment as scenario
 
         required = _CONFIG_FIELDS | scenario.MODE_REQUIRED[mode_name]
-        allowed = required | scenario.COMMON_OPTIONAL | scenario.MODE_OPTIONAL[mode_name]
+        allowed = (required | scenario.COMMON_OPTIONAL | scenario.MODE_OPTIONAL[mode_name]
+                   | set(checkpoint_override.FIELDS))
         if not required <= set(config) <= allowed:
             _fail("workload configuration must contain exactly the required fields")
         expected_fields = set(config)
@@ -90,7 +94,8 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         from robot_debug import language_experiment as language
 
         required = _CONFIG_FIELDS | language.MODE_REQUIRED[mode_name]
-        allowed = required | language.COMMON_OPTIONAL | language.MODE_OPTIONAL[mode_name]
+        allowed = (required | language.COMMON_OPTIONAL | language.MODE_OPTIONAL[mode_name]
+                   | set(checkpoint_override.FIELDS))
         if not required <= set(config) <= allowed:
             _fail("workload configuration must contain exactly the required fields")
         expected_fields = set(config)
@@ -131,6 +136,12 @@ def validate_workload_config(config: object) -> Dict[str, Any]:
         try:
             validated.update(language.validate_mode_fields(mode, config))
         except language.LanguageConfigError as error:
+            raise JobRuntimeError(str(error)) from error
+    if mode == "m6-threshold" or mode in SCENARIO_MODES or mode in LANGUAGE_MODES:
+        # The optional policy checkpoint override (both fields or neither); other modes never carry one.
+        try:
+            validated.update(checkpoint_override.as_fields(checkpoint_override.from_config(config)))
+        except checkpoint_override.CheckpointOverrideError as error:
             raise JobRuntimeError(str(error)) from error
     return validated
 

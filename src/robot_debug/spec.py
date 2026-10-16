@@ -23,6 +23,10 @@ Modes:
     Used only with ``faultline replay`` (the case supplies the scenario); the spec
     gives the name, budget and backend.
 
+``policy.checkpoint`` (optional, any mode; a replay spec may give it without ``policy.suite``) is
+``{id: org/name, revision: <40-hex commit>}``: serve that Hugging Face repository at that commit instead of
+the suite's pinned GR00T checkpoint, so a saved case can be replayed against a changed policy.
+
 Nothing here imports the simulator, numpy or a cloud SDK.
 """
 
@@ -34,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from robot_debug import checkpoint_override as _checkpoint_module
 from robot_debug import paraphrase as _paraphrase_module
 
 SPEC_VERSION = 1
@@ -129,6 +134,18 @@ class BackendSpec:
 
 
 @dataclass(frozen=True)
+class Checkpoint:
+    """``policy.checkpoint``: serve this Hugging Face repository at this commit instead of the suite's pin."""
+
+    id: str
+    revision: str
+
+    @property
+    def pair(self) -> Tuple[str, str]:
+        return self.id, self.revision
+
+
+@dataclass(frozen=True)
 class Spec:
     name: str
     mode: str
@@ -139,6 +156,7 @@ class Spec:
     scenario: Optional[Scenario] = None
     audit: Optional[Audit] = None
     paraphrase: Optional[Paraphrase] = None
+    checkpoint: Optional[Checkpoint] = None
     raw: Mapping[str, Any] = field(default_factory=dict, compare=False)
 
     @property
@@ -321,6 +339,23 @@ def _nemotron(value: Any) -> Nemotron:
                     explain=_bool(data.get("explain", False), "nemotron.explain"))
 
 
+def _checkpoint(value: Any) -> Checkpoint:
+    data = _exact(value, "policy.checkpoint", (), ("id", "revision"))
+    if "id" not in data:
+        _fail("policy.checkpoint", "missing required key(s): id")
+    if "revision" not in data:
+        _fail("policy.checkpoint.revision", "is required when id is given (the 40-character commit to serve)")
+    try:
+        checkpoint_id = _checkpoint_module.validate_id(data["id"])
+    except _checkpoint_module.CheckpointOverrideError as error:
+        _fail("policy.checkpoint.id", str(error))
+    try:
+        revision = _checkpoint_module.validate_revision(data["revision"])
+    except _checkpoint_module.CheckpointOverrideError as error:
+        _fail("policy.checkpoint.revision", str(error))
+    return Checkpoint(id=checkpoint_id, revision=revision)
+
+
 def _executable(value: Any, path: str) -> None:
     parts = value if type(value) is list else [value]
     if not 1 <= len(parts) <= 8 or any(
@@ -395,18 +430,24 @@ def parse_spec(data: Any) -> Spec:
     if type(name) is not str or len(name) > MAX_NAME or _NAME.fullmatch(name) is None:
         _fail("name", "must be a lowercase slug of at most {} characters (letters, digits, hyphens)".format(MAX_NAME))
     suite = None
+    checkpoint = None
     if "policy" in top:
-        policy = _exact(top["policy"], "policy", ("suite",))
-        suite = policy["suite"]
-        if suite not in SUITES:
-            _fail("policy.suite", "must be one of {}".format(", ".join(SUITES)))
+        # A replay spec may name only a checkpoint (the case supplies the suite).
+        policy = _exact(top["policy"], "policy", () if mode == "replay" else ("suite",), (
+            "suite", "checkpoint") if mode == "replay" else ("checkpoint",))
+        if "suite" in policy:
+            suite = policy["suite"]
+            if suite not in SUITES:
+                _fail("policy.suite", "must be one of {}".format(", ".join(SUITES)))
+        if "checkpoint" in policy:
+            checkpoint = _checkpoint(policy["checkpoint"])
     return Spec(
         name=name, mode=mode, suite=suite, budget=_budget(top["budget"]),
         nemotron=_nemotron(top.get("nemotron", {})), backend=_backend(top["backend"]),
         scenario=_scenario(top["scenario"]) if mode == "scenario" else None,
         audit=_audit(top["audit"]) if mode == "audit" else None,
         paraphrase=_paraphrase(top["paraphrase"], suite) if mode == "paraphrase" else None,
-        raw=top,
+        checkpoint=checkpoint, raw=top,
     )
 
 
@@ -462,6 +503,6 @@ def load_spec(path: Any) -> Spec:
 
 
 __all__ = [
-    "Audit", "BackendSpec", "Budget", "Nemotron", "Paraphrase", "Scenario", "Spec", "SpecError",
+    "Audit", "BackendSpec", "Budget", "Checkpoint", "Nemotron", "Paraphrase", "Scenario", "Spec", "SpecError",
     "load_spec", "parse_spec", "parse_spec_text", "parse_starts",
 ]

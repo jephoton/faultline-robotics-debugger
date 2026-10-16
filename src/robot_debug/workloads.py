@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
-from robot_debug import m6_experiment, scenario_experiment
+from robot_debug import checkpoint_override, m6_experiment, scenario_experiment
 from robot_debug.job_runtime import JobRuntimeError, validate_workload_config
 from robot_debug.scenario_import import ScenarioImportError, validate_scenario_candidate
 
@@ -56,6 +56,20 @@ def _section(spec: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     return section
 
 
+def spec_checkpoint_fields(policy: Mapping[str, Any]) -> Dict[str, str]:
+    """The workload fields for a spec's ``policy.checkpoint`` (``{id, revision}``); empty without one."""
+
+    checkpoint = policy.get("checkpoint") if isinstance(policy, Mapping) else None
+    if checkpoint is None:
+        return {}
+    if not isinstance(checkpoint, Mapping):
+        raise WorkloadError("policy.checkpoint must be a mapping with id and revision")
+    try:
+        return checkpoint_override.as_fields((checkpoint.get("id"), checkpoint.get("revision")))
+    except checkpoint_override.CheckpointOverrideError as error:
+        raise WorkloadError("policy.checkpoint is invalid: {}".format(error)) from error
+
+
 def audit_workload(spec: Mapping[str, Any], run_id: str) -> Dict[str, Any]:
     """The ``m6-threshold`` workload for a spec's ``audit`` section and ``policy.suite``.
 
@@ -86,6 +100,7 @@ def audit_workload(spec: Mapping[str, Any], run_id: str) -> Dict[str, Any]:
     }  # type: Dict[str, Any]
     if audit.get("start") is not None:
         config["init_state_index"] = audit["start"]
+    config.update(spec_checkpoint_fields(policy))
     for key in _AUDIT_OVERRIDES:
         config[key] = copy.deepcopy(audit.get(key, DEFAULT_AUDIT_SEARCH[key]))
     if "required_failures" not in audit and type(config["attempts"]) is int:
@@ -135,6 +150,7 @@ def replay_workload(
     layout: Mapping[str, Any],
     reference_candidate: Optional[Mapping[str, Any]] = None,
     required_failures: Optional[int] = None,
+    checkpoint: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """The ``scenario-replay`` workload for a scenario case record.
 
@@ -148,7 +164,9 @@ def replay_workload(
       start state. Without it only the minimal scene is replayed and the verdict cannot be
       ``reference_fails``.
 
-    ``required_failures`` defaults to the case's own gate, else ``min(4, attempts)``.
+    ``required_failures`` defaults to the case's own gate, else ``min(4, attempts)``. ``checkpoint`` is an
+    ``(id, revision)`` pair to serve instead of the suite's pinned checkpoint (replay a case against a
+    changed policy); without it the workload is the same as before.
     """
 
     if not isinstance(case, Mapping) or not isinstance(case.get("replay"), Mapping):
@@ -177,6 +195,11 @@ def replay_workload(
         "task_id": case["task_id"], "layout": copy.deepcopy(dict(layout)), "scenes": scenes,
         "attempts": attempts, "required_failures": required_failures,
     }  # type: Dict[str, Any]
+    if checkpoint is not None:
+        try:
+            config.update(checkpoint_override.as_fields(tuple(checkpoint)))
+        except checkpoint_override.CheckpointOverrideError as error:
+            raise WorkloadError("the checkpoint is invalid: {}".format(error)) from error
     try:
         validate_workload_config(dict(config, deadline_seconds=3000))
         config["deadline_seconds"] = scenario_experiment.recommended_deadline_seconds(
@@ -191,4 +214,5 @@ __all__ = [
     "audit_workload",
     "reference_inputs",
     "replay_workload",
+    "spec_checkpoint_fields",
 ]
