@@ -15,6 +15,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { LocalOnlyPage } from './NotFoundPage';
 
 const POLL_MS = 5000;
+const RESUME_GRACE_MS = 20_000;
 const AUTO_OPEN_SECONDS = 3;
 
 export function RunPage() {
@@ -29,7 +30,14 @@ function Run({ controls }: { controls: boolean }) {
   const api = useApi();
   const navigate = useNavigate();
   const { items, refreshLibrary, refreshRuns } = useAppData();
-  const poll = usePoll(() => api.progress(run), POLL_MS, { key: run, until: (data) => isTerminal(data.status) });
+  // A resume restarts the same run folder: bump the epoch to restart polling, and keep polling through the few
+  // seconds before the resumed process has recorded itself (the folder still reads as finished until then).
+  const [epoch, setEpoch] = useState(0);
+  const resumedAt = useRef(0);
+  const poll = usePoll(() => api.progress(run), POLL_MS, {
+    key: `${run}#${epoch}`,
+    until: (data) => isTerminal(data.status) && Date.now() - resumedAt.current > RESUME_GRACE_MS,
+  });
   const progress: Progress | null = poll.data && poll.data.run === run ? poll.data : null;
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -123,7 +131,9 @@ function Run({ controls }: { controls: boolean }) {
     try {
       const result = await api.resumeRun(run);
       refreshRuns();
-      navigate(`/run/${encodeURIComponent(result.run)}`);
+      resumedAt.current = Date.now();
+      if (result.run === run) setEpoch((value) => value + 1);
+      else navigate(`/run/${encodeURIComponent(result.run)}`);
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : 'The run could not be resumed.');
     } finally {

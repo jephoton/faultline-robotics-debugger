@@ -96,12 +96,15 @@ describe('other run states', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('A run is already active. Wait for it to finish or stop it first.');
   });
 
-  it('resumes onto the new run page', async () => {
+  it('keeps watching the same run after Resume, as the server continues the same folder', async () => {
     const user = userEvent.setup();
     const view = await openRun(RUN_IDS.authExpired);
     await user.click(screen.getByRole('button', { name: /resume/i }));
     await waitFor(() => expect(posts(view, `/api/runs/${RUN_IDS.authExpired}/resume`)).toHaveLength(1));
+    // Polling restarts on the same page and picks up the resumed, running state.
     expect(await screen.findByRole('heading', { level: 1, name: 'new-diagnosis' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^stop$/i })).toBeInTheDocument();
   });
 
   it('offers the case for a run that already finished, without redirecting', async () => {

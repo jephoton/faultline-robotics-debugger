@@ -244,8 +244,9 @@ export function createMockServer(options: MockOptions = {}) {
       const resume = /^\/api\/runs\/([^/]+)\/resume$/.exec(path);
       if (resume) {
         if (activeDemo) return failure(409, 'A run is already active. Wait for it to finish or stop it first.');
-        counter += 1;
-        const run = `${decodeURIComponent(resume[1] as string)}-resumed-${counter}`;
+        // Like the real server: a resume continues the same run folder.
+        const run = decodeURIComponent(resume[1] as string);
+        stopped.delete(run);
         started.set(run, 0);
         return json(202, { run });
       }
