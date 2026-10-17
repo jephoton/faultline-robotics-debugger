@@ -362,6 +362,11 @@ def run_progress(runs_root: Path, run: str, probe: Probe = default_probe,
     mode = data.get("mode") if isinstance(data.get("mode"), str) else "scenario"
     active = recorded_process(folder, probe) is not None
     stopping = active and (folder / STOP_REQUEST_FILE).is_file()
+    # The CLI removes process.json when it exits normally; one left behind by a dead process means the run was
+    # cut off (its header may still say what the segment before it ended with), so it reads as interrupted.
+    orphaned = not active and (folder / PROCESS_FILE).is_file()
+    if orphaned:
+        header = dict(header, status="interrupted", reason="process_ended", detail=None)
     status = _status(active, stopping, header)
     spec = spec_raw(folder)
     rows = step_rows(mode, steps, spec, header.get("status") if not active else None)

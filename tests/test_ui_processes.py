@@ -146,6 +146,21 @@ class ProgressTests(Folders):
         steps.update(extra)
         return steps
 
+    def test_a_run_whose_process_died_mid_job_reads_as_interrupted_and_resumable(self):
+        # The header still says how the segment before the resume ended; process.json was left by a killed process.
+        folder = self.make_run(steps=self.scenario_steps(), run={"status": "failed"}, pid=DEAD)
+        progress = self.progress(folder)
+        self.assertEqual(progress["status"], "interrupted")
+        self.assertEqual(progress["stop_reason"], "process_ended")
+        self.assertIn("Resume re-attaches", progress["stop_text"])
+        self.assertTrue(progress["resumable"])
+        self.assertTrue(progress["attention"])
+        self.assertFalse(progress["stoppable"])
+
+    def test_a_cleanly_finished_run_keeps_its_own_status(self):
+        folder = self.make_run(steps=self.scenario_steps(), run={"status": "completed"}, pid=None)
+        self.assertEqual(self.progress(folder)["status"], "completed")
+
     def test_the_timeline_lists_every_planned_step_in_order(self):
         folder = self.make_run(steps=self.scenario_steps())
         progress = self.progress(folder)
@@ -393,7 +408,8 @@ class StopTextTests(unittest.TestCase):
         self.assertEqual(stop_text("stopped_by_user"), "Stopped from the control panel or `faultline stop`.")
         self.assertEqual(stop_text("something_new"), "Stopped: something_new.")
         self.assertIsNone(stop_text(None))
-        self.assertEqual(len(STOP_TEXTS), 14)
+        self.assertEqual(len(STOP_TEXTS), 15)
+        self.assertIn("Resume re-attaches", stop_text("process_ended"))
 
     def test_attention_excludes_only_a_clean_negative_result(self):
         self.assertFalse(needs_attention("no_reproducible_failure"))

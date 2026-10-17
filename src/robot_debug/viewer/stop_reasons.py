@@ -24,6 +24,8 @@ STOP_TEXTS: Dict[str, str] = {
     "stopped_by_user": "Stopped from the control panel or `faultline stop`.",
     "backend_error": "The cloud call failed; resume to re-attach.",
     "auth_expired": "Your Nebius sign-in expired. Sign in, then resume.",
+    "process_ended": ("The run's process ended before it finished (for example the control panel or this computer "
+                      "was shut down). Resume re-attaches to any Job it left running without paying for it twice."),
 }
 
 # A stop that is a clean negative finding is a result, not a problem: everything else needs a look (amber).
