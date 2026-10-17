@@ -47,6 +47,8 @@ class FakePopen:
     def _child(self, argv, kwargs):
         if self.behaviour == "oserror":
             raise FileNotFoundError("python")
+        if self.behaviour == "no_breakaway" and kwargs.get("creationflags", 0) & 0x01000000:
+            raise PermissionError("access denied: the job object forbids breaking away")
         if self.behaviour == "exit":
             kwargs["stdout"].write(b"error: spec: budget.max_spend_usd: must be positive\n")
             kwargs["stdout"].flush()
@@ -167,12 +169,20 @@ class StartTests(LauncherCase):
         self.make().start(spec, directory, no_llm=True)
         self.assertIn("--no-llm", self.popen.calls[0]["argv"])
 
+    def test_windows_falls_back_inside_the_job_when_breaking_away_is_forbidden(self):
+        launcher = self.make("no_breakaway", win32=True)
+        directory, spec = self.launch_dir()
+        launcher.start(spec, directory)
+        self.assertEqual([call["creationflags"] for call in self.popen.calls], [0x200 | 0x8 | 0x01000000, 0x200 | 0x8])
+        self.assertIn(b"could not leave the control panel's process group", (directory / "run.log").read_bytes())
+
     def test_windows_detaches_with_a_new_process_group_and_no_console(self):
         launcher = self.make(win32=True)
         directory, spec = self.launch_dir()
         launcher.start(spec, directory)
         call = self.popen.calls[0]
-        self.assertEqual(call["creationflags"], 0x200 | 0x8)
+        # New process group, no console, and out of the viewer's job object, so stopping the viewer cannot kill it.
+        self.assertEqual(call["creationflags"], 0x200 | 0x8 | 0x01000000)
         self.assertNotIn("start_new_session", call)
         self.assertTrue(call["close_fds"])
         self.assertEqual(call["stdin"], subprocess.DEVNULL)

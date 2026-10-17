@@ -36,13 +36,21 @@ RUN_DIR_FILE = "run-dir.txt"
 PENDING_FILE = "ui-pending.json"     # {"pid", "started_at"}: a spawned child that has not reported its run folder
 
 
-def popen_options(win32: bool) -> Dict[str, Any]:
-    """Keyword arguments that detach the child from this process: it must outlive the viewer."""
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
+
+def popen_options(win32: bool, breakaway: bool = True) -> Dict[str, Any]:
+    """Keyword arguments that detach the child from this process: it must outlive the viewer.
+
+    On Windows a process started inside a job object (a terminal, an IDE, a preview tool) is killed with that job
+    unless it breaks away from it; ``DETACHED_PROCESS`` alone does not (found October 17: stopping the viewer killed
+    a running diagnosis mid-Job). ``breakaway=False`` is the fallback for jobs that forbid breaking away."""
 
     options: Dict[str, Any] = {"stdin": subprocess.DEVNULL, "close_fds": True}
     if win32:
         options["creationflags"] = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
-                                    | getattr(subprocess, "DETACHED_PROCESS", 0x8))
+                                    | getattr(subprocess, "DETACHED_PROCESS", 0x8)
+                                    | (CREATE_BREAKAWAY_FROM_JOB if breakaway else 0))
     else:
         options["start_new_session"] = True
     return options
@@ -171,7 +179,16 @@ class Launcher:
                 process = self.popen(argv, stdout=log, stderr=subprocess.STDOUT, env=self._env(), cwd=self._cwd(),
                                      **popen_options(self.win32))
             except OSError:
-                raise ApiError(500, "The run could not be started on this machine.") from None
+                if not self.win32:
+                    raise ApiError(500, "The run could not be started on this machine.") from None
+                try:                    # a job object that forbids breaking away: start inside it instead
+                    process = self.popen(argv, stdout=log, stderr=subprocess.STDOUT, env=self._env(),
+                                         cwd=self._cwd(), **popen_options(self.win32, breakaway=False))
+                except OSError:
+                    raise ApiError(500, "The run could not be started on this machine.") from None
+                log.write(b"note: this run could not leave the control panel's process group; stopping the panel "
+                          b"stops it too (resume re-attaches)\n")
+                log.flush()
         self._remember(process, launch_dir)
         deadline = self.clock() + self.discover_seconds
         while True:
