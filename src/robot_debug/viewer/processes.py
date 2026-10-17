@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, NamedTuple, Optional
 
-from robot_debug.viewer.stop_reasons import needs_attention, stop_text
+from robot_debug.viewer.stop_reasons import NOT_ATTENTION, needs_attention, stop_text
 
 PROCESS_FILE = "process.json"            # robot_debug.cli.PROCESS_FILE
 STOP_REQUEST_FILE = "stop-request.json"  # robot_debug.orchestrator.STOP_REQUEST_FILE
@@ -367,6 +367,12 @@ def run_progress(runs_root: Path, run: str, probe: Probe = default_probe,
     orphaned = not active and (folder / PROCESS_FILE).is_file()
     if orphaned:
         header = dict(header, status="interrupted", reason="process_ended", detail=None)
+    # "No failure repeated" is the diagnosis's answer, not a problem: the run is finished, there is nothing to resume,
+    # and its result is in the library (as a run without a case when nothing was registered).
+    negative = (not active and header.get("status") == "stopped" and isinstance(header.get("reason"), str)
+                and header["reason"] in NOT_ATTENTION)
+    if negative:
+        header = dict(header, status="completed")
     status = _status(active, stopping, header)
     spec = spec_raw(folder)
     rows = step_rows(mode, steps, spec, header.get("status") if not active else None)
@@ -393,7 +399,8 @@ def run_progress(runs_root: Path, run: str, probe: Probe = default_probe,
         "steps": rows, "job": job,
         "reserved_usd": _money(ledger.get("reserved_usd")) or 0.0, "elapsed_seconds": round(elapsed, 1),
         "max_hours": _money(ledger.get("max_hours")) or 0.0, "log_tail": log_tail(folder),
-        "library_id": "d-" + registered if isinstance(registered, str) and registered else None,
+        "library_id": ("d-" + registered if isinstance(registered, str) and registered
+                       else "r-" + folder.name if negative and mode != "replay" else None),
         "resumable": (not active) and mode != "replay" and status in ("stopped", "failed", "interrupted"),
         "stoppable": active and not stopping,
     }

@@ -157,6 +157,19 @@ class ProgressTests(Folders):
         self.assertTrue(progress["attention"])
         self.assertFalse(progress["stoppable"])
 
+    def test_no_failure_found_is_a_finished_result_not_a_stop_to_resume(self):
+        steps = {"paraphrase": {"status": "done"}, "screen": {"status": "done", "state": "COMPLETED", "attempts": []}}
+        folder = self.make_run(mode="paraphrase", steps=steps, pid=None,
+                               run={"status": "stopped", "reason": "no_reproducible_failure"})
+        progress = self.progress(folder)
+        self.assertEqual(progress["status"], "completed")
+        self.assertFalse(progress["resumable"])
+        self.assertFalse(progress["attention"])
+        self.assertEqual(progress["library_id"], "r-" + folder.name)
+        self.assertEqual(progress["stop_text"], "No failure repeated 4 of 5 times.")
+        later = {row["key"]: row["status"] for row in progress["steps"]}
+        self.assertEqual(later["reduce"], "skipped")
+
     def test_a_cleanly_finished_run_keeps_its_own_status(self):
         folder = self.make_run(steps=self.scenario_steps(), run={"status": "completed"}, pid=None)
         self.assertEqual(self.progress(folder)["status"], "completed")
