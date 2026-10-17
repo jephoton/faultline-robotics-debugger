@@ -9,6 +9,7 @@ from pathlib import Path
 
 from robot_debug.backends import Backend, BackendError, JobHandle, make_backend
 from robot_debug.backends.nebius import (
+    CliError,
     Launcher,
     NebiusBackend,
     NebiusCli,
@@ -142,6 +143,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("tenant-e00f...", str(caught.exception))
         self.assertNotIn("faketenant0001", str(caught.exception))
+
+    def test_an_error_keeps_its_cause_not_the_trailing_request_ids(self):
+        detail = ("Error: rpc error: code = FailedPrecondition desc = bucket quota exceeded for tenant "
+                  "This issue may be linked to API request calls. The following information may be helpful "
+                  "while debugging the issue: Request ID: 9ce4 Trace ID: 26a5 Previous Request IDs: b0fd, 4f7c")
+        with self.assertRaises(CliError) as caught:
+            self.cli(lambda argv, cwd=None, timeout=None: completed(argv, 64, "", detail)).text(
+                ["storage", "bucket", "create", "--name", "faultline-x-abc123"])
+        message = str(caught.exception)
+        self.assertIn("bucket quota exceeded", message)
+        self.assertNotIn("Request ID", message)
+        self.assertIn("delete emptied faultline-* buckets", message)
+        self.assertEqual(caught.exception.kind, "quota")
+
+    def test_a_rate_limit_stays_transient(self):
+        answers = [completed([], 1, "", "rpc error: code = ResourceExhausted desc = too many requests"),
+                   completed([], 0, "{}", "")]
+        self.assertEqual(self.cli(lambda argv, cwd=None, timeout=None: answers.pop(0)).json(["x"]), {})
 
     def test_timeout_counts_as_transient(self):
         import subprocess

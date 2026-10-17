@@ -77,6 +77,18 @@ _JOB_ID_TEXT = re.compile(r"\baijob-[a-z0-9]+\b")
 _AUTH = re.compile(r"get auth data|authorize: |unauthenticated|switch to your browser", re.IGNORECASE)
 _NOT_FOUND = re.compile(r"not.?found", re.IGNORECASE)
 _EXISTS = re.compile(r"already.?exists", re.IGNORECASE)
+# A used-up quota is permanent until someone frees it; a rate limit (also gRPC ResourceExhausted) stays transient.
+_QUOTA = re.compile(r"quota|limit (is )?(exceeded|reached)", re.IGNORECASE)
+# The CLI ends errors with debugging boilerplate and request ids; the cause comes before it.
+_BOILERPLATE = re.compile(r"\s*(This issue may be linked|The following information may be helpful|Request ID:|"
+                          r"Trace ID:|Previous Request IDs:).*", re.IGNORECASE)
+
+
+def _error_detail(detail: str, limit: int = 300) -> str:
+    """The useful part of a CLI error: the start of the message, without the trailing request ids."""
+
+    text = _BOILERPLATE.sub("", detail).strip() or detail
+    return text if len(text) <= limit else text[:limit] + "…"
 
 _TERMINAL = {
     "COMPLETED": "COMPLETED", "SUCCEEDED": "COMPLETED", "FAILED": "FAILED",
@@ -210,7 +222,13 @@ class NebiusCli:
                 kind = "transient"
             else:
                 kind = "other"
-            error = CliError("%s failed (exit %s): %s" % (label, result.returncode, redact(detail[-300:])), kind)
+            message = "%s failed (exit %s): %s" % (label, result.returncode, redact(_error_detail(detail)))
+            if kind != "transient" and _QUOTA.search(detail):
+                kind = "quota"
+                message += (" (a Nebius quota is used up; for buckets, delete emptied faultline-* buckets in the "
+                            "console or with `nebius storage bucket delete`, then resume)" if "bucket" in label
+                            else " (a Nebius quota is used up; check the project's quotas, then resume)")
+            error = CliError(message, kind)
             if kind != "transient":
                 raise error
         assert error is not None
