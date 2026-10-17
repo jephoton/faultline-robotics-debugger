@@ -66,3 +66,29 @@ US$1.7468/h, as recorded by each run's spend ledger; reconcile with billing.
 Run folders (ignored): `artifacts/runs/{catalog-spatial,scene-goal,scene-object,paraphrase-task0,paraphrase-l10}-*`,
 each with spec, ledger, steps, Job evidence, report and case; private specs
 with real ids in `artifacts/specs-local/`.
+
+## Control panel live check (October 17)
+
+The first run started from the control panel (`faultline ui`, ADR 0033), image
+v16, cap US$1.30 approved by Jethro: paraphrase diagnosis on LIBERO-Spatial
+task 0, start 0, four rewordings by Nemotron 3 Super (all kept by the meaning
+check). Control S S; all four rewordings succeeded, so there was nothing to
+reduce. Cost US$0.31 (one screen Job, 393 s of measured container time).
+GR00T has now passed 24 everyday rewordings across three suites.
+
+What the check found in the product (all fixed the same day):
+
+- The tenant's 10-bucket quota was full of earlier runs' buckets, and the CLI
+  error kept only its trailing request ids. Errors now keep the cause and say
+  when a quota is used up; seven emptied buckets were deleted (non-empty ones
+  are refused by Nebius, so no evidence was lost).
+- Stopping the panel's server killed the run it had started (a Windows job
+  object takes its children with it). The run re-attached to its submitted
+  Job with `--resume` and paid once; runs now break away from the server's
+  job object, and a run whose process died reads as "interrupted" with
+  Resume.
+- Smaller: Resume did not restart the run page's polling, a resumed run's
+  header kept its old status, the review step refused any plan whose total
+  worst case exceeded the cap (the CLI only needs the first Job to fit), and
+  a "no failure found" result read as a stop to resume.
+

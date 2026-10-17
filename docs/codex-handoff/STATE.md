@@ -18,8 +18,10 @@
 - The September viewer pages are retired; their data APIs remain.
 - Independent security review: no cross-origin control found; its 14
   findings fixed. Python suite 2843 OK (60 skips); web suite 173 OK.
-- Not yet done: the one real run started from the panel (needs Jethro's go
-  and a Nebius sign-in), and publishing the gallery (M7a step 5, needs go).
+- Live check from the panel done (paraphrase, LIBERO-Spatial 0, US$0.31,
+  no failure; `m7-breadth-pack.md`). Its findings are fixed (run survival on
+  Windows, interrupted state, quota errors, resume polling, cap rule).
+  Suite 2851 OK. Next: publishing the gallery (M7a step 5, needs Jethro's go).
 
 ## October 16 review fixes and import replication (Claude Code)
 
