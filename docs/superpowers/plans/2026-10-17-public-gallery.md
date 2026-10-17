@@ -24,10 +24,10 @@ Handoff refresh/review/commit → export generation → export review ∥ authen
 
 ## Task 1 — Restore a reliable handoff (green)
 
-- [ ] Rewrite `PROJECT.md` as a concise current architecture map: two product modes, CLI/orchestrator/backends, current React control panel, static export, four LIBERO suites, Nemotron per-task roles, Tavily boundaries, replay limitations and local GPU validation boundary. Remove obsolete claims that M5 or Serverless are unaccepted.
-- [ ] Replace the M3-centric `RUNBOOK.md` with portable installation, test, UI, dry-run, diagnosis, stop/resume, replay, export and recovery commands. Link historical VM experiment notes rather than presenting them as current setup. Record historical test counts as dated evidence, not permanent expected totals. Never write user-specific paths.
-- [ ] Put a concise authoritative current snapshot at the top of `STATE.md`. Preserve older entries under an explicit historical/superseded heading. Identify the completed live panel check, estimated/unreconciled costs, current step 5 authorization and no-new-paid-run boundary. Update the roadmap's current status date and publication gate.
-- [ ] Validate CLI help, relative documentation links and `git diff --check`; independently review factual consistency against ADRs 0027–0033 and the latest experiment notes. Commit explicit paths as `docs(handoff): synchronize current product and operations`.
+- [x] Rewrite `PROJECT.md` as a concise current architecture map: two product modes, CLI/orchestrator/backends, current React control panel, static export, four LIBERO suites, Nemotron per-task roles, Tavily boundaries, replay limitations and local GPU validation boundary. Remove obsolete claims that M5 or Serverless are unaccepted.
+- [x] Replace the M3-centric `RUNBOOK.md` with portable installation, test, UI, dry-run, diagnosis, stop/resume, replay, export and recovery commands. Link historical VM experiment notes rather than presenting them as current setup. Record historical test counts as dated evidence, not permanent expected totals. Never write user-specific paths.
+- [x] Put a concise authoritative current snapshot at the top of `STATE.md`. Preserve older entries in `STATE-history-through-2026-10-17.md` under an explicit historical/superseded heading. Identify the completed live panel check, estimated/unreconciled costs, current step 5 authorization and no-new-paid-run boundary. Update the roadmap's current status date and publication gate.
+- [x] Validate CLI help, relative documentation links and `git diff --check`; independently review factual consistency against ADRs 0027–0033 and the latest experiment notes. Commit explicit paths as `docs(handoff): synchronize current product and operations`.
 
 ## Task 2 — Prepare and inspect the exact public payload (green/amber)
 

@@ -2,7 +2,7 @@
 
 # Faultline Project Roadmap
 
-## Current status — October 16, 2026
+## Current status — October 17, 2026
 
 Faultline finds a robot-policy failure, confirms that it repeats, reduces it to
 a minimal trigger and saves it as a replayable regression case. The
@@ -25,6 +25,12 @@ Spend so far is tracked per experiment note; every figure there is an estimate
 pending billing reconciliation, and the current Nebius balance is in the
 billing console (see billing, not this file). Roadmap order and
 timeboxes: [ADR 0023](docs/decisions/0023-post-m5-roadmap-order.md).
+
+**Immediate authorized step:** Jethro approved proceeding with M7a step 5 on
+October 17 after the handoff refresh: publish only the privacy-filtered static
+gallery on Vercel, verify public case/media access and record the URL. This is
+not a new GPU/API spend allowance or approval for a public container image.
+See the [execution plan](docs/superpowers/plans/2026-10-17-public-gallery.md).
 
 **Everything below is the original September 12 startup plan, kept for
 history.** Its milestone table (section 6) is maintained; dated status notes
