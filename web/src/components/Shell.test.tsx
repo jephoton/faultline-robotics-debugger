@@ -77,9 +77,9 @@ describe('Shell in local mode', () => {
     expect(within(screen.getByRole('complementary', { name: 'Workspace' })).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
   });
 
-  it('returns to the previous app page when a route was opened inside the app', async () => {
+  it('always returns home even when the previous app page was a case', async () => {
     const user = userEvent.setup();
-    renderBrowserShell(local, '/');
+    renderBrowserShell(local, '/case/d-a');
     await user.click(screen.getByRole('link', { name: /setup/i }));
     expect(screen.getByRole('heading', { name: 'Setup page' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back' }));

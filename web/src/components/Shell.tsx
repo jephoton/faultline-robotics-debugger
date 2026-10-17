@@ -79,10 +79,7 @@ export function Shell({ session, items, runs, libraryState }: Props) {
             <button
               type="button"
               className="btn btn--secondary btn--small main__back"
-              onClick={() => {
-                if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
-                else navigate('/');
-              }}
+              onClick={() => navigate('/')}
             >
               <span aria-hidden="true">←</span> Back
             </button>
