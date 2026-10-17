@@ -137,7 +137,7 @@ export interface ReplayForm {
   checkpointRevision: string;
 }
 
-export const REPLAY_DEFAULTS: ReplayForm = { spend: '1', hours: '1', checkpointId: '', checkpointRevision: '' };
+export const REPLAY_DEFAULTS: ReplayForm = { spend: '1.2', hours: '1', checkpointId: '', checkpointRevision: '' };
 
 /** A replay spec for `faultline replay`: budget, an optional checkpoint override and the template's backend. */
 export function buildReplayYaml(caseName: string, form: ReplayForm, backend: string | null): string {

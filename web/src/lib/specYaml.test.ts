@@ -67,7 +67,8 @@ describe('buildReplayYaml', () => {
     const yaml = buildReplayYaml('soup-start14', REPLAY_DEFAULTS, BACKEND);
     expect(yaml).toContain('mode: replay');
     expect(yaml).toContain('name: replay-soup-start14');
-    expect(yaml).toContain('max_spend_usd: 1');
+    // The replay Job's worst case is about US$1.08, so the default cap must be above it or Start is refused.
+    expect(yaml).toContain('max_spend_usd: 1.2');
     expect(yaml).not.toContain('policy:');
     expect(yaml.trimEnd().endsWith('sha256:0000')).toBe(true);
   });
