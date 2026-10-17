@@ -14,6 +14,8 @@
   current authority.
 - [Runbook](RUNBOOK.md): setup, diagnosis, recovery, replay, export and
   verification commands.
+- [UI user runbook](../ui-runbook.md): click-by-click saved-case walkthrough
+  and recipes for users, separate from setup and architecture reference.
 - [Accepted decisions](../decisions/): rationale and scope; in particular
   [ADR 0027](../decisions/0027-m7-product-consolidation-and-access.md),
   [ADR 0032](../decisions/0032-breadth-pack.md) and

@@ -6,6 +6,10 @@
 > [the runbook](codex-handoff/RUNBOOK.md) for commands, and
 > [decisions](decisions/) for accepted design rationale.
 
+For **how to use the UI**, start with the [UI user runbook](ui-runbook.md):
+saved-case walkthrough, goal-based recipes, result interpretation and recovery.
+This document explains the system; it is not the first-use tutorial.
+
 ## Read this first
 
 Faultline has **two product modes, implemented by three execution paths**:

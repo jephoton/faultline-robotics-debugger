@@ -29,19 +29,26 @@ Do not treat walkthrough examples or default form values as spending approval.
 
 ## Deliverables and acceptance
 
-- [ ] Start with a five-minute, zero-new-compute walkthrough of the saved soup
+- [x] Start with a five-minute, zero-new-compute walkthrough of the saved soup
   failure: sidebar choice, three videos, reduction table, reruns, hypothesis
   versus evidence and interpretation. Include a compact demonstration route.
-- [ ] Add a choose-your-goal table with literal existing card labels. Include
+- [x] Add a choose-your-goal table with literal existing card labels. Include
   numbered recipes for known failing start, unknown-start screen, imported
   state, visual/scene stress test, rewordings and scenario replay. Every recipe
   states input, clicks, expected output, limitations and a safe stopping point.
-- [ ] Explain the shared review/start/progress workflow, cap versus all-service
+- [x] Explain the shared review/start/progress workflow, cap versus all-service
   charges, Stop versus navigation, Resume versus new run and uncertain Start.
-- [ ] Add result interpretation and troubleshooting (no failure, control failure,
+- [x] Add result interpretation and troubleshooting (no failure, control failure,
   incomplete reduction, missing video, absent Replay, stalled/expired run).
-- [ ] Writer self-checks labels against source. Coordinator checks spec coverage;
+- [x] Writer self-checks labels against source. Coordinator checks spec coverage;
   independent reviewer checks usability and source accuracy. Validate relative
   links and `git diff --check`; confirm only documentation is staged.
-- [ ] Link from README, docs index, architecture and existing handoff/runbook.
+- [x] Link from README, docs index, architecture and existing handoff/runbook.
   Commit as `docs(ui): add task-based user runbook`; no public redeploy.
+
+**Done October 18:** restructured into the Tencent demo-runbook format
+(Setup, nine demos with point, steps, expected output and talking point,
+then result reading, recovery, reset and a video route). Expected values were
+checked against the live API; an independent review checked labels and
+behaviour against `web/src`. Product fixes found on the way: the replay cap
+default and the audit wording for families a run never searched.

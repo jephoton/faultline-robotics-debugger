@@ -13,6 +13,8 @@ suite, task, start and perturbation family; none is a general claim.
   resume, replay.
 - [Architecture and full UI map](architecture.md): Mode 1 versus Mode 2,
   execution paths, local/cloud diagrams, user flow and current UI capabilities.
+- [UI user runbook](ui-runbook.md): start with a saved-case walkthrough, then
+  follow click-by-click recipes for diagnosis, stress tests, wording and replay.
 - The control panel: `faultline ui` (README, "Control panel"), a browser UI
   over the same commands; its design is
   [ADR 0033](decisions/0033-control-panel-ui.md).

@@ -28,6 +28,10 @@ python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.cli import
 
 Then open <http://127.0.0.1:8765> and select the case in the sidebar.
 
+For a click-by-click walkthrough and recipes for different goals, start with
+the [UI user runbook](docs/ui-runbook.md). Its first walkthrough uses saved
+evidence and starts no new compute; setup instructions are separate.
+
 ## Two modes, one engine
 
 | Mode | Question it answers | What you give it |

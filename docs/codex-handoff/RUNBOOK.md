@@ -5,6 +5,10 @@
 > Hugging Face secret, registry and image setup details. This document does
 > not grant approval for new paid work.
 
+For a guide to **using the interface**, rather than setting up or operating
+the CLI, read the [UI user runbook](../ui-runbook.md). It starts with a free
+walkthrough of recorded evidence and covers concrete diagnosis/replay scenarios.
+
 ## Install and inspect an offline case
 
 Use Python **3.10 or 3.11** (NumPy 1.24 has no wheel for newer versions).

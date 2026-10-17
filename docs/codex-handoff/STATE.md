@@ -70,6 +70,25 @@ all-services budget guarantee. Source audit also identified over-broad UI copy
 about causes/minimality, retry cost and incomplete audit coverage; these are
 documented review points, not fixes or new validation claims.
 
+October 18: the [UI user runbook](../ui-runbook.md) follows the Tencent
+project's demo-runbook format: Setup, then nine demos, each with its point,
+exact clicks and inputs, expected output and talking point. Demos 1–5 read the
+recorded cases (expected values checked against the live API on October 18).
+Demo 6 makes dry runs of every New diagnosis option, with the expected Job
+table at the form's defaults. Demos 7–9 (replay, start/stop/resume, import)
+are marked paid. Result interpretation, recovery, reset and a 90-second video
+route follow. It is distinct from architecture/setup documentation and does
+not authorize the paid actions it describes.
+Two product fixes came out of checking it:
+- The replay cap default (US$1.00, in both the spec template and the panel's
+  replay form) was below the replay Job's worst case (US$1.08), so a default
+  replay would be refused; both are now US$1.20.
+- An audit family the run never searched (scene-goal, where the control
+  failed) read "No failure up to severity 1" and "no failure found". It now
+  reads "Not tested", and a partly searched family reads "Incomplete".
+The **published gallery still shows the old audit wording** until it is
+re-exported and redeployed, which needs Jethro's go.
+
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851
 Python tests with eight skips; the web test/build/type-check and committed-bundle
