@@ -36,6 +36,10 @@ STEP_LABELS = {
     "explain": "Nemotron's reading", "register": "Add to the library", "paraphrase": "Write the paraphrases",
     "audit": "Run the audit", "replay": "Replay the case",
 }
+# Where a mode's step means something else (a paraphrase run screens rewordings, not starts).
+MODE_STEP_LABELS = {
+    "paraphrase": {"screen": "Screen the rewordings", "reduce": "Reduce the wording"},
+}
 STEP_ORDER = {
     "scenario": ["import", "screen", "plan", "reduce", "report", "case", "explain", "register"],
     "paraphrase": ["paraphrase", "screen", "reduce", "report", "case", "register"],
@@ -244,10 +248,10 @@ def _step_keys(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any]) -> 
     return keys
 
 
-def _step_label(key: str) -> str:
+def _step_label(key: str, mode: str = "") -> str:
     if _CONTINUATION.match(key):
         return "Continue the reduction ({})".format(key[6:])
-    return STEP_LABELS.get(key, key.capitalize())
+    return MODE_STEP_LABELS.get(mode, {}).get(key) or STEP_LABELS.get(key, key.capitalize())
 
 
 def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], finished: Optional[str]) -> List[Dict]:
@@ -261,7 +265,7 @@ def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], fini
         record = steps.get(key) if isinstance(steps.get(key), Mapping) else None
         attempts = [a for a in (record or {}).get("attempts", []) if isinstance(a, Mapping)]
         status = (record or {}).get("status") or ("skipped" if finished == "completed" else "pending")
-        rows.append({"key": key, "label": _step_label(key), "status": status,
+        rows.append({"key": key, "label": _step_label(key, mode), "status": status,
                      "state": (record or {}).get("state") if isinstance((record or {}).get("state"), str) else None,
                      "attempts": len(attempts),
                      "capacity_waits": sum(1 for a in attempts if a.get("state") == "capacity")})

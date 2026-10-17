@@ -331,6 +331,17 @@ class ProgressTests(Folders):
             px.run_progress(self.root, folder.name, probe_for())
 
 
+class StepLabelTests(unittest.TestCase):
+    def test_a_paraphrase_run_screens_rewordings_not_starts(self):
+        rows = {row["key"]: row["label"] for row in px.step_rows("paraphrase", {}, {}, None)}
+        self.assertEqual(rows["screen"], "Screen the rewordings")
+        self.assertEqual(rows["reduce"], "Reduce the wording")
+
+    def test_a_scenario_run_keeps_the_start_wording(self):
+        rows = {row["key"]: row["label"] for row in px.step_rows("scenario", {}, {}, None)}
+        self.assertEqual(rows["screen"], "Screen the starts")
+
+
 class ScrubTextTests(unittest.TestCase):
     """The text scrubber hides local paths without damaging URLs (review L3)."""
 
