@@ -7,13 +7,15 @@
 
 ## Current position — October 17, 2026
 
-M1–M6 are complete. M7a steps 1–4 are complete, including the control panel's
-live acceptance check. The immediate work is **M7a step 5: publish the static
-gallery**. Jethro explicitly authorized it after the handoff refresh on
+M1–M6 and **M7a steps 1–5 are complete**, including the control panel's live
+acceptance check and the published
+[static gallery](https://faultline-robotics-debugger.vercel.app).
+Jethro explicitly authorized publication after the handoff refresh on
 October 17. Execution plan:
 [public gallery](../superpowers/plans/2026-10-17-public-gallery.md).
 Publication is authorized for the filtered gallery only, not the repository's
 visibility, a public container image, paid hosting upgrades or new GPU runs.
+Next is **M7b: demo/video and submission preparation**.
 
 ## What exists and what has been demonstrated
 
@@ -54,6 +56,15 @@ Python tests with eight skips; the web test/build/type-check and committed-bundl
 freshness checks passed. These are dated evidence, not a fixed expected test
 count. Later changes must be checked independently.
 
+Gallery acceptance: 77 export/library tests passed; five cases and 25 videos
+published. All 55 served files matched the inspected export by SHA-256.
+Unauthenticated browser checks passed case deep links, video playback,
+static-only controls, three viewport sizes, theme/menu interaction and
+automated accessibility checks (with two incomplete case-page checks noted).
+See [the publication record](../experiments/m7-public-gallery.md) for exact
+scope, limitations and portable regeneration commands. No new paid inference
+or GPU experiment was run.
+
 The live UI check exposed and fixed: bucket-quota diagnostics, Windows panel
 shutdown killing its child run, interrupted/resumed status, Resume polling,
 first-Job budget admission, no-failure completion presentation and paraphrase
@@ -62,18 +73,15 @@ These are recorded project defects, not inferred provider or robot failures.
 
 ## Next actions and gates
 
-1. Complete and commit the current architecture/runbook refresh.
-2. Generate a fresh ignored gallery export; inspect public projections, reports,
-   media and static-mode behavior independently before uploading anything.
-3. Use Vercel for the accepted static publication; no credentials or Python
-   backend in the deployment. If authentication or account selection is
-   unavailable, request only the missing user action.
-4. Verify public visitor access, case deep links, media and browser behavior;
-   record the stable URL and acceptance evidence. Do not mark M7a complete
-   before these checks pass.
-5. M7b follows: three-minute pitch/demo, write-up, public-repository/judge setup
+1. M7b: plan the three-minute pitch/demo, write-up, public-repository/judge setup
    audit, required tool feedback and billing reconciliation. Roadmap target is
    October 29; recorded submission deadline October 30, 10:00 PT.
+2. Keep the public gallery static. New cases or regenerated interpretations
+   require inspecting the changed public payload before redeploying. The
+   publication record discloses absent audit videos, no default paraphrase
+   case, M4's stored explanation fallback and unfinished scenario size search.
+3. Any new paid experiment, hosting upgrade or public container image requires
+   its own accepted scope and gate; M7a completion does not authorize it.
 
 ## Boundaries and remaining limitations
 

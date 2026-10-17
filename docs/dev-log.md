@@ -4,6 +4,29 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## Public gallery publication — October 17
+
+The installed Vercel CLI could not validate its initial HTTPS connection with
+Node's default CA configuration. Setting `NODE_USE_SYSTEM_CA=1` for the CLI
+process enabled the trusted workstation system store; authentication and
+deployment then succeeded with TLS verification still enabled. No antivirus,
+global trust setting or certificate-verification bypass was changed. This is
+local Node trust configuration, not a Nebius/NVIDIA failure.
+
+Vercel linking automatically created `.env.local` with an OIDC credential in
+the ignored export directory. The final deployment dry run explicitly excluded
+it, `.vercel` and `.gitignore`, and enumerated exactly the 56 reviewed files.
+That file must never be copied into a public deployment or committed. The
+static session has no token and no provider calls; all 55 served files were
+verified remotely by hash. See [the publication record](experiments/m7-public-gallery.md).
+
+Public-output review also found a conservative case/report discrepancy: the
+saved scenario retains full shift sizes while its historical rerun table
+contains a successful 75% joint-offset candidate. Entity minimality remains
+supported, but completed size minimization is not claimed. This is a known
+evidence-presentation limitation, not a new simulator result; no source
+recording or outcome was rewritten.
+
 ## Serverless export failure and deadline review — October 10
 
 Resumed quality review additionally reproduced interruption during probe launch:

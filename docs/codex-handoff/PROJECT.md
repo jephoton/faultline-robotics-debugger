@@ -67,6 +67,9 @@ different policy, but compatibility remains the operator's responsibility.
   checks. `faultline export` makes a separate static gallery of finished
   cases with no provider calls or controls. It is a filtered publication
   artifact, not a live copy of the local server ([ADR 0033](../decisions/0033-control-panel-ui.md)).
+  The [public gallery](https://faultline-robotics-debugger.vercel.app) is live;
+  its [publication record](../experiments/m7-public-gallery.md) defines the
+  included evidence, verification and remaining limitations.
 - Nemotron 3 Ultra writes pre-rerun scenario hypotheses and explanations of
   verified scenario and historical occlusion cases. Nemotron 3 Super writes
   paraphrases; Nemotron 3 Nano summarizes related research. Audit and

@@ -14,6 +14,10 @@ original names for compatibility.
 
 ## See a real result in one minute
 
+Open the [public Faultline gallery](https://faultline-robotics-debugger.vercel.app)
+to explore five recorded cases and their evidence without installing anything.
+It is read-only: diagnoses and replays run through the local tool, not the site.
+
 [`demo/`](demo/README.md) holds one finished diagnosis (the LIBERO-10 failure
 below, with its report, Nemotron explanation and the original, minimal and
 reference videos). No GPU or cloud account is needed:
@@ -142,8 +146,9 @@ M1–M6 are complete. **M7a** turns the engine into a product
 scenario reduction (mode 1), `faultline diagnose / replay`, and the breadth
 pack (four suites; image, scene and language families) and the **control
 panel** (a browser UI over the same commands,
-[ADR 0033](docs/decisions/0033-control-panel-ui.md)) are done. Next is
-publishing the static **gallery** of finished cases.
+[ADR 0033](docs/decisions/0033-control-panel-ui.md)) and the public static
+**gallery** of finished cases are done
+([publication checks and limits](docs/experiments/m7-public-gallery.md)).
 
 M7b is the submission (demo video and write-up). LIBERO-Plus integration is a
 post-M7 stretch goal.
@@ -186,7 +191,8 @@ be done from the terminal (`faultline diagnose`, `stop`, `replay`), and every
 spec it writes is kept under `artifacts/specs-ui/`.
 
 `faultline export --out site/` writes the finished cases as a static gallery
-(no controls, no run folders, ids or local paths) for any static host.
+(no controls, private run folders, cloud resource IDs or local paths) for any
+static host. Public case/evidence fingerprints remain available for reference.
 
 ## Documentation
 

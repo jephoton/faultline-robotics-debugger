@@ -7,6 +7,8 @@ suite, task, start and perturbation family; none is a general claim.
 
 - [Project README](../README.md): what Faultline does, what it has found, how
   NVIDIA and Nebius are used.
+- [Public gallery](https://faultline-robotics-debugger.vercel.app): recorded
+  cases, videos and reports, without installation or a cloud account.
 - [Quickstart: run a diagnosis](setup/diagnose.md): setup, specs, dry run,
   resume, replay.
 - The control panel: `faultline ui` (README, "Control panel"), a browser UI
@@ -26,6 +28,8 @@ The three M7 notes are the newest and use the `faultline` tooling:
   together; includes the Nemotron model comparison and the regression replay.
 - [M7 breadth pack](experiments/m7-breadth-pack.md): four suites; image
   catalog, lighting, viewpoint and paraphrases, one task and start per family.
+- [M7 public gallery](experiments/m7-public-gallery.md): published evidence
+  scope, privacy review, visitor checks and regeneration/deployment commands.
 - [M6: camera roles and scalar families](experiments/m6-camera-and-scalar-families.md):
   wrist versus third-person camera; blur, noise, darkening and contrast
   thresholds.

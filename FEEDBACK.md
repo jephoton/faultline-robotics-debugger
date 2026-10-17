@@ -7,6 +7,17 @@ rates times measured time or tokens) and has not yet been reconciled with
 posted Nebius billing. Do not put account identifiers, tokens, private
 addresses or payment details here.
 
+## October 17 publication-only checkpoint
+
+The [public gallery](https://faultline-robotics-debugger.vercel.app) now exposes
+reviewed recordings and reports from the completed Nebius/GR00T experiments.
+Publication ran no additional Nebius Job, Token Factory generation or Tavily
+search, so it adds no new provider-reliability or model-quality claim and no
+new inference-cost estimate. Existing feedback and costs still need final
+submission review and billing reconciliation. Local Node certificate-store
+friction during Vercel deployment is documented separately in the
+[development log](docs/dev-log.md), not attributed to Nebius or NVIDIA.
+
 ## Summary
 
 | Tool | What we used it for | What worked | Friction and attribution | Would we use it again? |

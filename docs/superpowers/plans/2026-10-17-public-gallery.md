@@ -31,20 +31,28 @@ Handoff refresh/review/commit → export generation → export review ∥ authen
 
 ## Task 2 — Prepare and inspect the exact public payload (green/amber)
 
-- [ ] Run `PYTHONPATH=src python -B -m robot_debug.cli export --help`, then export into a new ignored directory under `artifacts/` without `--force`. Preserve all source evidence and earlier exports.
-- [ ] Run the existing exporter/library test modules identified in `tests/`; inspect the generated session, library, case details, reports, media references and deployment configuration. Require `mode: static`, `controls: false`, `token: null`, no private ids/paths/specs/logs/credentials and no omitted cases or missing required videos without disclosure.
-- [ ] Have the independent reviewer inspect both the export guard and generated payload. No uploading the repository, `.env`, raw run folders or source maps containing private data. Stop publication for an actual privacy finding; make any required code repair test-first within a separately explicit scope.
-- [ ] Record export counts, sizes and checks in `docs/experiments/m7-public-gallery.md` using only public-safe evidence. Preserve model explanations as interpretations and research as context, never verified causal claims.
+- [x] Run `PYTHONPATH=src python -B -m robot_debug.cli export --help`, then export into a new ignored directory under `artifacts/` without `--force`. Preserve all source evidence and earlier exports.
+- [x] Run the existing exporter/library test modules identified in `tests/`; inspect the generated session, library, case details, reports, media references and deployment configuration. Require `mode: static`, `controls: false`, `token: null`, no private ids/paths/specs/logs/credentials and no omitted cases or missing required videos without disclosure.
+- [x] Have the independent reviewer inspect both the export guard and generated payload. No uploading the repository, `.env`, raw run folders or source maps containing private data. Stop publication for an actual privacy finding; make any required code repair test-first within a separately explicit scope.
+- [x] Record export counts, sizes and checks in `docs/experiments/m7-public-gallery.md` using only public-safe evidence. Preserve model explanations as interpretations and research as context, never verified causal claims.
 
 ## Task 3 — Publish static files only (amber within accepted design)
 
-- [ ] Read official Vercel deployment/configuration documentation and installed CLI help. Check CLI identity and relevant existing projects without printing authentication material. Use a clearly named Faultline gallery project; do not overwrite an unrelated deployment or upgrade a plan.
-- [ ] Verify the existing export's SPA rewrite preserves `/assets/`, `/data/` and `/media/`. Apply static-only settings in the export/project when needed; no API functions or secret environment variables. Review the exact deployment directory before invoking `vercel`.
-- [ ] Deploy the inspected directory to Vercel production with the CLI. User-facing access must work without a Vercel login. Do not treat a protected preview or a successful upload as a usable public gallery.
+- [x] Read official Vercel deployment/configuration documentation and installed CLI help. Check CLI identity and relevant existing projects without printing authentication material. Use a clearly named Faultline gallery project; do not overwrite an unrelated deployment or upgrade a plan.
+- [x] Verify the existing export's SPA rewrite preserves `/assets/`, `/data/` and `/media/`. Apply static-only settings in the export/project when needed; no API functions or secret environment variables. Review the exact deployment directory before invoking `vercel`.
+- [x] Deploy the inspected directory to Vercel production with the CLI. User-facing access must work without a Vercel login. Do not treat a protected preview or a successful upload as a usable public gallery.
 
 ## Task 4 — Visitor acceptance and durable completion (green)
 
-- [ ] Fetch home, session, library, each case JSON and referenced assets/media; verify HTTPS, content types, SPA direct links and media retrieval. Check that public pages have no start/stop/resume/replay control surface and cannot call a provider.
-- [ ] Browser QA: home → representative scenario case → video evidence/report → another case kind → refresh a deep link. Check narrow-screen layout and console/network errors. Report verification limitations honestly; never substitute HTTP success for a rendered-page check.
-- [ ] Update the deployment note, README/roadmap and the top handoff snapshot with the stable public URL, exact evidence scope, regeneration/deployment commands and current limitations. Mark M7a complete only if its acceptance checks pass; M7b remains submission/video/write-up work.
-- [ ] Commit publication documentation separately (`docs(m7): record public gallery deployment`), check GitHub identity before pushing, then verify CI for the exact pushed commit. No history rewrite, repository visibility change or paid experiments.
+- [x] Fetch home, session, library, each case JSON and referenced assets/media; verify HTTPS, content types, SPA direct links and media retrieval. Check that public pages have no start/stop/resume/replay control surface and cannot call a provider.
+- [x] Browser QA: home → representative scenario case → video evidence/report → another case kind → refresh a deep link. Check narrow-screen layout and console/network errors. Report verification limitations honestly; never substitute HTTP success for a rendered-page check.
+- [x] Update the deployment note, README/roadmap and the top handoff snapshot with the stable public URL, exact evidence scope, regeneration/deployment commands and current limitations. Mark M7a complete only if its acceptance checks pass; M7b remains submission/video/write-up work.
+- [x] Prepare the separate publication documentation commit (`docs(m7): record public gallery deployment`) and verify the GitHub identity. The coordinator pushes and checks CI for that exact resulting commit after committing, then reports the outcome; no timestamp-only follow-up commit is needed. No history rewrite, repository visibility change or paid experiments.
+
+## Acceptance evidence
+
+Published at [Faultline](https://faultline-robotics-debugger.vercel.app).
+The [publication record](../../experiments/m7-public-gallery.md) contains exact
+payload counts/fingerprints, independent privacy review, visitor/browser checks,
+local test results and limitations. No product-code change or new paid robot
+experiment was needed. M7b is next.

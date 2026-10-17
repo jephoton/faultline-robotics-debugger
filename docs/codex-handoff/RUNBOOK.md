@@ -100,6 +100,12 @@ spec can name a different compatible `policy.checkpoint`.
 
 ## Static gallery and front end
 
+The public [gallery](https://faultline-robotics-debugger.vercel.app) is live.
+Its [publication record](../experiments/m7-public-gallery.md) documents the
+reviewed evidence scope, missing media/interpretation limitations, visitor
+checks and regeneration/deployment commands. It is not a hosted execution
+service; keep local run controls and credentials out of future deployments.
+
 ```bash
 faultline export --out artifacts/<fresh-gallery-dir>
 npm --prefix web ci
