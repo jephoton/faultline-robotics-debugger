@@ -6,7 +6,7 @@ faultline: 1
 name: replay-soup
 mode: replay
 budget:
-  max_spend_usd: 1.0
+  max_spend_usd: 1.2              # the replay Job's worst case is about US$1.08; measured October 15: US$0.41
   max_hours: 1
 backend:
   kind: nebius
