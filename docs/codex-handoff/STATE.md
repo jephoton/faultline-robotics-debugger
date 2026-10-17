@@ -52,14 +52,18 @@ Next is **M7b: demo/video and submission preparation**.
 
 October 17 UI follow-up: the shared shell now has a compact Back button at the
 top left of the main-content column, outside the sidebar, on non-home routes.
-It uses prior app history when present and returns a fresh direct entry to
-home. Local Python server startup/health and real-browser desktop/mobile
+It always returns home, including when the previous app page was a case;
+the diagnosis wizard's separate Back buttons still select the previous step.
+Local Python server startup/health and real-browser desktop/mobile
 navigation passed; 180 web tests, type check and the production bundle build
 passed. No Python/provider execution behavior changed. The public gallery
 remains the reviewed publication below; this local UI update has not been
-redeployed. The repo has an older occlusion-pipeline Mermaid diagram but no
-current standalone full-system diagram; `PROJECT.md` is the current written
-architecture overview.
+redeployed. `PROJECT.md` now includes full-system/user-journey Mermaid diagrams,
+the three execution modes versus two user intentions, source anchors and a
+UI-support/limitations table. Regrouping the three New diagnosis cards under
+two intentions is a proposal for Jethro's review, not an implemented redesign.
+Token Factory costs remain outside the GPU ledger; the diagram is not an
+all-services budget guarantee.
 
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851
