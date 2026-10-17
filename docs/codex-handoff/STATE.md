@@ -58,12 +58,17 @@ Local Python server startup/health and real-browser desktop/mobile
 navigation passed; 180 web tests, type check and the production bundle build
 passed. No Python/provider execution behavior changed. The public gallery
 remains the reviewed publication below; this local UI update has not been
-redeployed. `PROJECT.md` now includes full-system/user-journey Mermaid diagrams,
-the three execution modes versus two user intentions, source anchors and a
-UI-support/limitations table. Regrouping the three New diagnosis cards under
-two intentions is a proposal for Jethro's review, not an implemented redesign.
+redeployed. The canonical [architecture](../architecture.md) now contains the
+full-system/user-journey Mermaid diagrams, glossary, Mode 1/Mode 2 versus the
+three execution paths, source anchors and a full page/field/action/evidence UI
+inventory. `PROJECT.md` is a short handoff pointer, not a duplicate architecture.
+Rewordings belong to the policy-audit intention but retain a separate word-edit
+engine. Regrouping the three New diagnosis cards under two intentions is a
+proposal for Jethro's review, not an implemented redesign.
 Token Factory costs remain outside the GPU ledger; the diagram is not an
-all-services budget guarantee.
+all-services budget guarantee. Source audit also identified over-broad UI copy
+about causes/minimality, retry cost and incomplete audit coverage; these are
+documented review points, not fixes or new validation claims.
 
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851

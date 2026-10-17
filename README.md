@@ -46,6 +46,12 @@ saved **scenario** case (audit and paraphrase cases are not replayed yet) and
 can aim at a different checkpoint through `policy.checkpoint` in the replay
 spec, so you can test a retrained policy against the failure you found.
 
+The UI currently presents three execution paths: scenario, visual/scene audit,
+and instruction rewordings. Rewordings are part of product Mode 2 (language
+robustness) but use word-edit search rather than the visual-audit severity
+search. See [the architecture and full UI reference](docs/architecture.md) for
+the diagrams, terminology, controls, evidence and current limitations.
+
 ## What it has found so far
 
 All results are for GR00T N1.7 on LIBERO, one seed per run, on single Nebius

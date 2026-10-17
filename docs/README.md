@@ -11,6 +11,8 @@ suite, task, start and perturbation family; none is a general claim.
   cases, videos and reports, without installation or a cloud account.
 - [Quickstart: run a diagnosis](setup/diagnose.md): setup, specs, dry run,
   resume, replay.
+- [Architecture and full UI map](architecture.md): Mode 1 versus Mode 2,
+  execution paths, local/cloud diagrams, user flow and current UI capabilities.
 - The control panel: `faultline ui` (README, "Control panel"), a browser UI
   over the same commands; its design is
   [ADR 0033](decisions/0033-control-panel-ui.md).

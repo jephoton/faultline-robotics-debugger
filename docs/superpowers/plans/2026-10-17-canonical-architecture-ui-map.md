@@ -33,23 +33,30 @@ explain alternatives, recommend one, and await Jethro before changing UI code.
 
 ## Tasks
 
-- [ ] Inspect ADRs 0027/0032/0033 and UI source. Distinguish product Mode 1
+- [x] Inspect ADRs 0027/0032/0033 and UI source. Distinguish product Mode 1
   (`scenario`) from Mode 2 (audit intention, implemented as `audit` or `paraphrase`).
-- [ ] Create `docs/architecture.md`, carrying over the reviewed diagrams and
+- [x] Create `docs/architecture.md`, carrying over the reviewed diagrams and
   source anchors with corrected relative links. Add a short glossary, mode
   examples, shared versus mode-specific algorithms, technology responsibilities
   and an inventory of what every current UI page actually exposes.
-- [ ] Present wording as an audit subtype with a different search engine;
+- [x] Present wording as an audit subtype with a different search engine;
   explain why neither removing its separate implementation nor silently making
   it part of the numeric-family selector follows from that product grouping.
   Mark any recommended UI change as proposed, not implemented.
-- [ ] Replace `docs/codex-handoff/PROJECT.md` with a concise architecture pointer
+- [x] Replace `docs/codex-handoff/PROJECT.md` with a concise architecture pointer
   and stable product/operating boundaries; update `STATE.md`, `docs/README.md`
   and root `README.md` entry links. Preserve historical plan/ADR links.
-- [ ] Independently review actual source against the UI coverage claims; run
+- [x] Independently review actual source against the UI coverage claims; run
   Markdown relative-link checks, Mermaid parse/render and `git diff --check`.
   No test-suite or runtime success claim is needed for docs-only changes.
-- [ ] Commit with `docs(architecture): consolidate system and UI reference`.
+- [x] Commit with `docs(architecture): consolidate system and UI reference`.
+
+**Review checkpoint:** a smaller-model read-only UI audit and independent
+source/document review both passed. The coordinator checked their source
+findings, including the distinction between readiness checks that are shown
+and actual Start blockers. Both carried-over Mermaid diagrams parse/render;
+all relative links in the six changed documents resolve and the diff is clean.
+No UI/runtime source or deployed gallery changes are part of this step.
 
 No new paid run, UI redesign, cloud setup, public gallery redeploy, repository
 visibility change or claim of universal/minimal failure coverage is included.
