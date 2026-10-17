@@ -16,6 +16,9 @@ export function checkLabel(key: string): string {
 /** The dry-run table: every planned Job, its deadline and worst-case cost, and the total against the cap. */
 export function DryRunTable({ plan }: { plan: DryRun }) {
   const over = plan.worst_case_total_usd > plan.cap_usd;
+  // The CLI reserves each Job's worst case just before submitting it, so only the first Job must fit to start;
+  // a later Job that would not fit stops the run (resumable after raising the cap).
+  const firstFits = (plan.jobs[0]?.worst_case_usd ?? 0) <= plan.cap_usd;
   return (
     <>
       <div className="table-wrap">
@@ -54,9 +57,15 @@ export function DryRunTable({ plan }: { plan: DryRun }) {
         <dt>Spend cap</dt>
         <dd>
           {usd(plan.cap_usd)}{' '}
-          {over ? (
+          {over && !firstFits ? (
             <strong className="warn-text">
-              <Icon name="attention" /> The required Jobs could cost more than the cap.
+              <Icon name="attention" /> Even the first Job could cost more than the cap.
+            </strong>
+          ) : over ? (
+            <strong className="warn-text">
+              <Icon name="attention" /> The first Job fits, but not all of them. A later Job (for example a
+              reduction, which runs only if a failure is found) would be refused and the run would stop there;
+              you can raise the cap and resume.
             </strong>
           ) : (
             <span className="muted">(the worst case is {usd(plan.cap_usd - plan.worst_case_total_usd)} under it)</span>

@@ -58,10 +58,14 @@ export function StepReview({
     else if (plan.error) {
       list.push(plan.error.message);
       if (plan.error instanceof ApiError) for (const error of plan.error.errors) list.push(`${error.path || 'spec'}: ${error.message}`);
-    } else if (plan.data && plan.data.worst_case_total_usd > plan.data.cap_usd) {
-      list.push(
-        `The required Jobs could cost up to ${usd(plan.data.worst_case_total_usd)}, above your ${usd(plan.data.cap_usd)} cap. Raise the spend cap or choose a smaller test.`,
-      );
+    } else if (plan.data) {
+      // Only the first Job must fit: the run reserves each Job's worst case just before submitting it.
+      const first = plan.data.jobs[0];
+      if (first && first.worst_case_usd > plan.data.cap_usd) {
+        list.push(
+          `Even the first Job could cost up to ${usd(first.worst_case_usd)}, above your ${usd(plan.data.cap_usd)} cap, so nothing could run. Raise the spend cap.`,
+        );
+      }
     }
     const nebius = check('nebius_cli');
     if (nebius && !nebius.ok) list.push('You are not signed in to Nebius. Sign in, then start (see Setup for how).');

@@ -243,6 +243,36 @@ describe('step 3: review and start', () => {
     await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
   });
 
+  async function toReviewWithCap(user: ReturnType<typeof userEvent.setup>, cap: string) {
+    await user.click(screen.getByRole('radio', { name: /test rewordings/i }));
+    await user.click(screen.getByRole('button', { name: /next: settings/i }));
+    const field = await screen.findByLabelText('Spend cap (US$)');
+    await waitFor(() => expect((screen.getByLabelText('Spec in YAML') as HTMLTextAreaElement).value).toContain('backend:'));
+    fireEvent.change(field, { target: { value: cap } });
+    await waitFor(() => expect((screen.getByLabelText('Spec in YAML') as HTMLTextAreaElement).value).toContain(`max_spend_usd: ${cap}`));
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByText('Total worst case');
+  }
+
+  it('starts when the first Job fits the cap even if a later one would not, and says so', async () => {
+    const user = userEvent.setup();
+    const view = await openNew();
+    await toReviewWithCap(user, '1'); // mock paraphrase plan: screen US$0.98, reduce US$1.22
+    expect(screen.getByText(/The first Job fits, but not all of them/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
+    await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
+  });
+
+  it('refuses to start when even the first Job is over the cap', async () => {
+    const user = userEvent.setup();
+    const view = await openNew();
+    await toReviewWithCap(user, '0.5');
+    expect(screen.getByText(/Even the first Job could cost more than the cap/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/nothing could run/);
+    expect(postsTo(view, '/api/runs')).toHaveLength(0);
+  });
+
   it('goes back to the settings without losing them', async () => {
     const user = userEvent.setup();
     await openNew();
