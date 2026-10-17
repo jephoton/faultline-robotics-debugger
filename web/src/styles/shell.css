@@ -158,6 +158,9 @@
   max-width: 1080px;
   margin: 0 auto;
 }
+.main__back {
+  margin-bottom: var(--space-3);
+}
 
 .scrim {
   display: none;

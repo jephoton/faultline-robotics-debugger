@@ -16,15 +16,22 @@ The home page has no back button. Local panel and exported gallery share it.
 coordinator owns server startup, review, bundle build, verification, handoff and
 Git integration. These can proceed independently; no overlapping source edits.
 
-- [ ] Write failing tests for main-not-sidebar placement, previous-route
+- [x] Write failing tests for main-not-sidebar placement, previous-route
   navigation, direct-entry home fallback, hidden-on-home and static-mode use.
-- [ ] Implement the minimal shared-shell button. Run its focused tests,
+- [x] Implement the minimal shared-shell button. Run its focused tests,
   the complete web suite and type check; preserve focus/menu behavior.
-- [ ] Rebuild `src/robot_debug/viewer/app/`, review the diff and verify the local
+- [x] Rebuild `src/robot_debug/viewer/app/`, review the diff and verify the local
   server and rendered button at desktop/mobile widths. Test back and fallback
   with a real browser; no cloud controls are clicked.
-- [ ] Update the current handoff and commit source/tests/bundle as
+- [x] Update the current handoff and commit source/tests/bundle as
   `feat(ui): add back navigation above main content` after checks.
+
+Verification: focused shell 13/13; full web 180/180; TypeScript and production
+build passed. Browser checks verified previous-route Back, direct-entry home
+fallback, placement above content and outside sidebar, hidden-on-home,
+375px layout without horizontal overflow and zero page errors. Local viewer
+health is `ok` on loopback port 8765. Experiment artifacts remain local;
+no diagnosis, replay or paid service was invoked.
 
 The public gallery deployment remains the reviewed version until a separately
 inspected fresh export is deployed; a local UI request alone is not a new

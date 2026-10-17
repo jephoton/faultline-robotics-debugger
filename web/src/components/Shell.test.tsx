@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { LibraryItem, RunSummary, Session } from '../api/types';
 import { ReadoutHeader } from './ReadoutHeader';
 import { Shell } from './Shell';
@@ -41,18 +41,66 @@ const runs: RunSummary[] = [
 function renderShell(session: Session, path = '/') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<Shell session={session} items={items} runs={runs} libraryState="ready" />}>
-          <Route index element={<h1>Home page</h1>} />
-          <Route path="case/:id" element={<h1>A case</h1>} />
-          <Route path="setup" element={<h1>Setup page</h1>} />
-        </Route>
-      </Routes>
+      <ShellRoutes session={session} />
     </MemoryRouter>,
   );
 }
 
+function ShellRoutes({ session }: { session: Session }) {
+  return (
+    <Routes>
+      <Route element={<Shell session={session} items={items} runs={runs} libraryState="ready" />}>
+        <Route index element={<h1>Home page</h1>} />
+        <Route path="case/:id" element={<h1>A case</h1>} />
+        <Route path="setup" element={<h1>Setup page</h1>} />
+      </Route>
+    </Routes>
+  );
+}
+
+function renderBrowserShell(session: Session, path: string) {
+  window.history.replaceState(null, '', path);
+  return render(
+    <BrowserRouter>
+      <ShellRoutes session={session} />
+    </BrowserRouter>,
+  );
+}
+
 describe('Shell in local mode', () => {
+  it('places Back above page content in main, outside the sidebar', () => {
+    renderShell(local, '/case/d-a');
+    const main = screen.getByRole('main');
+    const back = within(main).getByRole('button', { name: 'Back' });
+    expect(back).toHaveClass('btn', 'btn--secondary', 'btn--small');
+    expect(main.querySelector('.main__inner')?.firstElementChild).toBe(back);
+    expect(within(screen.getByRole('complementary', { name: 'Workspace' })).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+  });
+
+  it('returns to the previous app page when a route was opened inside the app', async () => {
+    const user = userEvent.setup();
+    renderBrowserShell(local, '/');
+    await user.click(screen.getByRole('link', { name: /setup/i }));
+    expect(screen.getByRole('heading', { name: 'Setup page' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Home page' })).toBeInTheDocument());
+    expect(window.location.pathname).toBe('/');
+    expect(screen.getByRole('main')).toHaveFocus();
+  });
+
+  it('returns a fresh direct entry to home', async () => {
+    const user = userEvent.setup();
+    renderBrowserShell(local, '/case/d-a');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Home page' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('hides Back on home', () => {
+    renderShell(local);
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+  });
+
   it('shows New diagnosis, Running and the case groups with fault codes', () => {
     renderShell(local);
     const nav = screen.getByRole('navigation', { name: 'Runs and cases' });
@@ -111,6 +159,14 @@ describe('Shell in local mode', () => {
 });
 
 describe('Shell in static mode', () => {
+  it('offers Back on a case and returns a direct entry to home', async () => {
+    const user = userEvent.setup();
+    renderBrowserShell(staticMode, '/case/d-a');
+    expect(within(screen.getByRole('main')).getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Home page' })).toBeInTheDocument();
+  });
+
   it('hides New diagnosis, Running, Setup and All evidence but keeps the cases', () => {
     renderShell(staticMode);
     expect(screen.queryByRole('link', { name: /new diagnosis/i })).not.toBeInTheDocument();

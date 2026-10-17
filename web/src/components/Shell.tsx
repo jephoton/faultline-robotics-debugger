@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { LibraryItem, RunSummary, Session } from '../api/types';
 import { Icon, Mark } from './Icon';
 import { Sidebar, type LoadState } from './Sidebar';
@@ -15,6 +15,7 @@ interface Props {
 export function Shell({ session, items, runs, libraryState }: Props) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
@@ -74,6 +75,18 @@ export function Shell({ session, items, runs, libraryState }: Props) {
       </aside>
       <main className="main" id="main" tabIndex={-1} ref={main}>
         <div className="main__inner">
+          {location.pathname !== '/' && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--small main__back"
+              onClick={() => {
+                if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+                else navigate('/');
+              }}
+            >
+              <span aria-hidden="true">←</span> Back
+            </button>
+          )}
           <Outlet />
         </div>
       </main>

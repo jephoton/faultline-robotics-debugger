@@ -50,6 +50,17 @@ Next is **M7b: demo/video and submission preparation**.
 
 ## Verified engineering checkpoint
 
+October 17 UI follow-up: the shared shell now has a compact Back button at the
+top left of the main-content column, outside the sidebar, on non-home routes.
+It uses prior app history when present and returns a fresh direct entry to
+home. Local Python server startup/health and real-browser desktop/mobile
+navigation passed; 180 web tests, type check and the production bundle build
+passed. No Python/provider execution behavior changed. The public gallery
+remains the reviewed publication below; this local UI update has not been
+redeployed. The repo has an older occlusion-pipeline Mermaid diagram but no
+current standalone full-system diagram; `PROJECT.md` is the current written
+architecture overview.
+
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851
 Python tests with eight skips; the web test/build/type-check and committed-bundle
