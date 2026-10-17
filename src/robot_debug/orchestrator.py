@@ -982,6 +982,8 @@ class Orchestrator:
     def _guarded(self, body: Callable[[], RunResult]) -> RunResult:
         try:
             try:
+                # A resumed segment starts afresh: the header must not keep saying how the last one ended.
+                self.steps.set_run(status="running", reason=None, detail=None)
                 if self.spec.mode != "replay":
                     # Recorded first so --resume can reapply it, even when this segment ends before any Job.
                     self.steps.set_run(no_llm=bool(self.no_llm))
