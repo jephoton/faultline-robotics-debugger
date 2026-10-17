@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { IDS } from '../mocks/fixtures';
-import { renderApp } from '../test/utils';
+import { vi } from 'vitest';
+import { makeHarness, renderApp } from '../test/utils';
 
 async function openCase(id: string, options?: Parameters<typeof renderApp>[1]) {
   const view = renderApp(`/case/${id}`, options);
@@ -104,11 +105,30 @@ describe('audit case', () => {
     expect(within(blur).getByText('Threshold')).toBeInTheDocument();
     expect(within(blur).getByRole('img', { name: '4 of 5 attempts failed at severity 0.50' })).toBeInTheDocument();
     const noise = screen.getByRole('article', { name: 'Noise severity ladder' });
-    expect(within(noise).getByText('No failure up to severity 1')).toBeInTheDocument();
+    expect(within(noise).getByText('No failure up to severity 1.00')).toBeInTheDocument();
     expect(within(noise).queryByText('Threshold')).not.toBeInTheDocument();
     const contrast = screen.getByRole('article', { name: 'Contrast severity ladder' });
     expect(within(contrast).getByText('Fails from severity 0.75')).toBeInTheDocument();
     expect(screen.getByText('0 of 5 attempts failed')).toBeInTheDocument();
+  });
+
+  it('never calls a family the run did not search "no failure"', async () => {
+    const harness = makeHarness();
+    const base = await harness.api.detail(IDS.audit);
+    const families = [
+      { family: 'viewpoint', label: 'Camera viewpoint', threshold_severity: null, stop_reason: 'nominal_failed', levels: [] },
+      {
+        family: 'lighting', label: 'Scene lighting', threshold_severity: null, stop_reason: 'infrastructure_error',
+        levels: [{ severity: 0.2, failures: 0, attempts: 5 }, { severity: 0.4, failures: 0, attempts: 5 }],
+      },
+    ];
+    vi.spyOn(harness.api, 'detail').mockResolvedValue({ ...base, audit: { ...base.audit!, families } });
+    renderApp(`/case/${IDS.audit}`, { harness });
+    const viewpoint = await screen.findByRole('article', { name: 'Camera viewpoint severity ladder' });
+    expect(within(viewpoint).getByText(/Not tested: the run stopped before this family was searched/)).toBeInTheDocument();
+    const lighting = screen.getByRole('article', { name: 'Scene lighting severity ladder' });
+    expect(within(lighting).getByText(/Incomplete: searched up to severity 0.40, then stopped/)).toBeInTheDocument();
+    expect(screen.queryByText(/No failure up to severity/)).not.toBeInTheDocument();
   });
 });
 

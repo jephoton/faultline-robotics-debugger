@@ -61,6 +61,16 @@ class MagnitudeTests(unittest.TestCase):
         self.assertEqual(lib._magnitude(row, "joints", 1.0), "2 joints, up to 2.7°")
 
 
+class AuditSentenceTests(unittest.TestCase):
+    def test_a_family_the_run_never_searched_is_not_tested_not_robust(self):
+        case = {"families": {"viewpoint": {"stop_reason": "nominal_failed", "threshold_severity": None},
+                             "jpeg": {"stop_reason": "no_reproducible_failure", "threshold_severity": None}},
+                "stop_reason": "nominal_controls_failed", "complete": False}
+        sentence = lib._audit_sentence(case)
+        self.assertIn("Camera viewpoint: not tested", sentence)
+        self.assertIn("JPEG compression: no failure found", sentence)
+
+
 class ListTests(LibraryCase):
     def test_every_source_is_listed_once(self):
         items = self.items()

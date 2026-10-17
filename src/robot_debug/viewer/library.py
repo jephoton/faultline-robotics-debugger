@@ -758,8 +758,12 @@ def _audit_sentence(case: Mapping[str, Any]) -> str:
     for name, info in sorted(_mapping(case.get("families")).items()):
         severity = _number(_mapping(info).get("threshold_severity"))
         label = FAMILY_LABELS.get(name, name)
-        parts.append("{} from severity {:g}".format(label, severity) if severity is not None
-                     else "{}: no failure found".format(label))
+        if severity is not None:
+            parts.append("{} from severity {:g}".format(label, severity))
+        elif _mapping(info).get("stop_reason") == "no_reproducible_failure":
+            parts.append("{}: no failure found".format(label))
+        else:                           # never searched (for example the unperturbed control failed first)
+            parts.append("{}: not tested".format(label))
     return text if not parts else text + " " + "; ".join(parts) + "."
 
 

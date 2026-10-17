@@ -204,6 +204,9 @@ details.reruns summary {
 .ladder__result--alarm {
   color: var(--alarm-text);
 }
+.ladder__result--attention {
+  color: var(--attention-text);
+}
 .ladder__levels {
   list-style: none;
   margin: 0;

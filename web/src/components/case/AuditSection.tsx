@@ -11,13 +11,24 @@ function severity(value: number): string {
 function Ladder({ family }: { family: AuditFamily }) {
   const threshold = family.threshold_severity;
   const robust = threshold === null;
+  // Only a family that was searched and found nothing is "no failure": one the run never reached was not tested.
+  const tested = family.stop_reason === 'no_reproducible_failure' && family.levels.length > 0;
+  const highest = Math.max(...family.levels.map((level) => level.severity));
   return (
     <article className="ladder" aria-label={`${family.label} severity ladder`}>
       <header className="ladder__head">
         <h3>{family.label}</h3>
-        {robust ? (
+        {robust && tested ? (
           <p className="ladder__result">
-            <Icon name="check" /> No failure up to severity 1
+            <Icon name="check" /> No failure up to severity {severity(highest)}
+          </p>
+        ) : robust && family.levels.length > 0 ? (
+          <p className="ladder__result ladder__result--attention">
+            <Icon name="attention" /> Incomplete: searched up to severity {severity(highest)}, then stopped
+          </p>
+        ) : robust ? (
+          <p className="ladder__result ladder__result--attention">
+            <Icon name="attention" /> Not tested: the run stopped before this family was searched
           </p>
         ) : (
           <p className="ladder__result ladder__result--alarm">

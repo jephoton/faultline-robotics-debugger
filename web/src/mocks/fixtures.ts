@@ -390,7 +390,7 @@ details[IDS.audit] = {
         family: 'noise',
         label: 'Noise',
         threshold_severity: null,
-        stop_reason: 'robust_to_maximum',
+        stop_reason: 'no_reproducible_failure',
         levels: [
           { severity: 0, failures: 0, attempts: 5 },
           { severity: 0.5, failures: 0, attempts: 5 },
