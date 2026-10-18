@@ -94,6 +94,9 @@ differences that still fails, using reruns rather than the model's opinion.
 7. **How it was made.** **Expected:** 3 cloud Jobs, US$1.80 of a US$2.80 cap,
    1 h 14 min of a 3-hour limit.
 
+What each rerun phase does, and every column of the report's Candidates
+table, is explained in [how a scenario reduction works](how-reduction-works.md).
+
 **Talking point:** "The arm and five objects differ between a failing and a
 passing start.
 Reruns, not the model, show that five are needed together: the ones tried

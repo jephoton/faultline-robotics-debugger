@@ -13,6 +13,8 @@ suite, task, start and perturbation family; none is a general claim.
   resume, replay.
 - [Architecture and full UI map](architecture.md): Mode 1 versus Mode 2,
   execution paths, local/cloud diagrams, user flow and current UI capabilities.
+- [How a scenario reduction works](how-reduction-works.md): the gates,
+  every rerun phase, and how to read the report's Candidates table.
 - [UI user runbook](ui-runbook.md): start with a saved-case walkthrough, then
   follow click-by-click recipes for diagnosis, stress tests, wording and replay.
 - The control panel: `faultline ui` (README, "Control panel"), a browser UI
