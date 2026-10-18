@@ -147,7 +147,7 @@ function Run({ controls }: { controls: boolean }) {
         code={code}
         tag={caseItem ? 'Fault code' : 'Fault code (assigned when the case is saved)'}
         fields={[
-          { label: 'Status', value: view.word },
+          { label: 'Status', value: view.word, tone: view.tone, icon: view.icon },
           { label: 'Step', value: step ?? 'none' },
           { label: 'Kind', value: MODE_LABEL[progress.mode] ?? progress.mode },
           { label: 'Spent', value: `${usd(progress.spent_usd)} of ${usd(progress.cap_usd)}` },

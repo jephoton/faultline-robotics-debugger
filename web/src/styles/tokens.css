@@ -51,6 +51,9 @@
   --readout-text: #8ef0a8;
   --readout-dim: #5fa875;
   --readout-line: #24402e;
+  --readout-alarm: #ff6b5e;
+  --readout-attention: #f5b83d;
+  --readout-neutral: #e6efe8;
 }
 
 @media (prefers-color-scheme: dark) {

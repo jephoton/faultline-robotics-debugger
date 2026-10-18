@@ -330,3 +330,14 @@ describe('static mode', () => {
     expect(screen.queryByRole('button', { name: /dry run/i })).not.toBeInTheDocument();
   });
 });
+
+describe('readout verdict colours', () => {
+  it('marks the verdict by tone inside the readout, unlike the descriptive fields', async () => {
+    renderApp(`/case/${IDS.soup}`);
+    const readout = await screen.findByRole('region', { name: 'Readout' });
+    const verdict = within(readout).getByText('Failure repeats').closest('dd');
+    expect(verdict).toHaveClass('readout__value--alarm');
+    const kind = within(readout).getByText('Scenario reduction').closest('dd');
+    expect(kind).not.toHaveClass('readout__value');
+  });
+});

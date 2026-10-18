@@ -75,6 +75,9 @@ describe.each(themes)('contrast, %s theme', (_name, t) => {
   it('the readout panel text reads at 4.5:1', () => {
     expect(ratio(t['readout-text'] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(t['readout-dim'] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
+    for (const tone of ['readout-alarm', 'readout-attention', 'readout-neutral']) {
+      expect(ratio(t[tone] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
 

@@ -148,6 +148,20 @@
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
+.readout__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.readout__value--alarm {
+  color: var(--readout-alarm);
+}
+.readout__value--attention {
+  color: var(--readout-attention);
+}
+.readout__value--neutral {
+  color: var(--readout-neutral);
+}
 .readout__foot {
   margin: var(--space-3) 0 0;
   color: var(--readout-dim);

@@ -94,7 +94,7 @@ export function CaseView({ detail }: { detail: Detail }) {
       <ReadoutHeader
         code={detail.fault_code}
         fields={[
-          { label: 'Verdict', value: status.label },
+          { label: 'Verdict', value: status.label, tone: status.tone, icon: status.icon },
           { label: 'Kind', value: KIND_LABEL[detail.kind] },
           { label: 'Suite and task', value: detail.suite ? `${suiteLabel(detail.suite)}, task ${detail.task_id ?? '?'}` : 'not recorded' },
           { label: 'Made', value: shortDate(detail.created) },
