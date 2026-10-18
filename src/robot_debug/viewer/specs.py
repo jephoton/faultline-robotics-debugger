@@ -266,11 +266,15 @@ class SpecService:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def dry_run(self, yaml_text: Any, import_file: Any = None) -> Dict[str, Any]:
+    def dry_run(self, yaml_text: Any, import_file: Any = None, case: Optional[Mapping[str, Any]] = None
+                ) -> Dict[str, Any]:
+        """The plan of a spec. ``case`` is the saved case a replay spec replays: its kind decides which Jobs
+        the replay runs, so the plan (and its hash) is for that case; other modes ignore it."""
+
         prepared = self.prepare(yaml_text, import_file)
         spec, staging = self._staged(prepared)
         try:
-            lines, required = self._plan_lines(spec)
+            lines, required = self._plan_lines(spec, case)
         finally:
             if staging is not None:
                 shutil.rmtree(str(staging), ignore_errors=True)
@@ -287,11 +291,11 @@ class SpecService:
         return {"plan_hash": digest.hexdigest(), "jobs": jobs, "branches": branches, "worst_case_total_usd": total,
                 "cap_usd": spec.budget.max_spend_usd, "max_hours": spec.budget.max_hours, "lines": shown}
 
-    def _plan_lines(self, spec: sp.Spec) -> Tuple[List[str], float]:
+    def _plan_lines(self, spec: sp.Spec, case: Optional[Mapping[str, Any]] = None) -> Tuple[List[str], float]:
         tools = self._tools()
         try:
             if spec.mode == "replay":
-                return replay_plan_lines(spec)
+                return replay_plan_lines(spec, case, tools)
             orch.check_candidate_budget(spec, tools)
             orch.check_import(spec, tools)
             return orch.dry_run_lines(spec, tools)
@@ -420,25 +424,69 @@ def parse_plan_branches(lines: List[str], required: float) -> Tuple[List[Dict[st
     return jobs, round(required, 2) if total is None else total, branches
 
 
-def replay_plan_lines(spec: sp.Spec) -> Tuple[List[str], float]:
-    """The dry-run text for a replay, in the format of ``orchestrator.dry_run_lines``: one Job whose deadline
-    comes from the replay workload's own timing (two scenes, ``orchestrator.REPLAY_ATTEMPTS`` attempts).
+def replay_jobs(case: Optional[Mapping[str, Any]], tools: Any) -> List[Tuple[str, str, int]]:
+    """The Jobs a replay of ``case`` runs, as ``(step, what it does, deadline seconds)``, from the same
+    workload builders the replay itself uses (so the plan cannot drift from the run).
 
-    The spec does not name the case, so this is the plan for the scenario replay. A stress-test case runs one
-    replay Job per original probe group that holds a failing family (usually one), and a wording case one Job;
-    each is reserved on its own against the cap."""
+    * a scenario case (or no case): one Job, two scenes of ``orchestrator.REPLAY_ATTEMPTS`` attempts;
+    * a stress-test case: one Job per original probe group that holds a failing family;
+    * a wording case: one rewording-screen Job.
+    """
 
     from robot_debug import scenario_experiment as se
 
+    kind = case.get("kind") if isinstance(case, Mapping) else None
+    try:
+        if kind == "audit":
+            block = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+            attempts = block.get("attempts") if type(block.get("attempts")) is int else orch.pipeline_replay_attempts()
+            required = block.get("required_failures") if type(block.get("required_failures")) is int else 4
+            jobs = []
+            groups = [g for g in block.get("groups") or () if isinstance(g, Mapping) and g.get("families")]
+            for index, group in enumerate(groups):
+                wanted = [(f["family"], f["severity"]) for f in group["families"]]
+                workload = tools.audit_replay_workload(
+                    case, [f for f, _s in wanted], sorted({s for _f, s in wanted}), attempts, required, "plan-replay")
+                step = "replay" if index == 0 else "replay-{}".format(index + 1)
+                jobs.append((step, "replay the stress test: {} ({} attempts per level)".format(
+                    ", ".join(f for f, _s in wanted), attempts), int(workload["deadline_seconds"])))
+            if jobs:
+                return jobs
+        elif kind == "paraphrase_reduction":
+            replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+            config = replay.get("config") if isinstance(replay.get("config"), Mapping) else {}
+            wording = config.get("instruction")
+            original = replay.get("reference_instruction") or case.get("instruction")
+            if isinstance(wording, str) and isinstance(original, str):
+                workload = tools.wording_replay_workload(case, wording, original, "plan-replay")
+                return [("replay", "replay the failing wording against the original",
+                         int(workload["deadline_seconds"]))]
+    except (orch.StopRun, KeyError, TypeError, ValueError):
+        pass                                  # an unusable case falls back to the scenario plan
     deadline = se.recommended_deadline_seconds("scenario-replay", {"scenes": [None, None], "attempts": orch.REPLAY_ATTEMPTS})
+    return [("replay", "replay the saved case ({} attempts per scene)".format(orch.REPLAY_ATTEMPTS), deadline)]
+
+
+def replay_plan_lines(spec: sp.Spec, case: Optional[Mapping[str, Any]] = None, tools: Any = None
+                      ) -> Tuple[List[str], float]:
+    """The dry-run text for a replay, in the format of ``orchestrator.dry_run_lines``.
+
+    The Jobs depend on the kind of ``case`` (see :func:`replay_jobs`); without a case the plan is the
+    scenario replay. Every Job is reserved on its own against the cap, so the worst case is their sum."""
+
     rate = spec.backend.hourly_usd
-    cost = lg.worst_case_seconds(deadline) / 3600.0 * rate
+    jobs = replay_jobs(case, tools if tools is not None else orch.DefaultTools())
+    costs = [lg.worst_case_seconds(deadline) / 3600.0 * rate for _step, _what, deadline in jobs]
     lines = ["Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
-        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours),
-        "  {:<8} {:<56} deadline {:>4d} s  worst case US${:.2f}".format(
-            "replay", "replay the saved case ({} attempts per scene)".format(orch.REPLAY_ATTEMPTS), deadline, cost),
-        "Worst case of the required Jobs: US${:.2f}.".format(cost)]
-    if cost > spec.budget.max_spend_usd:
-        lines.append("WARNING: that exceeds the cap; the spend ledger will refuse the Job and the replay will stop early.")
+        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours)]
+    for (step, what, deadline), cost in zip(jobs, costs):
+        lines.append("  {:<8} {:<56} deadline {:>4d} s  worst case US${:.2f}".format(step, what, deadline, cost))
+    total = sum(costs)
+    lines.append("Worst case of the required Jobs: US${:.2f}.".format(total))
+    if costs and costs[0] > spec.budget.max_spend_usd:
+        lines.append("WARNING: the first Job exceeds the cap; the spend ledger will refuse it and the replay will "
+                     "stop early.")
+    elif total > spec.budget.max_spend_usd:
+        lines.append("WARNING: the Jobs together exceed the cap; the replay will stop after the Jobs that fit.")
     lines.append("Each Job is reserved at its worst case before submission and settled at measured container time.")
-    return lines, cost
+    return lines, total

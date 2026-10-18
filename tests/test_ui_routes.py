@@ -385,5 +385,60 @@ class AppServingTests(RoutesCase):
         self.assertEqual(self.get("/case/anything")[0], 404)
 
 
+class ReplayPlanRoutes(RoutesCase):
+    """The replay's dry run is for the case being replayed (M3)."""
+
+    AUDIT_ID = "ab" * 32
+    WORDING_ID = "cd" * 32
+
+    def setUp(self):
+        super().setUp()
+        from robot_debug.case_register import register_run
+
+        audit = {"schema_version": 1, "kind": "audit", "case_id": self.AUDIT_ID, "suite": "libero_10", "task_id": 3,
+                 "start_index": 0, "complete": True, "stop_reason": None,
+                 "families": {"blur": {"threshold_severity": 0.4, "stop_reason": "threshold_found"},
+                              "lighting": {"threshold_severity": 0.8, "stop_reason": "threshold_found"}},
+                 "replay": {"kind": "audit", "attempts": 5, "required_failures": 4, "groups": [
+                     {"step": "probe-image-1", "families": [{"family": "blur", "severity": 0.4}]},
+                     {"step": "probe-scene-1", "families": [{"family": "lighting", "severity": 0.8}]}]}}
+        run = fx.make_run(self.runs, "stress-20261017T010203Z", "audit", {"register": {"status": "done"}},
+                          {"status": "completed"}, report="# r\n", case=audit, spec_name="stress")
+        register_run(run, self.artifacts / "diagnoses")
+
+    def replay_spec(self):
+        return self.get_json("/api/specs/template?mode=replay")[1]["yaml"]
+
+    def plan(self, item, **extra):
+        status, payload = self.server.post_json("/api/specs/dry-run", dict({"yaml": self.replay_spec()}, **extra))
+        self.assertEqual(status, 200, payload)
+        return payload
+
+    def test_the_dry_run_of_a_stress_test_replay_lists_its_jobs(self):
+        plain = self.plan("d-" + self.AUDIT_ID)
+        planned = self.plan("d-" + self.AUDIT_ID, case_id="d-" + self.AUDIT_ID)
+        self.assertEqual([j["name"] for j in plain["jobs"]], ["replay"])
+        self.assertEqual([j["name"] for j in planned["jobs"]], ["replay", "replay-2"])
+        self.assertNotEqual(planned["plan_hash"], plain["plan_hash"])
+
+    def test_a_replay_needs_the_plan_of_its_own_case(self):
+        text = self.replay_spec()
+        item = "/api/library/d-{}/replay".format(self.AUDIT_ID)
+        generic = self.plan("x")["plan_hash"]
+        status, payload = self.server.post_json(item, {"yaml": text, "plan_hash": generic})
+        self.assertEqual(status, 412, "the case-less plan is not the plan of this case")
+        right = self.plan("x", case_id="d-" + self.AUDIT_ID)["plan_hash"]
+        self.popen.run_name = "replay-started-20261017T010203Z"
+        status, payload = self.server.post_json(item, {"yaml": text, "plan_hash": right})
+        self.assertEqual(status, 202, payload)
+
+    def test_an_unknown_or_malformed_case_id_in_a_dry_run_is_a_404(self):
+        for case_id in ("d-" + "0" * 64, "x", "d-../../etc", 5):
+            with self.subTest(case_id=case_id):
+                status, payload = self.server.post_json(
+                    "/api/specs/dry-run", {"yaml": self.replay_spec(), "case_id": case_id})
+                self.assertEqual(status, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import type { Detail, Environment } from '../api/types';
 import { IDS } from '../mocks/fixtures';
+import { mockDryRun } from '../mocks/handlers';
 import { makeHarness, renderApp } from '../test/utils';
 
 const READY: Environment = {
@@ -150,6 +151,47 @@ describe('replay of an audit case and a wording case', () => {
     await user.click(within(panel).getByRole('button', { name: 'Start replay' }));
     await waitFor(() => expect(replayPosts(view)).toHaveLength(1));
     expect((replayPosts(view)[0] as [string, RequestInit])[0]).toBe(`/api/library/${encodeURIComponent(IDS.pipeAudit)}/replay`);
+  });
+
+  function dryRunPosts(view: Awaited<ReturnType<typeof openCase>>) {
+    return view.fetchSpy.mock.calls
+      .filter((call) => call[0] === '/api/specs/dry-run' && (call[1] as RequestInit | undefined)?.method === 'POST')
+      .map((call) => JSON.parse((call[1] as RequestInit).body as string) as { case_id?: string; yaml: string });
+  }
+
+  it('plans the replay for the case: every dry run names it, and the review lists the case Jobs', async () => {
+    const user = userEvent.setup();
+    const view = await openCase(IDS.pipeAudit);
+    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
+    await user.click(within(panel).getByRole('button', { name: /dry run the replay/i }));
+    await within(panel).findByText('Total worst case');
+    const posts = dryRunPosts(view);
+    expect(posts.length).toBeGreaterThan(0);
+    for (const post of posts) expect(post.case_id).toBe(IDS.pipeAudit);
+    expect(within(panel).getAllByText('replay-2').length).toBeGreaterThan(0);
+  });
+
+  it('sets the default spend cap and hour limit from the plan so the first Job fits', async () => {
+    await openCase(IDS.pipeAudit);
+    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
+    const spend = within(panel).getByLabelText('Spend cap (US$)') as HTMLInputElement;
+    const plan = mockDryRun('mode: replay\n', undefined, IDS.pipeAudit);
+    expect(plan.jobs[0]!.worst_case_usd).toBeGreaterThan(1.2);
+    await waitFor(() => expect(Number(spend.value)).toBeGreaterThanOrEqual(plan.worst_case_total_usd));
+    const hours = within(panel).getByLabelText('Hour limit') as HTMLInputElement;
+    const needed = plan.jobs.reduce((sum, job) => sum + (job.deadline_seconds + 840) / 3600, 0);
+    await waitFor(() => expect(Number(hours.value)).toBeGreaterThanOrEqual(needed));
+  });
+
+  it('does not overwrite a cap the person typed', async () => {
+    const user = userEvent.setup();
+    await openCase(IDS.pipeAudit);
+    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
+    const spend = within(panel).getByLabelText('Spend cap (US$)') as HTMLInputElement;
+    await user.clear(spend);
+    await user.type(spend, '9');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(spend.value).toBe('9');
   });
 
   it('shows a replay of a wording case in words and colours: fixed is green, still failing is red', async () => {

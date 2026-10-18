@@ -182,6 +182,22 @@ export interface ReplayForm {
 
 export const REPLAY_DEFAULTS: ReplayForm = { spend: '1.2', hours: '1', checkpointId: '', checkpointRevision: '' };
 
+/**
+ * The spend cap and hour limit that fit a replay's plan: the plan's worst case rounded up to 10 cents (every
+ * Job of the case, so a stress test with two probe groups is covered) and the time the Jobs may take
+ * (deadline plus the provider's ten-minute timeout and four-minute start allowance), rounded up to a quarter hour.
+ */
+export function suggestedReplayLimits(plan: { jobs: { deadline_seconds: number }[]; worst_case_total_usd: number }): {
+  spend: string;
+  hours: string;
+} {
+  const hours = plan.jobs.reduce((sum, job) => sum + (job.deadline_seconds + 840) / 3600, 0);
+  return {
+    spend: String(Math.ceil(plan.worst_case_total_usd * 10 - 1e-9) / 10),
+    hours: String(Math.max(1, Math.ceil(hours * 4 - 1e-9) / 4)),
+  };
+}
+
 /** A replay spec for `faultline replay`: budget, an optional checkpoint override and the template's backend. */
 export function buildReplayYaml(caseName: string, form: ReplayForm, backend: string | null): string {
   const slug = `replay-${caseName}`.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+$/, '');

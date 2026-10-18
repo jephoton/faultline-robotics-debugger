@@ -281,7 +281,8 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
 
 def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], None]) -> int:
     """The exit code of ``replay --expect``: 0 when the verdict is the expected one, 5 when it is another
-    one or inconclusive, and the run's own code (3) when the replay stopped without any verdict."""
+    one or inconclusive (including a replay that stopped after some of its Jobs), and the run's own code (3)
+    when the replay was refused or stopped before any Job produced evidence."""
 
     wanted = EXPECTATIONS[expect]
     if result.status == "completed" and result.verdict == wanted:
@@ -289,6 +290,10 @@ def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], 
         return 0
     if result.status == "completed" or result.reason == "replay_inconclusive":
         out("Expected '{}': NOT met ({}).".format(expect, orch.replay_text(result.verdict).rstrip(".")))
+        return EXIT_UNEXPECTED_VERDICT
+    if result.verdict == "incomplete":              # stopped after some Jobs: partial evidence, no verdict
+        out("Expected '{}': NOT met (inconclusive: the replay stopped ({}) before every Job finished, so nothing "
+            "can be said about the policy).".format(expect, result.reason))
         return EXIT_UNEXPECTED_VERDICT
     return result.exit_code
 

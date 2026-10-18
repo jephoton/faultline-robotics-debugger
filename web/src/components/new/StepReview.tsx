@@ -22,6 +22,8 @@ interface Props {
   consequence?: string;
   /** Heading level of the three sections, so the page's outline stays in order. */
   headingLevel?: 2 | 3 | 4;
+  /** A replay's case (library id): the plan lists the Jobs of that case's kind. */
+  caseId?: string;
 }
 
 /** What the diagnose spec checks, for the review facts. */
@@ -40,12 +42,13 @@ export function StepReview({
   startLabel = 'Start diagnosis',
   consequence = 'Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any time.',
   headingLevel = 2,
+  caseId,
 }: Props) {
   const Heading = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
   const api = useApi();
   const navigate = useNavigate();
   const { refreshRuns } = useAppData();
-  const plan = useAsync(() => api.dryRun(yaml, importFile ?? undefined), [api, yaml, importFile?.content]);
+  const plan = useAsync(() => api.dryRun(yaml, importFile ?? undefined, caseId), [api, yaml, importFile?.content, caseId]);
   const env = useAsync(() => api.environment(), [api]);
   const [problems, setProblems] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);

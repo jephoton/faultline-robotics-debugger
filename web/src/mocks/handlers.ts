@@ -125,7 +125,20 @@ function diagnoseJobs(yaml: string): { jobs: DryRunJob[]; branches: DryRunBranch
   return { jobs, branches, total: round(worst('check') + Math.max(worst('layout'), worst('probes'))) };
 }
 
-export function mockDryRun(yaml: string, importContent?: string): DryRun {
+/** The Jobs of a replay, by the kind of case replayed (a stress test runs one Job per probe group). */
+function replayJobs(caseId: string | undefined): DryRunJob[] {
+  const kind = caseId ? detailById[caseId]?.kind : undefined;
+  if (kind === 'audit') {
+    return [
+      { name: 'replay', deadline_seconds: 2400, worst_case_usd: 1.62 },
+      { name: 'replay-2', deadline_seconds: 2000, worst_case_usd: 1.38 },
+    ] as DryRunJob[];
+  }
+  if (kind === 'paraphrase') return [{ name: 'replay', deadline_seconds: 1200, worst_case_usd: 0.9 }] as DryRunJob[];
+  return [{ name: 'replay', deadline_seconds: 1500, worst_case_usd: 0.7 }] as DryRunJob[];
+}
+
+export function mockDryRun(yaml: string, importContent?: string, caseId?: string): DryRun {
   const mode = line(yaml, 'mode') ?? 'scenario';
   if (mode === 'diagnose') {
     const plan = diagnoseJobs(yaml);
@@ -149,7 +162,7 @@ ${importContent ?? ''}`),
             { name: 'reduce', deadline_seconds: 2400, worst_case_usd: 1.22 },
           ]
         : mode === 'replay'
-          ? [{ name: 'replay', deadline_seconds: 1500, worst_case_usd: 0.7 }]
+          ? replayJobs(caseId)
           : [
               { name: 'screen', deadline_seconds: 1800, worst_case_usd: 0.98 },
               { name: 'reference', deadline_seconds: 1500, worst_case_usd: 0.84 },
@@ -157,7 +170,7 @@ ${importContent ?? ''}`),
             ];
   const total = Math.round(jobs.reduce((sum, job) => sum + job.worst_case_usd, 0) * 100) / 100;
   return {
-    plan_hash: djb2(`${yaml}\n${importContent ?? ''}`),
+    plan_hash: djb2(`${yaml}\n${importContent ?? ''}${mode === 'replay' ? `\n${jobs.map((entry) => entry.name).join()}` : ''}`),
     jobs,
     worst_case_total_usd: total,
     cap_usd: Number(line(yaml, 'max_spend_usd')) || 0,
@@ -276,7 +289,7 @@ export function createMockServer(options: MockOptions = {}) {
         const result = mockValidate(yaml);
         if (!result.ok) return failure(422, 'The spec has problems; fix them before the dry run.', result.errors);
         const file = body.import_file as { content?: string } | undefined;
-        return json(200, mockDryRun(yaml, file?.content));
+        return json(200, mockDryRun(yaml, file?.content, typeof body.case_id === 'string' ? body.case_id : undefined));
       }
       if (path === '/api/runs') {
         if (launchStatus) return failure(launchStatus, 'The run did not report its folder in time.');
@@ -312,7 +325,7 @@ export function createMockServer(options: MockOptions = {}) {
       const replay = /^\/api\/library\/([^/]+)\/replay$/.exec(path);
       if (replay) {
         const yaml = String(body.yaml ?? '');
-        if (body.plan_hash !== mockDryRun(yaml).plan_hash) {
+        if (body.plan_hash !== mockDryRun(yaml, undefined, decodeURIComponent(replay[1] as string)).plan_hash) {
           return failure(412, 'The plan changed since the dry run. Run the dry run again.');
         }
         if (activeDemo) return failure(409, 'A run is already active. Wait for it to finish or stop it first.');

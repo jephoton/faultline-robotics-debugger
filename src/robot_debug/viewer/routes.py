@@ -9,6 +9,7 @@ spec: the plan the person confirmed is the plan that runs.
 from __future__ import annotations
 
 import hmac
+import json
 import re
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from robot_debug.viewer.security import ApiError
 from robot_debug.viewer.specs import SpecService
 
 LIBRARY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}\Z")
+CASE_ITEM = re.compile(r"d-[0-9a-f]{64}\Z")
 CONTENT_TYPES = {".md": "text/markdown; charset=utf-8", ".json": "application/json; charset=utf-8"}
 
 
@@ -81,16 +83,35 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
     # -- controls -----------------------------------------------------------------------------------------
 
     api.add_route("POST", r"/api/specs/validate", lambda request: (200, specs.validate(request.body.get("yaml"))))
-    api.add_route("POST", r"/api/specs/dry-run", lambda request: (
-        200, specs.dry_run(request.body.get("yaml"), request.body.get("import_file"))))
+    def plan_case(case_id):
+        """The saved case a replay's dry run is for (``None`` when the request names none): the Jobs of a
+        replay depend on the kind of case, so its plan is made for that case."""
 
-    def verify_plan(request: Request) -> None:
-        """The plan hash the person confirmed must be the hash of a fresh dry run of the same spec."""
+        if case_id is None:
+            return None
+        if not isinstance(case_id, str) or CASE_ITEM.match(case_id) is None:
+            raise ApiError(404, "There is no such case.")
+        try:
+            case = json.loads((library.diagnoses_root / case_id[2:] / "case.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise ApiError(404, "There is no such case.") from None
+        if not isinstance(case, dict):
+            raise ApiError(404, "There is no such case.")
+        return case
+
+    api.add_route("POST", r"/api/specs/dry-run", lambda request: (
+        200, specs.dry_run(request.body.get("yaml"), request.body.get("import_file"),
+                           plan_case(request.body.get("case_id")))))
+
+    def verify_plan(request: Request, case_id=None) -> None:
+        """The plan hash the person confirmed must be the hash of a fresh dry run of the same spec (and, for
+        a replay, of the same case)."""
 
         supplied = request.body.get("plan_hash")
         if not isinstance(supplied, str) or not supplied:
             raise ApiError(412, "Review the dry run first, then start it with the plan it showed.")
-        fresh = specs.dry_run(request.body.get("yaml"), request.body.get("import_file"))["plan_hash"]
+        fresh = specs.dry_run(request.body.get("yaml"), request.body.get("import_file"),
+                              plan_case(case_id))["plan_hash"]
         if not hmac.compare_digest(supplied.encode("utf-8"), fresh.encode("utf-8")):
             raise ApiError(412, "The plan changed since you reviewed it. Run the dry run again.")
 
@@ -143,7 +164,7 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
             raise ApiError(400, "The spec's suite differs from the case's.",
                            [{"path": "policy.suite", "message": "must match the case's suite"}])
         refuse_if_busy()
-        verify_plan(request)
+        verify_plan(request, identifier)
         directory, spec_path = specs.persist(prepared)
         run = launcher.replay(library.diagnoses_root / case["case_id"], spec_path, directory, expect)
         return 202, {"run": run}

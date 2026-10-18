@@ -35,7 +35,15 @@ code for a script or CI job.
 | Rewording probe | The failing wording, with the original wording as the control | The wording still fails / no longer fails |
 
 A replay whose control does not pass, or whose Job does not finish, is
-inconclusive, never a pass.
+inconclusive, never a pass. A stress-test replay that stops after some of its
+Jobs (a spend cap, a cloud error) keeps the verdicts of the Jobs that ran in
+`replay-result.json` but has no verdict of its own, and `--expect` reports it
+as inconclusive (exit 5).
+
+The replay's dry run is for the case being replayed: a layout case plans one
+Job, a stress-test case one Job per probe group that holds a failing family,
+and a wording case one rewording-screen Job. The Replay form's default spend
+cap and hour limit are taken from that plan.
 
 ### One diagnosis, routed on the untouched result
 

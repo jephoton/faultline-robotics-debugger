@@ -1,8 +1,8 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi, useControls } from '../../api/context';
 import type { Detail } from '../../api/types';
-import { buildReplayYaml, extractBackend, REPLAY_DEFAULTS, type ReplayForm } from '../../lib/specYaml';
+import { buildReplayYaml, extractBackend, REPLAY_DEFAULTS, suggestedReplayLimits, type ReplayForm } from '../../lib/specYaml';
 import { useAsync } from '../../lib/useAsync';
 import { Icon } from '../Icon';
 import { StepReview } from '../new/StepReview';
@@ -28,9 +28,26 @@ function ReplayForm({ detail }: { detail: Detail }) {
   const [expect, setExpect] = useState<Expect>('');
   const [review, setReview] = useState(false);
   const template = useAsync(() => api.specTemplate('replay'), [api]);
-  const yaml = buildReplayYaml(detail.name, form, template.data ? extractBackend(template.data) : null);
+  const backend = template.data ? extractBackend(template.data) : null;
+  const yaml = buildReplayYaml(detail.name, form, backend);
+  // The Jobs of a replay depend on the case (a stress test runs one per probe group), so the default cap and
+  // hour limit come from a plan made for this case, until the person types their own.
+  const planYaml = template.data ? buildReplayYaml(detail.name, REPLAY_DEFAULTS, backend) : null;
+  const suggestion = useAsync(() => (planYaml ? api.dryRun(planYaml, undefined, detail.id) : Promise.resolve(null)), [api, detail.id, planYaml]);
+  const typed = useRef({ spend: false, hours: false });
+  useEffect(() => {
+    if (!suggestion.data) return;
+    const limits = suggestedReplayLimits(suggestion.data);
+    setForm((previous) => ({
+      ...previous,
+      spend: typed.current.spend ? previous.spend : limits.spend,
+      hours: typed.current.hours ? previous.hours : limits.hours,
+    }));
+  }, [suggestion.data]);
 
   const change = (patch: Partial<ReplayForm>) => {
+    if (patch.spend !== undefined) typed.current.spend = true;
+    if (patch.hours !== undefined) typed.current.hours = true;
     setForm((previous) => ({ ...previous, ...patch }));
     setReview(false);
   };
@@ -112,6 +129,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
             importFile={null}
             startLabel="Start replay"
             headingLevel={4}
+            caseId={detail.id}
             consequence="A replay creates one cloud Job on your Nebius account and spends real credit, up to the worst case above."
             launch={(plan) => api.startReplay(detail.id, { yaml, plan_hash: plan.plan_hash, ...(expect ? { expect } : {}) })}
           />

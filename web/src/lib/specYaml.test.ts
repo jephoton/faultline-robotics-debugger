@@ -8,6 +8,7 @@ import {
   extractBackend,
   fieldForPath,
   sortFamilies,
+  suggestedReplayLimits,
   usesNemotron,
   yamlValue,
 } from './specYaml';
@@ -101,6 +102,14 @@ describe('what a spec asks of Nemotron', () => {
     expect(usesNemotron(buildYaml('screen', defaultsFor('screen'), null))).toBe(true);
     expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false }, null))).toBe(true); // research
     expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false, research: false }, null))).toBe(false);
+  });
+});
+
+describe('suggestedReplayLimits', () => {
+  it('rounds the worst case up to 10 cents and the time up to a quarter hour', () => {
+    expect(suggestedReplayLimits({ jobs: [{ deadline_seconds: 1500 }], worst_case_total_usd: 1.08 })).toEqual({ spend: '1.1', hours: '1' });
+    const two = suggestedReplayLimits({ jobs: [{ deadline_seconds: 2400 }, { deadline_seconds: 2000 }], worst_case_total_usd: 3.0 });
+    expect(two).toEqual({ spend: '3', hours: '1.75' });
   });
 });
 

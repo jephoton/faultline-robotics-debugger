@@ -118,6 +118,34 @@ class AuditReplay(Base):
         self.assertEqual(saved["verdict_text"], "still fails at s = 0.40 (blur); still fails at s = 0.20 (lighting)")
         self.assertEqual(len(saved["jobs"]), 2)
 
+    def two_groups(self):
+        return audit_case([{"step": "probe-image-1", "families": [{"family": "blur", "severity": 0.4}]},
+                           {"step": "probe-scene-1", "families": [{"family": "lighting", "severity": 0.8}]}])
+
+    def test_a_stop_between_groups_keeps_the_verdicts_of_the_groups_that_ran(self):
+        temp, runner, backend, tools, ledger, lines = make_world(
+            spec_for(mode="replay"), [m6_step(["blur"], thresholds={"blur": 0.4})], tools=ParaphraseTools())
+        self.addCleanup(temp.cleanup)
+        backend.fail_submit_at = 1                        # the second group's Job cannot be submitted
+        result = runner.replay(self.case_dir(self.two_groups()))
+        self.assertEqual((result.status, result.reason, result.verdict, result.reproduces),
+                         ("stopped", "backend_error", "incomplete", None))
+        saved = json.loads((runner.run_dir / "replay-result.json").read_text(encoding="utf-8"))
+        self.assertEqual((saved["verdict"], saved["reproduces"], saved["partial"], len(saved["jobs"])),
+                         ("incomplete", None, True, 1))
+        self.assertIn("still fails at s = 0.40 (blur)", saved["verdict_text"])
+        self.assertIn("not finished", saved["verdict_text"])
+        self.assertEqual(saved["groups"], {"ran": 1, "planned": 2})
+
+    def test_a_stop_before_any_group_ran_writes_no_partial_result(self):
+        temp, runner, backend, tools, ledger, lines = make_world(
+            spec_for(mode="replay"), [], tools=ParaphraseTools())
+        self.addCleanup(temp.cleanup)
+        backend.fail_submit_at = 0
+        result = runner.replay(self.case_dir(self.two_groups()))
+        self.assertEqual((result.status, result.reason, result.verdict), ("stopped", "backend_error", None))
+        self.assertFalse((runner.run_dir / "replay-result.json").exists())
+
     def test_the_cases_own_checkpoint_is_replayed_against(self):
         script = [m6_step(["blur", "noise"], thresholds={"blur": 0.4})]
         result, saved, runner, backend, lines = self.replay(audit_case(checkpoint=CHECKPOINT), script)
@@ -181,6 +209,28 @@ class ExpectGate(Base):
         self.assertEqual(cli._expectation_code(gone, "fixed", out.append), 0)
         inconclusive, *_ = self.replay(audit_case(), [m6_step(["blur", "noise"], control_ok=False)])
         self.assertEqual(cli._expectation_code(inconclusive, "reproduces", out.append), cli.EXIT_UNEXPECTED_VERDICT)
+
+    def test_expect_on_a_replay_that_stopped_part_way_says_inconclusive(self):
+        temp, runner, backend, tools, ledger, lines = make_world(
+            spec_for(mode="replay"), [m6_step(["blur"], thresholds={"blur": 0.4})], tools=ParaphraseTools())
+        self.addCleanup(temp.cleanup)
+        backend.fail_submit_at = 1
+        groups = [{"step": "probe-image-1", "families": [{"family": "blur", "severity": 0.4}]},
+                  {"step": "probe-scene-1", "families": [{"family": "lighting", "severity": 0.8}]}]
+        result = runner.replay(self.case_dir(audit_case(groups)))
+        out: List[str] = []
+        self.assertEqual(cli._expectation_code(result, "reproduces", out.append), cli.EXIT_UNEXPECTED_VERDICT)
+        self.assertEqual(len(out), 1)
+        self.assertIn("inconclusive", out[0].lower())
+        self.assertIn("backend_error", out[0])
+
+    def test_expect_on_a_refusal_before_any_job_keeps_the_run_exit_code(self):
+        temp, runner, backend, tools, ledger, lines = make_world(
+            spec_for(mode="replay", policy={"suite": "libero_object"}), [], tools=ParaphraseTools())
+        self.addCleanup(temp.cleanup)
+        result = runner.replay(self.case_dir(audit_case()))
+        self.assertEqual(result.reason, "suite_mismatch")
+        self.assertEqual(cli._expectation_code(result, "fixed", [].append), result.exit_code)
 
 
 if __name__ == "__main__":

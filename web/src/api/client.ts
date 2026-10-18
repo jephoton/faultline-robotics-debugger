@@ -149,8 +149,13 @@ export class FaultlineApi {
     return this.post<ValidateResult>('/api/specs/validate', { yaml });
   }
 
-  dryRun(yaml: string, importFile?: ImportFile): Promise<DryRun> {
-    return this.post<DryRun>('/api/specs/dry-run', importFile ? { yaml, import_file: importFile } : { yaml });
+  /** `caseId` names the saved case a replay spec replays: its kind decides which Jobs the plan lists. */
+  dryRun(yaml: string, importFile?: ImportFile, caseId?: string): Promise<DryRun> {
+    return this.post<DryRun>('/api/specs/dry-run', {
+      yaml,
+      ...(importFile ? { import_file: importFile } : {}),
+      ...(caseId ? { case_id: caseId } : {}),
+    });
   }
 
   startRun(request: RunRequest): Promise<{ run: string; library_id: string | null }> {

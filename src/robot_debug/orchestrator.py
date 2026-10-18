@@ -2457,6 +2457,34 @@ class Orchestrator:
                          None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
                          case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
 
+    def _partial_audit_replay(self, case: Mapping[str, Any], outcomes: Sequence[JobOutcome],
+                              judged: Tuple[Any, Any, Any], planned: int, stop: StopRun,
+                              checkpoint: Optional[Tuple[str, str]]) -> RunResult:
+        """A stress-test replay that stopped after some groups: write what those groups showed, but no
+        verdict. The result is ``incomplete`` (never "fixed" and never "still reproduces"), so ``--expect``
+        reports it as inconclusive; the stop reason is kept so the run can be understood."""
+
+        from robot_debug import pipeline
+
+        still, gone, untested = judged
+        seen = pipeline.audit_replay_text(still, gone, untested)
+        text = "{}Inconclusive: the replay has not finished ({} of {} Jobs ran; stopped: {}).".format(
+            seen + "; " if seen else "", len(outcomes), planned, stop.reason)
+        replay_result = {
+            "case_id": case.get("case_id"), "kind": "audit", "reproduces": None, "verdict": "incomplete",
+            "verdict_text": text, "partial": True, "stop_reason": stop.reason,
+            "groups": {"ran": len(outcomes), "planned": planned}, "job_name": outcomes[0].job_name,
+            "summary": outcomes[0].summary_path.relative_to(self.run_dir).as_posix(),
+            "jobs": [{"job_name": o.job_name, "summary": o.summary_path.relative_to(self.run_dir).as_posix()}
+                     for o in outcomes]}
+        if checkpoint is not None:
+            replay_result["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        _write_json(self.run_dir / "replay-result.json", replay_result)
+        result = self._stopped(stop)
+        self.steps.set_run(reproduces=None, verdict="incomplete")
+        result.verdict, result.case_id = "incomplete", case.get("case_id")
+        return result
+
     def _replay_audit(self, case: Mapping[str, Any]) -> RunResult:
         """Rerun each family that failed, at its threshold, with the unperturbed control, one Job per original
         probe group. A family still fails when its search finds a reproducing level at or below the threshold."""
@@ -2481,7 +2509,13 @@ class Orchestrator:
             workload = self.tools.audit_replay_workload(
                 case, [f for f, _s in wanted], sorted({s for _f, s in wanted}), attempts, required,
                 self.job_name(step, 0), checkpoint)
-            outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            try:
+                outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            except StopRun as stop:
+                if not outcomes:
+                    raise
+                return self._partial_audit_replay(case, outcomes, (still, gone, untested), len(groups), stop,
+                                                  checkpoint)
             outcomes.append(outcome)
             summary = outcome.summary
             if pipeline.audit_control_failed(summary):
