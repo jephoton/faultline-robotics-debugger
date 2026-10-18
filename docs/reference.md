@@ -1,7 +1,7 @@
 # Faultline reference
 
 The documentation for what Faultline does and what everything it shows means:
-the two modes, the repeatability gate, how a reduction works, every stress-test
+the diagnosis and its routes, the repeatability gate, how a reduction works, every stress-test
 severity, every report column and abbreviation, the verdicts and stop reasons,
 and how spending is capped. The control panel shows this page as
 **Reference**. For step-by-step use of the interface, see the
@@ -9,46 +9,90 @@ and how spending is capped. The control panel shows this page as
 
 ## 1. What Faultline is for
 
-Faultline turns a robot-policy failure into the **smallest confirmed
-trigger** and keeps it as a **regression test** that reruns on every new
-checkpoint. The policy runs in simulation (LIBERO on MuJoCo); the evidence is
-reruns of the policy, never a model's opinion.
+Faultline finds **the smallest condition under which a robot policy fails**
+and keeps it as a **regression test** that reruns on every new checkpoint.
+The policy runs in simulation (LIBERO on MuJoCo). The evidence is reruns of
+the policy, never a model's opinion.
 
 ### Regression tests
 
 In software, a **regression** is something that used to work and breaks after
-a change; a **regression test** is a small saved check, rerun after every
-change, that catches it. For a robot policy every fine-tune or retrain is a
-change. Each Faultline case pins one failure: `faultline replay` reruns its
-minimal scene and passing reference on any checkpoint and says whether the
-failure still reproduces (`--expect fixed` or `--expect reproduces` turns that
-into a pass/fail exit code for a script or CI job).
+a change. A **regression test** is a small saved check, rerun after every
+change, that catches it.
 
-### Two kinds of diagnosis
+For a robot policy, every fine-tune or retrain is a change. Each Faultline
+case pins one failing condition, and `faultline replay` (or **Replay** on the
+case page) reruns it on any checkpoint to say whether it still fails.
+`--expect fixed` or `--expect reproduces` turns that into a pass/fail exit
+code for a script or CI job.
 
-Both modes produce cases for the same suite. They differ in what you start
-from and what question is asked.
+### What a replay reruns
 
-| | **Find why a start fails** | **Stress-test a passing start / Test rewordings** |
+| Case | Replay reruns | Verdict |
 | --- | --- | --- |
-| You start from | A start where the policy **fails**: a benchmark start you know, a range to search, or your own start-state file | A start where the policy **passes** |
-| Question | "Which of the differences between this failing layout and a passing one make it fail?" | "What change to what the policy sees or is told makes it fail, and how much is needed?" |
-| What is varied | Real scene differences between two layouts: object positions and rotations, the arm's starting joints | Disturbances added on purpose: image effects, camera position, lighting, or the wording of the instruction |
-| Reference | Found automatically: the nearest benchmark start that passes 5 of 5 | The start itself, run undisturbed (the control) |
-| Result | The minimal set of differences needed (a scenario case with videos and replay inputs) | The smallest severity that fails per family, or the smallest word change, or "no failure in the tested range" |
-| Replay | Yes (minimal scene and reference) | Not yet |
+| Layout reduction | The minimal scene and its passing reference, 5 attempts each | Still reproduces / no longer reproduces |
+| Disturbance probe | Each failing family at its threshold severity on the start, with the undisturbed control, 5 attempts each | Still fails at s = *x* / no longer fails |
+| Rewording probe | The failing wording, with the original wording as the control | The wording still fails / no longer fails |
 
-Use **Find why a start fails** when you already have a failure (from your own
-evaluation, or a start you suspect) and want its trigger. Use the stress test
-or rewordings when the policy works and
-you want to find what breaks it.
+A replay whose control does not pass, or whose Job does not finish, is
+inconclusive, never a pass.
+
+### One diagnosis, routed on the untouched result
+
+There is one **New diagnosis**. You give it a task and a start, and it
+promises: *find the smallest condition under which the policy fails here.*
+
+1. **Check.** The start is run untouched (with confirmation attempts).
+2. **If it fails reliably:** find the smallest *layout* change that triggers
+   it. The differences between this start and the nearest passing benchmark
+   start are reduced to the ones the failure needs (section 4).
+3. **If it passes:** probe it with the disturbances and rewordings you chose.
+   Each probe reports the smallest severity, or the smallest word change, that
+   breaks it (section 5). If the probe's own control shows the start is
+   unreliable untouched, the start is reported as **flaky** and nothing is
+   blamed on a disturbance.
+4. **Every failing condition becomes a replayable case.** The run's
+   **findings** list them; "no failing condition in these ranges" is a valid
+   finding too.
+
+| What you send | Route | What comes back |
+| --- | --- | --- |
+| A start that fails untouched | **layout** | "Fails from this layout; smallest trigger: these shifts" |
+| A start that passes | **probes** | "Passes untouched; breaks under blur from s = 0.50", or nothing breaks it |
+| A start that fails sometimes | **flaky** | "Unreliable even untouched"; no probe is blamed |
+| A start that passes, with no probes chosen | **passes** | "Passes untouched" |
+
+Two other ways in only look for a failure to reduce, without probing:
+**Search a range of starts** and **A start file of my own** (section 4).
+
+Defaults:
+- The four image families **blur, noise, darken and contrast** (the only ones
+  where the policy has failed before), no rewordings, and a **US$2.50** cap
+  over **1.5 hours**.
+- Typically about **US$1.25 and 45 minutes** when the start passes, and about
+  **US$1.10 and 40 minutes** when it fails (measured runs; GPU waits add
+  time).
+- The other six families and rewordings are one tick away. More families mean
+  more probe Jobs, about half an hour each.
+
+### Related research (optional)
+
+With **Find related research** ticked and a Tavily key in `.env`, each new
+case gets a **Research context** section:
+- Tavily finds public sources about similar failures;
+- Nemotron 3 Nano summarises them.
+
+It is context, not evidence: it cannot say why this policy failed.
 
 ### Fault codes
 
 Each case gets a display code such as `FL-S-AFB5`: `FL`, a letter for the
-kind (`S` scenario reduction, `A` stress test/audit, `L` language/rewordings,
-`M` the September occlusion case), and the first hex digits of the case id.
-The full case id is always shown as well.
+kind, and the first hex digits of the case id. The full case id is always
+shown as well. The letters are:
+- `S`: a layout (scenario) reduction;
+- `A`: a disturbance probe (audit);
+- `L`: a rewording (language) probe;
+- `M`: the September occlusion case.
 
 ## 2. Glossary
 
@@ -58,9 +102,9 @@ The full case id is always shown as well.
 | **Suite, task** | LIBERO's four suites (Object, Spatial, Goal, 10), ten tasks each, each with an instruction such as "put both the alphabet soup and the tomato sauce in the basket". |
 | **Benchmark start** | One of the 50 fixed starting layouts LIBERO provides per task (where each object and the arm begin). |
 | **Episode / attempt** | One run of the policy from a start until success or the step limit. |
-| **Failing start** | The start being diagnosed by *Find why a start fails*: a benchmark start or an imported state file. |
-| **Reference** | In *Find why a start fails*, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
-| **Control** | In a stress test or rewording test, the start run with no disturbance; it must pass for any disturbance to be judged. |
+| **Failing start** | A start that fails untouched (layout route): a benchmark start or an imported state file. |
+| **Reference** | On the layout route, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
+| **Control** | On the probes route, the start run with no disturbance; it must pass for any disturbance to be judged. |
 | **Entity** | One object in the scene, or the robot. |
 | **Difference** | What differs for one entity between the failing start and the reference: position, rotation, or joints (the robot's arm joints, or an object's hinge/slide such as a drawer). |
 | **Part** | One kind of difference of one entity (position, rotation or joints). |
@@ -95,17 +139,17 @@ next time. Every judgement therefore uses repeated attempts.
 - **Invalid scene** (`I`): objects started interpenetrating. Never counted as
   a policy failure.
 
-## 4. Find why a start fails: how a scenario reduction works
+## 4. The layout route: how a scenario reduction works
 
-### Three ways to name the failing start
+### Three ways in
 
 | Option | When to use it | What happens first |
 | --- | --- | --- |
-| **A benchmark start I know fails** (`scenario.start`) | Your evaluation already showed a failure on, say, start 14 of a task (LIBERO evaluations run the benchmark starts by number) | The start is confirmed: it must fail 4 of 5. |
-| **Search a range of starts** (`scenario.screen`) | You suspect the task has weak starts but do not know which | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. |
-| **A start file of my own** (`scenario.import`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. |
+| **A benchmark start** (`diagnose.start`) | You have a start number, for example from your own evaluation (LIBERO evaluations run the benchmark starts by number), and may not know whether it fails | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
+| **Search a range of starts** (`diagnose.screen`) | You suspect the task has weak starts but do not know which | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |
+| **A start file of my own** (`diagnose.import`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. Layout route only. |
 
-After the failing start is confirmed, all three continue the same way.
+Older specs with `mode: scenario` and `scenario.start` / `screen` / `import` still work from the CLI; after the failing start is confirmed, all of them continue the same way.
 
 ### The flow
 
@@ -169,7 +213,7 @@ LIBERO-10 task 0, an imported failing start (benchmark start 14), reference
 The budget ended there. The recorded case keeps the arm at 100%: a defect
 fixed on October 18 discarded the verified 75%; new runs record it.
 
-## 5. Stress tests and rewordings
+## 5. The probes route: disturbances and rewordings
 
 ### How an audit searches
 
@@ -313,7 +357,14 @@ Hypothesis labels:
 
 Run statuses on the run page: **Submitting a Job**, **Waiting for a GPU**,
 **Running**, **Downloading results**, **Stopping**, **Completed**,
-**Stopped**, **Failed**, **Interrupted**.
+**Stopped**, **Failed**, **Interrupted**. Once the check is read, the run page
+also shows the **route**: layout, probes, flaky or passes (section 1).
+
+Colours:
+- **Red**: a failure (with a cross).
+- **Green**: a pass, including "No failure found" (with a tick).
+- **Amber**: anything that needs attention: stopped, flaky, waiting for a GPU.
+- Colour is never the only signal: an icon and a word go with it.
 
 | Stop reason | Meaning |
 | --- | --- |
@@ -329,6 +380,9 @@ Run statuses on the run page: **Submitting a Job**, **Waiting for a GPU**,
 | `stopped_by_user` | Stopped from the control panel or `faultline stop`. |
 | `backend_error`, `auth_expired` | A cloud call failed (resume to re-attach); the Nebius sign-in expired. |
 | `process_ended` | The run's process ended unexpectedly; Resume re-attaches. |
+| `control_not_passing` | The original wording did not pass both control attempts, so a failing rewording cannot be attributed to the wording. |
+| `paraphrase_failed`, `llm_required` | Nemotron could not write the rewordings (resume to retry), or they need Nemotron and it is off. |
+| `original_unknown` | The task's own wording is not known, so its rewordings cannot be probed. |
 
 ## 8. Spending and the cap
 
@@ -345,6 +399,19 @@ the reservation is replaced by the measured container time.
 - The cap covers Nebius Serverless Jobs only, not Token Factory calls or
   storage.
 - Costs are estimates from measured time until reconciled against the bill.
+
+**Worst case and typical figures on Review.** The worst case is the check
+plus the larger of the two branches, because only one branch runs. Beside it,
+each branch shows a **typical** cost and time, modelled on measured runs. For
+example: the check, about 16 minutes and US$0.43; four disturbance families,
+about 29 minutes and US$0.82; a layout reduction, about 25 minutes and
+US$0.68. These are estimates. GPU waits, longer tasks and finding a failure
+(the narrowing steps) add time.
+
+A default cap of US$2.50 can sit below the worst case (US$3.09) and still
+cover the typical runs. The review then shows "The first Job fits, but not
+all of them". Raise the cap if you want layout continuations to run
+uninterrupted.
 
 ## 9. What results do and do not show
 
