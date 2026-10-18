@@ -10,6 +10,11 @@ export function isFail(outcome: string): boolean {
   return FAIL.has(outcome);
 }
 
+/** The colour class of an outcome: green for a pass, red for a failure, plain for anything else. */
+export function outcomeKind(outcome: string): 'pass' | 'fail' | 'other' {
+  return isFail(outcome) ? 'fail' : isPass(outcome) ? 'pass' : 'other';
+}
+
 export function outcomeWord(outcome: string): string {
   if (isPass(outcome)) return 'passed';
   if (isFail(outcome)) return 'failed';

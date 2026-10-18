@@ -53,13 +53,14 @@ article > h1 {
   stroke-width: 3;
 }
 .cell--fail {
-  background: var(--text);
-  color: var(--bg-panel);
-  border-color: var(--text);
+  background: var(--alarm-fill);
+  color: var(--on-alarm);
+  border-color: var(--alarm-fill);
 }
 .cell--pass {
   background: transparent;
-  color: var(--text-2);
+  color: var(--pass-text);
+  border-color: var(--pass);
 }
 .cell--other {
   border-style: dashed;
@@ -124,6 +125,10 @@ details.fold > .panel {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-4);
 }
+.player__videos[data-many='true'] {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+}
 .player__item {
   margin: 0;
   background: var(--bg-panel);
@@ -149,6 +154,7 @@ details.fold > .panel {
 }
 .player__item figcaption {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -163,6 +169,13 @@ details.fold > .panel {
   gap: 4px;
   color: var(--text-2);
   white-space: nowrap;
+  font-weight: 500;
+}
+.player__outcome--pass {
+  color: var(--pass-text);
+}
+.player__outcome--fail {
+  color: var(--alarm-text);
 }
 .player__controls {
   display: flex;
@@ -219,6 +232,9 @@ details.fold > .panel {
   gap: 6px;
   margin: 2px 0 0;
   font-weight: 500;
+}
+.ladder__result--pass {
+  color: var(--pass-text);
 }
 .ladder__result--alarm {
   color: var(--alarm-text);
@@ -449,4 +465,40 @@ details.fold > .panel {
   padding-left: var(--space-4);
   border-left: 4px solid var(--line-strong);
   color: var(--text-2);
+}
+
+/* Findings of one diagnosis run */
+.findings {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.finding {
+  display: grid;
+  grid-template-columns: max-content max-content max-content 1fr;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.finding:first-child {
+  border-top: 0;
+}
+.finding--current {
+  background: var(--bg-raised);
+  box-shadow: inset 4px 0 0 var(--text);
+}
+.finding__kind {
+  color: var(--text-2);
+}
+.finding__here {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .finding {
+    grid-template-columns: 1fr;
+  }
 }

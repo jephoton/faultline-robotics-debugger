@@ -88,6 +88,11 @@
   border-color: var(--alarm-fill);
   color: var(--on-alarm);
 }
+.badge--pass {
+  background: var(--pass-fill);
+  border-color: var(--pass-fill);
+  color: var(--on-pass);
+}
 .badge--attention {
   background: var(--attention);
   border-color: var(--attention);
@@ -158,6 +163,10 @@
 }
 .readout__value--attention {
   color: var(--readout-attention);
+}
+.readout__value--pass {
+  color: var(--readout-pass);
+  font-weight: 700;
 }
 .readout__value--neutral {
   color: var(--readout-neutral);
@@ -240,6 +249,12 @@
 }
 .notice--neutral {
   border-left-color: var(--line-strong);
+}
+.notice--pass {
+  border-left-color: var(--pass);
+}
+.notice--pass .notice__title {
+  color: var(--pass-text);
 }
 .notice__body > :last-child {
   margin-bottom: 0;

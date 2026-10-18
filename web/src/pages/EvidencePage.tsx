@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useApi, useAppData } from '../api/context';
 import type { EvidenceEpisode } from '../api/types';
 import { Icon } from '../components/Icon';
-import { isFail, isPass, outcomeWord } from '../components/Outcomes';
+import { isFail, isPass, outcomeKind, outcomeWord } from '../components/Outcomes';
 import { duration, shortDate, suiteLabel } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
@@ -23,7 +23,7 @@ function Row({ episode }: { episode: EvidenceEpisode }) {
           <div className="muted">{episode.instruction}</div>
         </td>
         <td>
-          <span className="outcome-word">
+          <span className={`outcome-word outcome-word--${outcomeKind(episode.outcome)}`}>
             <Icon name={failed ? 'close' : isPass(episode.outcome) ? 'tick' : 'minus'} /> {outcomeWord(episode.outcome)}
           </span>
           {episode.failure_detail && <div className="muted">{episode.failure_detail}</div>}

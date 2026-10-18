@@ -85,6 +85,9 @@
 .nav-item--alarm {
   border-left-color: var(--alarm);
 }
+.nav-item--pass {
+  border-left-color: var(--pass);
+}
 .nav-item--attention {
   border-left-color: var(--attention);
 }
@@ -114,6 +117,10 @@
 }
 .nav-item--alarm .nav-item__status {
   color: var(--alarm-text);
+  font-weight: 500;
+}
+.nav-item--pass .nav-item__status {
+  color: var(--pass-text);
   font-weight: 500;
 }
 .nav-item--attention .nav-item__status {

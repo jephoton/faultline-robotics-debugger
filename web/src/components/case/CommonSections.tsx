@@ -169,7 +169,10 @@ export function ResearchSection({ detail }: { detail: Detail }) {
   const r = detail.research;
   if (!r) return null;
   return (
-    <Section title="Research context">
+    <Section
+      title="Research context"
+      hint="Context, not evidence: public sources found with Tavily and summarised by Nemotron 3 Nano. It does not show that anything above is true."
+    >
       {r.related && <p>{r.related}</p>}
       {r.sources.length > 0 ? (
         <ul>
@@ -188,8 +191,8 @@ export function ResearchSection({ detail }: { detail: Detail }) {
   );
 }
 
-export function replayLabel(verdict: string): { icon: IconName; label: string; tone: 'alarm' | 'neutral' } {
-  if (/fixed|no_longer|not_reproduce|does_not/.test(verdict)) return { icon: 'check', label: 'Fixed', tone: 'neutral' };
+export function replayLabel(verdict: string): { icon: IconName; label: string; tone: 'alarm' | 'pass' | 'neutral' } {
+  if (/fixed|no_longer|not_reproduce|does_not/.test(verdict)) return { icon: 'check', label: 'Fixed', tone: 'pass' };
   if (/reproduces|still/.test(verdict)) return { icon: 'alarm', label: 'Still reproduces', tone: 'alarm' };
   return { icon: 'dash', label: verdict.replace(/_/g, ' '), tone: 'neutral' };
 }
@@ -204,7 +207,7 @@ export function ReplayHistory({ detail, slot }: { detail: Detail; slot?: (run: s
         const view = replayLabel(replay.verdict);
         return (
           <li key={replay.run ?? index} className="replay">
-            <span className={view.tone === 'alarm' ? 'badge badge--alarm' : 'badge'}>
+            <span className={view.tone === 'neutral' ? 'badge' : `badge badge--${view.tone}`}>
               <Icon name={view.icon} />
               {view.label}
             </span>
@@ -249,14 +252,20 @@ export function CaseVideos({ detail }: { detail: Detail }) {
     ) : null;
   }
   const scenario = detail.kind === 'scenario';
+  // The control first, so every other clip is read against the unchanged start; the rest keep the server's order.
+  const ordered = [...detail.videos.filter((video) => video.role === 'control'), ...detail.videos.filter((video) => video.role !== 'control')];
+  const hint = scenario
+    ? 'Original failing start, the reference with the minimal cause applied, and the passing reference.'
+    : detail.kind === 'audit' && ordered.some((video) => video.role === 'control')
+      ? 'The control (the start untouched) first, then each disturbance that broke the policy, at its threshold.'
+      : detail.kind === 'paraphrase' && ordered.some((video) => video.role === 'control')
+        ? 'The control (the original wording) first, then the failing wording.'
+        : undefined;
   return (
-    <Section
-      title="Videos"
-      hint={scenario ? 'Original failing start, the reference with the minimal cause applied, and the passing reference.' : undefined}
-    >
+    <Section title="Videos" hint={hint}>
       <LinkedPlayer
-        title={scenario ? 'Original, minimal and reference videos' : detail.kind === 'audit' ? 'Audit videos' : 'Case videos'}
-        videos={detail.videos.map((video) => ({ key: video.role, label: video.label, url: video.url, outcome: video.outcome }))}
+        title={scenario ? 'Original, minimal and reference videos' : detail.kind === 'audit' ? 'Audit videos' : detail.kind === 'paraphrase' ? 'Wording videos' : 'Case videos'}
+        videos={ordered.map((video) => ({ key: video.role, label: video.label, url: video.url, outcome: video.outcome }))}
       />
     </Section>
   );

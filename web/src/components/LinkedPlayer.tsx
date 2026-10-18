@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { isFail, isPass, outcomeWord } from './Outcomes';
+import { isFail, isPass, outcomeKind, outcomeWord } from './Outcomes';
 
 export interface PlayerVideo {
   key: string;
@@ -98,7 +98,7 @@ export function LinkedPlayer({ videos, title }: { videos: PlayerVideo[]; title?:
 
   return (
     <div className="player" role="group" aria-label={title ?? 'Linked videos'}>
-      <div className="player__videos" data-count={videos.length}>
+      <div className="player__videos" data-count={videos.length} data-many={videos.length > 6 ? 'true' : undefined}>
         {videos.map((video, index) => (
           <figure className="player__item" key={video.key}>
             {video.url ? (
@@ -135,7 +135,7 @@ export function LinkedPlayer({ videos, title }: { videos: PlayerVideo[]; title?:
             <figcaption>
               <span className="player__label">{video.label}</span>
               {video.outcome && (
-                <span className="player__outcome">
+                <span className={`player__outcome player__outcome--${outcomeKind(video.outcome)}`}>
                   <Icon name={isFail(video.outcome) ? 'close' : isPass(video.outcome) ? 'tick' : 'minus'} />
                   {outcomeWord(video.outcome)}
                 </span>
