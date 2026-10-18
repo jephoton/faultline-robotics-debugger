@@ -46,6 +46,12 @@ TYPICAL_AUDIT_STARTUP_MINUTES = 8.0
 TYPICAL_AUDIT_FAMILY_MINUTES = 4.0
 TYPICAL_START_ALLOWANCE_MINUTES = 4.0    # ledger.DEFAULT_START_ALLOWANCE_SECONDS, billed on every Job
 TYPICAL_OVERHEAD_MINUTES = 5.0           # submitting the Job and downloading its evidence, on this machine
+# The references above were measured on LIBERO-Object and LIBERO-Spatial (episodes of about 44 s). The testing
+# part of a Job that runs episodes stretches with the suite's episode time, as the deadline model of
+# ``m6_experiment`` already assumes (LIBERO-10: about three times longer); the start-up (image, model load) does
+# not. These are the assumed start-up minutes inside each such Job's typical figure; layout and replay Jobs
+# were measured on LIBERO-10 itself and are not rescaled.
+TYPICAL_FIXED_MINUTES = {"check": 6.0, "probe": TYPICAL_AUDIT_STARTUP_MINUTES, "rewording-screen": 3.0}
 ROUTES = ("layout", "probes", "passes", "flaky")
 BRANCHES = ("check", "layout", "probes")
 
@@ -114,9 +120,22 @@ def severity_text(value: float) -> str:
     return "{}.{}".format(whole, fraction.ljust(2, "0"))
 
 
-def typical_container_minutes(kind: str, families: int = 0, deadline_seconds: Optional[float] = None) -> float:
+def suite_time_factor(suite: Optional[str]) -> float:
+    """How much longer an episode takes on ``suite`` than on LIBERO-Object (1.0 for it and for an unknown
+    suite), from the deadline model's own episode times."""
+
+    baseline = m6_experiment.episode_wall_seconds({"suite": "libero_object"})
+    if suite not in m6_experiment.SUITES:
+        return 1.0
+    return max(1.0, m6_experiment.episode_wall_seconds({"suite": suite}) / baseline)
+
+
+def typical_container_minutes(kind: str, families: int = 0, deadline_seconds: Optional[float] = None,
+                              suite: Optional[str] = None) -> float:
     """Typical container minutes of one Job: ``check``, ``layout``, ``probe`` (``families`` of them),
-    ``rewording-screen``, ``rewording-reduce`` or ``replay``. Clamped to the Job's deadline when given."""
+    ``rewording-screen``, ``rewording-reduce`` or ``replay``. The testing part of the check, a probe and a
+    rewording screen is stretched for a suite with longer episodes (``suite``); the result is clamped to the
+    Job's deadline when given."""
 
     if kind == "probe":
         minutes = TYPICAL_AUDIT_STARTUP_MINUTES + TYPICAL_AUDIT_FAMILY_MINUTES * families
@@ -124,6 +143,9 @@ def typical_container_minutes(kind: str, families: int = 0, deadline_seconds: Op
         minutes = {"check": TYPICAL_CHECK_MINUTES, "layout": TYPICAL_LAYOUT_MINUTES,
                    "rewording-screen": TYPICAL_REWORDING_SCREEN_MINUTES,
                    "rewording-reduce": TYPICAL_REWORDING_REDUCE_MINUTES, "replay": TYPICAL_REPLAY_MINUTES}[kind]
+    fixed = TYPICAL_FIXED_MINUTES.get(kind)
+    if fixed is not None:
+        minutes = fixed + (minutes - fixed) * suite_time_factor(suite)
     if deadline_seconds is not None:
         minutes = min(minutes, deadline_seconds / 60.0)
     return minutes

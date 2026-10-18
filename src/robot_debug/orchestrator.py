@@ -1129,7 +1129,7 @@ def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], f
             if not optional:
                 required += cost
                 container = pipeline.typical_container_minutes(
-                    _job_kind(step), probe_sizes.get(step, 0), deadline)
+                    _job_kind(step), probe_sizes.get(step, 0), deadline, spec.suite)
                 usd += pipeline.typical_cost(container, rate)
                 minutes += pipeline.typical_total_minutes(container)
         totals[name] = required

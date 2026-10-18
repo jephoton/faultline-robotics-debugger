@@ -81,8 +81,9 @@ Defaults:
   where the policy has failed before), no rewordings, and a **US$2.50** cap
   over **1.5 hours**.
 - Typically about **US$1.25 and 45 minutes** when the start passes, and about
-  **US$1.10 and 40 minutes** when it fails (measured runs; GPU waits add
-  time).
+  **US$1.10 and 40 minutes** when it fails (measured runs on LIBERO-Object;
+  GPU waits add time). The Review stretches the testing part of the check and
+  of each probe for a suite with longer episodes, so LIBERO-10 shows more.
 - The other six families and rewordings are one tick away. More families mean
   more probe Jobs, about half an hour each.
 

@@ -38,6 +38,17 @@ class Model(unittest.TestCase):
         self.assertAlmostEqual(pl.typical_cost(7.5, RATE), 0.33, delta=0.03)       # measured US$0.31-0.35
         self.assertAlmostEqual(pl.typical_cost(10.2, RATE), 0.41, delta=0.02)      # measured US$0.41
 
+    def test_longer_episodes_stretch_the_testing_part_of_a_job(self):
+        # The references were measured on LIBERO-Object; LIBERO-10's episodes are about three times longer.
+        for kind, families in (("check", 0), ("probe", 4), ("rewording-screen", 0)):
+            object_minutes = pl.typical_container_minutes(kind, families)
+            long_minutes = pl.typical_container_minutes(kind, families, suite="libero_10")
+            self.assertGreater(long_minutes, object_minutes, kind)
+            self.assertLess(long_minutes, object_minutes * 3.0, "the start-up does not stretch")
+        for suite in ("libero_object", "libero_spatial", "an-unknown-suite"):
+            self.assertEqual(pl.typical_container_minutes("probe", 4, suite=suite),
+                             pl.typical_container_minutes("probe", 4))
+
     def test_a_job_never_takes_longer_than_its_deadline(self):
         self.assertEqual(pl.typical_container_minutes("probe", 4, deadline_seconds=600), 10.0)
         self.assertEqual(pl.typical_container_minutes("check", deadline_seconds=3000), 10.6)
@@ -50,10 +61,12 @@ class Model(unittest.TestCase):
         self.assertAlmostEqual(pl.typical_cost(56.0, 60.0), 60.0)
 
 
-def plan_of(**diagnose):
+def plan_of(suite=None, **diagnose):
     with open("configs/specs/diagnose.yaml", encoding="utf-8") as handle:
         mapping = yaml.safe_load(handle)
     mapping["diagnose"].update(diagnose)
+    if suite is not None:
+        mapping["policy"]["suite"] = suite
     lines, required = orch.dry_run_lines(sp.parse_spec(mapping), FakeTools())
     return lines, vs.parse_plan_branches(lines, required)[2]
 
@@ -78,6 +91,15 @@ class DryRunFigures(unittest.TestCase):
         self.assertEqual(by["probes"]["typical_minutes"], 13)                    # the screen only: 7.5 + 5
         _lines, continuations = plan_of()
         self.assertEqual({b["branch"]: b for b in continuations}["layout"]["typical_minutes"], 25)
+
+    def test_a_libero_10_plan_is_slower_and_dearer_than_the_same_plan_on_libero_object(self):
+        _lines, quick = plan_of()
+        _lines, slow = plan_of(suite="libero_10")
+        quick, slow = {b["branch"]: b for b in quick}, {b["branch"]: b for b in slow}
+        for branch in ("check", "probes"):
+            self.assertGreater(slow[branch]["typical_minutes"], quick[branch]["typical_minutes"], branch)
+            self.assertGreater(slow[branch]["typical_usd"], quick[branch]["typical_usd"], branch)
+            self.assertLessEqual(slow[branch]["typical_usd"], slow[branch]["worst_case_usd"], branch)
 
     def test_more_families_cost_more_time_in_more_jobs(self):
         _lines, branches = plan_of(probes={"families": list(sp.FAMILIES), "rewordings": 0})
