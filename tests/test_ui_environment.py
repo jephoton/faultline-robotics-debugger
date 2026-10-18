@@ -181,7 +181,7 @@ class DockerAndShapeTests(EnvironmentCase):
     def test_the_report_shape(self):
         report = self.make().check()
         self.assertEqual(list(report), ["checks"])
-        self.assertEqual([c["key"] for c in report["checks"]], ["nebius_cli", "token_factory_key", "spec_template", "docker"])
+        self.assertEqual([c["key"] for c in report["checks"]], ["nebius_cli", "token_factory_key", "spec_template", "docker", "tavily_key"])
         for check in report["checks"]:
             self.assertTrue({"key", "ok", "detail"} <= set(check))
             self.assertIsInstance(check["ok"], bool)
