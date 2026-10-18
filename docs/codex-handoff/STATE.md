@@ -129,6 +129,13 @@ These are recorded project defects, not inferred provider or robot failures.
 
 ## Next actions and gates
 
+**Pipeline decision (October 18, ADR 0035):** one New diagnosis that routes on
+the untouched result (fails: layout reduction; passes: the chosen probes),
+with every finding a replayable case. The plan
+(`docs/superpowers/plans/2026-10-18-one-diagnosis-pipeline.md`) awaits
+Jethro's review and answers to Q1–Q3. Names come after the build. The
+Reference no longer uses "Mode 1 / Mode 2".
+
 **Agreed order (Jethro, October 18):** demos → stale public gallery → remaining
 things → video and cover → submission. Roadmap target October 29; deadline
 October 30, 10:00 PT.
