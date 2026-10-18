@@ -67,14 +67,34 @@ class AuditReplay(Base):
                          ("m6-threshold", ["noise", "blur"], [0.4, 0.6], 0, 5, 4))
         self.assertEqual((workload["suite"], workload["task_id"], workload["init_state_index"]), ("libero_10", 3, 0))
         self.assertEqual((result.status, result.verdict, result.reproduces), ("completed", "still_reproduces", True))
-        self.assertEqual(saved["verdict_text"], "still fails at s = 0.40 (blur); no longer fails: noise")
+        self.assertEqual(saved["verdict_text"], "still fails at s = 0.40 (blur); no longer fails at s = 0.60 (noise)")
         self.assertEqual(saved["kind"], "audit")
         self.assertIn("still fails at s = 0.40 (blur)", " ".join(lines))
 
     def test_a_family_that_no_longer_fails_is_a_fixed_verdict(self):
         result, saved, *_ = self.replay(audit_case(), [m6_step(["blur", "noise"])])
         self.assertEqual((result.verdict, result.reproduces, saved["verdict_text"]),
-                         ("no_longer_reproduces", False, "no longer fails"))
+                         ("no_longer_reproduces", False, "no longer fails at s = 0.40 (blur), s = 0.60 (noise)"))
+
+    def test_a_threshold_that_moved_up_is_not_still_failing(self):
+        case = audit_case([{"step": "probe-image-1", "families": [{"family": "blur", "severity": 0.4}]}])
+        result, saved, *_ = self.replay(case, [m6_step(["blur"], thresholds={"blur": 0.8})])
+        self.assertEqual((result.verdict, result.reproduces), ("no_longer_reproduces", False))
+        self.assertEqual(saved["verdict_text"], "no longer fails at s = 0.40 (blur; fails only at higher s = 0.80)")
+
+    def test_a_threshold_that_moved_down_still_fails_at_the_new_level(self):
+        case = audit_case([{"step": "probe-image-1", "families": [{"family": "blur", "severity": 0.6}]}])
+        result, saved, *_ = self.replay(case, [m6_step(["blur"], thresholds={"blur": 0.4})])
+        self.assertEqual((result.verdict, saved["verdict_text"]), ("still_reproduces", "still fails at s = 0.40 (blur)"))
+
+    def test_a_family_the_replay_never_tested_is_not_listed_as_no_longer_failing(self):
+        # The Job's summary holds no result for noise (it stopped first): noise is untested.
+        result, saved, *_ = self.replay(audit_case(), [m6_step(["blur"], thresholds={"blur": 0.4})])
+        self.assertEqual(result.verdict, "still_reproduces")
+        self.assertEqual(saved["verdict_text"], "still fails at s = 0.40 (blur); not tested: noise")
+        gone, saved2, *_ = self.replay(audit_case(), [m6_step(["blur"])])
+        self.assertEqual((gone.status, gone.verdict), ("stopped", "incomplete"))
+        self.assertNotIn("no longer fails", saved2["verdict_text"])
 
     def test_a_failing_control_is_inconclusive_not_fixed(self):
         result, saved, *_ = self.replay(audit_case(), [m6_step(["blur", "noise"], control_ok=False)])

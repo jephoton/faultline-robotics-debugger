@@ -2472,7 +2472,8 @@ class Orchestrator:
         checkpoint = self._replay_checkpoint(case)
         outcomes: List[JobOutcome] = []
         still: List[Tuple[str, float]] = []
-        gone: List[str] = []
+        gone: List[Tuple[str, float, Optional[float]]] = []
+        untested: List[str] = []
         control_failed = incomplete = False
         for index, group in enumerate(groups):
             step = "replay" if index == 0 else "replay-{}".format(index + 1)
@@ -2487,21 +2488,26 @@ class Orchestrator:
                 control_failed = True
                 break
             incomplete = incomplete or outcome.partial or not summary.get("complete")
-            for family, _severity in wanted:
-                found = ((summary.get("families") or {}).get(family) or {}).get("threshold_severity")
-                if type(found) in (int, float):
-                    still.append((family, float(found)))
+            for family, recorded in wanted:
+                # The Job sweeps every severity of the group for every family, so a family's threshold can sit
+                # above its own recorded one: that is not "still fails", the failure moved up or went away.
+                verdict, level = pipeline.classify_replayed_family(
+                    (summary.get("families") or {}).get(family), float(recorded))
+                if verdict == "still":
+                    still.append((family, level))
+                elif verdict == "gone":
+                    gone.append((family, float(recorded), level))
                 else:
-                    gone.append(family)
+                    untested.append(family)
         if control_failed:
             key = "reference_fails"
         elif still:
             key = "still_reproduces"
-        elif incomplete:
+        elif incomplete or untested:
             key = "incomplete"
         else:
             key = "no_longer_reproduces"
-        text = (pipeline.audit_replay_text(still, gone) if key in ("still_reproduces", "no_longer_reproduces")
+        text = (pipeline.audit_replay_text(still, gone, untested) if key in ("still_reproduces", "no_longer_reproduces")
                 else pipeline.replay_kind_text("audit", key) or replay_text(key))
         return self._finish_kind_replay(case, "audit", key, text, outcomes, checkpoint)
 

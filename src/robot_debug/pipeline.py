@@ -209,16 +209,44 @@ REPLAY_TEXTS = {
 }
 
 
-def audit_replay_text(failing: Sequence[Tuple[str, float]], gone: Sequence[str]) -> str:
-    """The audit replay verdict sentence: ``still fails at s = 0.50 (blur)`` for each family that still fails."""
+def classify_replayed_family(result: Any, recorded: float) -> Tuple[str, Optional[float]]:
+    """How one family fared in a replay Job, against the severity it first failed at.
 
-    if not failing:
-        return "no longer fails"
+    ``("still", s)``: it reproduces at a severity ``s`` no higher than ``recorded`` (a lower one is a worse
+    finding, still a failure). ``("gone", higher)``: it does not fail at ``recorded``; ``higher`` is the level it
+    did fail at when that is above ``recorded``, else ``None``. ``("untested", None)``: the Job never judged
+    ``recorded`` for this family, so nothing can be said about it."""
+
+    result = result if isinstance(result, Mapping) else {}
+    found = result.get("threshold_severity")
+    if type(found) in (int, float):
+        if found <= recorded + 1e-9:
+            return "still", float(found)
+        return "gone", float(found)
+    for level in result.get("levels") or ():
+        if (isinstance(level, Mapping) and type(level.get("severity")) in (int, float)
+                and abs(level["severity"] - recorded) < 1e-9 and level.get("complete", True) is not False):
+            return "gone", None
+    return "untested", None
+
+
+def audit_replay_text(failing: Sequence[Tuple[str, float]], gone: Sequence[Tuple[str, float, Optional[float]]],
+                      untested: Sequence[str] = ()) -> str:
+    """The audit replay verdict sentence: ``still fails at s = 0.50 (blur)`` for each family that still fails.
+
+    ``gone`` holds ``(family, recorded severity, higher failing severity or None)``: it reads
+    ``no longer fails at s = 0.60 (noise)``, with ``fails only at higher s = 0.80`` when the family fails at a
+    higher level. Families in ``untested`` are listed as not tested, never as no longer failing."""
+
     parts = ["still fails at s = {} ({})".format(severity_text(severity), family) for family, severity in failing]
-    text = "; ".join(parts)
     if gone:
-        text += "; no longer fails: {}".format(", ".join(gone))
-    return text
+        items = ["s = {} ({}{})".format(severity_text(recorded), family, "" if higher is None else
+                                        "; fails only at higher s = " + severity_text(higher))
+                 for family, recorded, higher in gone]
+        parts.append("no longer fails at " + ", ".join(items))
+    if untested:
+        parts.append("not tested: {}".format(", ".join(untested)))
+    return "; ".join(parts)
 
 
 def replay_kind_text(kind: str, verdict: Optional[str]) -> Optional[str]:
