@@ -1,9 +1,12 @@
 /*
  * Design tokens. Alarm-first rule (ISA-101 inspired): surfaces, text and controls are neutral greys.
- * Colour appears only for abnormal states:
- *   --alarm      red    a confirmed, reproducing failure, and Stop
+ * Colour carries outcomes and abnormal states:
+ *   --alarm      red    a failed outcome (a policy failure, a confirmed reproducing failure), and Stop
+ *   --pass       green  a passed outcome (success, "no failure found")
  *   --attention  amber  waiting for a GPU, stopped, sign-in expired, controls failed, stopped at budget
- * The readout panel (phosphor green on near-black) is the one decorative use of colour.
+ * Every pass/fail outcome shown is coloured this way (October 2026 change: a pass is green, not neutral).
+ * The readout panel (phosphor green on near-black) is the one decorative use of colour; its verdict field
+ * uses --readout-pass / --readout-alarm / --readout-attention.
  * Status is never colour alone: every state also carries an icon and a word.
  *
  * Measured contrast (WCAG 2.2 AA needs 4.5:1 for text, 3:1 for UI components and indicators):
@@ -43,6 +46,10 @@
   --attention: #f2a900;
   --attention-text: #6e4a00;
   --on-attention: #1e1f21;
+  --pass: #177a32;
+  --pass-text: #0d5c24;
+  --pass-fill: #17722f;
+  --on-pass: #ffffff;
 
   --button-bg: #1e1f21;
   --on-button: #f2f3f4;
@@ -53,6 +60,7 @@
   --readout-line: #24402e;
   --readout-alarm: #ff6b5e;
   --readout-attention: #f5b83d;
+  --readout-pass: #6bff97;
   --readout-neutral: #e6efe8;
 }
 
@@ -76,6 +84,10 @@
     --attention: #f2b31f;
     --attention-text: #f2b31f;
     --on-attention: #1e1f21;
+    --pass: #4fc774;
+    --pass-text: #5ad17d;
+    --pass-fill: #17722f;
+    --on-pass: #ffffff;
 
     --button-bg: #e4e5e7;
     --on-button: #151617;
@@ -101,6 +113,10 @@
   --attention: #f2b31f;
   --attention-text: #f2b31f;
   --on-attention: #1e1f21;
+  --pass: #4fc774;
+  --pass-text: #5ad17d;
+  --pass-fill: #17722f;
+  --on-pass: #ffffff;
 
   --button-bg: #e4e5e7;
   --on-button: #151617;

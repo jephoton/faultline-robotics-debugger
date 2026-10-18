@@ -195,12 +195,16 @@ describe('ReadoutHeader and StatusBadge', () => {
     expect(screen.getByText(/alphabet soup/)).toBeInTheDocument();
   });
 
-  it('uses red only for a repeating failure and amber for attention', () => {
+  it('uses red for a repeating failure, green for no failure and amber for attention', () => {
     const { rerender } = render(<StatusBadge verdict="reproduces" attention={false} />);
     expect(screen.getByText('Failure repeats').closest('span')).toHaveAttribute('data-tone', 'alarm');
     rerender(<StatusBadge verdict="stopped" attention />);
     expect(screen.getByText('Stopped').closest('span')).toHaveAttribute('data-tone', 'attention');
     rerender(<StatusBadge verdict="no_failure" attention={false} />);
-    expect(screen.getByText('No failure found').closest('span')).toHaveAttribute('data-tone', 'neutral');
+    expect(screen.getByText('No failure found').closest('span')).toHaveAttribute('data-tone', 'pass');
+    rerender(<StatusBadge verdict="no_failure" attention />);
+    expect(screen.getByText('No failure found').closest('span')).toHaveAttribute('data-tone', 'attention');
+    rerender(<StatusBadge verdict="incomplete" attention={false} />);
+    expect(screen.getByText('Incomplete').closest('span')).toHaveAttribute('data-tone', 'neutral');
   });
 });

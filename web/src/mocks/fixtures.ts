@@ -11,7 +11,7 @@ import type {
   RunSummary,
   Session,
 } from '../api/types';
-import { auditReport, importedReport, paraphraseReport, soupReport } from './reports';
+import { auditReport, importedReport, paraphraseReport, pipelineAuditReport, pipelineWordingReport, soupReport } from './reports';
 
 const hex = (prefix: string): string => (prefix + '0123456789abcdef'.repeat(4)).slice(0, 64);
 
@@ -20,6 +20,9 @@ export const IDS = {
   imported: `d-${hex('7e31')}`,
   audit: `d-${hex('1c20')}`,
   wording: `d-${hex('4d9a')}`,
+  // One diagnosis run that passed untouched and was probed: an audit case, then a wording case.
+  pipeAudit: `d-${hex('5a10')}`,
+  pipeWording: `d-${hex('6b21')}`,
   quiet: 'r-para-quiet-20261016-141500',
   nominal: `d-${hex('9b07')}`,
   occlusion: `m-${hex('0f42')}`,
@@ -31,6 +34,11 @@ export const RUN_IDS = {
   stopping: 'soup-demo-20261017-110000',
   completed: 'para-done-20261017-084500',
   authExpired: 'soup-expired-20261016-193000',
+  // Diagnosis runs, one per route the untouched check can choose.
+  probing: 'diag-probing-20261018-100000',
+  layoutRoute: 'diag-layout-20261018-110000',
+  flaky: 'diag-flaky-20261018-120000',
+  passes: 'diag-passes-20261018-130000',
 };
 
 export const PLACEHOLDER_VIDEO = '/media/placeholder.webm';
@@ -116,6 +124,36 @@ const items: LibraryItem[] = [
     created: '2026-10-14T10:02:00Z',
     case_id: hex('4d9a'),
     run: 'paraphrase-task0-20261014-100200',
+  },
+  {
+    id: IDS.pipeAudit,
+    fault_code: 'FL-A-5A10',
+    kind: 'audit',
+    name: 'diagnose-obj0',
+    verdict: 'reproduces',
+    verdict_text: 'Blur breaks the policy from severity 0.50; the other nine families did not.',
+    attention: false,
+    suite: 'libero_object',
+    task_id: 0,
+    instruction: OBJECT_INSTRUCTION,
+    created: '2026-10-16T09:40:00Z',
+    case_id: hex('5a10'),
+    run: 'diagnose-obj0-20261016-090000',
+  },
+  {
+    id: IDS.pipeWording,
+    fault_code: 'FL-L-6B21',
+    kind: 'paraphrase',
+    name: 'diagnose-obj0 (wording)',
+    verdict: 'reproduces',
+    verdict_text: 'Replacing "place" with "put" is enough to make the policy fail from this start.',
+    attention: false,
+    suite: 'libero_object',
+    task_id: 0,
+    instruction: OBJECT_INSTRUCTION,
+    created: '2026-10-16T09:55:00Z',
+    case_id: hex('6b21'),
+    run: 'diagnose-obj0-20261016-090000',
   },
   {
     id: IDS.quiet,
@@ -457,6 +495,113 @@ details[IDS.wording] = {
   replayable: false,
 };
 
+/* ---- One diagnosis run that passed untouched and was probed ----------------- */
+
+/** Every item the run registered, in route order: the audit case first, then the wording case. */
+const pipelineFindings = (): NonNullable<Detail['findings']> =>
+  [IDS.pipeAudit, IDS.pipeWording].map((id) => {
+    const item = base(id);
+    return { id: item.id, fault_code: item.fault_code, kind: item.kind, verdict: item.verdict, verdict_text: item.verdict_text };
+  });
+
+const pipelineHistory = history({
+  steps: [
+    { key: 'check', label: 'Check the start untouched', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.52 },
+    { key: 'probe_images_1', label: 'Probe image disturbances (1 of 2)', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.61 },
+    { key: 'probe_images_2', label: 'Probe image disturbances (2 of 2)', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.58 },
+    { key: 'probe_scene', label: 'Probe scene disturbances', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.49 },
+    { key: 'rewordings_screen', label: 'Screen rewordings', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.33 },
+    { key: 'rewordings_reduce', label: 'Reduce the wording', status: 'completed', state: 'succeeded', partial: false, cost_usd: 0.36 },
+    { key: 'case', label: 'Save the cases', status: 'completed', state: null, partial: false, cost_usd: null },
+  ],
+  jobs: 6,
+  spent_usd: 2.89,
+  cap_usd: 6,
+  elapsed_seconds: 6300,
+  max_hours: 4,
+});
+
+details[IDS.pipeAudit] = {
+  ...base(IDS.pipeAudit),
+  sentence:
+    'The start passed untouched, so ten disturbance families were probed: blur breaks the policy from severity 0.50, and the other nine did not within their range.',
+  stop_reason: null,
+  stop_text: null,
+  checkpoint: { id: 'nvidia/gr00t17-lerobot-libero_object-640', revision: '5ee08ab09fac5c5ef2388a14c882ea825ac861db', pinned: true },
+  // Listed with the failing family first on purpose: the page puts the control first.
+  videos: [
+    { role: 'blur@0.50', label: 'Blur at s = 0.50 (failed)', url: PLACEHOLDER_VIDEO, outcome: 'policy_failure' },
+    { role: 'control', label: 'Control: the start untouched (passed)', url: PLACEHOLDER_VIDEO, outcome: 'success' },
+    { role: 'contrast@0.75', label: 'Contrast at s = 0.75 (failed)', url: PLACEHOLDER_VIDEO, outcome: 'policy_failure' },
+  ],
+  audit: {
+    start_index: 0,
+    nominal: { failures: 0, attempts: 5 },
+    families: [
+      {
+        family: 'blur',
+        label: 'Blur',
+        threshold_severity: 0.5,
+        stop_reason: 'threshold_found',
+        levels: [
+          { severity: 0, failures: 0, attempts: 5 },
+          { severity: 0.5, failures: 4, attempts: 5 },
+        ],
+      },
+      {
+        family: 'noise',
+        label: 'Noise',
+        threshold_severity: null,
+        stop_reason: 'no_reproducible_failure',
+        levels: [
+          { severity: 0, failures: 0, attempts: 5 },
+          { severity: 1, failures: 1, attempts: 5 },
+        ],
+      },
+    ],
+  },
+  explanation: null,
+  research: {
+    related: 'Image blur is a common robustness test for vision-based manipulation policies; this case is one small, repeatable instance.',
+    sources: [{ title: 'Robustness of vision-based policies to image corruptions', url: 'https://example.org/image-corruptions' }],
+  },
+  history: pipelineHistory,
+  replays: [],
+  report_markdown: pipelineAuditReport,
+  files: [{ name: 'report.md', url: '/media/cases/5a10/report.md' }],
+  findings: pipelineFindings(),
+  replayable: true,
+};
+
+details[IDS.pipeWording] = {
+  ...base(IDS.pipeWording),
+  sentence: 'Of ten rewordings, one made the policy fail; replacing "place" with "put" is the smallest edit that still does.',
+  stop_reason: null,
+  stop_text: null,
+  checkpoint: { id: 'nvidia/gr00t17-lerobot-libero_object-640', revision: '5ee08ab09fac5c5ef2388a14c882ea825ac861db', pinned: true },
+  videos: [
+    { role: 'control', label: 'Control: the original wording (passed)', url: PLACEHOLDER_VIDEO, outcome: 'success' },
+    { role: 'wording', label: 'Failing wording: "pick up the alphabet soup and put it in the basket" (failed)', url: PLACEHOLDER_VIDEO, outcome: 'policy_failure' },
+  ],
+  paraphrase: {
+    original: OBJECT_INSTRUCTION,
+    control: ['success', 'success', 'success', 'success', 'success'],
+    paraphrases: [
+      { text: 'pick up the alphabet soup and put it in the basket', outcomes: ['policy_failure', 'policy_failure', 'success', 'policy_failure', 'policy_failure'], failures: 4, meaning: 'Same task' },
+      { text: 'grab the alphabet soup and put it in the basket', outcomes: ['success', 'success'], failures: 0, meaning: 'Same task' },
+    ],
+    minimal_edit: { text: 'pick up the alphabet soup and put it in the basket', edits: ['replace "place" with "put"'] },
+  },
+  explanation: null,
+  research: null,
+  history: pipelineHistory,
+  replays: [],
+  report_markdown: pipelineWordingReport,
+  files: [{ name: 'report.md', url: '/media/cases/6b21/report.md' }],
+  findings: pipelineFindings(),
+  replayable: true,
+};
+
 details[IDS.quiet] = {
   ...base(IDS.quiet),
   sentence: 'None of ten rewordings made the policy fail 4 of 5 times, so there is no case to keep.',
@@ -534,6 +679,14 @@ details[IDS.occlusion] = {
   files: [],
   replayable: false,
 };
+
+// A diagnosis run that routed to the layout branch registers one case: its findings list is just itself.
+{
+  const soup = base(IDS.soup);
+  (details[IDS.soup] as Detail).findings = [
+    { id: soup.id, fault_code: soup.fault_code, kind: soup.kind, verdict: soup.verdict, verdict_text: soup.verdict_text },
+  ];
+}
 
 export const detailById = details;
 
@@ -677,6 +830,114 @@ export const progressById: Record<string, Progress> = {
     resumable: true,
     stoppable: false,
   },
+  // A diagnosis whose start passed untouched: the probes are running.
+  [RUN_IDS.probing]: {
+    run: RUN_IDS.probing,
+    name: 'diagnose-obj0',
+    mode: 'diagnose',
+    status: 'running',
+    step: 'probe_images_1',
+    attention: false,
+    stop_reason: null,
+    stop_text: null,
+    route: 'probes',
+    steps: [
+      { key: 'check', label: 'Check the start untouched', status: 'completed', state: 'succeeded', attempts: 1, capacity_waits: 0 },
+      { key: 'probe_images_1', label: 'Probe image disturbances (1 of 2)', status: 'running', state: 'running', attempts: 1, capacity_waits: 0 },
+      { key: 'probe_images_2', label: 'Probe image disturbances (2 of 2)', status: 'pending', state: null, attempts: 0, capacity_waits: 0 },
+      { key: 'probe_scene', label: 'Probe scene disturbances', status: 'pending', state: null, attempts: 0, capacity_waits: 0 },
+      { key: 'rewordings_screen', label: 'Screen rewordings', status: 'pending', state: null, attempts: 0, capacity_waits: 0 },
+      { key: 'case', label: 'Save the cases', status: 'pending', state: null, attempts: 0, capacity_waits: 0 },
+    ],
+    job: { name: 'probe-images-1-attempt-1', phase: 'running' },
+    spent_usd: 0.9,
+    reserved_usd: 1.3,
+    cap_usd: 6,
+    elapsed_seconds: 2100,
+    max_hours: 4,
+    log_tail: ['[10:05:00] check: the start passed 5 of 5; probing', '[10:07:12] probe_images_1: Job running'],
+    library_id: null,
+    resumable: false,
+    stoppable: true,
+  },
+  // A diagnosis whose start failed untouched: the layout diagnosis is running.
+  [RUN_IDS.layoutRoute]: {
+    run: RUN_IDS.layoutRoute,
+    name: 'soup-start14',
+    mode: 'diagnose',
+    status: 'running',
+    step: 'reduce',
+    attention: false,
+    stop_reason: null,
+    stop_text: null,
+    route: 'layout',
+    steps: [
+      { key: 'check', label: 'Check the start untouched', status: 'completed', state: 'succeeded', attempts: 1, capacity_waits: 0 },
+      { key: 'reference', label: 'Choose a reference', status: 'completed', state: 'succeeded', attempts: 1, capacity_waits: 0 },
+      { key: 'reduce', label: 'Reduce the difference', status: 'running', state: 'running', attempts: 1, capacity_waits: 0 },
+      { key: 'case', label: 'Save the case', status: 'pending', state: null, attempts: 0, capacity_waits: 0 },
+    ],
+    job: { name: 'reduce-attempt-1', phase: 'running' },
+    spent_usd: 1.4,
+    reserved_usd: 1.3,
+    cap_usd: 6,
+    elapsed_seconds: 3000,
+    max_hours: 4,
+    log_tail: ['[11:20:00] check: the start failed 4 of 5; diagnosing the layout'],
+    library_id: null,
+    resumable: false,
+    stoppable: true,
+  },
+  // The untouched start is flaky: the audit's control failed, so the rewordings were skipped.
+  [RUN_IDS.flaky]: {
+    run: RUN_IDS.flaky,
+    name: 'diagnose-flaky',
+    mode: 'diagnose',
+    status: 'completed',
+    step: null,
+    attention: true,
+    stop_reason: 'nominal_controls_failed',
+    stop_text: 'The unperturbed policy did not pass reliably, so no disturbance can be judged.',
+    route: 'flaky',
+    steps: [
+      { key: 'check', label: 'Check the start untouched', status: 'completed', state: 'succeeded', attempts: 1, capacity_waits: 0 },
+      { key: 'probe_images_1', label: 'Probe image disturbances (1 of 2)', status: 'stopped', state: 'nominal_controls_failed', attempts: 1, capacity_waits: 0 },
+      { key: 'rewordings_screen', label: 'Screen rewordings', status: 'skipped', state: null, attempts: 0, capacity_waits: 0 },
+    ],
+    job: null,
+    spent_usd: 1.1,
+    reserved_usd: 0,
+    cap_usd: 6,
+    elapsed_seconds: 2400,
+    max_hours: 4,
+    log_tail: ['[12:40:00] probe_images_1: the control failed 3 of 5; the start is flaky'],
+    library_id: null,
+    resumable: false,
+    stoppable: false,
+  },
+  // Nothing to reduce and no probes chosen.
+  [RUN_IDS.passes]: {
+    run: RUN_IDS.passes,
+    name: 'diagnose-clean',
+    mode: 'diagnose',
+    status: 'completed',
+    step: null,
+    attention: false,
+    stop_reason: null,
+    stop_text: null,
+    route: 'passes',
+    steps: [{ key: 'check', label: 'Check the start untouched', status: 'completed', state: 'succeeded', attempts: 1, capacity_waits: 0 }],
+    job: null,
+    spent_usd: 0.52,
+    reserved_usd: 0,
+    cap_usd: 6,
+    elapsed_seconds: 900,
+    max_hours: 4,
+    log_tail: ['[13:15:00] check: the start passed 5 of 5; no probes chosen'],
+    library_id: null,
+    resumable: false,
+    stoppable: false,
+  },
 };
 
 export function activeRunSummaries(): RunSummary[] {
@@ -758,6 +1019,25 @@ const backend = `backend:
   hourly_usd: 1.7468`;
 
 export const specTemplates: Record<string, string> = {
+  diagnose: `faultline: 1
+name: soup-start14
+mode: diagnose
+policy: {suite: libero_10}
+diagnose:
+  task: 0
+  start: 14
+  probes:
+    families: [blur, noise, darken, contrast]
+    rewordings: 0
+    enabled: true
+  layout: true
+budget:
+  max_spend_usd: 2.5
+  max_hours: 1.5
+  max_candidates: 36
+nemotron: {hypothesis: true, explain: true}
+${backend}
+`,
   'scenario-start': `faultline: 1
 name: soup-start14
 mode: scenario

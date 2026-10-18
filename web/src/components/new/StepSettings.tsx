@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import type { FieldError, ImportFile } from '../../api/types';
 import { AUDIT_FAMILIES, SUITES, SUITE_LABEL, TASKS, taskInstruction } from '../../data/tasks';
-import { errorsByField, type DiagnosisChoice, type FieldKey, type FormState } from '../../lib/specYaml';
+import { errorsByField, sortFamilies, type DiagnosisChoice, type FieldKey, type FormState } from '../../lib/specYaml';
 import { Icon } from '../Icon';
 
 export type ValidationState =
@@ -71,7 +71,6 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
   const uid = useId();
   const [fileProblem, setFileProblem] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const mode = choice.startsWith('scenario') ? 'scenario' : choice;
   const allErrors = validation.status === 'done' ? validation.errors : [];
   const { byField, other } = errorsByField(allErrors);
   const fieldErrors = (key: FieldKey): string[] | undefined => byField[key];
@@ -156,13 +155,8 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           </select>
         </Field>
 
-        {(choice === 'scenario-start' || mode === 'audit' || mode === 'paraphrase') && (
-          <Field
-            id={id('start')}
-            label="Start"
-            hint={mode === 'audit' ? 'The benchmark start (0 to 49) to stress-test. It should pass cleanly.' : 'The benchmark start, 0 to 49.'}
-            errors={fieldErrors('start')}
-          >
+        {choice === 'start' && (
+          <Field id={id('start')} label="Start" hint="The benchmark start, 0 to 49." errors={fieldErrors('start')}>
             <input
               id={id('start')}
               type="text"
@@ -175,7 +169,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           </Field>
         )}
 
-        {choice === 'scenario-screen' && (
+        {choice === 'screen' && (
           <>
             <Field id={id('range')} label="Starts to search" hint="For example 10-49." errors={fieldErrors('range')}>
               <input
@@ -200,7 +194,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           </>
         )}
 
-        {choice === 'scenario-import' && (
+        {choice === 'import' && (
           <Field
             id={id('file')}
             label="Start file"
@@ -224,64 +218,75 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           </Field>
         )}
 
-        {mode === 'paraphrase' && (
-          <Field id={id('count')} label="Rewordings to ask for" hint="1 to 12." errors={fieldErrors('count')}>
-            <input
-              id={id('count')}
-              type="text"
-              inputMode="numeric"
-              value={form.count}
-              onChange={(event) => onChange({ count: event.target.value })}
-              aria-invalid={fieldErrors('count') ? true : undefined}
-              aria-describedby={describedBy(id('count'), true, fieldErrors('count'))}
-            />
-          </Field>
-        )}
       </div>
 
-      {mode === 'audit' && (
-        <fieldset aria-describedby={fieldErrors('families') ? id('families-error') : undefined}>
-          <legend>Disturbance families</legend>
-          <p className="muted">Each family is searched from severity 0 (no change) to 1 (the strongest). More families cost more time.</p>
-          <p className="section-label">Image, both cameras</p>
-          <div>
-            {AUDIT_FAMILIES.filter((family) => family.group === 'image').map((family) => (
-              <label key={family.key} className="check">
-                <input
-                  type="checkbox"
-                  checked={form.families.includes(family.key)}
-                  onChange={(event) =>
-                    onChange({
-                      families: event.target.checked ? [...form.families, family.key] : form.families.filter((key) => key !== family.key),
-                    })
-                  }
-                />
-                {family.label}
-              </label>
+      {choice === 'start' && (
+        <fieldset className="probes">
+          <legend>If the start passes untouched, also probe</legend>
+          <label className="check">
+            <input type="checkbox" checked={form.probes} onChange={(event) => onChange({ probes: event.target.checked })} />
+            Probe with disturbances and rewordings
+          </label>
+          <span className="field__hint">
+            Turn this off to only check the start and diagnose the layout if it fails. If the start passes, nothing more runs.
+          </span>
+
+          <fieldset disabled={!form.probes} aria-describedby={fieldErrors('families') ? id('families-error') : undefined}>
+            <legend>Disturbance families</legend>
+            <p className="muted">
+              Each family is searched from severity 0 (no change) to 1 (the strongest) for the smallest severity that breaks the policy. More
+              families cost more time.
+            </p>
+            {(['image', 'scene'] as const).map((group) => (
+              <div key={group}>
+                <p className="section-label">{group === 'image' ? 'Image, both cameras' : 'Scene, applied when the simulator resets'}</p>
+                <div>
+                  {AUDIT_FAMILIES.filter((family) => family.group === group).map((family) => (
+                    <label key={family.key} className="check">
+                      <input
+                        type="checkbox"
+                        checked={form.families.includes(family.key)}
+                        onChange={(event) =>
+                          onChange({
+                            families: sortFamilies(
+                              event.target.checked ? [...form.families, family.key] : form.families.filter((key) => key !== family.key),
+                            ),
+                          })
+                        }
+                      />
+                      {family.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
-          </div>
-          <p className="section-label">Scene, applied when the simulator resets</p>
-          <div>
-            {AUDIT_FAMILIES.filter((family) => family.group === 'scene').map((family) => (
-              <label key={family.key} className="check">
-                <input
-                  type="checkbox"
-                  checked={form.families.includes(family.key)}
-                  onChange={(event) =>
-                    onChange({
-                      families: event.target.checked ? [...form.families, family.key] : form.families.filter((key) => key !== family.key),
-                    })
-                  }
-                />
-                {family.label}
-              </label>
+            <p className="field__hint">
+              These four are where the policy has failed before; each extra family adds about half an hour and can need another Job.
+            </p>
+            {fieldErrors('families')?.map((message) => (
+              <span className="field__error" id={id('families-error')} key={message}>
+                <Icon name="alarm" /> {message}
+              </span>
             ))}
-          </div>
-          {fieldErrors('families')?.map((message) => (
-            <span className="field__error" id={id('families-error')} key={message}>
-              <Icon name="alarm" /> {message}
-            </span>
-          ))}
+          </fieldset>
+
+          <Field
+            id={id('rewordings')}
+            label="Rewordings to ask for"
+            hint="0 skips this probe; 1 to 12 asks Nemotron for that many rewordings, and the smallest word change that breaks the policy is kept."
+            errors={fieldErrors('rewordings')}
+          >
+            <input
+              id={id('rewordings')}
+              type="text"
+              inputMode="numeric"
+              value={form.rewordings}
+              disabled={!form.probes}
+              onChange={(event) => onChange({ rewordings: event.target.value })}
+              aria-invalid={fieldErrors('rewordings') ? true : undefined}
+              aria-describedby={describedBy(id('rewordings'), true, fieldErrors('rewordings'))}
+            />
+          </Field>
         </fieldset>
       )}
 
@@ -310,24 +315,36 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
         </Field>
       </div>
 
-      {mode === 'scenario' ? (
-        <div className="field">
-          <label className="check">
-            <input type="checkbox" checked={form.nemotron} onChange={(event) => onChange({ nemotron: event.target.checked })} />
-            Ask Nemotron for a hypothesis and an explanation
-          </label>
-          <span className="field__hint">
-            Needs a Token Factory key in your .env file. Nemotron only proposes an order and a reading; the reruns decide the result.
+      <div className="field">
+        <label className="check">
+          <input type="checkbox" checked={form.nemotron} onChange={(event) => onChange({ nemotron: event.target.checked })} />
+          Ask Nemotron for a hypothesis and an explanation if the layout diagnosis runs
+        </label>
+        <span className="field__hint">
+          Needs a Token Factory key in your .env file. Nemotron only proposes an order and a reading; the reruns decide the result.
+          {choice === 'start' && ' Rewordings are written by Nemotron too, whatever you choose here.'}
+        </span>
+        {fieldErrors('nemotron')?.map((message) => (
+          <span className="field__error" key={message}>
+            <Icon name="alarm" /> {message}
           </span>
-          {fieldErrors('nemotron')?.map((message) => (
-            <span className="field__error" key={message}>
-              <Icon name="alarm" /> {message}
-            </span>
-          ))}
-        </div>
-      ) : mode === 'paraphrase' ? (
-        <p className="muted">Nemotron writes the rewordings, so this test needs a Token Factory key in your .env file.</p>
-      ) : null}
+        ))}
+      </div>
+
+      <div className="field">
+        <label className="check">
+          <input type="checkbox" checked={form.research} onChange={(event) => onChange({ research: event.target.checked })} />
+          Find related research
+        </label>
+        <span className="field__hint">
+          Searches public sources with Tavily and summarises them with Nemotron 3 Nano. Context, not evidence. Needs a Tavily key in .env.
+        </span>
+        {fieldErrors('research')?.map((message) => (
+          <span className="field__error" key={message}>
+            <Icon name="alarm" /> {message}
+          </span>
+        ))}
+      </div>
 
       <details className="yaml-panel" open={yamlEdited || other.length > 0 ? true : undefined}>
         <summary>Edit YAML</summary>

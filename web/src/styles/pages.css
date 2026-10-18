@@ -132,6 +132,12 @@
   gap: 4px;
   font-weight: 500;
 }
+.outcome-word--pass {
+  color: var(--pass-text);
+}
+.outcome-word--fail {
+  color: var(--alarm-text);
+}
 .boot h1 {
   margin-bottom: var(--space-3);
 }

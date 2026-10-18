@@ -53,7 +53,7 @@ const themes: [string, Record<string, string>][] = [
 const surfaces = ['bg-page', 'bg-panel', 'bg-raised'];
 
 describe.each(themes)('contrast, %s theme', (_name, t) => {
-  it.each(['text', 'text-2', 'alarm-text', 'attention-text'])('%s reads at 4.5:1 on every surface', (token) => {
+  it.each(['text', 'text-2', 'alarm-text', 'attention-text', 'pass-text'])('%s reads at 4.5:1 on every surface', (token) => {
     for (const surface of surfaces) {
       expect(ratio(t[token] as string, t[surface] as string), `${token} on ${surface}`).toBeGreaterThanOrEqual(4.5);
     }
@@ -63,6 +63,7 @@ describe.each(themes)('contrast, %s theme', (_name, t) => {
     expect(ratio(t['on-button'] as string, t['button-bg'] as string)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(t['on-alarm'] as string, t['alarm-fill'] as string)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(t['on-attention'] as string, t['attention'] as string)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t['on-pass'] as string, t['pass-fill'] as string)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('control borders and the focus ring reach 3:1', () => {
@@ -72,10 +73,16 @@ describe.each(themes)('contrast, %s theme', (_name, t) => {
     }
   });
 
+  it('the green pass indicator reaches 3:1 on every surface', () => {
+    for (const surface of surfaces) {
+      expect(ratio(t['pass'] as string, t[surface] as string), `pass on ${surface}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   it('the readout panel text reads at 4.5:1', () => {
     expect(ratio(t['readout-text'] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(t['readout-dim'] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
-    for (const tone of ['readout-alarm', 'readout-attention', 'readout-neutral']) {
+    for (const tone of ['readout-alarm', 'readout-attention', 'readout-neutral', 'readout-pass']) {
       expect(ratio(t[tone] as string, t['readout-bg'] as string)).toBeGreaterThanOrEqual(4.5);
     }
   });

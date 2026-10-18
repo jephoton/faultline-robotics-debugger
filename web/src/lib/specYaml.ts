@@ -1,8 +1,12 @@
-import type { FieldError, SpecMode } from '../api/types';
-import { taskInstruction } from '../data/tasks';
+import type { FieldError } from '../api/types';
+import { AUDIT_FAMILIES } from '../data/tasks';
 
-/** The three things a person can ask for in step 1 (scenario has three ways to name the failing start). */
-export type DiagnosisChoice = Exclude<SpecMode, 'replay'>;
+/**
+ * What to check in step 1: one benchmark start (the untouched check, then layout or probes), a range of
+ * starts to search for a failure, or the person's own start file. The last two look for a failure and
+ * never probe. All three make one `mode: diagnose` spec (ADR 0035).
+ */
+export type DiagnosisChoice = 'start' | 'screen' | 'import';
 
 export interface FormState {
   name: string;
@@ -11,12 +15,32 @@ export interface FormState {
   start: string;
   range: string;
   confirm: string;
+  /** Probe a start that passes untouched (the master toggle). */
+  probes: boolean;
   families: string[];
-  count: string;
+  /** Rewordings to ask Nemotron for; 0 skips the wording probe. */
+  rewordings: string;
   spend: string;
   hours: string;
   nemotron: boolean;
+  /** Find related public research (Tavily), summarised by Nemotron; context, not evidence. */
+  research: boolean;
   importFile: { name: string; content: string } | null;
+}
+
+/** Every disturbance family, in the order the server lists them. */
+export const ALL_FAMILIES: string[] = AUDIT_FAMILIES.map((family) => family.key);
+
+/** The families ticked by default: where the policy has failed before. */
+export const DEFAULT_FAMILIES: string[] = ['blur', 'noise', 'darken', 'contrast'];
+
+/** Families in their canonical order, so ticking and unticking never reorders the YAML. */
+export function sortFamilies(families: string[]): string[] {
+  const rank = (key: string) => {
+    const index = ALL_FAMILIES.indexOf(key);
+    return index === -1 ? ALL_FAMILIES.length : index;
+  };
+  return [...families].sort((a, b) => rank(a) - rank(b));
 }
 
 export function defaultsFor(choice: DiagnosisChoice): FormState {
@@ -27,24 +51,25 @@ export function defaultsFor(choice: DiagnosisChoice): FormState {
     start: '14',
     range: '10-49',
     confirm: '4',
-    families: ['blur', 'noise', 'darken', 'contrast'],
-    count: '10',
-    spend: '3.5',
-    hours: '2',
+    probes: true,
+    // The four families where the policy has failed before; the other six are unticked but one tick away.
+    families: [...DEFAULT_FAMILIES],
+    // Rewordings are opt-in (0 skips the wording probe); 1 to 12 asks Nemotron for that many.
+    rewordings: '0',
+    // A small default cap: the check plus a four-family probe. The review shows when the worst case is above it.
+    spend: '2.5',
+    hours: '1.5',
     nemotron: true,
+    research: true,
     importFile: null,
   };
   switch (choice) {
-    case 'scenario-start':
+    case 'start':
       return { ...base, name: 'soup-start14' };
-    case 'scenario-screen':
+    case 'screen':
       return { ...base, name: 'soup-screen', spend: '4', hours: '3' };
-    case 'scenario-import':
+    case 'import':
       return { ...base, name: 'my-failing-start', spend: '3', hours: '2' };
-    case 'audit':
-      return { ...base, name: 'audit-task0', suite: 'libero_object', start: '0', spend: '2', hours: '1.5', nemotron: false };
-    case 'paraphrase':
-      return { ...base, name: 'paraphrase-task0', suite: 'libero_object', start: '0', spend: '4', hours: '3', nemotron: false };
   }
 }
 
@@ -66,30 +91,25 @@ const NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 /** Build a spec from the form. Anything the form does not cover is added in the YAML panel. */
 export function buildYaml(choice: DiagnosisChoice, form: FormState, backend: string | null): string {
   const name = NAME_OK.test(form.name.trim()) ? form.name.trim() : JSON.stringify(form.name.trim());
-  const lines: string[] = ['faultline: 1', `name: ${name}`];
-  const mode = choice.startsWith('scenario') ? 'scenario' : choice;
-  lines.push(`mode: ${mode}`);
-  lines.push(`policy: {suite: ${form.suite}}`);
-  if (choice === 'scenario-start' || choice === 'scenario-screen' || choice === 'scenario-import') {
-    lines.push('scenario:', `  task: ${num(form.task, '0')}`);
-    if (choice === 'scenario-start') lines.push(`  start: ${num(form.start, '0')}`);
-    if (choice === 'scenario-screen') lines.push(`  screen: {starts: ${JSON.stringify(form.range.trim())}, confirm: ${num(form.confirm, '4')}}`);
-    if (choice === 'scenario-import') lines.push(`  import: ${form.importFile ? form.importFile.name : 'my-failing-start.candidate.json'}`);
-    lines.push('  reference: auto');
-  } else if (choice === 'audit') {
-    lines.push('audit:', `  task: ${num(form.task, '0')}`, `  start: ${num(form.start, '0')}`, `  families: [${form.families.join(', ')}]`);
-  } else {
-    lines.push('paraphrase:', `  task: ${num(form.task, '0')}`, `  start: ${num(form.start, '0')}`, `  count: ${num(form.count, '10')}`);
-    const instruction = taskInstruction(form.suite, Number(form.task));
-    if (instruction) lines.push(`  instruction: ${JSON.stringify(instruction)}`);
+  const lines: string[] = ['faultline: 1', `name: ${name}`, 'mode: diagnose', `policy: {suite: ${form.suite}}`];
+  lines.push('diagnose:', `  task: ${num(form.task, '0')}`);
+  if (choice === 'start') lines.push(`  start: ${num(form.start, '0')}`);
+  if (choice === 'screen') lines.push(`  screen: {starts: ${JSON.stringify(form.range.trim())}, confirm: ${num(form.confirm, '4')}}`);
+  if (choice === 'import') lines.push(`  import: ${form.importFile ? form.importFile.name : 'my-failing-start.candidate.json'}`);
+  // Probes follow the untouched check of one benchmark start; a range and a file only look for a failure.
+  if (choice === 'start') {
+    lines.push(
+      '  probes:',
+      `    families: [${sortFamilies(form.families).join(', ')}]`,
+      `    rewordings: ${num(form.rewordings, '0')}`,
+      `    enabled: ${form.probes}`,
+    );
   }
-  lines.push('budget:', `  max_spend_usd: ${num(form.spend, '0')}`, `  max_hours: ${num(form.hours, '0')}`);
-  if (mode === 'scenario') lines.push('  max_candidates: 36');
-  if (mode === 'scenario') {
-    lines.push(`nemotron: {hypothesis: ${form.nemotron}, explain: ${form.nemotron}}`);
-  } else {
-    lines.push('nemotron: {hypothesis: false, explain: false}');
-  }
+  // "Probe only" (layout: false) is set in the YAML panel; the form keeps the default.
+  lines.push('  layout: true');
+  lines.push('budget:', `  max_spend_usd: ${num(form.spend, '0')}`, `  max_hours: ${num(form.hours, '0')}`, '  max_candidates: 36');
+  lines.push(`nemotron: {hypothesis: ${form.nemotron}, explain: ${form.nemotron}}`);
+  lines.push(`research: ${form.research}`);
   if (backend) lines.push(backend);
   return `${lines.join('\n')}\n`;
 }
@@ -98,6 +118,28 @@ export function buildYaml(choice: DiagnosisChoice, form: FormState, backend: str
 export function yamlValue(yaml: string, key: string): string | null {
   const match = new RegExp(`^\\s*${key}:\\s*(.+?)\\s*$`, 'm').exec(yaml);
   return match ? (match[1] as string).replace(/^["']|["']$/g, '') : null;
+}
+
+/** True when a run of this spec would ask Nemotron to write rewordings (it then needs a Token Factory key). */
+export function asksForRewordings(yaml: string): boolean {
+  const mode = yamlValue(yaml, 'mode');
+  if (mode === 'paraphrase') return true;
+  if (mode !== 'diagnose') return false;
+  // Probes follow the untouched check of a single start; a range or a file never probe.
+  if (yamlValue(yaml, 'start') === null) return false;
+  if (yamlValue(yaml, 'enabled') === 'false') return false;
+  const count = yamlValue(yaml, 'rewordings');
+  return count === null ? true : Number(count) !== 0;
+}
+
+/** True when the spec asks for related research (a Tavily search, summarised by Nemotron). */
+export function asksForResearch(yaml: string): boolean {
+  return /^research:\s*true\s*$/m.test(yaml);
+}
+
+/** True when a run of this spec would call Nemotron: a layout reading, rewordings, or the research summary. */
+export function usesNemotron(yaml: string): boolean {
+  return /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml) || asksForRewordings(yaml) || asksForResearch(yaml);
 }
 
 export type FieldKey = keyof FormState | 'file';
@@ -112,10 +154,11 @@ export function fieldForPath(path: string): FieldKey | null {
   if (p.includes('screen')) return 'range';
   if (p.endsWith('.import')) return 'file';
   if (p.includes('families')) return 'families';
-  if (p.endsWith('.count')) return 'count';
+  if (p.endsWith('.rewordings') || p.endsWith('.count')) return 'rewordings';
   if (p.includes('max_spend_usd')) return 'spend';
   if (p.includes('max_hours')) return 'hours';
   if (p.startsWith('nemotron')) return 'nemotron';
+  if (p === 'research') return 'research';
   return null;
 }
 

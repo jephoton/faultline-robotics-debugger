@@ -5,7 +5,7 @@ import type { Tone } from '../lib/status';
 export interface ReadoutField {
   label: string;
   value: ReactNode;
-  /** A status field (verdict, run status) keeps the alarm-first colours inside the readout; others stay green. */
+  /** A status field (verdict, run status) keeps the outcome colours inside the readout (red, green, amber); others stay phosphor green. */
   tone?: Tone;
   icon?: IconName;
 }
@@ -22,8 +22,8 @@ interface Props {
 
 /**
  * Scan-tool style readout: a near-black panel in DM Mono with phosphor green text, the only decorative use of
- * colour in the interface. A status field is the exception: red for a reproducing failure, amber for attention,
- * off-white for a normal result, each with an icon, so the verdict stands out from the descriptive fields.
+ * colour in the interface. A status field is the exception: red for a reproducing failure, bright green for a
+ * pass, amber for attention, off-white for a normal result, each with an icon, so the verdict stands out from the descriptive fields.
  */
 export function ReadoutHeader({ code, tag = 'Fault code', fields, foot }: Props) {
   return (

@@ -19,7 +19,7 @@ function Ladder({ family }: { family: AuditFamily }) {
       <header className="ladder__head">
         <h3>{family.label}</h3>
         {robust && tested ? (
-          <p className="ladder__result">
+          <p className="ladder__result ladder__result--pass">
             <Icon name="check" /> No failure up to severity {severity(highest)}
           </p>
         ) : robust && family.levels.length > 0 ? (

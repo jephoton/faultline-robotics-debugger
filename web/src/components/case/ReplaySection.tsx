@@ -11,6 +11,16 @@ import { ReplayHistory } from './CommonSections';
 
 type Expect = '' | 'reproduces' | 'fixed';
 
+/** What a replay runs, per kind of case (the Jobs are the same replay Job; the inputs differ). */
+const REPLAY_INTRO: Partial<Record<Detail['kind'], string>> = {
+  scenario:
+    "A replay runs the case's minimal scene and its passing reference five times each, and says whether the failure still reproduces. Use it as a regression test after you change the policy.",
+  audit:
+    'A replay reruns each disturbance that broke the policy at its threshold on the start, five times each, plus the unchanged start five times as its control, and says whether each still fails. Use it as a regression test after you change the policy.',
+  paraphrase:
+    'A replay reruns the failing wording on the start five times, with the original wording as its control, and says whether it still fails. Use it as a regression test after you change the policy.',
+};
+
 function ReplayForm({ detail }: { detail: Detail }) {
   const api = useApi();
   const uid = useId();
@@ -29,10 +39,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
   return (
     <div className="panel">
       <h3>Replay this case</h3>
-      <p>
-        A replay runs the case's minimal scene and its passing reference five times each, and says whether the failure still
-        reproduces. Use it as a regression test after you change the policy.
-      </p>
+      <p>{REPLAY_INTRO[detail.kind] ?? REPLAY_INTRO.scenario}</p>
       <div className="form-grid">
         <div className="field">
           <label htmlFor={id('expect')}>What do you expect?</label>
@@ -118,11 +125,29 @@ function ReplayForm({ detail }: { detail: Detail }) {
 export const REPLAY_PURPOSE =
   'Replay re-runs the minimal scene and its reference to check whether the failure still reproduces, for example after you change the policy.';
 
+const REPLAY_PURPOSE_BY_KIND: Partial<Record<Detail['kind'], string>> = {
+  scenario: REPLAY_PURPOSE,
+  audit:
+    'Replay reruns this disturbance at its threshold on the start, with its control, to check whether it still breaks the policy, for example after you change the policy.',
+  paraphrase:
+    'Replay reruns this wording on the start, with the original instruction as its control, to check whether it still breaks the policy, for example after you change the policy.',
+};
+
+/**
+ * Scenario cases always have the section (it says when the inputs were not saved). Audit and wording cases have
+ * it when a diagnosis run kept their replay inputs, or when they were already replayed.
+ */
+export function showsReplay(detail: Detail): boolean {
+  if (detail.kind === 'scenario') return true;
+  if (detail.kind === 'audit' || detail.kind === 'paraphrase') return detail.replayable || detail.replays.length > 0;
+  return false;
+}
+
 export function ReplaySection({ detail, purpose = false }: { detail: Detail; purpose?: boolean }) {
   const controls = useControls();
   return (
     <Section title="Replays">
-      {purpose && <p className="replay__purpose">{REPLAY_PURPOSE}</p>}
+      {purpose && <p className="replay__purpose">{REPLAY_PURPOSE_BY_KIND[detail.kind] ?? REPLAY_PURPOSE}</p>}
       <ReplayHistory detail={detail} slot={(run) => <ReplayRunLink run={run} />} />
       {controls && detail.replayable && <ReplayForm detail={detail} />}
       {controls && !detail.replayable && (

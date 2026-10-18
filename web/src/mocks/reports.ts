@@ -127,3 +127,35 @@ export const paraphraseReport = `# Faultline paraphrase report
 | p01 | paraphrase | S S | passed | 2 | kept |
 | p02 | paraphrase | F F F S F | reproduces | 2 | kept |
 `;
+
+export const pipelineAuditReport = `# Stress test: put the alphabet soup in the basket
+
+## Summary
+
+- Route: the start passed untouched (5 of 5 attempts), so the chosen disturbances were probed.
+- Unperturbed control: 0 of 5 attempts failed.
+- Blur: fails from s = 0.50.
+- Nine other families: no failure up to s = 1.00.
+
+Scope: GR00T N1.7 on LIBERO-Object task 0, benchmark start 0, ten families. Thresholds are budget-local and describe reliable failure, not the onset of any failure.
+
+## Threshold search per family
+
+| Family | Smallest reproducibly failing severity | Stop reason |
+| --- | --- | --- |
+| Blur | 0.5 | threshold found |
+| Noise | none up to 1 | no reproducible failure up to s = 1 |
+| Contrast | none up to 1 | no reproducible failure up to s = 1 |
+`;
+
+export const pipelineWordingReport = `# Language test: put the alphabet soup in the basket
+
+## Summary
+
+- Route: the start passed untouched, so rewordings were tried.
+- Control: the original wording passed (S S S S S).
+- Rewordings: 10 screened; 8 kept by the meaning check.
+- Failures: 1 rewording failed at least 4 of 5 attempts.
+- Smallest failing wording: 1 word edit from the original.
+- Minimal wording: "pick up the alphabet soup and put it in the basket"
+`;

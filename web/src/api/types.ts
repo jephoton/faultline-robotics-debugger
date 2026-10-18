@@ -170,6 +170,18 @@ export interface ReplayRow {
   cost_usd: number | null;
 }
 
+/** Which way a diagnosis run went after the untouched check (API v1 additions, ADR 0035). */
+export type Route = 'layout' | 'probes' | 'passes' | 'flaky';
+
+/** One library item registered by the same diagnosis run, in route order (the current case included). */
+export interface Finding {
+  id: string;
+  fault_code: string;
+  kind: Kind;
+  verdict: Verdict;
+  verdict_text: string;
+}
+
 export interface Detail extends LibraryItem {
   sentence: string | null;
   stop_reason: string | null;
@@ -186,6 +198,11 @@ export interface Detail extends LibraryItem {
   replays: ReplayRow[];
   report_markdown: string | null;
   files: { name: string; url: string }[];
+  /** Absent in older exports and for cases not made by a diagnosis run. */
+  findings?: Finding[];
+  /** Not in the contract: read when the server sends it, otherwise derived from the findings. */
+  route?: Route | null;
+  /** True for scenario cases and, with the pipeline, for audit and paraphrase cases that kept replay inputs. */
   replayable: boolean;
 }
 
@@ -215,6 +232,8 @@ export interface Progress extends Omit<RunSummary, 'status' | 'spent_usd' | 'cap
   status: 'running' | 'stopping' | 'completed' | 'stopped' | 'failed' | 'interrupted';
   stop_reason: string | null;
   stop_text: string | null;
+  /** Known once the untouched check has finished; null before, and for runs that are not diagnoses. */
+  route?: Route | null;
   steps: ProgressStep[];
   job: { name: string; phase: JobPhase | null } | null;
   spent_usd: number;
@@ -266,6 +285,7 @@ export interface Evidence {
 }
 
 export type SpecMode =
+  | 'diagnose'
   | 'scenario-start'
   | 'scenario-screen'
   | 'scenario-import'
@@ -289,10 +309,24 @@ export interface ImportFile {
   content: string;
 }
 
+/** Which part of a diagnosis a planned Job belongs to. */
+export type Branch = 'check' | 'layout' | 'probes';
+
 export interface DryRunJob {
   name: string;
   deadline_seconds: number;
   worst_case_usd: number;
+  /** Only in a diagnose plan. */
+  branch?: Branch;
+}
+
+export interface DryRunBranch {
+  branch: Branch;
+  worst_case_usd: number;
+  /** From measured history; null when unknown. */
+  typical_usd: number | null;
+  /** Typical time end to end, excluding waits for a GPU; null when unknown. */
+  typical_minutes?: number | null;
 }
 
 export interface DryRun {
@@ -302,4 +336,6 @@ export interface DryRun {
   cap_usd: number;
   max_hours: number;
   lines: string[];
+  /** Only in a diagnose plan. worst_case_total_usd is then the check plus the larger of layout and probes. */
+  branches?: DryRunBranch[];
 }

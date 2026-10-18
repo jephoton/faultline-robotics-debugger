@@ -4,12 +4,12 @@ import { Icon } from '../components/Icon';
 import { StepChoose } from '../components/new/StepChoose';
 import { StepReview } from '../components/new/StepReview';
 import { StepSettings, type ValidationState } from '../components/new/StepSettings';
-import { buildYaml, defaultsFor, extractBackend, type DiagnosisChoice, type FormState } from '../lib/specYaml';
+import { buildYaml, defaultsFor, extractBackend, usesNemotron, type DiagnosisChoice, type FormState } from '../lib/specYaml';
 import { useAsync } from '../lib/useAsync';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { LocalOnlyPage } from './NotFoundPage';
 
-const STEPS = ['What to diagnose', 'Settings', 'Review'] as const;
+const STEPS = ['What to check', 'Settings', 'Review'] as const;
 const DEBOUNCE_MS = 400;
 
 export function NewDiagnosisPage() {
@@ -22,15 +22,15 @@ function NewDiagnosis() {
   useDocumentTitle('New diagnosis');
   const api = useApi();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [choice, setChoice] = useState<DiagnosisChoice>('scenario-start');
-  const [form, setForm] = useState<FormState>(() => defaultsFor('scenario-start'));
+  const [choice, setChoice] = useState<DiagnosisChoice>('start');
+  const [form, setForm] = useState<FormState>(() => defaultsFor('start'));
   const [override, setOverride] = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationState>({ status: 'idle' });
   const [blocked, setBlocked] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
 
-  const template = useAsync(() => api.specTemplate(choice), [api, choice]);
+  const template = useAsync(() => api.specTemplate('diagnose'), [api]);
   const backend = template.data ? extractBackend(template.data) : null;
   const generated = buildYaml(choice, form, backend);
   const yaml = override ?? generated;
@@ -74,8 +74,8 @@ function NewDiagnosis() {
 
   async function toReview() {
     setBlocked(null);
-    if (choice === 'scenario-import' && !form.importFile && override === null) {
-      setValidation({ status: 'done', ok: false, errors: [{ path: 'scenario.import', message: 'Choose the start file to upload.' }] });
+    if (choice === 'import' && !form.importFile && override === null) {
+      setValidation({ status: 'done', ok: false, errors: [{ path: 'diagnose.import', message: 'Choose the start file to upload.' }] });
       setBlocked('Choose your start file first.');
       return;
     }
@@ -167,7 +167,7 @@ function NewDiagnosis() {
                 yaml,
                 plan_hash: plan.plan_hash,
                 ...(form.importFile ? { import_file: form.importFile } : {}),
-                ...(choice.startsWith('scenario') && !/nemotron:\s*\{[^}]*:\s*true/.test(yaml) ? { no_llm: true } : {}),
+                ...(!usesNemotron(yaml) ? { no_llm: true } : {}),
               })
             }
           />

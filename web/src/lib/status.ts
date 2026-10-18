@@ -2,10 +2,10 @@ import type { IconName } from '../components/Icon';
 import type { Kind, Verdict } from '../api/types';
 
 /**
- * Alarm-first colour rule: red only for a confirmed, reproducing failure (and Stop), amber for
- * attention, everything else neutral. Every status has an icon and a word as well.
+ * Outcome colour rule: red for a confirmed, reproducing failure (and Stop), green for a pass or "no failure
+ * found", amber for attention, everything else neutral. Every status has an icon and a word as well.
  */
-export type Tone = 'alarm' | 'attention' | 'neutral';
+export type Tone = 'alarm' | 'pass' | 'attention' | 'neutral';
 
 export interface StatusView {
   tone: Tone;
@@ -28,6 +28,8 @@ export function statusFor(verdict: Verdict, attention: boolean): StatusView {
   if (attention || verdict === 'stopped' || verdict === 'failed') {
     return { tone: 'attention', icon: 'attention', label: entry.label, short: entry.short };
   }
+  // A pass is an outcome too, so it is green (with its tick and word) rather than neutral.
+  if (verdict === 'no_failure') return { tone: 'pass', icon: 'check', label: entry.label, short: entry.short };
   return { tone: 'neutral', icon: entry.icon, label: entry.label, short: entry.short };
 }
 
@@ -46,6 +48,7 @@ export const KIND_GROUP: { kind: Kind; title: string }[] = [
 ];
 
 export const MODE_LABEL: Record<string, string> = {
+  diagnose: 'Diagnosis',
   scenario: 'Scenario reduction',
   audit: 'Stress test',
   paraphrase: 'Language test',

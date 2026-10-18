@@ -6,9 +6,10 @@ import type { DryRun, ImportFile } from '../../api/types';
 import { usd } from '../../lib/format';
 import { MODE_LABEL } from '../../lib/status';
 import { useAsync } from '../../lib/useAsync';
-import { yamlValue } from '../../lib/specYaml';
+import { asksForResearch, asksForRewordings, usesNemotron, yamlValue } from '../../lib/specYaml';
 import { Icon } from '../Icon';
-import { DryRunTable, EnvironmentList } from './Review';
+import { DryRunTable, EnvironmentList, type DiagnosisSource } from './Review';
+import { PIPELINE_PROMISE } from './StepChoose';
 
 interface Props {
   yaml: string;
@@ -23,10 +24,13 @@ interface Props {
   headingLevel?: 2 | 3 | 4;
 }
 
-function usesNemotron(yaml: string): boolean {
-  const mode = yamlValue(yaml, 'mode');
-  if (mode === 'paraphrase') return true;
-  return /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml);
+/** What the diagnose spec checks, for the review facts. */
+function describeSource(yaml: string): { source: DiagnosisSource; text: string } {
+  const range = /screen:\s*\{[^}]*starts:\s*"?([^",}]+)/.exec(yaml);
+  if (range) return { source: 'screen', text: `a range of starts (${range[1]})` };
+  const file = /^\s*import:\s*(\S+)/m.exec(yaml);
+  if (file) return { source: 'import', text: `your start file (${(file[1] as string).replace(/^["']|["']$/g, '')})` };
+  return { source: 'start', text: `benchmark start ${yamlValue(yaml, 'start') ?? '?'}` };
 }
 
 export function StepReview({
@@ -50,6 +54,7 @@ export function StepReview({
   const [uncertain, setUncertain] = useState(false);
 
   const mode = yamlValue(yaml, 'mode') ?? 'scenario';
+  const checking = mode === 'diagnose' ? describeSource(yaml) : null;
   const check = (key: string) => env.data?.checks.find((entry) => entry.key === key);
 
   function blockers(): string[] {
@@ -74,8 +79,16 @@ export function StepReview({
       list.push(
         mode === 'paraphrase'
           ? 'Rewordings are written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup).'
-          : 'Nemotron needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Nemotron off.',
+          : asksForRewordings(yaml)
+            ? 'Rewordings are written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and set the rewordings to 0 (and turn Nemotron off).'
+            : /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml)
+              ? 'Nemotron needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Nemotron off.'
+              : 'The research summary is written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Find related research off.',
       );
+    }
+    const tavily = check('tavily_key');
+    if (tavily && !tavily.ok && asksForResearch(yaml)) {
+      list.push('Related research needs a Tavily key (TAVILY_API_KEY) in your .env file (see Setup). Add the key, or go back and turn Find related research off.');
     }
     return list;
   }
@@ -109,11 +122,18 @@ export function StepReview({
     <div className="review">
       <section aria-labelledby="review-what">
         <Heading id="review-what">What will run</Heading>
+        {checking && <p>{PIPELINE_PROMISE}</p>}
         <dl className="facts">
           <dt>Name</dt>
           <dd className="mono">{yamlValue(yaml, 'name') ?? 'not set'}</dd>
           <dt>Kind</dt>
           <dd>{MODE_LABEL[mode] ?? mode}</dd>
+          {checking && (
+            <>
+              <dt>Checking</dt>
+              <dd>{checking.text}</dd>
+            </>
+          )}
           {/suite:\s*(\w+)/.exec(yaml) && (
             <>
               <dt>Suite and task</dt>
@@ -151,7 +171,7 @@ export function StepReview({
               </div>
             </div>
           )}
-          {plan.data && <DryRunTable plan={plan.data} />}
+          {plan.data && <DryRunTable plan={plan.data} source={checking?.source} headingLevel={headingLevel} />}
         </div>
       </section>
 
