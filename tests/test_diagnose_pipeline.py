@@ -88,6 +88,21 @@ def screen_step(failing=False):
     return finished(lambda workload: screen_summary(failing=failing))
 
 
+def screen_of(outcomes, decision=None, complete=True, stop_reason=None, validity=None):
+    """A check summary whose start 0 has these outcomes (the other starts as in ``screen_summary``)."""
+
+    def build(workload):
+        summary = screen_summary(failing=False)
+        record = summary["tasks"]["3"]["starts"]["0"]
+        record["outcomes"], record["decision"] = list(outcomes), decision
+        if validity:
+            record["validity"] = validity
+        summary["complete"], summary["stop_reason"] = complete, stop_reason
+        return summary
+
+    return finished(build)
+
+
 class Base(unittest.TestCase):
     def world(self, behaviours, spec=None, tools=None, **options):
         temp, runner, backend, tools, ledger, lines = make_world(
@@ -225,13 +240,6 @@ class ProbesRoute(Base):
         self.assertEqual(len(backend.submitted), 3)
         self.assertEqual(len(self.diagnoses(runner)), 1, "the audit case is registered before the stop")
         self.assertEqual(self.header(runner)["run"]["status"], "stopped")
-
-    def test_probe_only_runs_the_probes_even_when_the_start_fails(self):
-        script = [screen_step(failing=True), m6_step(["blur"]), ]
-        spec = diag_spec(probes={"families": ["blur"], "rewordings": 0}, layout=False)
-        runner, backend, tools, ledger, lines = self.world(script, spec=spec)
-        result = runner.diagnose()
-        self.assertEqual((result.route, len(backend.submitted)), ("probes", 2))
 
     def test_an_incomplete_group_makes_the_run_stopped_but_keeps_the_case(self):
         script = [screen_step(), finished(lambda w: m6_summary(["blur", "noise"], complete=False), name=M6,
@@ -376,6 +384,90 @@ class StopsPartWay(Base):
         self.assertEqual(result.status, "stopped")
         self.assertEqual(self.header(runner)["steps"]["research-audit"]["status"], "done")
         self.assertTrue((runner.run_dir / "cases" / "audit" / "research.json").is_file())
+
+
+class RoutingOnTheCheck(Base):
+    """The route follows what the check observed: only a clean pass is probed (H2)."""
+
+    PROBE_ONLY = {"families": ["blur"], "rewordings": 0}
+
+    def test_a_start_that_fails_sometimes_is_flaky_and_nothing_is_probed(self):
+        script = [screen_of(["policy_failure", "success", "policy_failure", "success", "success"],
+                            decision="does_not_reproduce")]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason, result.route, result.exit_code),
+                         ("completed", None, "flaky", 0))
+        self.assertEqual(len(backend.submitted), 1, "no probe Job is paid for a flaky start")
+        self.assertEqual(tools.generated, [])
+        self.assertEqual(self.header(runner)["run"]["route"], "flaky")
+        self.assertIn("flaky", (runner.run_dir / "report.md").read_text(encoding="utf-8").lower())
+        self.assertFalse((runner.run_dir / "cases").exists())
+
+    def test_a_flaky_run_with_no_case_is_listed_as_a_finding_not_as_no_failure(self):
+        from robot_debug.viewer.library import Library
+
+        script = [screen_of(["policy_failure", "success", "success"], decision="does_not_reproduce")]
+        runner, *_ = self.world(script)
+        runner.diagnose()
+        library = Library(runner.run_dir.parent.parent, runs_root=runner.run_dir.parent)
+        item = next(i for i in library.list()["items"] if i["id"] == "r-" + runner.run_dir.name)
+        self.assertEqual(item["verdict"], "stopped")
+        self.assertIn("sometimes", item["verdict_text"])
+
+    def test_a_partial_check_with_no_decision_stops_resumably(self):
+        script = [screen_of(["policy_failure"], decision=None, complete=False, stop_reason="deadline_exhausted")]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "check_incomplete"))
+        self.assertEqual(len(backend.submitted), 1)
+        self.assertEqual(self.header(runner)["run"]["status"], "stopped")
+        self.assertNotEqual(self.header(runner)["steps"]["screen"]["status"], "done", "a resume checks again")
+
+    def test_a_partial_check_that_resumes_into_a_clean_pass_goes_on_to_the_probes(self):
+        from tests.test_orchestrator import FakeBackend
+
+        script = [screen_of(["success"], complete=False, stop_reason="deadline_exhausted")]
+        runner, backend, tools, ledger, lines = self.world(script)
+        self.assertEqual(runner.diagnose().reason, "check_incomplete")
+        temp, runner2, backend2, tools2, ledger2, lines2 = make_world(
+            diag_spec(probes=self.PROBE_ONLY), [], backend=FakeBackend([screen_step(), m6_step(["blur"])]),
+            tools=ParaphraseTools(), run_dir=runner.run_dir)
+        self.addCleanup(temp.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual((result.status, result.route), ("completed", "probes"))
+        self.assertEqual(len(backend2.submitted), 2)
+        self.assertNotIn(backend.submitted[0], backend2.submitted, "a fresh Job name is used")
+
+    def test_an_invalid_start_scene_is_not_probed(self):
+        script = [screen_of(["invalid_scene"], decision="invalid_scene", validity="invalid_scene")]
+        runner, backend, *_ = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "check_incomplete"))
+        self.assertEqual(len(backend.submitted), 1)
+
+    def test_a_clean_pass_is_probed(self):
+        runner, backend, *_ = self.world([screen_of(["success"]), m6_step(["blur"])],
+                                         spec=diag_spec(probes=self.PROBE_ONLY))
+        result = runner.diagnose()
+        self.assertEqual((result.route, len(backend.submitted)), ("probes", 2))
+
+    def test_probe_only_does_not_probe_a_start_that_fails_untouched(self):
+        spec = diag_spec(probes=self.PROBE_ONLY, layout=False)
+        runner, backend, tools, ledger, lines = self.world([screen_step(failing=True)], spec=spec)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason, result.route), ("stopped", "layout_skipped", "layout"))
+        self.assertEqual(len(backend.submitted), 1, "no layout Job and no probe Job")
+        self.assertEqual(self.header(runner)["run"]["route"], "layout")
+        self.assertEqual(self.header(runner)["run"]["reason"], "layout_skipped")
+        self.assertIn("probe only", self.header(runner)["run"]["detail"])
+
+    def test_the_new_stop_reasons_have_plain_sentences(self):
+        from robot_debug.viewer import stop_reasons as sr
+
+        self.assertIn("check of the start", sr.stop_text("check_incomplete"))
+        self.assertNotIn("Stopped: layout_skipped", sr.stop_text("layout_skipped"))
+        self.assertFalse(sr.needs_attention("layout_skipped"))
 
 
 class PassesAndLayout(Base):

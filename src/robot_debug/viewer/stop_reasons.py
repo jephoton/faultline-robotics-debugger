@@ -13,6 +13,10 @@ STOP_TEXTS: Dict[str, str] = {
     "budget_exhausted": "Stopped at the candidate budget; this is the smallest cause found so far.",
     "nominal_controls_failed": "The unperturbed policy did not pass reliably, so no disturbance can be judged.",
     "no_reproducible_failure": "No failure repeated 4 of 5 times.",
+    "check_incomplete": ("The check of the start did not finish, so it is not known whether it passes. Resume to "
+                         "check it again."),
+    "layout_skipped": ("The start fails untouched, so there is nothing to probe, and layout diagnosis was skipped "
+                       "(probe only)."),
     "no_reference": "No nearby benchmark start passed reliably.",
     "import_invalid": "The imported start file was not valid.",
     "import_mismatch": "The imported start did not match the task's scene.",
@@ -34,7 +38,7 @@ STOP_TEXTS: Dict[str, str] = {
 }
 
 # A stop that is a clean negative finding is a result, not a problem: everything else needs a look (amber).
-NOT_ATTENTION = frozenset({"no_reproducible_failure"})
+NOT_ATTENTION = frozenset({"no_reproducible_failure", "layout_skipped"})
 
 
 def stop_text(reason: Optional[str], detail: Optional[str] = None) -> Optional[str]:

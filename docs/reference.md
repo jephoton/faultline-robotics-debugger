@@ -59,7 +59,7 @@ promises: *find the smallest condition under which the policy fails here.*
 | --- | --- | --- |
 | A start that fails untouched | **layout** | "Fails from this layout; smallest trigger: these shifts" |
 | A start that passes | **probes** | "Passes untouched; breaks under blur from s = 0.50", or nothing breaks it |
-| A start that fails sometimes | **flaky** | "Unreliable even untouched"; no probe is blamed |
+| A start that fails sometimes (some attempts, but not 4 of 5) | **flaky** | "Unreliable even untouched"; no probe is run or blamed |
 | A start that passes, with no probes chosen | **passes** | "Passes untouched" |
 
 Two other ways in only look for a failure to reduce, without probing:
@@ -371,6 +371,8 @@ Colours:
 | `budget_exhausted` | Stopped at the candidate budget; the result is the smallest found so far. |
 | `nominal_controls_failed` | The undisturbed start did not pass reliably, so no disturbance can be judged. |
 | `no_reproducible_failure` | Nothing failed 4 of 5: a finished negative result. |
+| `check_incomplete` | The check ended before it decided the start (or the scene was invalid), so it is not known whether the start passes. Resume checks again. |
+| `layout_skipped` | The start fails untouched while layout diagnosis was off ("probe only"): nothing to probe and no layout Job. |
 | `no_reference` / `reference_not_passing` | No nearby benchmark start passed reliably. |
 | `failing_not_reproducible` / `no_faithful_failure` | The failing start (or imported start, or full hybrid) did not fail reliably. |
 | `import_invalid`, `import_mismatch` | The imported file was not valid, or does not match the task's scene. |

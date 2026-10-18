@@ -257,6 +257,28 @@ def passing_starts(summary: Mapping[str, Any], task: int) -> List[int]:
     return sorted(found)
 
 
+def start_observation(summary: Mapping[str, Any], task: int, start: int, *, partial: bool = False) -> str:
+    """What the check saw of ``start``: ``fails`` (it meets the 4-of-5 gate), ``flaky`` (it failed some
+    attempts without meeting the gate), ``incomplete`` (the check ended before the start was decided, or the
+    scene is invalid) or ``clean`` (every checked attempt passed). ``partial`` says the check summary is
+    partial or incomplete."""
+
+    record = _start_record(summary, task, start)
+    if failures_of(record):
+        return "fails"
+    if not isinstance(record, Mapping):
+        return "incomplete"
+    outcomes = [item for item in (record.get("outcomes") or []) if isinstance(item, str)]
+    decision = record.get("decision")
+    if record.get("validity") == "invalid_scene" or decision == "invalid_scene" or "invalid_scene" in outcomes:
+        return "incomplete"
+    if "policy_failure" in outcomes:
+        return "incomplete" if (decision is None and partial) else "flaky"
+    if not outcomes or (partial and decision is None):
+        return "incomplete"
+    return "clean"
+
+
 IMPORT_COPY = Path("import") / "candidate.json"
 
 # ``faultline stop`` (ADR 0033): a request file in the run folder, read while waiting and before each submit.
@@ -2037,11 +2059,55 @@ class Orchestrator:
                 raise StopRun("no_reproducible_failure",
                               "no start failed 4 of 5 attempts. " + "; ".join(screen_table(summary, sc.task)))
             return self._layout_branch(summary, start)
-        if start is not None and dg.layout:
-            return self._layout_branch(summary, start)
+        partial = bool(screen.partial or summary.get("complete") is False or summary.get("stop_reason"))
+        seen = start_observation(summary, sc.task, sc.start, partial=partial)
+        if seen == "fails":
+            if dg.layout:
+                return self._layout_branch(summary, start)
+            return self._layout_skipped(summary)
+        if seen == "flaky":
+            return self._flaky_check(summary)
+        if seen == "incomplete":
+            self._check_incomplete(screen)
         if dg.probes.active:
             return self._probes(summary)
         return self._passes(summary)
+
+    def _layout_skipped(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        """"Probe only" on a start that fails untouched: nothing to probe and no layout Job was asked for."""
+
+        self._set_route("layout")
+        self._write_screen_only_report(screen_summary, self.spec.scenario.task)
+        self.steps.update("report", status="done")
+        stop = StopRun("layout_skipped", "the start fails untouched, so there is nothing to probe; layout diagnosis "
+                       "was skipped (probe only). Turn layout diagnosis on to reduce it.")
+        return self._with_route(self._stopped(stop), "layout")
+
+    def _flaky_check(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        """The start failed some attempts but not 4 of 5: it is flaky untouched, so no probe is judged."""
+
+        self._set_route("flaky")
+        task = self.spec.scenario.task
+        self._write_screen_only_report(screen_summary, task)
+        report = self.run_dir / "report.md"
+        with report.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n## Finding\n\nThe start is flaky: it failed some attempts untouched but did not "
+                         "fail 4 of 5, so no disturbance or rewording is blamed and no probe was run.\n")
+        self.steps.update("report", status="done")
+        self.steps.set_run(status="completed", reason=None)
+        self.say("done", "completed: {}".format(ROUTE_TEXTS["flaky"]))
+        return RunResult("completed", None, self.run_dir, self.ledger.spent, notes=list(self.notes), route="flaky")
+
+    def _check_incomplete(self, screen: JobOutcome) -> None:
+        """The check ended before it decided the start: stop so a resume checks again (a fresh Job)."""
+
+        record = self.steps.get("screen")
+        for attempt in record.get("attempts") or ():
+            if attempt.get("job_name") == screen.job_name and attempt.get("state") == "settled":
+                attempt["state"] = "failed"          # not re-attached; the next submission gets a new name
+        self.steps.update("screen", status="stopped")
+        raise StopRun("check_incomplete", "the check of the start did not finish ({}); resume to check it again"
+                      .format(screen.summary.get("stop_reason") or "no decision"))
 
     def _with_route(self, result: RunResult, route: str) -> RunResult:
         result.route = route

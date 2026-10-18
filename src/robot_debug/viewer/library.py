@@ -278,6 +278,9 @@ def _run_verdict(steps_data: Mapping[str, Any]) -> Tuple[str, str, bool]:
                               "condition to report."), False
     if reason == "no_reproducible_failure":
         return "no_failure", stop_text(reason) or "", False
+    if run.get("route") == "flaky" and status == "completed":
+        return "stopped", ("The start fails sometimes even untouched, so it is flaky: no disturbance or "
+                           "rewording was probed or blamed."), True
     if status == "completed":
         return "no_failure", "The run finished without a failure to report.", False
     if status == "failed":
