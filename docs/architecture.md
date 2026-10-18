@@ -6,6 +6,8 @@
 > [the runbook](codex-handoff/RUNBOOK.md) for commands, and
 > [decisions](decisions/) for accepted design rationale.
 
+For **what each stress-test family and severity means**, read
+[disturbance families](disturbance-families.md).
 For **the reduction algorithm** (gates, probe, ddmin, split, shrink, the
 report's columns), read [how a scenario reduction works](how-reduction-works.md).
 For **how to use the UI**, start with the [UI user runbook](ui-runbook.md):

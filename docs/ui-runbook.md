@@ -130,7 +130,10 @@ cause the failure by itself."
 strong colour cast and 20% dead pixels. One motion-blur failure at full
 strength is not a repeatable failure. The gate needs 4 of 5."
 
-These four are the image catalog families; the New diagnosis form starts with
+What each family and severity level means physically (for example dead
+pixels at s = 1.00 is 20% of the pixels) is in
+[disturbance families](disturbance-families.md). These four are the image
+catalog families; the New diagnosis form starts with
 a different four (Blur, Noise, Darken, Contrast) checked.
 
 Also try **scene-object** (`FL-A-A70E`): camera viewpoint 1/5 at s = 0.80 and
