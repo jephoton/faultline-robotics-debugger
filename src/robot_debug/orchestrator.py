@@ -715,6 +715,39 @@ class DefaultTools:
 
         return self._checked(replay_workload(case, run_id, attempts=attempts, **dict(inputs or {})))
 
+    def audit_replay_workload(self, case: Mapping[str, Any], families: Sequence[str], sweep: Sequence[float],
+                              attempts: int, required_failures: int, run_id: str,
+                              checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
+        """The audit workload that reruns ``families`` at the levels in ``sweep`` (their recorded thresholds),
+        with no bisection, ``attempts`` per level and the unperturbed control. A field the Job already accepts."""
+
+        from robot_debug.workloads import WorkloadError, audit_workload
+
+        policy: Dict[str, Any] = {"suite": case.get("suite")}
+        if checkpoint is not None:
+            policy["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        audit: Dict[str, Any] = {"task": case.get("task_id"), "start": case.get("start_index"),
+                                 "families": list(families), "sweep": list(sweep), "attempts": attempts,
+                                 "required_failures": required_failures, "bisection_steps": 0}
+        try:
+            return self._checked(audit_workload({"policy": policy, "audit": audit}, run_id))
+        except WorkloadError as error:
+            raise StopRun("workload_invalid", str(error)) from None
+
+    def wording_replay_workload(self, case: Mapping[str, Any], wording: str, original: str, run_id: str,
+                                checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
+        """The rewording screen of one wording against the original wording (the control)."""
+
+        from robot_debug import language_experiment as le
+
+        try:
+            workload = le.build_screen_workload(
+                run_id=run_id, suite=case["suite"], task_id=case["task_id"], start=case["start_index"],
+                original=original, paraphrases=[wording])
+        except (ValueError, KeyError) as error:
+            raise StopRun("workload_invalid", str(error)) from None
+        return self._checked(self._with_checkpoint(self._valid(workload), checkpoint))
+
     def replay_inputs(self, case_dir: Path, case: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """The layout and reference start a replay needs beyond ``case.json``.
 
@@ -2213,10 +2246,15 @@ class Orchestrator:
             case = _read_json(case_path)
         except (OSError, ValueError):
             raise StopRun("case_unreadable", "case.json could not be read") from None
-        if not isinstance(case, dict) or case.get("kind") != "scenario_reduction":
-            raise StopRun("case_unsupported", "only scenario reduction cases can be replayed")
+        kind = case.get("kind") if isinstance(case, dict) else None
+        if kind not in ("scenario_reduction", "audit", "paraphrase_reduction"):
+            raise StopRun("case_unsupported", "only scenario, stress-test and wording cases can be replayed")
         if self.spec.suite is not None and self.spec.suite != case.get("suite"):
             raise StopRun("suite_mismatch", "the spec's suite differs from the case's")
+        if kind == "audit":
+            return self._replay_audit(case)
+        if kind == "paraphrase_reduction":
+            return self._replay_wording(case)
         case_root = case_path.parent
         inputs = self.tools.replay_inputs(case_root, case)
         if inputs is None:
@@ -2241,6 +2279,111 @@ class Orchestrator:
         return RunResult("completed" if verdict is not None else "stopped",
                          None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
                          case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
+
+    # -- replay of stress-test and wording cases (ADR 0035) ----------------------------------------
+
+    def _finish_kind_replay(self, case: Mapping[str, Any], kind: str, key: str, text: str,
+                            outcomes: Sequence[JobOutcome], checkpoint: Optional[Tuple[str, str]]) -> RunResult:
+        verdict = {"still_reproduces": True, "no_longer_reproduces": False}.get(key)
+        first = outcomes[0]
+        replay_result = {
+            "case_id": case.get("case_id"), "kind": kind, "reproduces": verdict, "verdict": key,
+            "verdict_text": text, "job_name": first.job_name,
+            "summary": first.summary_path.relative_to(self.run_dir).as_posix(),
+            "jobs": [{"job_name": o.job_name, "summary": o.summary_path.relative_to(self.run_dir).as_posix()}
+                     for o in outcomes]}
+        if checkpoint is not None:
+            replay_result["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        _write_json(self.run_dir / "replay-result.json", replay_result)
+        self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
+                           verdict=key)
+        self.say("replay", text)
+        return RunResult("completed" if verdict is not None else "stopped",
+                         None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
+                         case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
+
+    def _replay_audit(self, case: Mapping[str, Any]) -> RunResult:
+        """Rerun each family that failed, at its threshold, with the unperturbed control, one Job per original
+        probe group. A family still fails when its search finds a reproducing level at or below the threshold."""
+
+        from robot_debug import pipeline
+
+        block = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+        groups = [g for g in block.get("groups") or () if isinstance(g, Mapping) and g.get("families")]
+        if not groups:
+            raise StopRun("replay_inputs_missing", "the case has no failing family to replay")
+        attempts = block.get("attempts") if type(block.get("attempts")) is int else pipeline_replay_attempts()
+        required = block.get("required_failures") if type(block.get("required_failures")) is int else 4
+        checkpoint = self._replay_checkpoint(case)
+        outcomes: List[JobOutcome] = []
+        still: List[Tuple[str, float]] = []
+        gone: List[str] = []
+        control_failed = incomplete = False
+        for index, group in enumerate(groups):
+            step = "replay" if index == 0 else "replay-{}".format(index + 1)
+            wanted = [(g["family"], g["severity"]) for g in group["families"]]
+            workload = self.tools.audit_replay_workload(
+                case, [f for f, _s in wanted], sorted({s for _f, s in wanted}), attempts, required,
+                self.job_name(step, 0), checkpoint)
+            outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            outcomes.append(outcome)
+            summary = outcome.summary
+            if pipeline.audit_control_failed(summary):
+                control_failed = True
+                break
+            incomplete = incomplete or outcome.partial or not summary.get("complete")
+            for family, _severity in wanted:
+                found = ((summary.get("families") or {}).get(family) or {}).get("threshold_severity")
+                if type(found) in (int, float):
+                    still.append((family, float(found)))
+                else:
+                    gone.append(family)
+        if control_failed:
+            key = "reference_fails"
+        elif still:
+            key = "still_reproduces"
+        elif incomplete:
+            key = "incomplete"
+        else:
+            key = "no_longer_reproduces"
+        text = (pipeline.audit_replay_text(still, gone) if key in ("still_reproduces", "no_longer_reproduces")
+                else pipeline.replay_kind_text("audit", key) or replay_text(key))
+        return self._finish_kind_replay(case, "audit", key, text, outcomes, checkpoint)
+
+    def _replay_wording(self, case: Mapping[str, Any]) -> RunResult:
+        """Rerun the failing wording and the original wording (the control) through the rewording screen,
+        confirmed by the same 4-of-5 gate."""
+
+        from robot_debug import pipeline
+
+        replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+        config = replay.get("config") if isinstance(replay.get("config"), Mapping) else {}
+        wording = config.get("instruction")
+        original = replay.get("reference_instruction") or case.get("instruction")
+        if not isinstance(wording, str) or not isinstance(original, str):
+            raise StopRun("replay_inputs_missing", "the case has no failing wording to replay")
+        checkpoint = self._replay_checkpoint(case)
+        workload = self.tools.wording_replay_workload(case, wording, original, self.job_name("replay", 0), checkpoint)
+        outcome = self.run_job("replay", workload, int(workload["deadline_seconds"]), "language_summary.json")
+        summary = outcome.summary
+        row = next((r for r in summary.get("instructions") or () if isinstance(r, Mapping)
+                    and r.get("kind") == "paraphrase"), None)
+        if not (summary.get("control") or {}).get("passed"):
+            key = "reference_fails"
+        elif row is not None and paraphrase_failures(row):
+            key = "still_reproduces"
+        elif outcome.partial or row is None:
+            key = "incomplete"
+        else:
+            key = "no_longer_reproduces"
+        text = pipeline.replay_kind_text("paraphrase", key) or replay_text(key)
+        return self._finish_kind_replay(case, "paraphrase", key, text, [outcome], checkpoint)
+
+
+def pipeline_replay_attempts() -> int:
+    from robot_debug import pipeline_cases
+
+    return pipeline_cases.REPLAY_ATTEMPTS
 
 
 __all__ = [

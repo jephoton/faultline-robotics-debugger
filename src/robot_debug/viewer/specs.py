@@ -422,7 +422,11 @@ def parse_plan_branches(lines: List[str], required: float) -> Tuple[List[Dict[st
 
 def replay_plan_lines(spec: sp.Spec) -> Tuple[List[str], float]:
     """The dry-run text for a replay, in the format of ``orchestrator.dry_run_lines``: one Job whose deadline
-    comes from the replay workload's own timing (two scenes, ``orchestrator.REPLAY_ATTEMPTS`` attempts)."""
+    comes from the replay workload's own timing (two scenes, ``orchestrator.REPLAY_ATTEMPTS`` attempts).
+
+    The spec does not name the case, so this is the plan for the scenario replay. A stress-test case runs one
+    replay Job per original probe group that holds a failing family (usually one), and a wording case one Job;
+    each is reserved on its own against the cap."""
 
     from robot_debug import scenario_experiment as se
 
