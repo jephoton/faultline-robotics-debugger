@@ -56,60 +56,62 @@ The recorded cases (the public gallery holds the first five):
 
 ## Demo 1 — A failure that needs five shifts together
 
-**Point:** Faultline reduced a failing start to the smallest set of
-differences that still fails, using reruns rather than the model's opinion.
+**Point:** Faultline shrank a failing start to the smallest set of
+differences that still fails, using reruns rather than the model's opinion,
+and kept it as a replayable test.
 
 1. In the sidebar, under **Scenario reductions**, open **import-l10-start14**
    (`FL-S-AFB5`).
 2. **Expected header:** fault code `FL-S-AFB5`, verdict **Failure repeats**,
    kind **Scenario reduction**, **LIBERO-10, task 0**, and the instruction
-   "put both the alphabet soup and the tomato sauce in the basket". An amber
-   **Stopped early** note says the candidate budget was reached.
+   "put both the alphabet soup and the tomato sauce in the basket".
 3. In **Videos**, press **Play all**. **Expected:** three clips,
    **Original failing start** (failed), **Minimal cause** (failed) and
    **Passing reference** (passed), playing in step. Set **Speed** to `0.5x` to
-   compare the arm's approach. Clear **Keep in step** to control each clip on
-   its own.
-4. In **What changed between the passing and failing start**. **Expected:**
-   failing start "your imported file 6be6e4e2f06d", reference "benchmark start
-   28 (nearest passing start)", **Differences found** 6 (the arm and five
-   objects), and five rows, all at **Share** 100%:
+   compare the arm's approach. Clear **Keep in step** to move one clip on its
+   own; ticking it again lines all three up at the earliest position.
+4. In **Report**, read **Summary**. **Expected:**
+   - Verdict: reproduces.
+   - Failing start: imported file `6be6e4e2f06d` (from benchmark start 14).
+   - Reference: benchmark start 28, the nearest start that passed.
+   - Five kept shifts, each at 100% of the full difference: soup position
+     2.9 cm, cream cheese 1.1 cm, milk 2.4 cm, orange juice 3.7 cm, and the
+     arm's joints (6 joints, up to 2.6°).
+   - Status: stopped at the candidate budget; entity-minimal (each kept entity
+     is needed); sizes not fully shrunk.
+5. Read on in the report: **Screen** (starts 24–33 screened; 28 is the nearest
+   passing one), **Result** and **Minimal cause**, then **Differences between
+   the failing start and the reference** (six entities, with the distance
+   score), **Hypothesis** and **Hypothesis vs result**. Nemotron ranked the
+   robot first; it is needed, but not enough on its own.
+6. In **Candidates**, choose **Show all 26 rows**. Expected:
+   - **0–1** gates: the failing start fails, start 28 passes 5 of 5.
+   - **2–7** probe: each of the six alone passes.
+   - **8–17** ddmin: no group reproduces until **18**, the five without the
+     tomato sauce, which fails 4 of 4.
+   - **19–22**: removing any one of the five makes it pass.
+   - **23–25** shrink: the arm offset at 50% and 25% does not reproduce; at
+     75% it does.
 
-   | Entity | Part | Size |
-   | --- | --- | --- |
-   | alphabet_soup_1 | position | 2.9 cm |
-   | cream_cheese_1 | position | 1.1 cm |
-   | milk_1 | position | 2.4 cm |
-   | orange_juice_1 | position | 3.7 cm |
-   | robot | joints | 6 joints, up to 2.6° |
-
-5. In **Nemotron's guess and what was measured**. **Expected:** the guess
-   ranks `robot` first, then `alphabet_soup_1`, `tomato_sauce_1`. The
-   measurement says "The model's top suspect was needed but not enough on its
-   own." `tomato_sauce_1`, ranked third, is not in the final set.
-6. Open **Reruns** → **Show all 8 reruns**. **Expected:** the failing start
-   fails 4 of 4 and the reference passes 5 of 5; the robot, the soup and the
-   tomato sauce shifted alone each pass; the five shifts together fail 4 of 4;
-   leaving out the robot, or the soup, makes the five pass again.
-7. **How it was made.** **Expected:** 3 cloud Jobs, US$1.80 of a US$2.80 cap,
-   1 h 14 min of a 3-hour limit.
-
-What each rerun phase does, and every column of the report's Candidates
-table, is explained in [how a scenario reduction works](how-reduction-works.md).
+   [How a scenario reduction works](how-reduction-works.md) explains every
+   phase and column.
+7. **Nemotron's reading** is collapsed: open it for the model's hypotheses,
+   labelled as interpretation, not evidence. **Replays** says what a replay is
+   for. **Run details** (collapsed): 3 cloud Jobs, US$1.80 of a US$2.80 cap,
+   1 h 14 min.
 
 **Talking point:** "The arm and five objects differ between a failing and a
-passing start.
-Reruns, not the model, show that five are needed together: the ones tried
-alone pass, and removing one from the five makes the failure go away.
-Nemotron guessed the robot; the measurement says it matters but does not
-cause the failure by itself."
+passing start. Reruns, not the model, show that five are needed together:
+each alone passes, and removing one from the five makes the failure go away.
+That is the minimal trigger, and the case replays it on any future
+checkpoint."
 
-> **Limits:** this is a local minimum for one task, one start pair and one
-> checkpoint. The entity set is minimal; the sizes were not shrunk (all 100%)
-> before the budget ran out. The bundled `soup-start14-demo` (in
-> `demo/root`) is the October 13 recording of the same failure: the same five
-> entities, with some sizes shrunk (each still needed at least 87.5% of its
-> shift).
+> **Limits:** a local minimum for one task, one start pair and one
+> checkpoint. Row 25 proves the arm offset at 75% still fails, but the
+> recorded case keeps 100%: a defect fixed on October 18 discarded it, and
+> new runs record it. The bundled `soup-start14-demo` (in `demo/root`) is the
+> October 13 recording of the same failure: the same five entities, with the
+> soup and the arm shrunk to 87.5%.
 
 ---
 
@@ -118,26 +120,27 @@ cause the failure by itself."
 **Point:** "No failure found" within a tested range is a result, not an error.
 
 1. Under **Stress tests**, open **catalog-spatial** (`FL-A-F526`).
-2. **Expected:** verdict **No failure found**, LIBERO-Spatial task 0,
-   **benchmark start 0**, **Unperturbed control** "0 of 5 attempts failed".
-3. In **Severity by family**. **Expected:** four ladders (JPEG compression,
-   Colour cast, Motion blur, Dead pixels), each tried at s = 0.20, 0.40, 0.60,
-   0.80 and 1.00 with 5 attempts. Every level is 0/5 except **Motion blur at
-   s = 1.00: 1/5**. Each family reads "No failure up to severity 1.00".
-4. **How it was made:** 1 Job, US$0.82.
+2. **Expected:** verdict **No failure found**, LIBERO-Spatial task 0.
+3. In **Report**, read **Summary**. **Expected:** unperturbed control 0 of 5
+   attempts failed; JPEG compression, Colour cast, Motion blur and Dead
+   pixels each "no failure up to s = 1.00".
+4. In the report's second table (**Levels in the order tried**). **Expected:**
+   every family was tried at s = 0.2, 0.4, 0.6, 0.8 and 1 with 5 attempts. All
+   levels are 0/5 except motion blur at s = 1: 1/5.
+5. **Run details:** 1 Job, US$0.82.
+
+What each family and severity level means physically (for example dead
+pixels at s = 1.00 is 20% of the pixels) is in
+[disturbance families](disturbance-families.md). These four are the image
+catalog families; the New diagnosis form starts with a different four (Blur,
+Noise, Darken, Contrast) checked.
 
 **Talking point:** "The policy kept working through JPEG down to quality 5, a
 strong colour cast and 20% dead pixels. One motion-blur failure at full
 strength is not a repeatable failure. The gate needs 4 of 5."
 
-What each family and severity level means physically (for example dead
-pixels at s = 1.00 is 20% of the pixels) is in
-[disturbance families](disturbance-families.md). These four are the image
-catalog families; the New diagnosis form starts with
-a different four (Blur, Noise, Darken, Contrast) checked.
-
-Also try **scene-object** (`FL-A-A70E`): camera viewpoint 1/5 at s = 0.80 and
-1.00, lighting 0/5 at every level.
+Also try **scene-object** (`FL-A-A70E`): camera viewpoint 1/5 at s = 0.8 and
+1.0, lighting 0/5 at every level.
 
 ---
 
@@ -147,15 +150,14 @@ Also try **scene-object** (`FL-A-A70E`): camera viewpoint 1/5 at s = 0.80 and
 
 1. Under **Stress tests**, open **scene-goal** (`FL-A-08D3`). Its sidebar row
    has an amber bar.
-2. **Expected:** verdict **Stopped**, with the explanation "The unperturbed
-   policy did not pass reliably, so no disturbance can be judged."
-   **Unperturbed control:** 3 of 5 attempts failed. **Camera viewpoint** and
-   **Scene lighting** each read "Not tested: the run stopped before this
-   family was searched".
+2. **Expected:** verdict **Stopped**. The report's **Summary**: unperturbed
+   control 3 of 5 attempts failed, so no disturbance can be judged; stopped
+   early (`nominal_controls_failed`); camera viewpoint and scene lighting
+   "not tested (the run stopped before this family was searched)".
 
 **Talking point:** "Faultline refused to blame the camera or the lights,
 because the policy already failed this start without them. LIBERO-Goal task 0
-start 0 is a weak start, a candidate for Demo 1's mode instead."
+start 0 is a weak start: a candidate for Demo 1's mode instead."
 
 ---
 
@@ -164,18 +166,18 @@ start 0 is a weak start, a candidate for Demo 1's mode instead."
 **Point:** the same task in other words, screened against the original.
 
 1. Under **Language**, open **ui-paraphrase-spatial** (`FL-L-C72C`).
-2. **Expected:** in **Wordings tried**, the original "pick up the black bowl
-   between the plate and the ramekin and place it on the plate" (control, 0 of
-   2 failed), then four Nemotron rewordings, each **kept** by the meaning check
-   and 0 of 1 failed. **Smallest word change that still fails:** "No wording
-   failed reliably, so there was nothing to reduce."
-3. **How it was made:** paraphrases written, rewordings screened (1 Job,
-   US$0.31).
+2. **Expected Summary:** control: the original wording passed (S S);
+   rewordings: 4 screened, 4 kept by the meaning check, 0 dropped; failures:
+   none.
+3. **Screen** lists each wording with its outcomes, decision, number of word
+   edits and meaning check, for example "Take the black bowl located between
+   the plate and the ramekin and put it on the plate". **Run details:** 1 Job,
+   US$0.31.
 
 **Talking point:** "Nemotron 3 Super writes everyday rewordings. A meaning
-check drops any that change the task, so a failure cannot come from a
-different instruction. GR00T passed all 24 rewordings tried across three
-suites."
+check drops any that lose an object or target of the task, so a failure
+cannot come from a different instruction. GR00T passed all 24 rewordings
+tried across three suites."
 
 ---
 
@@ -392,8 +394,8 @@ Use recorded cases only; start nothing.
 
 1. Public gallery → `FL-S-AFB5` → **Play all** at `0.5x`: failing, minimal,
    passing.
-2. The five-row table: five shifts needed together; **Show all 8 reruns**:
-   each alone passes.
+2. The report's Summary: five shifts needed together; **Show all 26 rows**
+   in Candidates: each alone passes, and removing any one of the five passes.
 3. Nemotron's robot-first guess versus "needed but not enough on its own".
 4. `FL-A-F526`: four robust ladders, one isolated 1/5. Close with: evidence is
    specific to these starts, this policy and these attempts.

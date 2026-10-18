@@ -88,3 +88,23 @@ gallery for the Vercel deployment.
   runs, read endpoints without the Host check, a stop of a still-queued Job
   charged at worst case, `--no-llm` lost on resume, relative paths, and
   smaller items) are fixed in follow-up commits.
+
+## Amendment (October 18, 2026): report-first case page
+
+Jethro chose a report-first case page. A case with a saved report shows, in
+order:
+1. the header;
+2. the linked videos;
+3. the rendered report, which opens with a bullet Summary; long tables fold;
+4. Nemotron's reading, collapsed;
+5. Replay, with its purpose line;
+6. collapsed run details;
+7. the files.
+
+The separate minimal-cause, reruns, hypothesis, ladder and wording sections
+were removed from that layout (the report holds them, and the old reruns view
+showed only the 8 reruns Nemotron cited, not all 26). Cases without a report
+keep the structured view. Reports now open with a Summary, explain the
+Candidates columns, and claim a size resolution only when shrinking finished.
+Stored reports were regenerated locally; the committed demo report was
+regenerated. See `docs/superpowers/plans/2026-10-18-report-first-case-page-and-traces.md`.
