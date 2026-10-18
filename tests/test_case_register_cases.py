@@ -31,7 +31,7 @@ def wording_case():
             "task_id": 0, "start_index": 0, "instruction": "pick up the soup", "paraphrase": None,
             "minimal": None, "failure": False, "reduced": False, "stop_reason": "no_reproducible_failure",
             "videos": {"control": {"case_id": "orig-a01", "outcome": "success", "video": "runs/orig-a01/a.mp4",
-                                   "job": "demo-2610181000-rewording-screen", "label": "Original wording (passed)"},
+                                   "job": "demo-2610181000-rewording-screen", "label": "Original wording"},
                        "reworded": {"case_id": "p01-a01", "outcome": "success", "video": "runs/p01-a01/a.mp4",
                                     "job": "demo-2610181000-rewording-screen", "label": 'Reworded "x" (passed)'}},
             "screen": []}
@@ -94,10 +94,10 @@ class MultipleCases(unittest.TestCase):
                          ["blur@0.40", "control", "noise@1.00"])
         clip = audit["videos"]["blur@0.40"]
         self.assertEqual((clip["file"], clip["outcome"], clip["label"]),
-                         ("videos/blur-0.40.mp4", "policy_failure", "Gaussian blur at s = 0.40 (failed)"))
+                         ("videos/blur-0.40.mp4", "policy_failure", "Gaussian blur at s = 0.40"))
         self.assertEqual((self.diagnoses / AUDIT_ID / "videos" / "blur-0.40.mp4").read_text(),
                          "mp4 blur-s400000-a01")
-        self.assertEqual(audit["videos"]["control"]["label"], "Unperturbed control (passed)")
+        self.assertEqual(audit["videos"]["control"]["label"], "Unperturbed control")
         wording = cr.read_diagnosis(self.diagnoses, WORDING_ID)
         self.assertEqual((self.diagnoses / WORDING_ID / "videos" / "control.mp4").read_text(), "mp4 orig-a01")
         self.assertEqual(wording["videos"]["reworded"]["label"], 'Reworded "x" (passed)')
@@ -132,7 +132,7 @@ class MultipleCases(unittest.TestCase):
         ids = cr.reregister_run(run)
         self.assertEqual(ids, before)
         entry = cr.read_diagnosis(self.diagnoses, ids[0])
-        self.assertEqual(entry["videos"]["blur@0.40"]["label"], "Gaussian blur at s = 0.40 (failed)")
+        self.assertEqual(entry["videos"]["blur@0.40"]["label"], "Gaussian blur at s = 0.40")
         self.assertEqual(json.loads((run / "case.json").read_text())["videos"]["blur@0.40"]["job"], job)
         self.assertEqual(cr.reregister_run(run), ids, "running it again changes nothing")
 
@@ -147,7 +147,7 @@ class AuditVideos(unittest.TestCase):
     def test_a_failed_control_is_shown_as_failed_and_untested_families_have_no_clip(self):
         videos = pc.audit_videos([("job-1", m6_summary(["blur"], control_ok=False))])
         self.assertEqual(list(videos), ["control"])
-        self.assertEqual(videos["control"]["label"], "Unperturbed control (failed)")
+        self.assertEqual(videos["control"]["label"], "Unperturbed control")
 
     def test_the_family_labels_match_the_viewers(self):
         from robot_debug.viewer.library import FAMILY_LABELS

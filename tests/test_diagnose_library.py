@@ -55,11 +55,11 @@ class PipelineLibrary(unittest.TestCase):
         detail = self.library.detail("d-" + AUDIT_ID)
         self.assertEqual([v["role"] for v in detail["videos"]], ["control", "blur@0.40", "noise@1.00"])
         by = {v["role"]: v for v in detail["videos"]}
-        self.assertEqual(by["blur@0.40"]["label"], "Gaussian blur at s = 0.40 (failed)")
+        self.assertEqual(by["blur@0.40"]["label"], "Gaussian blur at s = 0.40")
         self.assertEqual(by["blur@0.40"]["outcome"], "policy_failure")
         self.assertEqual(by["blur@0.40"]["url"], "/media/diagnoses/{}/videos/blur-0.40.mp4".format(AUDIT_ID))
         wording = self.library.detail("d-" + WORDING_ID)
-        self.assertEqual([v["label"] for v in wording["videos"]], ["Original wording (passed)", 'Reworded "x" (passed)'])
+        self.assertEqual([v["label"] for v in wording["videos"]], ["Original wording", 'Reworded "x" (passed)'])
 
     def test_audit_cases_with_a_failing_family_are_replayable_and_empty_wording_cases_are_not(self):
         self.assertTrue(self.library.detail("d-" + AUDIT_ID)["replayable"])

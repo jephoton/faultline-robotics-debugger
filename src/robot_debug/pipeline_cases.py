@@ -44,10 +44,10 @@ def audit_videos(job_summaries: Sequence[Tuple[str, Mapping[str, Any]]]) -> Dict
     ``job_summaries`` holds ``(job_name, summary)`` in run order. One clip per role, no more:
 
     * ``control``: the first unperturbed control attempt of the first group (the first failing one if a
-      control failed), labelled "Unperturbed control (passed|failed)";
+      control failed), labelled "Unperturbed control" (the page shows the outcome beside it);
     * ``<family>@<severity>`` per tested family: at its threshold, the first failing attempt
-      ("Gaussian blur at s = 0.50 (failed)"); for a family that held to the top, the first attempt at the
-      highest severity tried ("Scene lighting at s = 1.00 (passed)").
+      ("Gaussian blur at s = 0.50"); for a family that held to the top, the first attempt at the
+      highest severity tried ("Scene lighting at s = 1.00").
 
     A summary with no episode records yields no clip. The entries name the Job and the episode's ``case_id``;
     the registration finds the mp4 under that Job's evidence.
@@ -59,8 +59,7 @@ def audit_videos(job_summaries: Sequence[Tuple[str, Mapping[str, Any]]]) -> Dict
         if nominal and "control" not in videos:
             failed = [r for r in nominal if r["outcome"] == "policy_failure"]
             record = (failed or nominal)[0]
-            videos["control"] = _clip(job, record, "Unperturbed control ({})".format(
-                "failed" if record["outcome"] == "policy_failure" else "passed"))
+            videos["control"] = _clip(job, record, "Unperturbed control")
     for job, summary in job_summaries:
         records = _records(summary)
         for family, result in (summary.get("families") or {}).items():
@@ -84,9 +83,8 @@ def audit_videos(job_summaries: Sequence[Tuple[str, Mapping[str, Any]]]) -> Dict
                 chosen = next((r for r in at_level if r["outcome"] == "success"), at_level[0])
             if chosen is None:
                 continue
-            word = "failed" if chosen["outcome"] == "policy_failure" else "passed"
             videos["{}@{}".format(family, severity_text(severity))] = _clip(
-                job, chosen, "{} at s = {} ({})".format(label, severity_text(severity), word))
+                job, chosen, "{} at s = {}".format(label, severity_text(severity)))
     return videos
 
 
@@ -173,8 +171,7 @@ def wording_videos(summary: Mapping[str, Any], job: str) -> Dict[str, Dict[str, 
     control = next((r for r in rows if r.get("kind") == "original"), None)
     if control and control.get("attempts"):
         attempt = control["attempts"][0]
-        found = clip(attempt, "Original wording ({})".format(
-            "failed" if attempt.get("outcome") == "policy_failure" else "passed"))
+        found = clip(attempt, "Original wording")
         if found:
             videos["control"] = found
     wordings = [r for r in rows if r.get("kind") == "paraphrase" and r.get("attempts")]
@@ -183,8 +180,7 @@ def wording_videos(summary: Mapping[str, Any], job: str) -> Dict[str, Dict[str, 
         row = (failing or wordings)[0]
         attempts = row["attempts"]
         attempt = next((a for a in attempts if a.get("outcome") == "policy_failure"), attempts[0])
-        found = clip(attempt, 'Reworded "{}" ({})'.format(
-            row.get("text"), "failed" if attempt.get("outcome") == "policy_failure" else "passed"))
+        found = clip(attempt, 'Reworded "{}"'.format(row.get("text")))
         if found:
             videos["reworded"] = found
     return videos
@@ -215,7 +211,7 @@ def with_wording_clips(case: Dict[str, Any], screen: Mapping[str, Any], job: str
     """A reduced-wording case with labels on its clips (the reduction recorded original, reference and minimal)
     and, when it recorded none, the control and rewording clips of the screen."""
 
-    labels = {"original": "Failing rewording", "reference": "Original wording (passed)",
+    labels = {"original": "Failing rewording", "reference": "Original wording",
               "minimal": "Minimal wording change"}
     videos = case.get("videos") if isinstance(case.get("videos"), dict) else {}
     if not videos:
