@@ -95,6 +95,40 @@ class DryRun(Fixture):
         self.assertIn("Backend not checked", self.text)
 
 
+class NoLlmWithRewordings(Fixture):
+    """Rewordings are written by Nemotron: ``--no-llm`` with rewordings is refused before anything is spent."""
+
+    def write_spec(self, rewordings):
+        import yaml
+
+        from tests.test_diagnose_pipeline import diag_spec
+
+        raw = dict(diag_spec(probes={"families": ["blur"], "rewordings": rewordings}).raw)
+        self.spec_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    def test_the_run_is_refused_as_a_spec_error_before_a_backend_or_a_folder_exists(self):
+        self.write_spec(4)
+        code = self.run_cli(["diagnose", str(self.spec_path), "--no-llm", "--runs-root", str(self.runs)])
+        self.assertEqual(code, 2)
+        self.assertIn("--no-llm", self.text)
+        self.assertIn("rewordings", self.text)
+        self.assertEqual(self.backends, [])
+        self.assertFalse(self.runs.exists())
+
+    def test_the_dry_run_refuses_it_too(self):
+        self.write_spec(4)
+        code = self.run_cli(["diagnose", str(self.spec_path), "--no-llm", "--dry-run"])
+        self.assertEqual(code, 2)
+        self.assertIn("rewordings", self.text)
+        self.assertNotIn("Planned Jobs", self.text)
+
+    def test_no_rewordings_or_no_flag_is_fine(self):
+        self.write_spec(0)
+        self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--no-llm", "--dry-run"]), 0)
+        self.write_spec(4)
+        self.assertEqual(self.run_cli(["diagnose", str(self.spec_path), "--dry-run"]), 0)
+
+
 class CandidateBudget(Fixture):
     def test_a_budget_the_reduce_job_cannot_hold_is_a_spec_error_before_anything_exists(self):
         self.spec_path.write_text(SPEC.replace("max_candidates: 36", "max_candidates: 40"), encoding="utf-8")

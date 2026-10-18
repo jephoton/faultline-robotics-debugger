@@ -587,6 +587,19 @@ class PassesAndLayout(Base):
             diag_spec(probes={"enabled": False}, layout=False)
 
 
+class NoLlm(Base):
+    def test_rewordings_without_nemotron_stop_before_any_job(self):
+        runner, backend, tools, ledger, lines = self.world([], no_llm=True)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason, backend.submitted), ("stopped", "llm_required", []))
+        self.assertEqual(ledger.spent, 0)
+
+    def test_no_rewordings_run_fine_without_nemotron(self):
+        spec = diag_spec(probes={"families": ["blur"], "rewordings": 0})
+        runner, backend, tools, ledger, lines = self.world([screen_step(), m6_step(["blur"])], spec=spec, no_llm=True)
+        self.assertEqual(runner.diagnose().status, "completed")
+
+
 class JobNames(Base):
     def test_a_long_spec_name_is_shortened_so_the_longest_step_still_fits(self):
         runner, *_ = self.world([], spec=diag_spec(name="a" * 40))

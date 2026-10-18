@@ -229,6 +229,10 @@ def main(argv: Optional[Sequence[str]] = None, *, make_backend: Optional[Callabl
             spec, spec_text = _load_with_text(args.spec)
         if args.command == "diagnose":
             _precheck(spec, tools, run_dir)
+            if args.no_llm and spec.paraphrase is not None:
+                raise sp.SpecError(
+                    "--no-llm cannot be used with rewordings: Nemotron writes them. Set the rewordings to 0 "
+                    "(diagnose.probes.rewordings) or run without --no-llm")
         factory = make_backend
         if args.command == "diagnose" and args.dry_run:
             return _dry_run(spec, tools, factory, out)

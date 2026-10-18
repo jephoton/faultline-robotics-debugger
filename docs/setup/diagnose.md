@@ -27,8 +27,10 @@ run (step 5) prints every Job's worst-case cost before anything is created.
 - **Hugging Face access** (step 2 below).
 - For Nemotron hypotheses, explanations and paraphrases: a Nebius Token
   Factory key in a local `.env` file as `NEBIUS_API_KEY=...` (never commit it;
-  it stays on your machine and never enters a Job). Without it, use `--no-llm`
-  (paraphrase mode needs the key).
+  it stays on your machine and never enters a Job). Without it, use `--no-llm`.
+  Rewordings (paraphrase mode, or `diagnose.probes.rewordings` above 0) need
+  the key: `--no-llm` with rewordings is refused up front, before anything is
+  spent.
 
 ## 2. Hugging Face: accept the gated model terms and store a token
 

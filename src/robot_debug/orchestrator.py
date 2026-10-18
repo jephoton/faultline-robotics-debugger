@@ -1218,6 +1218,9 @@ class Orchestrator:
                     # Recorded first so --resume can reapply it, even when this segment ends before any Job.
                     self.steps.set_run(no_llm=bool(self.no_llm))
                     check_candidate_budget(self.spec, self.tools)      # before the backend or any Job exists
+                    if self.no_llm and self.spec.paraphrase is not None:
+                        raise StopRun("llm_required", "rewordings need Nemotron to write them; run without "
+                                      "--no-llm or set the rewordings to 0")
                     check_import(self.spec, self.tools, self.run_dir)
                 self._start()
                 result = body()
