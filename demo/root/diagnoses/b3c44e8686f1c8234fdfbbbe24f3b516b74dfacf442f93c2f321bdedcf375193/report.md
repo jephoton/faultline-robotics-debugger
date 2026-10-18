@@ -1,5 +1,17 @@
 # Scenario reduction: put both the alphabet soup and the tomato sauce in the basket
 
+## Summary
+
+- Verdict: Reproduces. Applying the kept shifts to the passing reference makes the policy fail at least 4 of 5 attempts.
+- Failing start: benchmark start 14.
+- Reference: benchmark start 28, the nearest start that passed.
+- Kept shift: alphabet_soup_1 position, 2.5 cm (87.5% of the full difference).
+- Kept shift: cream_cheese_1 position, 1.1 cm (100% of the full difference).
+- Kept shift: milk_1 position, 2.4 cm (100% of the full difference).
+- Kept shift: orange_juice_1 position, 3.7 cm (100% of the full difference).
+- Kept shift: robot joints, 6 joints, up to 2.3° (87.5% of the full difference).
+- Status: Stopped at the candidate budget: entity-minimal (each kept entity is needed), sizes not fully shrunk.
+
 Suite `libero_10`, task 0. Reference runs decide everything below; the model only proposes an order and a hypothesis.
 
 ## Screen
@@ -66,7 +78,7 @@ Attempts skipped by early decisions: 4; top-up episodes: 1.
 
 ### Minimal cause
 
-Moving alphabet_soup_1 by 2.5 cm (of the original 2.9 cm), moving cream_cheese_1 by 1.1 cm (of the original 1.1 cm), moving milk_1 by 2.4 cm (of the original 2.4 cm), moving orange_juice_1 by 3.7 cm (of the original 3.7 cm) and moving 6 joints of robot 88% of the way to their failing values are enough to make the policy fail from the passing start 28 (at least 4 of 5 attempts); sizes are resolved to within 1/8 of the original difference; the reduction stopped early, so this is the smallest cause found so far.
+Moving alphabet_soup_1 by 2.5 cm (of the original 2.9 cm), moving cream_cheese_1 by 1.1 cm (of the original 1.1 cm), moving milk_1 by 2.4 cm (of the original 2.4 cm), moving orange_juice_1 by 3.7 cm (of the original 3.7 cm) and moving 6 joints of robot 88% of the way to their failing values are enough to make the policy fail from the passing start 28 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far.
 
 Final selection: alphabet_soup_1 (position 0.875); cream_cheese_1 (position 1); milk_1 (position 1); orange_juice_1 (position 1); robot (joints 0.875). This is a local minimum found by reruns, not proof of the globally smallest cause.
 
@@ -134,6 +146,8 @@ The hypothesis text is free prose; this section compares only the ranking with t
 
 ## Candidates
 
+Every rerun, in order. Phases: `gate` (the failing start must fail 4 of 5, the reference pass 5 of 5), `probe` (one difference alone), `ddmin` (smaller and smaller groups of differences), `shrink` (smaller shares of each kept difference). A selection's number is its share: `robot (joints 0.75)` applies 75% of the arm's offset to the reference. Outcomes: S success, F policy failure, I invalid scene. `skipped`: attempts not run because the answer was already certain; `late`: attempts already running when it was decided, shown but not counted. See docs/how-reduction-works.md.
+
 | # | phase | role | selection | outcomes | decision | gate met | skipped | late |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | gate | failing | - | F F F F | reproduces | True | 1 | - |
@@ -181,6 +195,7 @@ Invalid scenes (never counted as failures): none
 
 - Candidates tested: 36; attempts run: 157 (gate attempts 9, hybrid attempts 148); attempts skipped by early decisions: 33
 - Job seconds: 1566.809; server start-up seconds: 14.649
+- Estimated compute cost at the given rate (an estimate, not billing): $0.76
 
 ## Videos
 
