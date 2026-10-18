@@ -535,9 +535,15 @@ def _bisect(reducer: _Reducer, parts: Dict[str, Dict[str, float]], entity: str, 
             quarter = round((low + middle) / 2.0, _DECIMALS)
             if low < quarter < middle:
                 middle_record, quarter_record = reducer.evaluate([with_t(middle), with_t(quarter)])
-                if middle_record is None or quarter_record is None:
+                if middle_record is None:
                     raise _Stop("budget_exhausted")
                 middle_verdict = judge(middle_record, middle)
+                if quarter_record is None:
+                    # The budget ended between the pair: keep what the middle point proved (found October 18:
+                    # a verified 75% was reported as 100% because the unrun quarter discarded it).
+                    if middle_verdict == "yes":
+                        parts[entity][component] = middle
+                    raise _Stop("budget_exhausted")
                 quarter_verdict = judge(quarter_record, quarter)
                 if middle_verdict == "yes":
                     if quarter_verdict == "yes":

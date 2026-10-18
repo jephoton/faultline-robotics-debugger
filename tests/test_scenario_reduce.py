@@ -336,6 +336,15 @@ class GateAndStopTests(unittest.TestCase):
         self.assertTrue(world.fails(result["final_selection"]))
         self.assertEqual(result["parts"], [])          # the stop came before the part summary
 
+    def test_budget_between_a_speculative_pair_keeps_the_verified_middle(self):
+        # Shrink tries 0.5 and 0.25 (both pass), then the pair 0.75 / 0.625. A budget of 9 runs 0.75 (it
+        # reproduces) but not 0.625; the verified 0.75 must be the answer, not the unshrunk 1.0.
+        world = World(lambda sel: comp(sel, "soup_1", "rotation") >= 0.7)
+        result, _ = reduce(world, speculative_bisection=True, max_candidates=9)
+        self.assertEqual(result["stop_reason"], "budget_exhausted")
+        self.assertEqual(result["final_selection"]["soup_1"]["rotation"], 0.75)
+        self.assertTrue(world.fails(result["final_selection"]))
+
     def test_deadline_stops_cleanly(self):
         world = World(lambda sel: "soup_1" in sel and "bowl_1" in sel)
         executor = FakeExecutor(world.outcome, workers=12)
