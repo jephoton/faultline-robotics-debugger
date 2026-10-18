@@ -50,7 +50,10 @@ promises: *find the smallest condition under which the policy fails here.*
    Each probe reports the smallest severity, or the smallest word change, that
    breaks it (section 5). If the probe's own control shows the start is
    unreliable untouched, the start is reported as **flaky** and nothing is
-   blamed on a disturbance.
+   blamed on a disturbance: the stress-test case is stopped, any threshold from
+   another group is marked unconfirmed, and it has no replay. Each case is
+   judged on its own control, so a failing rewording control leaves a passing
+   stress test valid.
 4. **Every failing condition becomes a replayable case.** The run's
    **findings** list them; "no failing condition in these ranges" is a valid
    finding too.

@@ -138,6 +138,20 @@ def _summary(case: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _case_route(run_route: Any, case: Optional[Mapping[str, Any]], pipeline_case: bool) -> Any:
+    """The route shown for one case. A probing run has one route, but each of its cases is judged on its own
+    control: a flaky stress test is ``flaky`` and a passing one is ``probes`` even when the wording control
+    failed, and the other way round."""
+
+    if not pipeline_case or not isinstance(case, Mapping) or run_route not in ("probes", "flaky"):
+        return run_route
+    if case.get("kind") == "audit":
+        return "flaky" if case.get("stop_reason") == "nominal_controls_failed" else "probes"
+    if case.get("kind") == "paraphrase_reduction":
+        return "flaky" if case.get("stop_reason") == "control_not_passing" else "probes"
+    return run_route
+
+
 def _role_stem(role: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", role).strip("-") or "clip"
 
@@ -265,7 +279,7 @@ def register_run(run_dir: Any, root: Any = None, *, source: Any = None, label: O
                 videos[role]["label"] = entry["label"][:200]
         explanation = _read_json(source_dir / "explanation.json")
         header = (_read_json(run_dir / "steps.json") or {}).get("run")
-        route = header.get("route") if isinstance(header, Mapping) else None
+        route = _case_route(header.get("route") if isinstance(header, Mapping) else None, case, source is not None)
         index = {
             "schema_version": SCHEMA_VERSION, "kind": "diagnosis", "case_id": case_id,
             "name": (spec.get("name") or run_dir.name) + ("" if label is None else " - " + label),

@@ -116,7 +116,11 @@ def audit_case(*, merged: Mapping[str, Any], suite: str, task: int, start: int, 
                summary_path: str, checkpoint: Optional[Tuple[str, str]] = None,
                videos: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """The audit case record of a pipeline run: the stand-alone audit case's shape plus the groups, the clips
-    and the replay block. ``summary_path`` is the merged summary, relative to the run folder."""
+    and the replay block. ``summary_path`` is the merged summary, relative to the run folder.
+
+    When an unperturbed control failed (``stop_reason`` ``nominal_controls_failed``) the start is flaky: the
+    thresholds of the groups that ran are kept but marked ``thresholds_unconfirmed``, and there is no replay
+    block, so nothing is blamed on a disturbance."""
 
     families = {name: {"threshold_severity": (merged["families"].get(name) or {}).get("threshold_severity"),
                        "stop_reason": (merged["families"].get(name) or {}).get("stop_reason")}
@@ -134,9 +138,12 @@ def audit_case(*, merged: Mapping[str, Any], suite: str, task: int, start: int, 
     }
     if checkpoint is not None:
         case["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1], "pinned": True}
-    replay = audit_replay_block(groups)
-    if replay is not None:
-        case["replay"] = replay
+    if merged.get("stop_reason") == "nominal_controls_failed":
+        case["thresholds_unconfirmed"] = True
+    else:
+        replay = audit_replay_block(groups)
+        if replay is not None:
+            case["replay"] = replay
     if videos:
         case["videos"] = copy.deepcopy(dict(videos))
     return case

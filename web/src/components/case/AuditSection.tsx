@@ -30,6 +30,10 @@ function Ladder({ family }: { family: AuditFamily }) {
           <p className="ladder__result ladder__result--attention">
             <Icon name="attention" /> Not tested: the run stopped before this family was searched
           </p>
+        ) : family.threshold_unconfirmed ? (
+          <p className="ladder__result ladder__result--attention">
+            <Icon name="attention" /> Unconfirmed: failed from severity {severity(threshold)} beside a flaky control
+          </p>
         ) : (
           <p className="ladder__result ladder__result--alarm">
             <Icon name="alarm" /> Fails from severity {severity(threshold)}

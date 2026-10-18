@@ -92,6 +92,8 @@ export interface AuditFamily {
   family: string;
   label: string;
   threshold_severity: number | null;
+  /** True when the start's own control failed: the threshold is shown but proves nothing. */
+  threshold_unconfirmed?: boolean;
   stop_reason: string;
   levels: AuditLevel[];
 }

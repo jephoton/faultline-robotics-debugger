@@ -2193,6 +2193,8 @@ class Orchestrator:
             (folder / "report.md").write_text(report, encoding="utf-8", newline="\n")
         if replay is not None:
             _write_json(folder / REPLAY_INPUTS, replay)
+        else:
+            (folder / REPLAY_INPUTS).unlink(missing_ok=True)      # a resumed segment can void an earlier replay
         self.steps.update("case-" + name, status="done", case_id=case["case_id"])
         self.say("case", "{} case {}".format(name, str(case["case_id"])[:12]))
         return folder
@@ -2218,6 +2220,11 @@ class Orchestrator:
             report = self.tools.audit_report([summary for _s, _j, summary in groups])
         except StopRun as stop:
             self._warn("report", "no stress-test report written ({})".format(stop.reason))
+        if report is not None and case.get("thresholds_unconfirmed"):
+            report = report.rstrip("\n") + (
+                "\n\n## Thresholds unconfirmed\n\nThe unperturbed control did not pass reliably, so the start is "
+                "flaky. Any threshold above is unconfirmed: it is not evidence that a disturbance breaks the "
+                "policy, and the case has no replay.\n")
         self._write_case_folder("audit", case, report, case.get("replay"))
 
     def _wording_original(self, screen_summary: Mapping[str, Any]) -> str:

@@ -470,6 +470,85 @@ class RoutingOnTheCheck(Base):
         self.assertFalse(sr.needs_attention("layout_skipped"))
 
 
+class FlakyStartIsNotBlamedOnADisturbance(Base):
+    """A flaky start must not look like a disturbance finding (M1); a passing audit stays valid when only the
+    wording control fails."""
+
+    def library(self, runner):
+        from robot_debug.viewer.library import Library
+
+        return Library(runner.run_dir.parent.parent, runs_root=runner.run_dir.parent)
+
+    def flaky_later_script(self):
+        return [screen_step(), m6_step(["blur", "noise"], thresholds={"blur": 0.4}),
+                m6_step(["lighting"], control_ok=False)]
+
+    def test_a_control_that_fails_in_a_later_group_voids_the_thresholds_of_the_first(self):
+        runner, backend, tools, ledger, lines = self.world(self.flaky_later_script())
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.route), ("completed", "flaky"))
+        audit = self.read(runner, "cases", "audit", "case.json")
+        self.assertEqual(audit["stop_reason"], "nominal_controls_failed")
+        self.assertNotIn("replay", audit)
+        self.assertFalse((runner.run_dir / "cases" / "audit" / "replay-inputs.json").exists())
+        self.assertTrue(audit["thresholds_unconfirmed"])
+        report = (runner.run_dir / "cases" / "audit" / "report.md").read_text(encoding="utf-8")
+        self.assertIn("unconfirmed", report.lower())
+        library = self.library(runner)
+        item = next(i for i in library.list()["items"] if i["kind"] == "audit")
+        self.assertEqual(item["verdict"], "stopped")
+        detail = library.detail(item["id"])
+        self.assertFalse(detail["replayable"])
+        self.assertEqual(detail["route"], "flaky")
+        self.assertNotIn("from severity 0.4", detail["sentence"])
+        self.assertTrue(all(f["threshold_unconfirmed"] for f in detail["audit"]["families"]))
+
+    def test_a_flaky_first_group_voids_its_own_thresholds_too(self):
+        # A summary can carry a threshold and a failed control at once (the control failed after a sweep).
+        def odd(workload):
+            summary = m6_summary(["blur", "noise"], thresholds={"blur": 0.4})
+            summary["stop_reason"], summary["complete"] = "nominal_controls_failed", False
+            return summary
+
+        runner, *_ = self.world([screen_step(), finished(odd, name=M6)])
+        runner.diagnose()
+        item = next(i for i in self.library(runner).list()["items"] if i["kind"] == "audit")
+        self.assertEqual(item["verdict"], "stopped")
+
+    def test_a_failing_wording_control_leaves_a_passing_audit_valid(self):
+        script = [screen_step(), m6_step(["blur", "noise"], thresholds={"blur": 0.4}), m6_step(["lighting"]),
+                  lang_step(failing=("p01",), control=False)]
+        runner, backend, tools, ledger, lines = self.world(script)
+        result = runner.diagnose()
+        self.assertEqual(result.route, "flaky")
+        audit = self.read(runner, "cases", "audit", "case.json")
+        self.assertIn("replay", audit)
+        self.assertNotIn("thresholds_unconfirmed", audit)
+        routes = {e["case_kind"]: e["route"] for e in self.diagnoses(runner)}
+        self.assertEqual(routes, {"audit": "probes", "paraphrase_reduction": "flaky"})
+        item = next(i for i in self.library(runner).list()["items"] if i["kind"] == "audit")
+        self.assertEqual(item["verdict"], "reproduces")
+
+    def test_a_flaky_audit_case_is_registered_with_the_flaky_route(self):
+        runner, *_ = self.world([screen_step(), m6_step(["blur", "noise"], control_ok=False)])
+        runner.diagnose()
+        self.assertEqual([e["route"] for e in self.diagnoses(runner)], ["flaky"])
+
+    def test_a_stale_replay_block_is_removed_when_a_resume_finds_the_start_flaky(self):
+        runner, backend, *_ = self.world(self.flaky_later_script()[:2])
+        backend.fail_submit_at = 2
+        self.assertEqual(runner.diagnose().reason, "backend_error")
+        self.assertTrue((runner.run_dir / "cases" / "audit" / "replay-inputs.json").is_file())
+        from tests.test_orchestrator import FakeBackend
+
+        temp, runner2, backend2, *_ = make_world(
+            diag_spec(), [], backend=FakeBackend([m6_step(["lighting"], control_ok=False)]),
+            tools=ParaphraseTools(), run_dir=runner.run_dir)
+        self.addCleanup(temp.cleanup)
+        self.assertEqual(runner2.diagnose().route, "flaky")
+        self.assertFalse((runner.run_dir / "cases" / "audit" / "replay-inputs.json").exists())
+
+
 class PassesAndLayout(Base):
     def test_a_passing_start_with_no_probes_is_a_finding(self):
         spec = diag_spec(probes={"enabled": False})

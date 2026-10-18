@@ -214,6 +214,8 @@ def _audit_summary(case: Mapping[str, Any]) -> Tuple[str, str, bool]:
     found = {name: _number(_mapping(info).get("threshold_severity")) for name, info in families.items()}
     hit = {name: severity for name, severity in found.items() if severity is not None}
     reason = _str(case.get("stop_reason"))
+    if reason == "nominal_controls_failed":      # the start is flaky: a threshold found beside it proves nothing
+        return "stopped", stop_text(reason) or "", True
     if hit:
         lowest = min(hit, key=lambda name: (hit[name], name))
         return ("reproduces",
@@ -221,8 +223,6 @@ def _audit_summary(case: Mapping[str, Any]) -> Tuple[str, str, bool]:
                 "{:g}.".format(len(hit), len(families), "family" if len(families) == 1 else "families",
                                FAMILY_LABELS.get(lowest, lowest).lower(), hit[lowest]),
                 False)
-    if reason == "nominal_controls_failed":
-        return "stopped", stop_text(reason) or "", True
     if case.get("complete") is False or reason not in (None, "", "no_reproducible_failure"):
         return "incomplete", stop_text(reason) or "The audit did not finish.", True
     return "no_failure", "No disturbance up to full strength made the policy fail 4 of 5 times.", False
@@ -629,6 +629,7 @@ class Library:
                                    "attempts": len(outcomes)})
             families.append({"family": name, "label": FAMILY_LABELS.get(name, name),
                              "threshold_severity": _number(info.get("threshold_severity")),
+                             "threshold_unconfirmed": bool(case.get("thresholds_unconfirmed")),
                              "stop_reason": _str(info.get("stop_reason")) or "", "levels": levels})
         nominal = _mapping(_mapping(summary).get("nominal_controls"))
         outcomes = _mapping(nominal.get("outcomes"))
@@ -835,7 +836,9 @@ def _audit_sentence(case: Mapping[str, Any]) -> str:
     for name, info in sorted(_mapping(case.get("families")).items()):
         severity = _number(_mapping(info).get("threshold_severity"))
         label = FAMILY_LABELS.get(name, name)
-        if severity is not None:
+        if severity is not None and case.get("thresholds_unconfirmed"):
+            parts.append("{}: {:g} (unconfirmed)".format(label, severity))
+        elif severity is not None:
             parts.append("{} from severity {:g}".format(label, severity))
         elif _mapping(info).get("stop_reason") == "no_reproducible_failure":
             parts.append("{}: no failure found".format(label))

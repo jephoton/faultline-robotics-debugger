@@ -250,6 +250,17 @@ describe('audit case', () => {
     expect(screen.getByText('0 of 5 attempts failed')).toBeInTheDocument();
   });
 
+  it('marks a threshold found beside a flaky control as unconfirmed', async () => {
+    const harness = makeHarness();
+    const base = await harness.api.detail(IDS.audit);
+    const families = base.audit!.families.map((family) => ({ ...family, threshold_unconfirmed: true }));
+    vi.spyOn(harness.api, 'detail').mockResolvedValue({ ...base, report_markdown: null, audit: { ...base.audit!, families } });
+    renderApp(`/case/${IDS.audit}`, { harness });
+    const blur = await screen.findByRole('article', { name: 'Blur severity ladder' });
+    expect(within(blur).getByText(/Unconfirmed: failed from severity 0.50 beside a flaky control/)).toBeInTheDocument();
+    expect(within(blur).queryByText('Fails from severity 0.50')).not.toBeInTheDocument();
+  });
+
   it('never calls a family the run did not search "no failure"', async () => {
     const harness = makeHarness();
     const base = await harness.api.detail(IDS.audit);
