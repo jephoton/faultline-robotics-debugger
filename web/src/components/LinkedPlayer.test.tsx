@@ -71,6 +71,21 @@ describe('LinkedPlayer', () => {
     expect(screen.queryByLabelText('Position in the videos')).not.toBeInTheDocument();
   });
 
+  it('lines the clips up at the earliest position when "Keep in step" is turned back on', async () => {
+    const user = userEvent.setup();
+    render(<LinkedPlayer videos={videos} />);
+    const [a, b] = elements() as [HTMLVideoElement, HTMLVideoElement];
+    stub(a, 10);
+    stub(b, 10);
+    const toggle = screen.getByRole('checkbox', { name: 'Keep in step' });
+    await user.click(toggle); // off: each clip has its own controls
+    a.currentTime = 7; // moved on its own
+    b.currentTime = 2;
+    await user.click(toggle); // back on
+    expect(a.currentTime).toBe(2);
+    expect(b.currentTime).toBe(2);
+  });
+
   it('names each video and shows its outcome as a word', () => {
     render(<LinkedPlayer videos={videos} />);
     expect(screen.getByLabelText('Original')).toBeInTheDocument();

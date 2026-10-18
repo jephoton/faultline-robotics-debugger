@@ -70,6 +70,24 @@ export function LinkedPlayer({ videos, title }: { videos: PlayerVideo[]; title?:
     });
     setPosition(0);
   };
+  // Turning "Keep in step" back on lines every clip up at the earliest of their positions, so a clip moved on
+  // its own does not keep its offset; they play on together if any was playing, otherwise they stay paused.
+  const toggleSync = (next: boolean) => {
+    if (next) {
+      const videosNow = refs.current.filter((video): video is HTMLVideoElement => Boolean(video));
+      const earliest = videosNow.length ? Math.min(...videosNow.map((video) => video.currentTime)) : 0;
+      const anyPlaying = videosNow.some((video) => !video.paused && !video.ended);
+      each((video) => {
+        video.currentTime = earliest;
+        video.playbackRate = speed;
+        if (anyPlaying) void Promise.resolve(video.play()).catch(() => undefined);
+        else video.pause();
+      });
+      setPosition(earliest);
+      setPlaying(anyPlaying);
+    }
+    setSync(next);
+  };
   const scrub = (value: number) => {
     each((video) => {
       const limit = Number.isFinite(video.duration) ? video.duration : value;
@@ -150,7 +168,7 @@ export function LinkedPlayer({ videos, title }: { videos: PlayerVideo[]; title?:
           </select>
         </label>
         <label className="check player__sync">
-          <input type="checkbox" checked={sync} onChange={(event) => setSync(event.target.checked)} />
+          <input type="checkbox" checked={sync} onChange={(event) => toggleSync(event.target.checked)} />
           Keep in step
         </label>
         {sync && (
