@@ -111,6 +111,7 @@ class RunResult:
     notes: List[str] = field(default_factory=list)
     route: Optional[str] = None            # diagnose only: layout | probes | passes | flaky
     case_ids: List[str] = field(default_factory=list)
+    verdict_text: Optional[str] = None     # replay only: the sentence for this kind of case (stress test, wording)
 
     @property
     def exit_code(self) -> int:
@@ -2460,7 +2461,8 @@ class Orchestrator:
         self.say("replay", text)
         return RunResult("completed" if verdict is not None else "stopped",
                          None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
-                         case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
+                         case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes),
+                         verdict_text=text)
 
     def _partial_audit_replay(self, case: Mapping[str, Any], outcomes: Sequence[JobOutcome],
                               judged: Tuple[Any, Any, Any], planned: int, stop: StopRun,

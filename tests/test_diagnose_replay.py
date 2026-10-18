@@ -210,6 +210,20 @@ class ExpectGate(Base):
         inconclusive, *_ = self.replay(audit_case(), [m6_step(["blur", "noise"], control_ok=False)])
         self.assertEqual(cli._expectation_code(inconclusive, "reproduces", out.append), cli.EXIT_UNEXPECTED_VERDICT)
 
+    def test_the_not_met_message_speaks_of_the_kind_of_case_not_of_a_scene(self):
+        out: List[str] = []
+        gone, *_ = self.replay(audit_case(), [m6_step(["blur", "noise"])])
+        self.assertEqual(cli._expectation_code(gone, "reproduces", out.append), cli.EXIT_UNEXPECTED_VERDICT)
+        self.assertIn("no longer fails at s = 0.40 (blur)", out[-1])
+        self.assertNotIn("The failure", out[-1])
+        still, *_ = self.replay(wording_case(), [lang_step(failing=("p01",))])
+        self.assertEqual(cli._expectation_code(still, "fixed", out.append), cli.EXIT_UNEXPECTED_VERDICT)
+        self.assertIn("the wording still fails", out[-1])
+        self.assertNotIn("The failure", out[-1])
+        failing_control, *_ = self.replay(wording_case(), [lang_step(failing=("p01",), control=False)])
+        cli._expectation_code(failing_control, "fixed", out.append)
+        self.assertIn("original wording", out[-1])
+
     def test_expect_on_a_replay_that_stopped_part_way_says_inconclusive(self):
         temp, runner, backend, tools, ledger, lines = make_world(
             spec_for(mode="replay"), [m6_step(["blur"], thresholds={"blur": 0.4})], tools=ParaphraseTools())

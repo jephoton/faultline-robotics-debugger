@@ -293,7 +293,10 @@ def _expectation_code(result: orch.RunResult, expect: str, out: Callable[[str], 
         out("Expected '{}': met.".format(expect))
         return 0
     if result.status == "completed" or result.reason == "replay_inconclusive":
-        out("Expected '{}': NOT met ({}).".format(expect, orch.replay_text(result.verdict).rstrip(".")))
+        # A stress-test or wording case has its own sentence ("still fails at s = 0.40 (blur)"); a layout case
+        # uses the scene wording.
+        text = result.verdict_text or orch.replay_text(result.verdict)
+        out("Expected '{}': NOT met ({}).".format(expect, text.rstrip(".")))
         return EXIT_UNEXPECTED_VERDICT
     if result.verdict == "incomplete":              # stopped after some Jobs: partial evidence, no verdict
         out("Expected '{}': NOT met (inconclusive: the replay stopped ({}) before every Job finished, so nothing "
