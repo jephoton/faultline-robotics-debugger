@@ -18,16 +18,16 @@ const BACKEND = `backend:
   image: cr.example.test/fake@sha256:0000`;
 
 describe('buildYaml', () => {
-  it('builds one diagnose spec for a benchmark start, with every family, 10 rewordings and probes on', () => {
+  it('builds one diagnose spec for a benchmark start, with four families, no rewordings and probes on', () => {
     const yaml = buildYaml('start', defaultsFor('start'), BACKEND);
     expect(yaml).toContain('faultline: 1');
     expect(yaml).toContain('mode: diagnose');
     expect(yaml).toContain('diagnose:\n  task: 0\n  start: 14');
-    expect(yaml).toContain(
-      '    families: [blur, noise, darken, contrast, jpeg, colour_cast, motion_blur, dead_pixels, viewpoint, lighting]',
-    );
-    expect(yaml).toContain('    rewordings: 10');
+    expect(yaml).toContain('    families: [blur, noise, darken, contrast]');
+    expect(yaml).toContain('    rewordings: 0');
     expect(yaml).toContain('    enabled: true');
+    expect(yaml).toContain('max_spend_usd: 2.5');
+    expect(yaml).toContain('max_hours: 1.5');
     expect(yaml).toContain('  layout: true');
     expect(yaml).toContain('nemotron: {hypothesis: true, explain: true}');
     expect(yaml).toContain('max_candidates: 36');
@@ -83,9 +83,11 @@ describe('buildYaml', () => {
 
 describe('what a spec asks of Nemotron', () => {
   it('asks for rewordings only for a single start with probes on and a count above zero', () => {
-    expect(asksForRewordings(buildYaml('start', defaultsFor('start'), null))).toBe(true);
-    expect(asksForRewordings(buildYaml('start', { ...defaultsFor('start'), probes: false }, null))).toBe(false);
-    expect(asksForRewordings(buildYaml('start', { ...defaultsFor('start'), rewordings: '0' }, null))).toBe(false);
+    const ten = { ...defaultsFor('start'), rewordings: '10' };
+    expect(asksForRewordings(buildYaml('start', defaultsFor('start'), null))).toBe(false);
+    expect(asksForRewordings(buildYaml('start', ten, null))).toBe(true);
+    expect(asksForRewordings(buildYaml('start', { ...ten, probes: false }, null))).toBe(false);
+    expect(asksForRewordings(buildYaml('start', { ...ten, rewordings: '0' }, null))).toBe(false);
     expect(asksForRewordings(buildYaml('screen', defaultsFor('screen'), null))).toBe(false);
     expect(asksForRewordings('mode: paraphrase\n')).toBe(true);
     expect(asksForRewordings('mode: audit\n')).toBe(false);
@@ -93,8 +95,9 @@ describe('what a spec asks of Nemotron', () => {
 
   it('uses Nemotron for a layout reading or for rewordings', () => {
     const quiet = { ...defaultsFor('start'), nemotron: false, research: false };
-    expect(usesNemotron(buildYaml('start', quiet, null))).toBe(true);
-    expect(usesNemotron(buildYaml('start', { ...quiet, rewordings: '0' }, null))).toBe(false);
+    expect(usesNemotron(buildYaml('start', { ...quiet, research: true }, null))).toBe(true);
+    expect(usesNemotron(buildYaml('start', quiet, null))).toBe(false);
+    expect(usesNemotron(buildYaml('start', { ...quiet, rewordings: '10' }, null))).toBe(true);
     expect(usesNemotron(buildYaml('screen', defaultsFor('screen'), null))).toBe(true);
     expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false }, null))).toBe(true); // research
     expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false, research: false }, null))).toBe(false);

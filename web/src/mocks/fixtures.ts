@@ -1027,13 +1027,13 @@ diagnose:
   task: 0
   start: 14
   probes:
-    families: [blur, noise, darken, contrast, jpeg, colour_cast, motion_blur, dead_pixels, viewpoint, lighting]
-    rewordings: 10
+    families: [blur, noise, darken, contrast]
+    rewordings: 0
     enabled: true
   layout: true
 budget:
-  max_spend_usd: 7.0
-  max_hours: 4
+  max_spend_usd: 2.5
+  max_hours: 1.5
   max_candidates: 36
 nemotron: {hypothesis: true, explain: true}
 ${backend}

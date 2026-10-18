@@ -31,6 +31,9 @@ export interface FormState {
 /** Every disturbance family, in the order the server lists them. */
 export const ALL_FAMILIES: string[] = AUDIT_FAMILIES.map((family) => family.key);
 
+/** The families ticked by default: where the policy has failed before. */
+export const DEFAULT_FAMILIES: string[] = ['blur', 'noise', 'darken', 'contrast'];
+
 /** Families in their canonical order, so ticking and unticking never reorders the YAML. */
 export function sortFamilies(families: string[]): string[] {
   const rank = (key: string) => {
@@ -49,12 +52,13 @@ export function defaultsFor(choice: DiagnosisChoice): FormState {
     range: '10-49',
     confirm: '4',
     probes: true,
-    families: [...ALL_FAMILIES],
-    rewordings: '10',
-    // The cap should hold the check plus the larger branch; probing a passing start with every family and
-    // the rewordings reserves about US$6 in the worst case (a typical run costs about half).
-    spend: '7',
-    hours: '4',
+    // The four families where the policy has failed before; the other six are unticked but one tick away.
+    families: [...DEFAULT_FAMILIES],
+    // Rewordings are opt-in (0 skips the wording probe); 1 to 12 asks Nemotron for that many.
+    rewordings: '0',
+    // A small default cap: the check plus a four-family probe. The review shows when the worst case is above it.
+    spend: '2.5',
+    hours: '1.5',
     nemotron: true,
     research: true,
     importFile: null,
@@ -97,7 +101,7 @@ export function buildYaml(choice: DiagnosisChoice, form: FormState, backend: str
     lines.push(
       '  probes:',
       `    families: [${sortFamilies(form.families).join(', ')}]`,
-      `    rewordings: ${num(form.rewordings, '10')}`,
+      `    rewordings: ${num(form.rewordings, '0')}`,
       `    enabled: ${form.probes}`,
     );
   }

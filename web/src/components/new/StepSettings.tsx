@@ -260,6 +260,9 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
                 </div>
               </div>
             ))}
+            <p className="field__hint">
+              These four are where the policy has failed before; each extra family adds about half an hour and can need another Job.
+            </p>
             {fieldErrors('families')?.map((message) => (
               <span className="field__error" id={id('families-error')} key={message}>
                 <Icon name="alarm" /> {message}
@@ -270,7 +273,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           <Field
             id={id('rewordings')}
             label="Rewordings to ask for"
-            hint="0 to 12. Nemotron writes them, and the smallest word change that breaks the policy is kept. 0 skips this probe."
+            hint="0 skips this probe; 1 to 12 asks Nemotron for that many rewordings, and the smallest word change that breaks the policy is kept."
             errors={fieldErrors('rewordings')}
           >
             <input

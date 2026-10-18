@@ -114,11 +114,13 @@ function diagnoseJobs(yaml: string): { jobs: DryRunJob[]; branches: DryRunBranch
   }
   const worst = (branch: Branch) => round(jobs.filter((entry) => entry.branch === branch).reduce((sum, entry) => sum + entry.worst_case_usd, 0));
   const present = (['check', 'layout', 'probes'] as Branch[]).filter((branch) => jobs.some((entry) => entry.branch === branch));
-  // Like the server: about half the worst case for a measured Job; unknown (null) for the layout branch.
+  // Like the server: about half the worst case for a measured Job; unknown (null) cost for the layout branch.
+  const minutes: Record<Branch, number> = { check: 15, layout: 25, probes: 25 };
   const branches: DryRunBranch[] = present.map((branch) => ({
     branch,
     worst_case_usd: worst(branch),
     typical_usd: branch === 'layout' ? null : round(worst(branch) * 0.5),
+    typical_minutes: minutes[branch],
   }));
   return { jobs, branches, total: round(worst('check') + Math.max(worst('layout'), worst('probes'))) };
 }

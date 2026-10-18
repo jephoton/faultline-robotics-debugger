@@ -11,9 +11,9 @@ function plan(over: Partial<DryRun> = {}): DryRun {
       { name: 'probe-images-1', deadline_seconds: 2400, worst_case_usd: 1.5, branch: 'probes' },
     ],
     branches: [
-      { branch: 'check', worst_case_usd: 1, typical_usd: 0.5 },
-      { branch: 'layout', worst_case_usd: 2, typical_usd: 1 },
-      { branch: 'probes', worst_case_usd: 1.5, typical_usd: 0.75 },
+      { branch: 'check', worst_case_usd: 1, typical_usd: 0.5, typical_minutes: 15 },
+      { branch: 'layout', worst_case_usd: 2, typical_usd: 1, typical_minutes: 25 },
+      { branch: 'probes', worst_case_usd: 1.5, typical_usd: 0.75, typical_minutes: 20 },
     ],
     worst_case_total_usd: 3,
     cap_usd: 5,
@@ -24,29 +24,45 @@ function plan(over: Partial<DryRun> = {}): DryRun {
 }
 
 describe('the branched dry run', () => {
-  it('labels every typical figure as an estimate and totals the check plus the larger branch', () => {
+  it('labels every typical figure as an estimate, with its time, and totals the check plus each branch', () => {
     render(<DryRunTable plan={plan()} />);
     const probes = screen.getByRole('region', { name: 'If it passes: probe' });
     const typical = within(probes).getByText('Typical').nextElementSibling as HTMLElement;
-    expect(typical).toHaveTextContent('about US$0.75');
-    expect(typical).toHaveTextContent('(typical, an estimate)');
+    expect(typical).toHaveTextContent('about US$0.75 and 20 minutes');
+    expect(typical).toHaveTextContent('(typical, an estimate; GPU waits can add more)');
     expect(screen.getByText('Total worst case').nextElementSibling).toHaveTextContent('US$3.00');
-    // 0.50 for the check plus the larger typical branch (the layout, 1.00).
-    expect(screen.getByText('Typical total').nextElementSibling).toHaveTextContent('about US$1.50');
+    // The check (0.50, 15 min) plus the layout (1.00, 25 min) or the probes (0.75, 20 min).
+    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about US$1.50 and 40 minutes');
+    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.25 and 35 minutes');
   });
 
-  it('says a typical cost is not known yet instead of inventing one, and shows no typical total', () => {
+  it('says which typical figure is not known yet instead of inventing one', () => {
     const unknown = plan({
       branches: [
-        { branch: 'check', worst_case_usd: 1, typical_usd: 0.5 },
-        { branch: 'layout', worst_case_usd: 2, typical_usd: null },
-        { branch: 'probes', worst_case_usd: 1.5, typical_usd: 0.75 },
+        { branch: 'check', worst_case_usd: 1, typical_usd: 0.5, typical_minutes: 15 },
+        { branch: 'layout', worst_case_usd: 2, typical_usd: null, typical_minutes: 25 },
+        { branch: 'probes', worst_case_usd: 1.5, typical_usd: 0.75, typical_minutes: null },
       ],
     });
     render(<DryRunTable plan={unknown} />);
     const layout = screen.getByRole('region', { name: 'If it fails: find the smallest layout change' });
-    expect(within(layout).getByText(/not known yet \(typical, an estimate\)/)).toBeInTheDocument();
-    expect(screen.queryByText('Typical total')).not.toBeInTheDocument();
+    expect(within(layout).getByText('Typical').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
+    const probes = screen.getByRole('region', { name: 'If it passes: probe' });
+    expect(within(probes).getByText('Typical').nextElementSibling).toHaveTextContent('about US$0.75, time not known yet');
+    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
+    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.25, time not known yet');
+  });
+
+  it('says "not known yet" when the server has no estimate at all', () => {
+    const none = plan({
+      branches: [
+        { branch: 'check', worst_case_usd: 1, typical_usd: null },
+        { branch: 'layout', worst_case_usd: 2, typical_usd: null },
+        { branch: 'probes', worst_case_usd: 1.5, typical_usd: null },
+      ],
+    });
+    render(<DryRunTable plan={none} />);
+    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('not known yet');
   });
 
   it('keeps a plan with no branches as the flat table of Jobs', () => {

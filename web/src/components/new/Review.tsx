@@ -124,12 +124,33 @@ const BRANCH_TEXT: Record<Branch, string> = {
     'Searches each chosen disturbance family for the smallest severity that breaks the policy, and asks Nemotron for rewordings, reducing a failing one to the smallest word change. A start that is flaky untouched is reported as that, and rewordings are skipped.',
 };
 
-/** The check plus the larger of the two "if" branches, or null when any branch has no estimate. */
-function typicalTotal(branches: DryRunBranch[]): number | null {
-  if (branches.some((entry) => entry.typical_usd === null)) return null;
-  const typical = (branch: Branch) => branches.find((entry) => entry.branch === branch)?.typical_usd ?? 0;
-  return typical('check') + Math.max(typical('layout'), typical('probes'));
+interface Typical {
+  usd: number | null;
+  minutes: number | null;
 }
+
+const typicalOf = (entry: DryRunBranch | undefined): Typical => ({ usd: entry?.typical_usd ?? null, minutes: entry?.typical_minutes ?? null });
+
+/** The typical cost and time of the check followed by one branch; a figure is null when either part is unknown. */
+function typicalWith(branches: DryRunBranch[], branch: Branch): Typical {
+  const first = typicalOf(branches.find((entry) => entry.branch === 'check'));
+  const next = typicalOf(branches.find((entry) => entry.branch === branch));
+  return {
+    usd: first.usd === null || next.usd === null ? null : first.usd + next.usd,
+    minutes: first.minutes === null || next.minutes === null ? null : first.minutes + next.minutes,
+  };
+}
+
+/** "about US$0.65 and 25 minutes", saying plainly which figure is not known yet. */
+function typicalText(typical: Typical): string {
+  const minutes = typical.minutes === null ? null : `${Math.max(1, Math.round(typical.minutes))} minutes`;
+  if (typical.usd !== null && minutes) return `about ${usd(typical.usd)} and ${minutes}`;
+  if (typical.usd !== null) return `about ${usd(typical.usd)}, time not known yet`;
+  if (minutes) return `about ${minutes}, cost not known yet`;
+  return 'not known yet';
+}
+
+const TYPICAL_NOTE = '(typical, an estimate; GPU waits can add more)';
 
 interface BranchPlanProps {
   plan: DryRun;
@@ -141,7 +162,7 @@ interface BranchPlanProps {
 /** A diagnose plan: the check, then the two branches of which only one runs, each with its Jobs and cost. */
 function BranchPlan({ plan, branches, source, headingLevel }: BranchPlanProps) {
   const Heading = `h${Math.min(headingLevel + 1, 6)}` as 'h3' | 'h4' | 'h5';
-  const total = typicalTotal(branches);
+  const present = (branch: Branch) => branches.some((entry) => entry.branch === branch);
   return (
     <>
       {BRANCH_ORDER.map((branch) => {
@@ -163,13 +184,7 @@ function BranchPlan({ plan, branches, source, headingLevel }: BranchPlanProps) {
               <dd>{usd(entry?.worst_case_usd ?? jobs.reduce((sum, job) => sum + job.worst_case_usd, 0))}</dd>
               <dt>Typical</dt>
               <dd>
-                {entry && entry.typical_usd !== null ? (
-                  <>
-                    about {usd(entry.typical_usd)} <span className="muted">(typical, an estimate)</span>
-                  </>
-                ) : (
-                  <span className="muted">not known yet (typical, an estimate)</span>
-                )}
+                {typicalText(typicalOf(entry))} <span className="muted">{TYPICAL_NOTE}</span>
               </dd>
             </dl>
           </section>
@@ -181,11 +196,19 @@ function BranchPlan({ plan, branches, source, headingLevel }: BranchPlanProps) {
           {usd(plan.worst_case_total_usd)}{' '}
           <span className="muted">(the check plus the larger of the two branches, because only one of them runs)</span>
         </dd>
-        {total !== null && (
+        {present('layout') && (
           <>
-            <dt>Typical total</dt>
+            <dt>Typical total if it fails</dt>
             <dd>
-              about {usd(total)} <span className="muted">(typical, an estimate)</span>
+              {typicalText(typicalWith(branches, 'layout'))} <span className="muted">{TYPICAL_NOTE}</span>
+            </dd>
+          </>
+        )}
+        {present('probes') && (
+          <>
+            <dt>Typical total if it passes</dt>
+            <dd>
+              {typicalText(typicalWith(branches, 'probes'))} <span className="muted">{TYPICAL_NOTE}</span>
             </dd>
           </>
         )}

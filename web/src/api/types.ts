@@ -325,6 +325,8 @@ export interface DryRunBranch {
   worst_case_usd: number;
   /** From measured history; null when unknown. */
   typical_usd: number | null;
+  /** Typical time end to end, excluding waits for a GPU; null when unknown. */
+  typical_minutes?: number | null;
 }
 
 export interface DryRun {

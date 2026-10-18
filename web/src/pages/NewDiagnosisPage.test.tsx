@@ -82,23 +82,25 @@ describe('step 2: settings', () => {
     expect(screen.getByText(/turn on the stove/, { selector: '.field__hint' })).toBeInTheDocument();
   });
 
-  it('generates the diagnose YAML with probes on, all ten families, 10 rewordings and the template backend', async () => {
+  it('generates the diagnose YAML with probes on, four families, no rewordings, a small cap and the template backend', async () => {
     const user = userEvent.setup();
     await openNew();
     await toSettings(user);
     const yaml = yamlBox().value;
     expect(yaml).toContain('mode: diagnose');
     expect(yaml).toContain('  start: 14');
-    expect(yaml).toContain('families: [blur, noise, darken, contrast, jpeg, colour_cast, motion_blur, dead_pixels, viewpoint, lighting]');
-    expect(yaml).toContain('rewordings: 10');
+    expect(yaml).toContain('families: [blur, noise, darken, contrast]');
+    expect(yaml).toContain('rewordings: 0');
     expect(yaml).toContain('enabled: true');
+    expect(yaml).toContain('max_spend_usd: 2.5');
+    expect(yaml).toContain('max_hours: 1.5');
     expect(yaml).not.toContain('mode: scenario');
     await user.clear(screen.getByLabelText('Start'));
     await user.type(screen.getByLabelText('Start'), '21');
     expect(yamlBox().value).toContain('  start: 21');
   });
 
-  it('groups the probes under "If the start passes untouched, also probe", every family ticked, image and scene apart', async () => {
+  it('groups the probes under "If the start passes untouched, also probe", four families ticked and six visible but unticked', async () => {
     const user = userEvent.setup();
     await openNew();
     await toSettings(user);
@@ -107,10 +109,15 @@ describe('step 2: settings', () => {
     const families = within(probes).getByRole('group', { name: 'Disturbance families' });
     const boxes = within(families).getAllByRole('checkbox');
     expect(boxes).toHaveLength(10);
-    for (const box of boxes) expect(box).toBeChecked();
+    const ticked = boxes.filter((box) => (box as HTMLInputElement).checked).map((box) => box.closest('label')?.textContent);
+    expect(ticked).toEqual(['Blur', 'Noise', 'Darken', 'Contrast']);
+    for (const name of ['JPEG compression', 'Colour cast', 'Motion blur', 'Dead pixels', 'Camera viewpoint', 'Lighting']) {
+      expect(within(families).getByRole('checkbox', { name })).not.toBeChecked();
+    }
+    expect(within(families).getByText('These four are where the policy has failed before; each extra family adds about half an hour and can need another Job.')).toBeInTheDocument();
     expect(within(families).getByText('Image, both cameras')).toBeInTheDocument();
     expect(within(families).getByText('Scene, applied when the simulator resets')).toBeInTheDocument();
-    expect(within(probes).getByLabelText('Rewordings to ask for')).toHaveValue('10');
+    expect(within(probes).getByLabelText('Rewordings to ask for')).toHaveValue('0');
   });
 
   it('lets families and the number of rewordings be changed', async () => {
@@ -119,10 +126,10 @@ describe('step 2: settings', () => {
     await toSettings(user);
     await user.click(screen.getByRole('checkbox', { name: 'Lighting' }));
     await user.click(screen.getByRole('checkbox', { name: 'JPEG compression' }));
-    expect(yamlBox().value).toContain('families: [blur, noise, darken, contrast, colour_cast, motion_blur, dead_pixels, viewpoint]');
-    // Ticking one again keeps the server's order.
-    await user.click(screen.getByRole('checkbox', { name: 'Lighting' }));
-    expect(yamlBox().value).toContain('dead_pixels, viewpoint, lighting]');
+    // Ticked later, but kept in the server's order.
+    expect(yamlBox().value).toContain('families: [blur, noise, darken, contrast, jpeg, lighting]');
+    await user.click(screen.getByRole('checkbox', { name: 'Blur' }));
+    expect(yamlBox().value).toContain('families: [noise, darken, contrast, jpeg, lighting]');
     await user.clear(screen.getByLabelText('Rewordings to ask for'));
     await user.type(screen.getByLabelText('Rewordings to ask for'), '4');
     expect(yamlBox().value).toContain('rewordings: 4');
@@ -203,7 +210,7 @@ describe('step 2: settings', () => {
     expect(await screen.findByText('must be a whole number from 0 to 12', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(rewordings).toHaveAttribute('aria-invalid', 'true');
     const families = screen.getByRole('group', { name: 'Disturbance families' });
-    for (const box of within(families).getAllByRole('checkbox')) await user.click(box);
+    for (const box of within(families).getAllByRole('checkbox').filter((entry) => (entry as HTMLInputElement).checked)) await user.click(box);
     expect(await screen.findByText('choose at least one family', {}, { timeout: 3000 })).toBeInTheDocument();
   });
 
@@ -301,16 +308,39 @@ describe('step 3: review and start', () => {
     expect(within(fails).getByText('reference')).toBeInTheDocument();
     expect(within(fails).getByText('reduce')).toBeInTheDocument();
     expect(within(fails).getByText('US$2.11', { selector: 'dd' })).toBeInTheDocument();
-    expect(within(fails).getByText(/not known yet \(typical, an estimate\)/)).toBeInTheDocument();
+    expect(within(fails).getByText('Typical').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
 
-    // Ten families make three audit Jobs (four image, four image, two scene), then the rewordings.
+    // Four image families make one audit Job; no scene families and no rewordings are chosen by default.
+    expect(within(passes).getByText('probe-images-1')).toBeInTheDocument();
+    expect(within(passes).queryByText('probe-scene')).not.toBeInTheDocument();
+    expect(within(passes).queryByText('rewordings-screen')).not.toBeInTheDocument();
+    expect(within(passes).getByText('US$1.30', { selector: 'dd' })).toBeInTheDocument();
+    const typical = within(passes).getByText('Typical').nextElementSibling as HTMLElement;
+    expect(typical).toHaveTextContent('about US$0.65 and 25 minutes');
+    expect(typical).toHaveTextContent('(typical, an estimate; GPU waits can add more)');
+    expect(within(first).getByText('Typical').nextElementSibling).toHaveTextContent('about US$0.49 and 15 minutes');
+    // The summary: the check plus each branch.
+    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.14 and 40 minutes');
+    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
+  });
+
+  it('plans one audit Job per four image families, a scene Job and the rewordings when everything is chosen', async () => {
+    const user = userEvent.setup();
+    await openNew();
+    await toSettings(user);
+    for (const name of ['JPEG compression', 'Colour cast', 'Motion blur', 'Dead pixels', 'Camera viewpoint', 'Lighting']) {
+      await user.click(screen.getByRole('checkbox', { name }));
+    }
+    await user.clear(screen.getByLabelText('Rewordings to ask for'));
+    await user.type(screen.getByLabelText('Rewordings to ask for'), '10');
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByText('Total worst case');
+    const passes = screen.getByRole('region', { name: 'If it passes: probe' });
     for (const name of ['probe-images-1', 'probe-images-2', 'probe-scene', 'rewordings-screen', 'rewordings-reduce']) {
       expect(within(passes).getByText(name)).toBeInTheDocument();
     }
     expect(within(passes).getByText('US$6.00', { selector: 'dd' })).toBeInTheDocument();
-    const typical = within(passes).getByText('Typical').nextElementSibling as HTMLElement;
-    expect(typical).toHaveTextContent('about US$3.00');
-    expect(typical).toHaveTextContent('(typical, an estimate)');
+    expect(screen.getByText('Total worst case').nextElementSibling).toHaveTextContent('US$6.98');
   });
 
   it('totals the check plus the larger branch, not the sum, and applies the cap rule', async () => {
@@ -318,10 +348,14 @@ describe('step 3: review and start', () => {
     await openNew();
     await toReview(user);
     const total = screen.getByText('Total worst case').nextElementSibling as HTMLElement;
-    // 0.98 for the check plus 6.00 for the probes, since only one branch runs.
-    expect(total).toHaveTextContent('US$6.98');
+    // 0.98 for the check plus 2.11 for the layout (the larger branch), since only one branch runs.
+    expect(total).toHaveTextContent('US$3.09');
     expect(total).toHaveTextContent('only one of them runs');
-    expect(screen.getByText('Spend cap').nextElementSibling).toHaveTextContent('US$7.00');
+    const cap = screen.getByText('Spend cap').nextElementSibling as HTMLElement;
+    expect(cap).toHaveTextContent('US$2.50');
+    // The check fits the small default cap, but the layout branch would not: the cap rule says so.
+    expect(cap).toHaveTextContent('The first Job fits, but not all of them');
+    expect(screen.getByText('Hour limit').nextElementSibling).toHaveTextContent('1.5 hours');
     expect(await screen.findByText(/Nebius sign-in/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start diagnosis/i })).toBeEnabled();
   });
@@ -376,7 +410,11 @@ describe('step 3: review and start', () => {
       ],
     };
     const view = await openNew({ environment: missing });
-    await toReview(user);
+    await toSettings(user);
+    await user.clear(screen.getByLabelText('Rewordings to ask for'));
+    await user.type(screen.getByLabelText('Rewordings to ask for'), '10');
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByText('Total worst case');
     await screen.findByText(/NEBIUS_API_KEY not found/);
     await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Rewordings are written by Nemotron/);
@@ -507,7 +545,8 @@ describe('step 3: review and start', () => {
     await openNew();
     await toReview(user);
     await user.click(screen.getByRole('button', { name: /back to settings/i }));
-    expect(await screen.findByLabelText('Spend cap (US$)')).toHaveValue('7');
+    expect(await screen.findByLabelText('Spend cap (US$)')).toHaveValue('2.5');
+    expect(screen.getByLabelText('Hour limit')).toHaveValue('1.5');
     expect(screen.getByRole('checkbox', { name: 'Blur' })).toBeChecked();
     const view = within(screen.getByRole('list', { name: 'Steps' }));
     expect(view.getByText('Settings')).toBeInTheDocument();
