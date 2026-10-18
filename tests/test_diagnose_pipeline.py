@@ -264,6 +264,120 @@ class ProbesRoute(Base):
         self.assertEqual(len(self.diagnoses(runner2)), 2)
 
 
+class StopsPartWay(Base):
+    """A stop after some probe Job finished keeps what was paid for: the audit case from the groups that ran,
+    registered, with the research step, and the run stays resumable (no duplicates after a resume)."""
+
+    def resume(self, runner, script, **world):
+        from tests.test_orchestrator import FakeBackend
+
+        tools = world.pop("tools", None) or ParaphraseTools()
+        temp, runner2, backend2, tools2, ledger2, lines2 = make_world(
+            diag_spec(), [], backend=FakeBackend(script), tools=tools, run_dir=runner.run_dir, **world)
+        self.addCleanup(temp.cleanup)
+        return runner2, backend2
+
+    def image_then(self, second, **kwargs):
+        return [screen_step(), m6_step(["blur", "noise"], thresholds={"blur": 0.4}), second]
+
+    def check_partial_audit(self, runner, result, reason):
+        self.assertEqual((result.status, result.reason), ("stopped", reason))
+        audit = self.read(runner, "cases", "audit", "case.json")
+        self.assertFalse(audit["complete"])
+        self.assertEqual(audit["families"]["blur"]["threshold_severity"], 0.4)
+        self.assertEqual(audit["families"]["lighting"]["stop_reason"], "not_run")
+        self.assertEqual(audit["stop_reason"], reason)
+        self.assertIn("replay", audit, "the failing family of the group that ran can still be replayed")
+        entries = self.diagnoses(runner)
+        self.assertEqual([e["case_id"] for e in entries], [audit["case_id"]])
+        self.assertEqual(self.header(runner)["run"]["status"], "stopped")
+        self.assertEqual(self.header(runner)["steps"]["register"]["status"], "done")
+        return audit
+
+    def test_a_backend_error_in_the_second_probe_group_keeps_the_first_groups_case(self):
+        runner, backend, tools, ledger, lines = self.world(self.image_then(m6_step(["lighting"])))
+        backend.fail_submit_at = 2
+        result = runner.diagnose()
+        audit = self.check_partial_audit(runner, result, "backend_error")
+        self.assertEqual(len(backend.submitted), 2)
+        runner2, backend2 = self.resume(runner, [m6_step(["lighting"]), lang_step(failing=()),])
+        result2 = runner2.diagnose()
+        self.assertEqual((result2.status, result2.route), ("completed", "probes"))
+        self.assertEqual(len(backend2.submitted), 2, "the finished groups are not resubmitted")
+        full = self.read(runner, "cases", "audit", "case.json")
+        self.assertEqual(full["case_id"], audit["case_id"], "the same case is completed, not duplicated")
+        self.assertTrue(full["complete"])
+        self.assertEqual(len(self.diagnoses(runner)), 2)
+
+    def test_a_failed_second_group_job_keeps_the_first_groups_case(self):
+        failed = {"state": "FAILED", "reason": "ContainerFailed", "container_seconds": 100, "summary": None,
+                  "summary_name": M6}
+        runner, backend, tools, ledger, lines = self.world(self.image_then(failed))
+        result = runner.diagnose()
+        self.check_partial_audit(runner, result, "job_failed")
+
+    def test_a_spend_cap_before_the_second_group_keeps_the_first_groups_case(self):
+        runner, backend, tools, ledger, lines = self.world(self.image_then(m6_step(["lighting"])), spec=diag_spec(cap=2.4))
+        result = runner.diagnose()
+        self.check_partial_audit(runner, result, "spend_cap")
+        self.assertEqual(len(backend.submitted), 2)
+
+    def test_a_user_stop_between_groups_keeps_the_first_groups_case(self):
+        runner, backend, tools, ledger, lines = self.world(self.image_then(m6_step(["lighting"])))
+        backend.on_wait = lambda: orch.request_stop(runner.run_dir) if len(backend.waited) == 2 else None
+        result = runner.diagnose()
+        self.check_partial_audit(runner, result, "stopped_by_user")
+
+    def test_a_stop_in_the_rewording_screen_keeps_the_stress_test_case(self):
+        runner, backend, tools, ledger, lines = self.world(
+            [screen_step(), m6_step(["blur", "noise"], thresholds={"blur": 0.4}), m6_step(["lighting"])])
+        backend.fail_submit_at = 3
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "backend_error"))
+        audit = self.read(runner, "cases", "audit", "case.json")
+        self.assertTrue(audit["complete"])
+        self.assertEqual([e["case_id"] for e in self.diagnoses(runner)], [audit["case_id"]])
+        self.assertFalse((runner.run_dir / "cases" / "wording").exists())
+
+    def test_a_stop_in_the_wording_reduction_registers_the_wording_case_as_incomplete(self):
+        runner, backend, tools, ledger, lines = self.world(
+            [screen_step(), m6_step(["blur", "noise"], thresholds={"blur": 0.4}), m6_step(["lighting"]),
+             lang_step(failing=("p01",))])
+        backend.fail_submit_at = 4
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "backend_error"))
+        wording = self.read(runner, "cases", "wording", "case.json")
+        self.assertEqual((wording["stop_reason"], wording["reduced"]), ("backend_error", False))
+        self.assertEqual(len(self.diagnoses(runner)), 2)
+        runner2, backend2 = self.resume(runner, [reduce_step()])
+        result2 = runner2.diagnose()
+        self.assertEqual((result2.status, len(backend2.submitted)), ("completed", 1))
+        entries = self.diagnoses(runner)
+        self.assertEqual(len(entries), 2, "the wording case is replaced, not duplicated")
+        self.assertTrue(self.read(runner, "cases", "wording", "case.json")["reduced"])
+
+    def test_a_stop_before_any_group_finished_writes_no_case(self):
+        runner, backend, tools, ledger, lines = self.world([screen_step()])
+        backend.fail_submit_at = 1
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.reason), ("stopped", "backend_error"))
+        self.assertFalse((runner.run_dir / "cases").exists())
+        self.assertEqual(self.diagnoses(runner), [])
+
+    def test_research_runs_for_the_cases_of_a_stopped_run(self):
+        from tests.test_diagnose_research import FakeResearch, research_spec
+
+        tools = ParaphraseTools()
+        tools.research_deps = FakeResearch().deps()
+        runner, backend, tools, ledger, lines = self.world(
+            self.image_then(m6_step(["lighting"])), spec=research_spec(), tools=tools)
+        backend.fail_submit_at = 2
+        result = runner.diagnose()
+        self.assertEqual(result.status, "stopped")
+        self.assertEqual(self.header(runner)["steps"]["research-audit"]["status"], "done")
+        self.assertTrue((runner.run_dir / "cases" / "audit" / "research.json").is_file())
+
+
 class PassesAndLayout(Base):
     def test_a_passing_start_with_no_probes_is_a_finding(self):
         spec = diag_spec(probes={"enabled": False})

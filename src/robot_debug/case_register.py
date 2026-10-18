@@ -304,8 +304,22 @@ def register_cases(run_dir: Any, root: Any = None) -> List[str]:
                if (run_dir / "cases" / name).is_dir()]
     if not folders:
         return [register_run(run_dir, root)]
-    return [register_run(run_dir, root, source=folder, label=label, order=order)
-            for order, (folder, label) in enumerate(folders)]
+    ids = [register_run(run_dir, root, source=folder, label=label, order=order)
+           for order, (folder, label) in enumerate(folders)]
+    _drop_superseded(run_dir, root, ids)
+    return ids
+
+
+def _drop_superseded(run_dir: Path, root: Any, keep: List[str]) -> None:
+    """Remove this run's earlier entries that a later segment replaced under a new case id.
+
+    A run stopped part-way registers what it has (a wording case for a screen whose reduction has not run);
+    the resumed run finishes the case under its own id, so the interim entry would otherwise be listed twice."""
+
+    base = Path(root) if root is not None else default_root(run_dir)
+    for entry in list_diagnoses(base):
+        if entry.get("run") == run_dir.name and entry["case_id"] not in keep:
+            shutil.rmtree(str(base / entry["case_id"]), ignore_errors=True)
 
 
 def reregister_run(run_dir: Any, root: Any = None) -> List[str]:

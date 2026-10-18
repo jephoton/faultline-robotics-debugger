@@ -487,8 +487,7 @@ ROUTE_TEXTS = {
     "passes": "the start passes untouched and no probes were chosen",
     "flaky": "the start is flaky: its own control did not pass reliably",
 }
-# Stops of the rewording probe that must not lose the stress-test case already paid for.
-WORDING_DEFERRED = ("paraphrase_failed", "llm_required", "original_unknown")
+
 
 
 def paraphrase_candidates(spec: Spec) -> int:
@@ -2074,40 +2073,43 @@ class Orchestrator:
         self._set_route("probes")
         problems: List[str] = []                 # why the run is incomplete, in order
         flaky = False
-        deferred: Optional[StopRun] = None
+        stop: Optional[StopRun] = None           # what ended the run part-way; raised after the cases are kept
         groups = self.tools.probe_groups(spec) if dg.probes.families else []
         ran: List[Tuple[Any, JobOutcome]] = []
-        for group in groups:
-            workload = self.tools.probe_workload(spec, group.families, self.job_name(group.step, 0))
-            outcome = self.run_job(group.step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
-            ran.append((group, outcome))
-            if pipeline.audit_control_failed(outcome.summary):
-                flaky = True
-                self.say(group.step, "the unperturbed control did not pass reliably: the start is flaky, so no "
-                         "disturbance is judged and the rewordings are skipped")
-                break
-            if outcome.partial or not outcome.summary.get("complete"):
-                problems.append(str(outcome.summary.get("stop_reason") or "incomplete"))
+        try:
+            for group in groups:
+                workload = self.tools.probe_workload(spec, group.families, self.job_name(group.step, 0))
+                outcome = self.run_job(group.step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+                ran.append((group, outcome))
+                if pipeline.audit_control_failed(outcome.summary):
+                    flaky = True
+                    self.say(group.step, "the unperturbed control did not pass reliably: the start is flaky, so no "
+                             "disturbance is judged and the rewordings are skipped")
+                    break
+                if outcome.partial or not outcome.summary.get("complete"):
+                    problems.append(str(outcome.summary.get("stop_reason") or "incomplete"))
+        except StopRun as error:
+            stop = error
         if ran:
-            self._audit_case_files(ran, list(dg.probes.families))
+            self._audit_case_files(ran, list(dg.probes.families), stopped=stop.reason if stop else None)
         wording_flaky = False
-        if spec.paraphrase is not None and not flaky:
+        if spec.paraphrase is not None and stop is None and not flaky:
             try:
                 problem, wording_flaky = self._wording_probe(screen_summary)
                 if problem:
                     problems.append(problem)
-            except StopRun as stop:
-                if stop.reason not in WORDING_DEFERRED:
-                    raise
-                deferred = stop
-        elif spec.paraphrase is not None:
+            except StopRun as error:
+                stop = error
+        elif spec.paraphrase is not None and stop is None:
             self.steps.update("rewording-screen", status="skipped", reason="flaky start")
         route = "flaky" if (flaky or wording_flaky) else "probes"
+        if stop is not None and not self._case_folders():
+            raise stop                           # nothing paid for is left unrecorded: a resume starts the probe over
         self.steps.set_run(route=route)
         ids = self._register_cases()
         self._research_cases()
-        if deferred is not None:
-            raise deferred
+        if stop is not None:
+            raise stop                           # the run stops resumably; the finished groups are kept
         reason = problems[0] if problems else None
         self.steps.set_run(status="stopped" if reason else "completed", reason=reason)
         self.say("done", "stopped: {}".format(reason) if reason else "completed ({})".format(ROUTE_TEXTS[route]))
@@ -2129,12 +2131,15 @@ class Orchestrator:
         self.say("case", "{} case {}".format(name, str(case["case_id"])[:12]))
         return folder
 
-    def _audit_case_files(self, ran: Sequence[Tuple[Any, JobOutcome]], requested: Sequence[str]) -> None:
+    def _audit_case_files(self, ran: Sequence[Tuple[Any, JobOutcome]], requested: Sequence[str],
+                          stopped: Optional[str] = None) -> None:
         from robot_debug import pipeline, pipeline_cases
 
         spec, sc = self.spec, self.spec.scenario
         groups = [(group.step, outcome.job_name, outcome.summary) for group, outcome in ran]
         merged = pipeline.merge_audit_summaries([summary for _s, _j, summary in groups], requested)
+        if stopped and not merged.get("stop_reason"):
+            merged["stop_reason"] = stopped      # the run was cut short before the other groups were reached
         folder = self.run_dir / "cases" / "audit"
         _write_json(folder / "merged-summary.json", merged)
         videos = pipeline_cases.audit_videos([(job, summary) for _s, job, summary in groups])
@@ -2202,8 +2207,15 @@ class Orchestrator:
                     chosen["label"], paraphrase_failures(chosen), chosen.get("edit_count"), chosen["text"]))
                 reduce_workload = self.tools.paraphrase_reduce_workload(
                     self.job_name("rewording-reduce", 0), self.spec, original, chosen["text"])
-                reduction = self.run_job("rewording-reduce", reduce_workload,
-                                         int(reduce_workload["deadline_seconds"]), "language_summary.json")
+                try:
+                    reduction = self.run_job("rewording-reduce", reduce_workload,
+                                             int(reduce_workload["deadline_seconds"]), "language_summary.json")
+                except StopRun as stop:
+                    # The screen is paid for: keep it as an incomplete wording case; a resume completes it.
+                    interim = pipeline_cases.wording_case_without_failure(
+                        screen=summary, run=self.run_dir.name, stop_reason=stop.reason, job=screen.job_name)
+                    self._write_wording_case(interim, summary, None)
+                    raise
                 minimal = reduction.summary.get("minimal")
                 detail = reduction.summary.get("reduction") or {}
                 if isinstance(minimal, Mapping) and minimal.get("verified"):
@@ -2218,15 +2230,18 @@ class Orchestrator:
         if case is None:
             case = pipeline_cases.wording_case_without_failure(
                 screen=summary, run=self.run_dir.name, stop_reason=stop_reason, job=screen.job_name)
+        self._write_wording_case(case, summary, reduction.summary if reduction else None)
+        return problem, flaky
+
+    def _write_wording_case(self, case: Mapping[str, Any], screen: Mapping[str, Any],
+                            reduction: Optional[Mapping[str, Any]]) -> None:
         report = None
         try:
-            report = self.tools.paraphrase_report(summary, reduction.summary if reduction else None,
-                                                  self.spec.backend.hourly_usd)
+            report = self.tools.paraphrase_report(screen, reduction, self.spec.backend.hourly_usd)
         except StopRun as stop:
             self._warn("report", "no wording report written ({})".format(stop.reason))
         replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else None
         self._write_case_folder("wording", case, report, replay)
-        return problem, flaky
 
     def _register_cases(self) -> List[str]:
         try:
