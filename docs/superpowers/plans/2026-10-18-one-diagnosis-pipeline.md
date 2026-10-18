@@ -220,3 +220,24 @@ stays valid; these are additions.
   - wording: "the wording still fails" / "no longer fails".
 - **Library ids** stay `d-<case_id>` and `r-<run>`. A pipeline run can
   register more than one case: an audit case and a wording case.
+
+### Contract addition (October 19): measured typical cost and time
+
+Each `branches[]` entry also has `typical_minutes`: end to end, excluding
+GPU waits. Both typical figures come from measured runs.
+
+Measured references (container minutes, cost):
+
+| Job | Minutes | Cost |
+| --- | --- | --- |
+| Check (screen) | 10.6 | US$0.43 |
+| Blur, noise, darken, contrast audit on LIBERO-Object | 20.4 (12.7 of testing) | US$0.59 |
+| JPEG, colour cast, motion blur, dead pixels audit on LIBERO-Spatial | 24.3 | US$0.82 |
+| Viewpoint and lighting | 9.6 | US$0.40 |
+| Layout reduce | 18–21 | US$0.65–0.72 |
+| Rewording screen | 7–8 | US$0.31–0.35 |
+| Replay | 10.2 | US$0.41 |
+
+The default diagnosis of a passing start (check plus the four default
+families) is typically about 35–45 minutes and US$1.00–1.25. Task length
+and finding a failure (the bisection steps) add time.
