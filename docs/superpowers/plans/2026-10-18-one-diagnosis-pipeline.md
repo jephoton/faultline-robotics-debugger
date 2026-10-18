@@ -104,6 +104,10 @@ Every branch ends with findings:
   word kept), replacing "pass stays neutral". Record this in ADR 0033.
 - **The UI runbook** is rewritten for the single pipeline, merging demos
   where the new flow makes them one.
+- **Research context returns** as an optional step per case: Tavily finds
+  public sources and Nemotron 3 Nano summarises them, shown as context, not
+  evidence. A tickbox on New diagnosis, on by default when a Tavily key is
+  present. Not yet in either builder's brief: add it at integration.
 
 
 Reference (the pipeline, findings, replay per kind), UI runbook (the demos
