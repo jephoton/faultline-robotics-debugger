@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import robot_debug
+from robot_debug.case_register import _role_stem as role_stem
 from robot_debug.viewer import processes
 from robot_debug.viewer.api import package_version
 from robot_debug.viewer.library import Library
@@ -135,6 +136,16 @@ def _select(library: Library, wanted: Sequence[str]) -> List[Dict[str, Any]]:
                               else "{!r} matches more than one case; give more of its id.".format(ask[:24]))
         if matches[0] not in chosen:
             chosen.append(matches[0])
+    # A case page links its findings (the other cases of the same diagnosis run): they must be exported too.
+    for item in list(chosen):
+        try:
+            peers = library.detail(item["id"])["findings"]
+        except (KeyError, ValueError, OSError):
+            continue
+        for peer in peers:
+            found = next((i for i in items if i["id"] == peer["id"]), None)
+            if found is not None and found not in chosen:
+                chosen.append(found)
     return chosen
 
 
@@ -177,9 +188,10 @@ def _rewrite_media(library: Library, detail: Dict[str, Any], out: Path, identifi
 
     base = out / "media" / identifier
     for video in detail.get("videos") or []:
-        copied = _copy(_media_source(library, video.get("url")), base / "videos" / (video["role"] + ".mp4"),
+        stem = role_stem(video["role"])
+        copied = _copy(_media_source(library, video.get("url")), base / "videos" / (stem + ".mp4"),
                        secrets=secrets)
-        video["url"] = "/media/{}/videos/{}.mp4".format(identifier, video["role"]) if copied else None
+        video["url"] = "/media/{}/videos/{}.mp4".format(identifier, stem) if copied else None
     block = detail.get("occlusion")
     if block:
         for episode in block["episodes"]:
@@ -224,6 +236,7 @@ def export_gallery(out: Path, artifact_root: Path, *, runs_root: Optional[Path] 
         _write_json(out / "data" / "session.json", {
             "api_version": 1, "mode": "static", "controls": False, "token": None, "version": package_version()})
         listing, warnings = [], []
+        exported = {public_id(item["id"]) for item in selected}
         for item in selected:
             try:
                 detail = library.detail(item["id"])
@@ -234,6 +247,13 @@ def export_gallery(out: Path, artifact_root: Path, *, runs_root: Optional[Path] 
             _rewrite_media(library, detail, out, identifier, secrets)       # while detail["id"] still names the source
             detail["id"] = identifier
             detail["run"] = None
+            # Findings link to the other cases of the run; the links keep only public ids of exported cases.
+            findings = []
+            for finding in detail.get("findings") or []:
+                finding = dict(finding, id=public_id(finding["id"]))
+                if finding["id"] in exported:
+                    findings.append(finding)
+            detail["findings"] = findings
             _write_json(out / "data" / "library" / (identifier + ".json"), detail, secrets)
             summary = {k: v for k, v in detail.items() if k in item}
             listing.append(summary)
