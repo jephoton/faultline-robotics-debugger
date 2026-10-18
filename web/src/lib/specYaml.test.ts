@@ -90,6 +90,8 @@ describe('what a spec asks of Nemotron', () => {
     expect(asksForRewordings(buildYaml('start', { ...ten, probes: false }, null))).toBe(false);
     expect(asksForRewordings(buildYaml('start', { ...ten, rewordings: '0' }, null))).toBe(false);
     expect(asksForRewordings(buildYaml('screen', defaultsFor('screen'), null))).toBe(false);
+    // The server's default is 0 rewordings, so a hand-edited spec without the line asks for none.
+    expect(asksForRewordings('mode: diagnose\ndiagnose:\n  start: 3\n  probes:\n    families: [blur]\n')).toBe(false);
     expect(asksForRewordings('mode: paraphrase\n')).toBe(true);
     expect(asksForRewordings('mode: audit\n')).toBe(false);
   });

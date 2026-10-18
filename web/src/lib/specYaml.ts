@@ -133,7 +133,8 @@ export function asksForRewordings(yaml: string): boolean {
   if (yamlValue(yaml, 'start') === null) return false;
   if (yamlValue(yaml, 'enabled') === 'false') return false;
   const count = yamlValue(yaml, 'rewordings');
-  return count === null ? true : Number(count) !== 0;
+  // The server's default is 0 rewordings: a spec without the line asks for none.
+  return count === null ? false : Number(count) !== 0;
 }
 
 /** True when the spec asks for related research (a Tavily search, summarised by Nemotron). */
