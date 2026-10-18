@@ -39,12 +39,40 @@ class DescribeTests(unittest.TestCase):
 
     def test_a_rotation_reads_like_the_plan_example(self):
         sentence = se.describe_minimal_cause({"akita_black_bowl_1": {"rotation": 14 / 30}}, self.rows(),
-                                             reference=7, bisection_steps=4)
+                                             reference=7, bisection_steps=4,
+                                             parts=[self.part("akita_black_bowl_1", "rotation", 4)])
         self.assertTrue(sentence.startswith(
             "Rotating akita_black_bowl_1 by 14 degrees (of the original 30) is enough to make the policy fail"))
         self.assertIn("from the passing start 7", sentence)
         self.assertIn("at least 4 of 5 attempts", sentence)
         self.assertIn("within 1/16", sentence)
+
+    @staticmethod
+    def part(entity, component, steps_done):
+        return {"entity": entity, "component": component, "steps_done": steps_done}
+
+    def test_the_resolution_is_claimed_only_when_every_kept_part_finished_shrinking(self):
+        selection = {"akita_black_bowl_1": {"position": 0.5}, "robot": {"joints": 0.25}}
+        done = [self.part("akita_black_bowl_1", "position", 4), self.part("robot", "joints", 4)]
+        sentence = se.describe_minimal_cause(selection, self.rows(), bisection_steps=4, parts=done)
+        self.assertIn("resolved to within 1/16", sentence)
+        self.assertNotIn("not fully shrunk", sentence)
+        # One part stopped after two of four steps: no resolution claim for any size.
+        partial = [self.part("akita_black_bowl_1", "position", 4), self.part("robot", "joints", 2)]
+        sentence = se.describe_minimal_cause(selection, self.rows(), bisection_steps=4, parts=partial)
+        self.assertNotIn("within 1/16", sentence)
+        self.assertIn("sizes not fully shrunk", sentence)
+        # A kept part with no shrink summary at all (the budget ended before it) is not shrunk either.
+        missing = [self.part("akita_black_bowl_1", "position", 4)]
+        sentence = se.describe_minimal_cause(selection, self.rows(), bisection_steps=4, parts=missing)
+        self.assertIn("sizes not fully shrunk", sentence)
+        sentence = se.describe_minimal_cause(selection, self.rows(), bisection_steps=4)
+        self.assertIn("sizes not fully shrunk", sentence)
+
+    def test_no_resolution_wording_when_shrinking_was_off(self):
+        sentence = se.describe_minimal_cause({"robot": {"joints": 1.0}}, self.rows(), bisection_steps=0, parts=[])
+        self.assertNotIn("1/", sentence)
+        self.assertNotIn("shrunk", sentence)
 
     def test_position_and_joints_and_several_parts(self):
         sentence = se.describe_minimal_cause(

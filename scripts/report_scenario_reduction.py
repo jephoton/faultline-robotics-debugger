@@ -298,7 +298,8 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
     sentence = se.describe_minimal_cause(
         selection or {}, summary.get("differences") or [], reference=reference,
         bisection_steps=reduction.get("bisection_steps"), reduced=bool(reduction.get("reduced")),
-        required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5))
+        required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5),
+        parts=reduction.get("parts"))
     lines = ["## Result", "",
              "- Stop reason: `{}`".format(reduction.get("stop_reason")),
              "- Failing start: {}; reference (nearest passing start): {}; candidate references tried: {}".format(
