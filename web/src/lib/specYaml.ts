@@ -50,9 +50,10 @@ export function sortFamilies(families: string[]): string[] {
 export function defaultsFor(choice: DiagnosisChoice, research = true): FormState {
   const base: FormState = {
     name: '',
-    suite: 'libero_10',
+    // LIBERO-Object task 0: its four default families fit one probe Job (the policy has failed there before).
+    suite: 'libero_object',
     task: '0',
-    start: '14',
+    start: '0',
     range: '10-49',
     confirm: '4',
     probes: true,
@@ -69,7 +70,7 @@ export function defaultsFor(choice: DiagnosisChoice, research = true): FormState
   };
   switch (choice) {
     case 'start':
-      return { ...base, name: 'soup-start14' };
+      return { ...base, name: 'object-start0' };
     case 'screen':
       return { ...base, name: 'soup-screen', spend: '4', hours: '3' };
     case 'import':

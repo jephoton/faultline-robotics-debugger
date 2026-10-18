@@ -75,7 +75,7 @@ describe('step 2: settings', () => {
     await openNew();
     await user.click(screen.getByRole('button', { name: /next: settings/i }));
     expect(await screen.findByLabelText('Task')).toBeInTheDocument();
-    expect(screen.getByText(/put both the alphabet soup and the tomato sauce in the basket/, { selector: '.field__hint' })).toBeInTheDocument();
+    expect(screen.getByText(/pick up the alphabet soup and place it in the basket/, { selector: '.field__hint' })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Suite'), 'libero_goal');
     expect(screen.getByText(/open the middle drawer of the cabinet/, { selector: '.field__hint' })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Task'), '7');
@@ -88,7 +88,8 @@ describe('step 2: settings', () => {
     await toSettings(user);
     const yaml = yamlBox().value;
     expect(yaml).toContain('mode: diagnose');
-    expect(yaml).toContain('  start: 14');
+    expect(yaml).toContain('  start: 0');
+    expect(yaml).toContain('policy: {suite: libero_object}');
     expect(yaml).toContain('families: [blur, noise, darken, contrast]');
     expect(yaml).toContain('rewordings: 0');
     expect(yaml).toContain('enabled: true');
@@ -289,7 +290,7 @@ describe('step 3: review and start', () => {
     const what = screen.getByRole('heading', { name: 'What will run' }).closest('section') as HTMLElement;
     expect(within(what).getByText(PROMISE)).toBeInTheDocument();
     expect(within(what).getByText('Diagnosis')).toBeInTheDocument();
-    expect(within(what).getByText('benchmark start 14')).toBeInTheDocument();
+    expect(within(what).getByText('benchmark start 0')).toBeInTheDocument();
   });
 
   it('shows the three branches in order, each with its Jobs, worst case and a labelled typical estimate', async () => {

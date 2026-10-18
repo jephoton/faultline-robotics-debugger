@@ -23,7 +23,9 @@ describe('buildYaml', () => {
     const yaml = buildYaml('start', defaultsFor('start'), BACKEND);
     expect(yaml).toContain('faultline: 1');
     expect(yaml).toContain('mode: diagnose');
-    expect(yaml).toContain('diagnose:\n  task: 0\n  start: 14');
+    // LIBERO-Object task 0, start 0: the four default families fit one probe Job there.
+    expect(yaml).toContain('policy: {suite: libero_object}');
+    expect(yaml).toContain('diagnose:\n  task: 0\n  start: 0');
     expect(yaml).toContain('    families: [blur, noise, darken, contrast]');
     expect(yaml).toContain('    rewordings: 0');
     expect(yaml).toContain('    enabled: true');
@@ -142,7 +144,7 @@ describe('helpers', () => {
   it('reads values from the spec text', () => {
     const yaml = buildYaml('start', defaultsFor('start'), null);
     expect(yamlValue(yaml, 'mode')).toBe('diagnose');
-    expect(yamlValue(yaml, 'name')).toBe('soup-start14');
+    expect(yamlValue(yaml, 'name')).toBe('object-start0');
     expect(yamlValue(yaml, 'nothing')).toBeNull();
   });
 
