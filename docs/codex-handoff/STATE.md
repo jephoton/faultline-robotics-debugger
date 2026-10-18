@@ -129,15 +129,44 @@ These are recorded project defects, not inferred provider or robot failures.
 
 ## Next actions and gates
 
-1. M7b: plan the three-minute pitch/demo, write-up, public-repository/judge setup
-   audit, required tool feedback and billing reconciliation. Roadmap target is
-   October 29; recorded submission deadline October 30, 10:00 PT.
-2. Keep the public gallery static. New cases or regenerated interpretations
-   require inspecting the changed public payload before redeploying. The
-   publication record discloses absent audit videos, no default paraphrase
-   case, M4's stored explanation fallback and unfinished scenario size search.
-3. Any new paid experiment, hosting upgrade or public container image requires
-   its own accepted scope and gate; M7a completion does not authorize it.
+**Agreed order (Jethro, October 18):** demos → stale public gallery → remaining
+things → video and cover → submission. Roadmap target October 29; deadline
+October 30, 10:00 PT.
+
+1. **Demos.** Jethro is working through `docs/ui-runbook.md` demo by demo (at
+   Demo 4 on October 18). Fix what each demo exposes as it comes.
+2. **Stale public gallery.** It predates the report-first page, the Reference
+   page, the readout colours and the Keep in step fix. Re-export and
+   redeploy only with Jethro's go, after inspecting the payload.
+3. **Remaining things:**
+   1. **Final runs** (paid; Jethro approves scope and cap first):
+      - build and push image v17 with the October 18 reduction fix and the
+        honest-sizes sentence;
+      - one or two fresh reduced cases, ideally on another task;
+      - one replay of a case against a second GR00T checkpoint, to show the
+        regression loop (ADR 0034). Which checkpoint is still to be decided.
+   2. **Gallery refresh** with the new cases (Jethro's go).
+   3. **Results refresh:** README "What it has found", experiment notes, and
+      possibly the `demo/` case.
+   4. **Billing reconciliation:** Jethro reads the Nebius billing page; compare
+      it with the run ledgers; correct FEEDBACK and README costs.
+   5. **FEEDBACK.md** final pass, with Jethro's first-hand notes.
+   6. **Fresh-machine test** of the README and quickstart from a clean checkout
+      (judge usability).
+   7. **Rules re-check:** Devpost rules and updates, including any "what changed
+      during the submission period" requirement.
+   8. **Devpost description** from ADR 0034's story.
+4. **Video and cover:** under 3 minutes, at least 1 minute of the product
+   working (story: ADR 0034; the runbook's 90-second route), plus a cover
+   image.
+5. **Submission.** Freeze the submitted versions.
+
+Gates:
+- The trace feature is paused (plan Part B).
+- Any new paid run, hosting upgrade or public container image needs its own
+  accepted scope.
+- New cases or regenerated interpretations need a payload inspection before
+  any redeploy.
 
 ## Boundaries and remaining limitations
 
