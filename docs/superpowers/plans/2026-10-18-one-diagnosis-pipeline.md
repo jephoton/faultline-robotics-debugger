@@ -149,6 +149,17 @@ cost about US$0.4–0.9, so a full probe of a passing start should typically
 cost about US$2–2.5, against reservations of about US$4.5. The dry run lists
 every probe Job, and the cap rule (the first Job must fit) is unchanged.
 
+
+**Sequential, not parallel (Jethro asked, October 18):**
+- The probe Jobs run one after another, as every Faultline run does.
+- Running them at once would not save cost: each Job pays its own startup
+  on its own GPU, and each is billed for its own container time.
+- It would save wall-clock time (about 40 minutes instead of 1.5–2 hours),
+  but needs three GPUs at once (more capacity waits), a cap covering three
+  worst cases together, and reworked Stop, Resume and ledger handling
+  (the orchestrator tracks one Job in flight).
+- Kept as a later upgrade.
+
 ## Agents and order
 
 - Build in two worktrees, in parallel against an agreed contract:
