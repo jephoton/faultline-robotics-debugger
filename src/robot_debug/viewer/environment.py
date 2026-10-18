@@ -24,6 +24,7 @@ from robot_debug.viewer.specs import SpecService
 WHOAMI_TIMEOUT_SECONDS = 20.0
 WHOAMI_CACHE_SECONDS = 60.0
 KEY_NAME = "NEBIUS_API_KEY"
+TAVILY_NAME = "TAVILY_API_KEY"          # robot_debug.tavily_search reads the same name
 _ASSIGNMENT = re.compile(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
@@ -114,6 +115,18 @@ class Environment:
                             "It stays on this machine. Paraphrase mode and Nemotron's reading need it.").format(KEY_NAME)
         return check
 
+    def _tavily(self) -> Dict[str, Any]:
+        """Whether a Tavily key is available for the optional web context of new cases (presence only)."""
+
+        present = bool(self.environ.get(TAVILY_NAME)) or dotenv_has(self.env_file, TAVILY_NAME)
+        check: Dict[str, Any] = {"key": "tavily_key", "ok": present, "optional": True,
+                                 "detail": "{} found".format(TAVILY_NAME) if present
+                                 else "{} not found in .env".format(TAVILY_NAME)}
+        if not present:
+            check["fix"] = ("Optional: add a line {}=<your Tavily key> to the .env file to add web context to new "
+                            "cases. Without it that step is skipped.").format(TAVILY_NAME)
+        return check
+
     def _spec_template(self) -> Dict[str, Any]:
         local = self.specs.local_backend()
         if local is None:
@@ -125,4 +138,5 @@ class Environment:
                 "detail": "Pinned image set; Hugging Face secret name: {}".format(local.get("hf_token_secret"))}
 
     def check(self) -> Dict[str, List[Dict[str, Any]]]:
-        return {"checks": [self._nebius(), self._token_factory(), self._spec_template(), self._docker()]}
+        return {"checks": [self._nebius(), self._token_factory(), self._spec_template(), self._docker(),
+                           self._tavily()]}

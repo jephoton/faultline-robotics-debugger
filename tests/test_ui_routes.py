@@ -126,7 +126,7 @@ class ReadRoutes(RoutesCase):
     def test_environment(self):
         status, payload = self.get_json("/api/environment")
         self.assertEqual(status, 200)
-        self.assertEqual([c["key"] for c in payload["checks"]], ["nebius_cli", "token_factory_key", "spec_template", "docker"])
+        self.assertEqual([c["key"] for c in payload["checks"]], ["nebius_cli", "token_factory_key", "spec_template", "docker", "tavily_key"])
 
     def test_templates_need_no_token(self):
         status, payload = self.get_json("/api/specs/template?mode=audit")

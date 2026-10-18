@@ -1,0 +1,47 @@
+# One diagnosis (ADR 0035): find the smallest condition under which the policy fails here.
+# The start is run untouched first. If it fails reliably, its layout is diagnosed (reduced to the smallest
+# set of differences from a nearby passing start). If it does not, the probes below are tried: disturbance
+# families (with their thresholds) and, optionally, rewordings of the instruction reduced to the smallest change.
+# Only one branch runs, so the worst case is the check plus the larger branch (`faultline diagnose --dry-run`).
+# Placeholders (REGISTRY_ID, IMAGE_DIGEST) are fake: put your own values in a copy of this file.
+faultline: 1
+name: diagnose-object-task0
+mode: diagnose
+policy: {suite: libero_object}
+diagnose:
+  task: 0
+  # Exactly one of: start (a benchmark start; the only choice that can also be probed),
+  #   screen: {starts: "10-49", confirm: 4}   (search a range for a failing start; layout only)
+  #   import: my-failing-start.json           (your own start file; layout only)
+  start: 0
+  probes:
+    # The four families the policy has failed under before. Six more can be added: jpeg, colour_cast,
+    # motion_blur, dead_pixels (image) and viewpoint, lighting (scene). One Job is limited to 40 minutes, so more
+    # families run in more Jobs (image families together, scene families together). [] runs no stress test.
+    families: [blur, noise, darken, contrast]
+    rewordings: 0               # 0 for none (1-12). Nemotron writes them on this machine (Token Factory).
+    enabled: true               # false = "don't probe": a start that passes just reports "passes untouched"
+    # instruction: "pick up the alphabet soup and place it in the basket"
+    #   ^ the task's language as the benchmark gives it. Optional: without it the run reads the task's own wording.
+  layout: true                  # false = "probe only": skip the layout branch even if the start fails
+budget:
+  # `faultline diagnose --dry-run` puts the worst case at about US$3.1 (the check US$1.2 plus the larger branch,
+  # the layout reduction at US$1.9; the stress test is US$1.3) and warns that it exceeds this cap. The ledger
+  # reserves each Job against what has really been spent, and a Job usually costs about half its reservation
+  # (about US$0.6 for the check), so a probe of a passing start (about US$1.3 in all) or a layout reduction that
+  # needs no continuation fits. Raise the cap before adding families, rewordings or continuations.
+  max_spend_usd: 2.5
+  max_hours: 1.5
+  max_candidates: 36
+nemotron: {hypothesis: true, explain: true}
+# Web context for each new case (Tavily source discovery, summarised by Nemotron 3 Nano). Shown as context,
+# never as evidence. Skipped silently without a TAVILY_API_KEY in the env file.
+research: true
+backend:
+  kind: nebius
+  project: from-cli-profile
+  platform: gpu-l40s-a
+  preset: 1gpu-16vcpu-64gb
+  image: cr.eu-north1.nebius.cloud/REGISTRY_ID/faultline-serverless@sha256:IMAGE_DIGEST
+  hf_token_secret: faultline-hf-token
+  hourly_usd: 1.7468

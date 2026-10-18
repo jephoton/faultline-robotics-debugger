@@ -44,7 +44,7 @@ SPECS_LOCAL = "specs-local"
 TEMPLATE_FILES = {
     "scenario-start": "scenario-start.yaml", "scenario-screen": "scenario-screen.yaml",
     "scenario-import": "scenario-import.yaml", "audit": "audit.yaml", "paraphrase": "paraphrase.yaml",
-    "replay": "replay.yaml",
+    "diagnose": "diagnose.yaml", "replay": "replay.yaml",
 }
 LOCAL_IMAGE = "local"                    # backend.image in a template: "the image pinned in my local spec"
 ID_KEYS = ("project", "subnet", "registry", "image_digest")      # backend keys that can hold resource ids
@@ -54,6 +54,9 @@ _PLACEHOLDERS = ("REGISTRY_ID", "IMAGE_DIGEST")
 _JOB_LINE = re.compile(r"^\s+(?P<step>\S+)\s+.*?\s+deadline\s+(?P<deadline>\d+) s\s+worst case US\$(?P<cost>\d+\.\d+)"
                        r"(?P<optional> \(optional\))?$")
 _TOTAL_LINE = re.compile(r"^Worst case of the required Jobs: US\$(?P<total>\d+\.\d+)\.$")
+_BRANCH_HEADER = re.compile(r"^(CHECK|LAYOUT|PROBES) \(")
+_BRANCH_LINE = re.compile(r"^Branch (?P<branch>check|layout|probes): worst case US\$(?P<cost>\d+\.\d+), typical "
+                          r"(?:unknown|about US\$(?P<typical>\d+\.\d+)(?: in about (?P<minutes>\d+) min)?)\.$")
 _SLUG = re.compile(r"[^a-z0-9-]+")
 
 
@@ -76,7 +79,7 @@ class Prepared:
 
         data = copy.deepcopy(self.mapping)
         if self.import_bytes is not None:
-            data["scenario"]["import"] = "sha256:" + str(self.import_sha256)
+            data[_import_section(self.spec)]["import"] = "sha256:" + str(self.import_sha256)
         return yaml.safe_dump(data, sort_keys=True, default_flow_style=False)
 
 
@@ -228,7 +231,7 @@ class SpecService:
             spec = sp.parse_spec(mapping)
         except sp.SpecError as error:
             raise _fail(_error_pairs(error)) from None
-        wants_import = spec.mode == "scenario" and bool(spec.scenario.import_path)
+        wants_import = _needs_import(spec)
         content: Optional[bytes] = None
         name: Optional[str] = None
         if import_file is not None:
@@ -242,7 +245,8 @@ class SpecService:
             if not content or len(content) > MAX_IMPORT_BYTES:
                 raise _fail([{"path": "import_file", "message": "must be 1 byte to 512 KiB"}])
         elif wants_import:
-            raise _fail([{"path": "scenario.import", "message": "attach the start file (a scenario candidate JSON)"}])
+            raise _fail([{"path": _import_section(spec) + ".import",
+                          "message": "attach the start file (a scenario candidate JSON)"}])
         return Prepared(spec, copy.deepcopy(dict(mapping)), content, name)
 
     def _staged(self, prepared: Prepared) -> Tuple[sp.Spec, Optional[Path]]:
@@ -254,7 +258,7 @@ class SpecService:
         path = staging / "import.json"
         path.write_bytes(prepared.import_bytes)
         mapping = copy.deepcopy(prepared.mapping)
-        mapping["scenario"]["import"] = str(path)
+        mapping[_import_section(prepared.spec)]["import"] = str(path)
         return sp.parse_spec(mapping), staging
 
     @staticmethod
@@ -270,7 +274,7 @@ class SpecService:
         finally:
             if staging is not None:
                 shutil.rmtree(str(staging), ignore_errors=True)
-        jobs, total = parse_plan(lines, required)
+        jobs, total, branches = parse_plan_branches(lines, required)
         digest = hashlib.sha256()
         for part in (prepared.canonical(), prepared.import_sha256 or "", "\n".join(lines)):
             digest.update(part.encode("utf-8"))
@@ -280,7 +284,7 @@ class SpecService:
             note = self.backend_check(spec)
             if note:
                 shown.append(note)
-        return {"plan_hash": digest.hexdigest(), "jobs": jobs, "worst_case_total_usd": total,
+        return {"plan_hash": digest.hexdigest(), "jobs": jobs, "branches": branches, "worst_case_total_usd": total,
                 "cap_usd": spec.budget.max_spend_usd, "max_hours": spec.budget.max_hours, "lines": shown}
 
     def _plan_lines(self, spec: sp.Spec) -> Tuple[List[str], float]:
@@ -292,15 +296,16 @@ class SpecService:
             orch.check_import(spec, tools)
             return orch.dry_run_lines(spec, tools)
         except orch.StopRun as stop:
-            path = {"candidates_too_large": "budget.max_candidates", "import_invalid": "scenario.import",
-                    "import_mismatch": "scenario.import"}.get(stop.reason, "")
+            path = {"candidates_too_large": "budget.max_candidates", "import_invalid": _import_section(spec) + ".import",
+                    "import_mismatch": _import_section(spec) + ".import"}.get(stop.reason, "")
             raise _fail([{"path": path, "message": stop.detail or str(stop)}]) from None
         except orch.OrchestratorError:
             raise ApiError(501, "Planning needs a source checkout of Faultline (the scripts folder).") from None
         except WorkloadError as error:
             # A plan the Job limits cannot hold (for example too many families for one audit Job) is the user's
             # to change, not a server fault: say what is too big instead of a generic error.
-            path = {"audit": "audit.families", "paraphrase": "paraphrase.count"}.get(spec.mode, "")
+            path = {"audit": "audit.families", "paraphrase": "paraphrase.count",
+                    "diagnose": "diagnose.probes"}.get(spec.mode, "")
             raise _fail([{"path": path, "message": _workload_message(str(error))}]) from None
 
     def new_directory(self, label: str) -> Path:
@@ -330,7 +335,7 @@ class SpecService:
         mapping = copy.deepcopy(prepared.mapping)
         if prepared.import_bytes is not None:
             (directory / "import.json").write_bytes(prepared.import_bytes)
-            mapping["scenario"]["import"] = str((directory / "import.json").resolve())
+            mapping[_import_section(prepared.spec)]["import"] = str((directory / "import.json").resolve())
         spec_path = directory / "spec.yaml"
         spec_path.write_text(yaml.safe_dump(mapping, sort_keys=False, default_flow_style=False),
                              encoding="utf-8", newline="\n")
@@ -355,34 +360,73 @@ def _load_mapping(text: str) -> Any:
         raise sp.SpecError("spec: not valid YAML{}".format("" if mark is None else " (line {})".format(mark.line + 1))) from None
 
 
+def _import_section(spec: sp.Spec) -> str:
+    """The spec section that holds ``import:`` (``scenario`` or, in the diagnosis mode, ``diagnose``)."""
+
+    return "diagnose" if spec.mode == "diagnose" else "scenario"
+
+
+def _needs_import(spec: sp.Spec) -> bool:
+    return spec.mode in ("scenario", "diagnose") and bool(spec.scenario.import_path)
+
+
 def _summary(spec: sp.Spec) -> Dict[str, Any]:
+    writes_wordings = spec.mode == "paraphrase" or (spec.mode == "diagnose" and spec.paraphrase is not None)
     return {"name": spec.name, "mode": spec.mode, "suite": spec.suite, "backend": spec.backend.kind,
             "cap_usd": spec.budget.max_spend_usd, "max_hours": spec.budget.max_hours,
-            "needs_import": bool(spec.mode == "scenario" and spec.scenario.import_path),
-            "uses_nemotron": spec.mode == "paraphrase" or spec.nemotron.hypothesis or spec.nemotron.explain}
+            "needs_import": _needs_import(spec),
+            "uses_nemotron": writes_wordings or spec.nemotron.hypothesis or spec.nemotron.explain}
 
 
 def parse_plan(lines: List[str], required: float) -> Tuple[List[Dict[str, Any]], float]:
     """The structured Jobs behind ``orchestrator.dry_run_lines`` text: ``name``, ``deadline_seconds``,
-    ``worst_case_usd`` (and ``optional`` for the continuation Jobs that run only if needed)."""
+    ``worst_case_usd``, ``optional`` (for the continuation Jobs that run only if needed) and ``branch``
+    (``check``, ``layout`` or ``probes`` for a diagnosis; ``None`` for the other modes)."""
+
+    jobs, total, _branches = parse_plan_branches(lines, required)
+    return jobs, total
+
+
+def parse_plan_branches(lines: List[str], required: float) -> Tuple[List[Dict[str, Any]], float, List[Dict[str, Any]]]:
+    """:func:`parse_plan` plus the branch summaries of a diagnosis: ``{branch, worst_case_usd, typical_usd,
+    typical_minutes}`` (the typical figures are estimates from measured runs, ``None`` when unknown; empty list
+    for the other modes). ``typical_minutes`` is end to end, excluding any wait for a GPU."""
 
     jobs: List[Dict[str, Any]] = []
+    branches: List[Dict[str, Any]] = []
     total: Optional[float] = None
+    current: Optional[str] = None
     for line in lines:
+        header = _BRANCH_HEADER.match(line)
+        if header:
+            current = header.group(1).lower()
+            continue
         job = _JOB_LINE.match(line)
         if job:
             jobs.append({"name": job.group("step"), "deadline_seconds": int(job.group("deadline")),
-                         "worst_case_usd": float(job.group("cost")), "optional": bool(job.group("optional"))})
+                         "worst_case_usd": float(job.group("cost")), "optional": bool(job.group("optional")),
+                         "branch": current})
+            continue
+        summary = _BRANCH_LINE.match(line)
+        if summary:
+            typical, minutes = summary.group("typical"), summary.group("minutes")
+            branches.append({"branch": summary.group("branch"), "worst_case_usd": float(summary.group("cost")),
+                             "typical_usd": None if typical is None else float(typical),
+                             "typical_minutes": None if minutes is None else int(minutes)})
             continue
         found = _TOTAL_LINE.match(line)
         if found:
             total = float(found.group("total"))
-    return jobs, round(required, 2) if total is None else total
+    return jobs, round(required, 2) if total is None else total, branches
 
 
 def replay_plan_lines(spec: sp.Spec) -> Tuple[List[str], float]:
     """The dry-run text for a replay, in the format of ``orchestrator.dry_run_lines``: one Job whose deadline
-    comes from the replay workload's own timing (two scenes, ``orchestrator.REPLAY_ATTEMPTS`` attempts)."""
+    comes from the replay workload's own timing (two scenes, ``orchestrator.REPLAY_ATTEMPTS`` attempts).
+
+    The spec does not name the case, so this is the plan for the scenario replay. A stress-test case runs one
+    replay Job per original probe group that holds a failing family (usually one), and a wording case one Job;
+    each is reserved on its own against the cap."""
 
     from robot_debug import scenario_experiment as se
 

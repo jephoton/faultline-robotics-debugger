@@ -109,6 +109,8 @@ class RunResult:
     reproduces: Optional[bool] = None
     verdict: Optional[str] = None          # replay only: still_reproduces | no_longer_reproduces | reference_fails | ...
     notes: List[str] = field(default_factory=list)
+    route: Optional[str] = None            # diagnose only: layout | probes | passes | flaky
+    case_ids: List[str] = field(default_factory=list)
 
     @property
     def exit_code(self) -> int:
@@ -292,7 +294,7 @@ def check_import(spec: Spec, tools: Any, run_dir: Optional[Path] = None) -> Opti
     file (a resumed run) is read from there, so the original may have moved.
     """
 
-    if spec.mode != "scenario" or not spec.scenario.import_path:
+    if spec.mode not in ("scenario", "diagnose") or not spec.scenario.import_path:
         return None
     stored = None if run_dir is None else Path(run_dir) / IMPORT_COPY
     path = stored if stored is not None and stored.is_file() else spec.scenario.import_path
@@ -479,10 +481,24 @@ def check_candidate_budget(spec: Spec, tools: Any) -> None:
 
 PARAPHRASE_DEFAULT_CANDIDATES = 24
 
+ROUTE_TEXTS = {
+    "layout": "the start fails reliably: diagnosing its layout",
+    "probes": "the start does not fail reliably: trying the chosen probes",
+    "passes": "the start passes untouched and no probes were chosen",
+    "flaky": "the start is flaky: its own control did not pass reliably",
+}
+# Stops of the rewording probe that must not lose the stress-test case already paid for.
+WORDING_DEFERRED = ("paraphrase_failed", "llm_required", "original_unknown")
+
 
 def paraphrase_candidates(spec: Spec) -> int:
-    """The reduction's candidate budget: ``budget.max_candidates`` when the spec sets it, else 24."""
+    """The reduction's candidate budget: ``budget.max_candidates`` when the spec sets it, else 24.
 
+    A ``diagnose`` spec's ``budget.max_candidates`` belongs to its layout reduction, so its wording
+    reduction always uses the default."""
+
+    if spec.mode == "diagnose":
+        return PARAPHRASE_DEFAULT_CANDIDATES
     budget = spec.raw.get("budget") if isinstance(spec.raw, Mapping) else None
     if isinstance(budget, Mapping) and "max_candidates" in budget:
         return spec.budget.max_candidates
@@ -661,7 +677,32 @@ class DefaultTools:
 
         if spec.mode in ("scenario", "paraphrase"):
             return self.candidate_limit_for(spec.mode)
+        if spec.mode == "diagnose" and spec.diagnose.layout:
+            return self.candidate_limit_for("scenario")      # the wording reduction uses its fixed default
         return None
+
+    def probe_groups(self, spec: Spec) -> List[Any]:
+        """The audit Jobs the spec's disturbance families split into (each fits one Job's deadline cap)."""
+
+        from robot_debug import pipeline
+        from robot_debug.workloads import WorkloadError
+
+        try:
+            return pipeline.probe_groups(spec.suite, spec.diagnose.probes.families)
+        except ValueError as error:
+            raise WorkloadError(str(error)) from None
+
+    def probe_workload(self, spec: Spec, families: Sequence[str], run_id: str) -> Dict[str, Any]:
+        """The ``m6-threshold`` workload for one group of probe families on the spec's start."""
+
+        from robot_debug.workloads import WorkloadError, audit_workload
+
+        mapping = {"policy": dict(spec.raw.get("policy") or {}),
+                   "audit": {"task": spec.scenario.task, "start": spec.scenario.start, "families": list(families)}}
+        try:
+            return self._checked(audit_workload(mapping, run_id))
+        except WorkloadError as error:
+            raise StopRun("workload_invalid", str(error)) from None
 
     def audit_workload(self, spec: Spec, run_id: str) -> Dict[str, Any]:
         from robot_debug.workloads import audit_workload
@@ -673,6 +714,39 @@ class DefaultTools:
         from robot_debug.workloads import replay_workload
 
         return self._checked(replay_workload(case, run_id, attempts=attempts, **dict(inputs or {})))
+
+    def audit_replay_workload(self, case: Mapping[str, Any], families: Sequence[str], sweep: Sequence[float],
+                              attempts: int, required_failures: int, run_id: str,
+                              checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
+        """The audit workload that reruns ``families`` at the levels in ``sweep`` (their recorded thresholds),
+        with no bisection, ``attempts`` per level and the unperturbed control. A field the Job already accepts."""
+
+        from robot_debug.workloads import WorkloadError, audit_workload
+
+        policy: Dict[str, Any] = {"suite": case.get("suite")}
+        if checkpoint is not None:
+            policy["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        audit: Dict[str, Any] = {"task": case.get("task_id"), "start": case.get("start_index"),
+                                 "families": list(families), "sweep": list(sweep), "attempts": attempts,
+                                 "required_failures": required_failures, "bisection_steps": 0}
+        try:
+            return self._checked(audit_workload({"policy": policy, "audit": audit}, run_id))
+        except WorkloadError as error:
+            raise StopRun("workload_invalid", str(error)) from None
+
+    def wording_replay_workload(self, case: Mapping[str, Any], wording: str, original: str, run_id: str,
+                                checkpoint: Optional[Tuple[str, str]] = None) -> Dict[str, Any]:
+        """The rewording screen of one wording against the original wording (the control)."""
+
+        from robot_debug import language_experiment as le
+
+        try:
+            workload = le.build_screen_workload(
+                run_id=run_id, suite=case["suite"], task_id=case["task_id"], start=case["start_index"],
+                original=original, paraphrases=[wording])
+        except (ValueError, KeyError) as error:
+            raise StopRun("workload_invalid", str(error)) from None
+        return self._checked(self._with_checkpoint(self._valid(workload), checkpoint))
 
     def replay_inputs(self, case_dir: Path, case: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """The layout and reference start a replay needs beyond ``case.json``.
@@ -826,10 +900,12 @@ class DefaultTools:
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
-    def audit_report(self, summary: Mapping[str, Any]) -> str:
+    def audit_report(self, summary: Any) -> str:
+        """The audit report for one summary, or for the summaries of several Jobs (a pipeline run's groups)."""
+
         module = _load_script("report_m6_experiment")
         try:
-            return module.render_report([summary])
+            return module.render_report(list(summary) if isinstance(summary, (list, tuple)) else [summary])
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
@@ -855,6 +931,26 @@ class DefaultTools:
 
         return register_run(Path(run_dir))
 
+    # optional web context for new cases (``research: true`` in a diagnose spec)
+    research_deps: Any = None            # a pipeline_research.ResearchDeps; None: the real Tavily and Token Factory
+
+    def research_available(self, env_file: Optional[Path]) -> bool:
+        from robot_debug import pipeline_research
+
+        return pipeline_research.key_available(env_file, self.research_deps)
+
+    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path]) -> Optional[Dict[str, Any]]:
+        from robot_debug import pipeline_research
+
+        return pipeline_research.run(case, env_file, self.research_deps, now=self.now)
+
+    def register_cases(self, run_dir: Path) -> List[str]:
+        """Register every case of a pipeline run (``cases/<name>/`` folders), in route order."""
+
+        from robot_debug.case_register import register_cases
+
+        return register_cases(Path(run_dir))
+
 
 # --------------------------------------------------------------------------------------
 # The orchestrator
@@ -865,6 +961,8 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
     """The planned Jobs and their worst-case spend, built from the spec alone (no backend call)."""
 
     rate = spec.backend.hourly_usd if rate is None else rate
+    if spec.mode == "diagnose":
+        return _diagnose_dry_run(spec, tools, rate)
 
     def worst(deadline: float) -> float:
         return lg.worst_case_seconds(deadline) / 3600.0 * rate
@@ -917,6 +1015,117 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
         lines.append("WARNING: that exceeds the cap; the spend ledger will refuse a Job and the run will stop early.")
     lines.append("Each Job is reserved at its worst case before submission and settled at measured container time.")
     return lines, required
+
+
+BRANCH_HEADERS = {
+    "check": "CHECK (always runs): the start, run untouched",
+    "layout": "LAYOUT (if the start fails reliably): reduce it to the smallest set of differences",
+    "probes": "PROBES (if the start passes): disturbance families and rewordings",
+}
+PROBE_ONLY_HEADER = "PROBES (probe only: the layout is not diagnosed): disturbance families and rewordings"
+
+
+def _job_kind(step: str) -> str:
+    """The typical-time model's kind of a pipeline step name."""
+
+    if step == "screen":
+        return "check"
+    if step.startswith("reduce"):
+        return "layout"
+    if step.startswith("probe-"):
+        return "probe"
+    return step
+
+
+def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], float]:
+    """The planned Jobs of a ``diagnose`` spec, grouped by branch, and the worst case of the required Jobs.
+
+    Only one of the layout and probe branches runs, so the worst case is the check plus the *larger*
+    branch, not the sum. Optional Jobs (the layout continuations, the wording reduction that runs only when
+    a rewording fails) are listed but not counted, as in the other modes. ``typical`` cost and minutes of a
+    branch are the sums over its required Jobs of the measured-run model in :mod:`robot_debug.pipeline`
+    (container minutes at the hourly rate plus the start allowance; end-to-end adds submission and download).
+    """
+
+    from robot_debug import pipeline
+
+    dg, sc = spec.diagnose, spec.scenario
+
+    def worst(deadline: float) -> float:
+        return lg.worst_case_seconds(deadline) / 3600.0 * rate
+
+    preface: List[str] = []
+    if sc.import_path:
+        check_import(spec, tools)
+        preface = ["The imported start is validated on this machine; it is not screened (the check Job screens "
+                   "the benchmark starts that can serve as the passing reference)."]
+    if spec.paraphrase is not None:
+        preface.append("Before the wording probe, Nemotron ({}) writes {} rewordings of the task instruction on "
+                       "this machine (Token Factory; not on the GPU ledger).".format(
+                           spec.paraphrase.model, spec.paraphrase.count))
+    starts = _screen_starts(spec)
+    screen = tools.screen_workload("dry-run", spec.suite, sc.task, starts, sc.confirm)
+    branches: Dict[str, List[Tuple[str, str, int, bool]]] = {"check": [], "layout": [], "probes": []}
+    probe_sizes: Dict[str, int] = {}
+    branches["check"].append(("screen", "screen task {} starts {}".format(sc.task, starts),
+                              int(screen["deadline_seconds"]), False))
+    if dg.layout:
+        reduce_deadline = tools.reduce_deadline(spec.budget.max_candidates)
+        branches["layout"].append(("reduce", "reduce the {} failing start ({} candidates)".format(
+            "imported" if sc.import_path else "chosen", spec.budget.max_candidates), reduce_deadline, False))
+        for number in range(1, MAX_CONTINUATIONS + 1):
+            branches["layout"].append(("reduce{}".format(number + 1),
+                                       "continuation {} (only if not entity-minimal)".format(number),
+                                       reduce_deadline, True))
+    if dg.probes.active:
+        families = dg.probes.families
+        if families:
+            groups = tools.probe_groups(spec)
+            probe_sizes.update({group.step: len(group.families) for group in groups})
+            for number, group in enumerate(groups, 1):
+                branches["probes"].append((group.step, "stress test ({} of {}): {}".format(
+                    number, len(groups), ", ".join(group.families)), group.deadline_seconds, False))
+        if spec.paraphrase is not None:
+            screen_deadline, reduce_deadline_w = tools.paraphrase_deadlines(spec)
+            branches["probes"].append(("rewording-screen", "screen {} rewordings of the instruction".format(
+                spec.paraphrase.count), screen_deadline, False))
+            branches["probes"].append(("rewording-reduce", "reduce a failing wording (only if one fails)",
+                                       reduce_deadline_w, True))
+    lines = list(preface)
+    lines.append("Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
+        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours))
+    totals: Dict[str, float] = {}
+    typical: Dict[str, Tuple[float, float]] = {}                  # branch -> (typical US$, typical end-to-end min)
+    for name in ("check", "layout", "probes"):
+        if not branches[name]:
+            continue
+        lines.append(PROBE_ONLY_HEADER if name == "probes" and not dg.layout else BRANCH_HEADERS[name])
+        required = usd = minutes = 0.0
+        for step, text, deadline, optional in branches[name]:
+            cost = worst(deadline)
+            lines.append("  {:<16} {:<56} deadline {:>4d} s  worst case US${:.2f}{}".format(
+                step, text, deadline, cost, " (optional)" if optional else ""))
+            if not optional:
+                required += cost
+                container = pipeline.typical_container_minutes(
+                    _job_kind(step), probe_sizes.get(step, 0), deadline)
+                usd += pipeline.typical_cost(container, rate)
+                minutes += pipeline.typical_total_minutes(container)
+        totals[name] = required
+        typical[name] = (usd, minutes)
+    for name in ("check", "layout", "probes"):
+        if name in totals:
+            lines.append("Branch {}: worst case US${:.2f}, typical about US${:.2f} in about {:d} min.".format(
+                name, totals[name], typical[name][0], int(typical[name][1] + 0.5)))      # half up, not to even
+    larger = max(totals.get("layout", 0.0), totals.get("probes", 0.0))
+    required_total = totals["check"] + larger
+    lines.append("Only one of the layout and probe branches runs, so the worst case is the check plus the larger "
+                 "branch.")
+    lines.append("Worst case of the required Jobs: US${:.2f}.".format(required_total))
+    if required_total > spec.budget.max_spend_usd:
+        lines.append("WARNING: that exceeds the cap; the spend ledger will refuse a Job and the run will stop early.")
+    lines.append("Each Job is reserved at its worst case before submission and settled at measured container time.")
+    return lines, required_total
 
 
 def _screen_starts(spec: Spec) -> str:
@@ -1042,14 +1251,18 @@ class Orchestrator:
             return self._audit()
         if self.spec.mode == "paraphrase":
             return self._paraphrase()
+        if self.spec.mode == "diagnose":
+            return self._diagnose_pipeline()
         raise StopRun("wrong_mode", "a replay spec is used with `faultline replay`")
 
     # -- Jobs --------------------------------------------------------------------------------
 
     def job_name(self, step: str, number: int) -> str:
-        name = "{}-{}-{}".format(self.spec.name, self.tag, step)
-        if number:
-            name += "-" + ATTEMPT_SUFFIXES[number - 1]
+        suffix = "-" + step + ("-" + ATTEMPT_SUFFIXES[number - 1] if number else "")
+        # The provider limits a Job name to 63 characters. A long spec name is shortened (never a step or
+        # the run tag, which keep names unique); names that already fit are unchanged.
+        room = 63 - len(self.tag) - 1 - len(suffix)
+        name = "{}-{}{}".format(self.spec.name[:max(room, 1)].rstrip("-"), self.tag, suffix)
         if _JOB_NAME.fullmatch(name) is None:
             raise OrchestratorError("the Job name is not valid")
         return name
@@ -1727,6 +1940,8 @@ class Orchestrator:
             if not self.steps.is_done("case"):
                 case = self.tools.paraphrase_case(summary, screen_summary)
                 _write_json(case_path, case)
+                if isinstance(case.get("replay"), dict):
+                    _write_json(self.run_dir / REPLAY_INPUTS, case["replay"])
                 self.steps.update("case", status="done", case_id=case["case_id"])
                 self.say("case", "case.json {}".format(case["case_id"][:12]))
             case_id = self.steps.get("case").get("case_id")
@@ -1753,6 +1968,8 @@ class Orchestrator:
             self.say("report", "report.md")
         case = self._audit_case(summary, outcome)
         _write_json(self.run_dir / "case.json", case)
+        if isinstance(case.get("replay"), dict):
+            _write_json(self.run_dir / REPLAY_INPUTS, case["replay"])
         self.steps.update("case", status="done", case_id=case["case_id"])
         self._register("case")
         finished = bool(summary.get("complete")) and not outcome.partial
@@ -1783,7 +2000,298 @@ class Orchestrator:
         }
         if self.checkpoint is not None:         # only a run with a checkpoint override records one
             case["checkpoint"] = {"id": self.checkpoint[0], "revision": self.checkpoint[1], "pinned": True}
+        from robot_debug import pipeline_cases
+
+        videos = pipeline_cases.audit_videos([(outcome.job_name, outcome.summary)])
+        if videos:
+            case["videos"] = videos
+        replay = pipeline_cases.audit_replay_block([("audit", outcome.job_name, outcome.summary)])
+        if replay is not None:
+            case["replay"] = replay
         return case
+
+    # -- the one diagnosis pipeline (ADR 0035) ------------------------------------------------------
+
+    def _set_route(self, route: str) -> None:
+        self.steps.set_run(route=route)
+        self.say("route", ROUTE_TEXTS[route])
+
+    def _diagnose_pipeline(self) -> RunResult:
+        """Check the start untouched, then route on the result: layout diagnosis for a start that fails
+        reliably, the chosen probes for one that does not, "passes" when no probes were chosen."""
+
+        spec, sc, dg = self.spec, self.spec.scenario, self.spec.diagnose
+        imported = self._import_record() if sc.import_path else None
+        screen_workload = self.tools.screen_workload(
+            self.job_name("screen", 0), spec.suite, sc.task, _screen_starts(spec), sc.confirm,
+            **self._checkpoint_args())
+        screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
+                              "scenario_summary.json")
+        summary = screen.summary
+        if imported is not None:
+            self._set_route("layout")
+            return self._with_route(self._scenario_import(summary, imported), "layout")
+        start = choose_start(summary, sc.task, sc.start)
+        if sc.start is None:                 # a range of starts is searched for a failure: layout only
+            if start is None:
+                self._write_screen_only_report(summary, sc.task)
+                raise StopRun("no_reproducible_failure",
+                              "no start failed 4 of 5 attempts. " + "; ".join(screen_table(summary, sc.task)))
+            return self._layout_branch(summary, start)
+        if start is not None and dg.layout:
+            return self._layout_branch(summary, start)
+        if dg.probes.active:
+            return self._probes(summary)
+        return self._passes(summary)
+
+    def _with_route(self, result: RunResult, route: str) -> RunResult:
+        result.route = route
+        return result
+
+    def _layout_branch(self, screen_summary: Mapping[str, Any], start: int) -> RunResult:
+        self._set_route("layout")
+        plan = self._plan(screen_summary, self.spec.scenario.task, start)
+        best, last, reason = self._reduce_loop(plan)
+        result = self._with_route(self._finish_scenario(best, last, reason, screen_summary), "layout")
+        self._research_cases()
+        return result
+
+    def _passes(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        """The start passed and no probe was chosen: "passes untouched" is the finding."""
+
+        self._set_route("passes")
+        self._write_screen_only_report(screen_summary, self.spec.scenario.task)
+        self.steps.update("report", status="done")
+        self.steps.set_run(status="completed", reason=None)
+        self.say("done", "completed: the start passes untouched")
+        return RunResult("completed", None, self.run_dir, self.ledger.spent, notes=list(self.notes),
+                         route="passes")
+
+    def _probes(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        from robot_debug import pipeline
+
+        spec, dg = self.spec, self.spec.diagnose
+        self._set_route("probes")
+        problems: List[str] = []                 # why the run is incomplete, in order
+        flaky = False
+        deferred: Optional[StopRun] = None
+        groups = self.tools.probe_groups(spec) if dg.probes.families else []
+        ran: List[Tuple[Any, JobOutcome]] = []
+        for group in groups:
+            workload = self.tools.probe_workload(spec, group.families, self.job_name(group.step, 0))
+            outcome = self.run_job(group.step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            ran.append((group, outcome))
+            if pipeline.audit_control_failed(outcome.summary):
+                flaky = True
+                self.say(group.step, "the unperturbed control did not pass reliably: the start is flaky, so no "
+                         "disturbance is judged and the rewordings are skipped")
+                break
+            if outcome.partial or not outcome.summary.get("complete"):
+                problems.append(str(outcome.summary.get("stop_reason") or "incomplete"))
+        if ran:
+            self._audit_case_files(ran, list(dg.probes.families))
+        wording_flaky = False
+        if spec.paraphrase is not None and not flaky:
+            try:
+                problem, wording_flaky = self._wording_probe(screen_summary)
+                if problem:
+                    problems.append(problem)
+            except StopRun as stop:
+                if stop.reason not in WORDING_DEFERRED:
+                    raise
+                deferred = stop
+        elif spec.paraphrase is not None:
+            self.steps.update("rewording-screen", status="skipped", reason="flaky start")
+        route = "flaky" if (flaky or wording_flaky) else "probes"
+        self.steps.set_run(route=route)
+        ids = self._register_cases()
+        self._research_cases()
+        if deferred is not None:
+            raise deferred
+        reason = problems[0] if problems else None
+        self.steps.set_run(status="stopped" if reason else "completed", reason=reason)
+        self.say("done", "stopped: {}".format(reason) if reason else "completed ({})".format(ROUTE_TEXTS[route]))
+        return RunResult("stopped" if reason else "completed", reason, self.run_dir, self.ledger.spent,
+                         case_id=ids[0] if ids else None, notes=list(self.notes), route=route, case_ids=ids)
+
+    # -- the cases of a pipeline run: ``cases/<name>/`` folders ----------------------------------------
+
+    def _write_case_folder(self, name: str, case: Mapping[str, Any], report: Optional[str],
+                           replay: Optional[Mapping[str, Any]]) -> Path:
+        folder = self.run_dir / "cases" / name
+        folder.mkdir(parents=True, exist_ok=True)
+        _write_json(folder / "case.json", case)
+        if report is not None:
+            (folder / "report.md").write_text(report, encoding="utf-8", newline="\n")
+        if replay is not None:
+            _write_json(folder / REPLAY_INPUTS, replay)
+        self.steps.update("case-" + name, status="done", case_id=case["case_id"])
+        self.say("case", "{} case {}".format(name, str(case["case_id"])[:12]))
+        return folder
+
+    def _audit_case_files(self, ran: Sequence[Tuple[Any, JobOutcome]], requested: Sequence[str]) -> None:
+        from robot_debug import pipeline, pipeline_cases
+
+        spec, sc = self.spec, self.spec.scenario
+        groups = [(group.step, outcome.job_name, outcome.summary) for group, outcome in ran]
+        merged = pipeline.merge_audit_summaries([summary for _s, _j, summary in groups], requested)
+        folder = self.run_dir / "cases" / "audit"
+        _write_json(folder / "merged-summary.json", merged)
+        videos = pipeline_cases.audit_videos([(job, summary) for _s, job, summary in groups])
+        case = pipeline_cases.audit_case(
+            merged=merged, suite=spec.suite, task=sc.task, start=sc.start, run=self.run_dir.name,
+            requested=requested, groups=groups, summary_path="cases/audit/merged-summary.json",
+            checkpoint=self.checkpoint, videos=videos)
+        report = None
+        try:
+            report = self.tools.audit_report([summary for _s, _j, summary in groups])
+        except StopRun as stop:
+            self._warn("report", "no stress-test report written ({})".format(stop.reason))
+        self._write_case_folder("audit", case, report, case.get("replay"))
+
+    def _wording_original(self, screen_summary: Mapping[str, Any]) -> str:
+        """The task's own wording: the spec's, else the one the check screen recorded for the task."""
+
+        from robot_debug import paraphrase as pp
+
+        text = self.spec.paraphrase.instruction
+        if text is None:
+            tasks = screen_summary.get("tasks") or {}
+            entry = tasks.get(str(self.spec.scenario.task)) or tasks.get(self.spec.scenario.task) or {}
+            text = entry.get("instruction") if isinstance(entry, Mapping) else None
+        if not isinstance(text, str) or not text.strip():
+            raise StopRun("original_unknown", "the task's own wording is not known; give "
+                          "diagnose.probes.instruction to probe its rewordings")
+        try:
+            return pp.clean_instruction(text)
+        except pp.ParaphraseError:
+            raise StopRun("original_unknown", "the task's wording is not usable text") from None
+
+    def _wording_probe(self, screen_summary: Mapping[str, Any]) -> Tuple[Optional[str], bool]:
+        """Rewordings: write them, screen them (the original wording is the control), reduce a failing one.
+
+        Writes the wording case (registered even when nothing failed). Returns ``(problem, flaky)``: why the
+        probe is incomplete (a stop reason) or ``None``, and whether its own control failed."""
+
+        from robot_debug import pipeline_cases
+
+        spec = self.spec
+        original = self._wording_original(screen_summary)
+        paraphrases = self._generate_paraphrases(original)
+        workload = self.tools.paraphrase_screen_workload(
+            self.job_name("rewording-screen", 0), spec, original, paraphrases)
+        screen = self.run_job("rewording-screen", workload, int(workload["deadline_seconds"]),
+                              "language_summary.json")
+        summary = screen.summary
+        control = summary.get("control") or {}
+        problem = str(summary.get("stop_reason") or "incomplete") if screen.partial else None
+        reduction: Optional[JobOutcome] = None
+        flaky = False
+        case: Optional[Dict[str, Any]] = None
+        if control.get("original_matches_task") is False:
+            stop_reason = "original_mismatch"
+        else:
+            chosen = choose_paraphrase(summary)
+            if chosen is None:
+                dropped = choose_paraphrase(summary, include_dropped=True) is not None
+                stop_reason = problem or ("no_faithful_failure" if dropped else "no_reproducible_failure")
+            elif not control.get("passed"):
+                stop_reason, flaky = "control_not_passing", True
+            else:
+                self.say("choose", "{} fails {} of 5 ({} word edits): {}".format(
+                    chosen["label"], paraphrase_failures(chosen), chosen.get("edit_count"), chosen["text"]))
+                reduce_workload = self.tools.paraphrase_reduce_workload(
+                    self.job_name("rewording-reduce", 0), self.spec, original, chosen["text"])
+                reduction = self.run_job("rewording-reduce", reduce_workload,
+                                         int(reduce_workload["deadline_seconds"]), "language_summary.json")
+                minimal = reduction.summary.get("minimal")
+                detail = reduction.summary.get("reduction") or {}
+                if isinstance(minimal, Mapping) and minimal.get("verified"):
+                    case = self.tools.paraphrase_case(reduction.summary, summary)
+                    case = pipeline_cases.with_wording_clips(case, summary, screen.job_name)
+                    stop_reason = None if detail.get("reduced") else str(detail.get("stop_reason") or "incomplete")
+                else:
+                    stop_reason = str(detail.get("stop_reason") or reduction.summary.get("stop_reason")
+                                      or "incomplete")
+                if stop_reason is not None and problem is None:
+                    problem = stop_reason                  # the wording was not fully reduced or verified
+        if case is None:
+            case = pipeline_cases.wording_case_without_failure(
+                screen=summary, run=self.run_dir.name, stop_reason=stop_reason, job=screen.job_name)
+        report = None
+        try:
+            report = self.tools.paraphrase_report(summary, reduction.summary if reduction else None,
+                                                  self.spec.backend.hourly_usd)
+        except StopRun as stop:
+            self._warn("report", "no wording report written ({})".format(stop.reason))
+        replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else None
+        self._write_case_folder("wording", case, report, replay)
+        return problem, flaky
+
+    def _register_cases(self) -> List[str]:
+        try:
+            ids = list(self.tools.register_cases(self.run_dir))
+        except Exception as error:              # noqa: BLE001 - registration is a convenience
+            self._warn("register", "the cases were not registered in the viewer ({})".format(type(error).__name__))
+            return []
+        self.steps.update("register", status="done", case_id=ids[0] if ids else None, case_ids=ids)
+        self.say("register", "{} viewer case(s)".format(len(ids)))
+        return ids
+
+    def _case_folders(self) -> List[Tuple[str, Path]]:
+        """Where this run's cases live: ``cases/<name>/`` for a probing run, else the run folder itself."""
+
+        found = [(name, self.run_dir / "cases" / name) for name in ("audit", "wording")
+                 if (self.run_dir / "cases" / name / "case.json").is_file()]
+        if not found and (self.run_dir / "case.json").is_file():
+            found = [("case", self.run_dir)]
+        return found
+
+    def _research_cases(self) -> None:
+        """Add web context to each new case when the spec asks for it and a Tavily key is present.
+
+        The context is stored beside the case (``research.json``) and registered with it. Without the key, with
+        ``research: false`` or under ``--no-llm`` the step is skipped and the reason is noted in ``steps.json``; a
+        failure of the lookup never fails the run. Neither key is ever printed or logged."""
+
+        if self.spec.mode != "diagnose":
+            return
+        reason = None
+        if not self.spec.research:
+            reason = "research is off in the spec"
+        elif self.no_llm:
+            reason = "--no-llm"
+        elif not self.tools.research_available(self.env_file):
+            reason = "no Tavily key"
+        folders = self._case_folders()
+        if reason is not None or not folders:
+            self.steps.update("research", status="skipped", reason=reason or "no case to research")
+            if reason is not None and self.spec.research:
+                self.say("research", "skipped ({})".format(reason))
+            return
+        wrote = False
+        for name, folder in folders:
+            step = "research-" + name
+            if self.steps.is_done(step):
+                continue
+            try:
+                case = _read_json(folder / "case.json")
+                record = self.tools.research_case(case, self.env_file)
+            except Exception as error:          # noqa: BLE001 - web context is optional; only the type is logged
+                self.steps.update(step, status="failed", error=type(error).__name__)
+                self._warn(step, "no web context for the {} case ({})".format(name, type(error).__name__))
+                continue
+            if record is None:
+                self.steps.update(step, status="skipped", reason="no sources found")
+                continue
+            _write_json(folder / "research.json", record)
+            sources = sum(len(entry.get("results") or ()) for entry in record.get("queries") or ())
+            self.steps.update(step, status="done", sources=sources, summary=(record.get("summary") or {}).get("status"))
+            self.say(step, "web context for the {} case ({} sources)".format(name, sources))
+            wrote = True
+        self.steps.update("research", status="done", reason=None)
+        if wrote:
+            self._register_cases()
 
     # -- replay --------------------------------------------------------------------------------
 
@@ -1805,10 +2313,15 @@ class Orchestrator:
             case = _read_json(case_path)
         except (OSError, ValueError):
             raise StopRun("case_unreadable", "case.json could not be read") from None
-        if not isinstance(case, dict) or case.get("kind") != "scenario_reduction":
-            raise StopRun("case_unsupported", "only scenario reduction cases can be replayed")
+        kind = case.get("kind") if isinstance(case, dict) else None
+        if kind not in ("scenario_reduction", "audit", "paraphrase_reduction"):
+            raise StopRun("case_unsupported", "only scenario, stress-test and wording cases can be replayed")
         if self.spec.suite is not None and self.spec.suite != case.get("suite"):
             raise StopRun("suite_mismatch", "the spec's suite differs from the case's")
+        if kind == "audit":
+            return self._replay_audit(case)
+        if kind == "paraphrase_reduction":
+            return self._replay_wording(case)
         case_root = case_path.parent
         inputs = self.tools.replay_inputs(case_root, case)
         if inputs is None:
@@ -1833,6 +2346,111 @@ class Orchestrator:
         return RunResult("completed" if verdict is not None else "stopped",
                          None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
                          case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
+
+    # -- replay of stress-test and wording cases (ADR 0035) ----------------------------------------
+
+    def _finish_kind_replay(self, case: Mapping[str, Any], kind: str, key: str, text: str,
+                            outcomes: Sequence[JobOutcome], checkpoint: Optional[Tuple[str, str]]) -> RunResult:
+        verdict = {"still_reproduces": True, "no_longer_reproduces": False}.get(key)
+        first = outcomes[0]
+        replay_result = {
+            "case_id": case.get("case_id"), "kind": kind, "reproduces": verdict, "verdict": key,
+            "verdict_text": text, "job_name": first.job_name,
+            "summary": first.summary_path.relative_to(self.run_dir).as_posix(),
+            "jobs": [{"job_name": o.job_name, "summary": o.summary_path.relative_to(self.run_dir).as_posix()}
+                     for o in outcomes]}
+        if checkpoint is not None:
+            replay_result["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        _write_json(self.run_dir / "replay-result.json", replay_result)
+        self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
+                           verdict=key)
+        self.say("replay", text)
+        return RunResult("completed" if verdict is not None else "stopped",
+                         None if verdict is not None else "replay_inconclusive", self.run_dir, self.ledger.spent,
+                         case_id=case.get("case_id"), reproduces=verdict, verdict=key, notes=list(self.notes))
+
+    def _replay_audit(self, case: Mapping[str, Any]) -> RunResult:
+        """Rerun each family that failed, at its threshold, with the unperturbed control, one Job per original
+        probe group. A family still fails when its search finds a reproducing level at or below the threshold."""
+
+        from robot_debug import pipeline
+
+        block = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+        groups = [g for g in block.get("groups") or () if isinstance(g, Mapping) and g.get("families")]
+        if not groups:
+            raise StopRun("replay_inputs_missing", "the case has no failing family to replay")
+        attempts = block.get("attempts") if type(block.get("attempts")) is int else pipeline_replay_attempts()
+        required = block.get("required_failures") if type(block.get("required_failures")) is int else 4
+        checkpoint = self._replay_checkpoint(case)
+        outcomes: List[JobOutcome] = []
+        still: List[Tuple[str, float]] = []
+        gone: List[str] = []
+        control_failed = incomplete = False
+        for index, group in enumerate(groups):
+            step = "replay" if index == 0 else "replay-{}".format(index + 1)
+            wanted = [(g["family"], g["severity"]) for g in group["families"]]
+            workload = self.tools.audit_replay_workload(
+                case, [f for f, _s in wanted], sorted({s for _f, s in wanted}), attempts, required,
+                self.job_name(step, 0), checkpoint)
+            outcome = self.run_job(step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            outcomes.append(outcome)
+            summary = outcome.summary
+            if pipeline.audit_control_failed(summary):
+                control_failed = True
+                break
+            incomplete = incomplete or outcome.partial or not summary.get("complete")
+            for family, _severity in wanted:
+                found = ((summary.get("families") or {}).get(family) or {}).get("threshold_severity")
+                if type(found) in (int, float):
+                    still.append((family, float(found)))
+                else:
+                    gone.append(family)
+        if control_failed:
+            key = "reference_fails"
+        elif still:
+            key = "still_reproduces"
+        elif incomplete:
+            key = "incomplete"
+        else:
+            key = "no_longer_reproduces"
+        text = (pipeline.audit_replay_text(still, gone) if key in ("still_reproduces", "no_longer_reproduces")
+                else pipeline.replay_kind_text("audit", key) or replay_text(key))
+        return self._finish_kind_replay(case, "audit", key, text, outcomes, checkpoint)
+
+    def _replay_wording(self, case: Mapping[str, Any]) -> RunResult:
+        """Rerun the failing wording and the original wording (the control) through the rewording screen,
+        confirmed by the same 4-of-5 gate."""
+
+        from robot_debug import pipeline
+
+        replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else {}
+        config = replay.get("config") if isinstance(replay.get("config"), Mapping) else {}
+        wording = config.get("instruction")
+        original = replay.get("reference_instruction") or case.get("instruction")
+        if not isinstance(wording, str) or not isinstance(original, str):
+            raise StopRun("replay_inputs_missing", "the case has no failing wording to replay")
+        checkpoint = self._replay_checkpoint(case)
+        workload = self.tools.wording_replay_workload(case, wording, original, self.job_name("replay", 0), checkpoint)
+        outcome = self.run_job("replay", workload, int(workload["deadline_seconds"]), "language_summary.json")
+        summary = outcome.summary
+        row = next((r for r in summary.get("instructions") or () if isinstance(r, Mapping)
+                    and r.get("kind") == "paraphrase"), None)
+        if not (summary.get("control") or {}).get("passed"):
+            key = "reference_fails"
+        elif row is not None and paraphrase_failures(row):
+            key = "still_reproduces"
+        elif outcome.partial or row is None:
+            key = "incomplete"
+        else:
+            key = "no_longer_reproduces"
+        text = pipeline.replay_kind_text("paraphrase", key) or replay_text(key)
+        return self._finish_kind_replay(case, "paraphrase", key, text, [outcome], checkpoint)
+
+
+def pipeline_replay_attempts() -> int:
+    from robot_debug import pipeline_cases
+
+    return pipeline_cases.REPLAY_ATTEMPTS
 
 
 __all__ = [

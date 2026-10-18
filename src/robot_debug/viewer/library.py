@@ -28,6 +28,12 @@ from robot_debug.viewer.stop_reasons import needs_attention, stop_text
 VERDICTS = ("reproduces", "no_failure", "stopped", "failed", "incomplete")
 KIND_LETTERS = {"scenario": "S", "audit": "A", "paraphrase": "L", "occlusion": "M"}
 VIDEO_LABELS = {"original": "Original failing start", "minimal": "Minimal cause", "reference": "Passing reference"}
+# The same three roles in a wording case (the reduction's clips), and the order clips are listed in: the control
+# first, the reduction's clips next, any other clip (a stress test's per-family clips) after, alphabetically.
+WORDING_VIDEO_LABELS = {"original": "Failing rewording", "minimal": "Minimal wording change",
+                        "reference": "Original wording (passed)"}
+VIDEO_ORDER = ("control", "original", "minimal", "reference")
+_ROUTES = ("layout", "probes", "passes", "flaky")
 FAMILY_LABELS = {
     "darken": "Darkening", "noise": "Gaussian noise", "blur": "Gaussian blur", "contrast": "Contrast reduction",
     "jpeg": "JPEG compression", "colour_cast": "Colour cast", "motion_blur": "Motion blur",
@@ -240,6 +246,19 @@ def _scenario_summary(case: Mapping[str, Any]) -> Tuple[str, str, bool]:
 
 def _paraphrase_summary(case: Mapping[str, Any]) -> Tuple[str, str, bool]:
     minimal = _mapping(case.get("minimal"))
+    if not _str(minimal.get("text")):
+        # A rewording probe that produced no verified failing wording: say what it found, not "a failure".
+        reason = _str(case.get("stop_reason"))
+        tried = sum(1 for r in _list(case.get("screen")) if isinstance(r, Mapping) and r.get("kind") == "paraphrase")
+        if reason in (None, "", "no_reproducible_failure"):
+            return ("no_failure", "None of the {} made the policy fail 4 of 5 times.".format(
+                _plural(tried, "rewording")), False)
+        if reason == "no_faithful_failure":
+            return ("no_failure", "The only rewordings that failed dropped an object or target word of the "
+                    "instruction, so the wording is not to blame.", False)
+        if reason == "control_not_passing":
+            return "stopped", stop_text(reason) or "", True
+        return "incomplete", stop_text(reason) or "The rewording probe did not finish.", True
     edits = len(_list(minimal.get("labels")))
     reduced = bool(case.get("reduced"))
     text = "A reworded instruction makes the policy fail; {} {} enough.".format(
@@ -254,6 +273,9 @@ def _run_verdict(steps_data: Mapping[str, Any]) -> Tuple[str, str, bool]:
     run = _mapping(steps_data.get("run"))
     reason = _str(run.get("reason"))
     status = run.get("status")
+    if run.get("route") == "passes":
+        return "no_failure", ("The start passed its check and no probes were chosen, so there is no failing "
+                              "condition to report."), False
     if reason == "no_reproducible_failure":
         return "no_failure", stop_text(reason) or "", False
     if status == "completed":
@@ -359,19 +381,24 @@ class Library:
             if folder.name in registered_runs or not (folder / "steps.json").is_file():
                 continue
             data = _read_json(folder / "steps.json")
-            if data is None or data.get("mode") not in ("scenario", "audit", "paraphrase"):
+            if data is None or data.get("mode") not in ("scenario", "audit", "paraphrase", "diagnose"):
                 continue
             if _mapping(data.get("run")).get("status") not in ("completed", "stopped", "failed"):
                 continue
             if _mapping(_mapping(data.get("steps")).get("register")).get("case_id") in registered_cases:
                 continue
             verdict, text, attention = _run_verdict(data)
-            item = self._base_item("r-" + folder.name, data["mode"], _str(data.get("name")) or folder.name)
+            mode = data["mode"]
+            if mode == "diagnose":
+                # A diagnosis that left no case: a start that passed untouched, or a run that stopped part-way.
+                route = _mapping(data.get("run")).get("route")
+                mode = "audit" if route in ("probes", "flaky") else "scenario"
+            item = self._base_item("r-" + folder.name, mode, _str(data.get("name")) or folder.name)
             spec = processes.spec_raw(folder)
             section = _mapping(spec.get(data["mode"]))
             task = _int(section.get("task"))
             instruction = None
-            if data["mode"] == "paraphrase":
+            if mode == "paraphrase":
                 instruction = _str((_read_json(folder / "paraphrases.json") or {}).get("original"))
             item.update(verdict=verdict, verdict_text=text, attention=attention,
                         suite=_str(_mapping(spec.get("policy")).get("suite")), task_id=task,
@@ -414,14 +441,31 @@ class Library:
         detail = dict(item)
         detail.update({"sentence": None, "stop_reason": None, "stop_text": None, "checkpoint": None, "videos": [],
                        "explanation": None, "research": None, "history": None, "replays": [],
-                       "report_markdown": None, "files": [], "replayable": False})
+                       "report_markdown": None, "files": [], "replayable": False, "route": None, "findings": []})
         if item_id.startswith("d-"):
             self._diagnosis_detail(detail, item["case_id"])
         elif item_id.startswith("r-"):
             self._run_detail(detail, item_id[2:])
         else:
             self._occlusion_detail(detail, item["case_id"])
+        detail["findings"] = self._findings(detail, listing)
+        detail.pop("_run", None)
         return detail
+
+    def _findings(self, detail: Mapping[str, Any], listing: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Every library item the same diagnosis run registered, in route order (the stress test, then the
+        rewordings), this one included. A case of any other run, a run without a case and the occlusion case
+        list only themselves."""
+
+        by_id = {i["id"]: i for i in listing}
+        ids = [detail["id"]]
+        if detail["id"].startswith("d-") and isinstance(detail.get("_run"), str):
+            peers = [e for e in list_diagnoses(self.diagnoses_root) if e.get("run") == detail["_run"]]
+            peers.sort(key=lambda e: (e.get("order") if type(e.get("order")) is int else 0, str(e.get("name"))))
+            ids = ["d-" + e["case_id"] for e in peers if "d-" + e["case_id"] in by_id] or ids
+        return [{"id": i, "fault_code": by_id[i]["fault_code"], "kind": by_id[i]["kind"],
+                 "verdict": by_id[i]["verdict"], "verdict_text": by_id[i]["verdict_text"]}
+                for i in ids if i in by_id]
 
     def file_path(self, item_id: str, name: str) -> Path:
         """The file ``name`` (one of the case's published files) of a library item; ``KeyError`` if none."""
@@ -458,15 +502,23 @@ class Library:
         files = _mapping(entry.get("files"))
         detail["files"] = [{"name": name, "url": "/api/library/{}/files/{}".format(detail["id"], name)}
                            for key, name in FILE_LABELS if files.get(key)]
+        labels = WORDING_VIDEO_LABELS if kind == "paraphrase" else VIDEO_LABELS
         for role, video in _mapping(entry.get("videos")).items():
-            if role not in VIDEO_LABELS or not isinstance(video, Mapping):
+            if not isinstance(role, str) or not isinstance(video, Mapping):
                 continue                           # no video was kept for this role
             url = None
-            if isinstance(video, Mapping) and isinstance(video.get("file"), str):
+            if isinstance(video.get("file"), str):
                 url = self._media_url(self.diagnoses_root / case_id / video["file"])
-            detail["videos"].append({"role": role, "label": VIDEO_LABELS[role], "url": url,
-                                     "outcome": _str(_mapping(video).get("outcome"))})
-        detail["videos"].sort(key=lambda v: list(VIDEO_LABELS).index(v["role"]))
+            label = _str(video.get("label")) or labels.get(role) or role
+            detail["videos"].append({"role": role, "label": label, "url": url,
+                                     "outcome": _str(video.get("outcome"))})
+        detail["videos"].sort(key=lambda v: (VIDEO_ORDER.index(v["role"]) if v["role"] in VIDEO_ORDER
+                                             else len(VIDEO_ORDER), v["role"]))
+        detail["_run"] = entry.get("run")
+        if _mapping(entry.get("files")).get("research"):
+            detail["research"] = self._diagnosis_research(case_id)
+        route = entry.get("route")
+        detail["route"] = route if route in _ROUTES else None
         explanation = entry.get("explanation")
         if isinstance(explanation, Mapping):
             detail["explanation"] = _explanation(
@@ -480,9 +532,13 @@ class Library:
         elif kind == "audit":
             detail["audit"] = self._audit_block(case, run_dir)
             detail["sentence"] = _audit_sentence(case)
+            detail["replayable"] = bool(_list(_mapping(case.get("replay")).get("groups"))) and bool(files.get("case"))
         else:
             detail["paraphrase"] = _paraphrase_block(case)
-            detail["sentence"] = _str(_mapping(case.get("minimal")).get("sentence"))
+            detail["sentence"] = _str(_mapping(case.get("minimal")).get("sentence")) or detail["verdict_text"]
+            replay = _mapping(case.get("replay"))
+            detail["replayable"] = bool(_str(_mapping(replay.get("config")).get("instruction"))) \
+                and bool(files.get("case"))
         if run_dir is not None:
             detail["history"] = self._history(run_dir)
         detail["replays"] = self._replays(case_id)
@@ -589,6 +645,7 @@ class Library:
         header = _mapping(data.get("run"))
         reason = _str(header.get("reason"))
         detail["stop_reason"], detail["stop_text"] = reason, stop_text(reason, _str(header.get("detail")))
+        detail["route"] = header.get("route") if header.get("route") in _ROUTES else None
         detail["sentence"] = detail["verdict_text"]
         report = _read_text(run_dir / "report.md")
         detail["report_markdown"] = None if report is None else processes.scrub_text(report)
@@ -668,25 +725,13 @@ class Library:
             return None
         if not records:
             return None
-        record = _mapping(records[-1])
-        sources, seen = [], set()
-        for query in _list(record.get("queries")):
-            for result in _list(_mapping(query).get("results")):
-                url = _str(_mapping(result).get("url"))
-                if url and url.startswith("https://") and url not in seen:
-                    seen.add(url)
-                    sources.append({"title": _str(result.get("title")) or url, "url": url})
-        summary = _mapping(record.get("summary"))
-        related = None
-        if summary.get("status") == "interpreted":
-            parts = []
-            for entry in _list(summary.get("related_work")):
-                text = _str(_mapping(entry).get("text"))
-                if text:
-                    ids = [i for i in _list(entry.get("source_ids")) if isinstance(i, str)]
-                    parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
-            related = "\n\n".join(parts) or None
-        return {"related": related, "sources": sources}
+        return _research_block(records[-1])
+
+    def _diagnosis_research(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """The web context a pipeline run stored beside a case (``research.json``), as the page shows it."""
+
+        record = _read_json(self.diagnoses_root / case_id / "research.json")
+        return None if record is None else _research_block(record)
 
     # -- history and replays -------------------------------------------------------------------------
 
@@ -697,7 +742,9 @@ class Library:
         ledger = _read_json(run_dir / "ledger.json") or {}
         steps = data["steps"]
         mode = _str(data.get("mode")) or "scenario"
-        rows = processes.step_rows(mode, steps, processes.spec_raw(run_dir), _str(_mapping(data.get("run")).get("status")))
+        route = _mapping(data.get("run")).get("route")
+        rows = processes.step_rows(mode, steps, processes.spec_raw(run_dir),
+                                   _str(_mapping(data.get("run")).get("status")), route if route in _ROUTES else None)
         history = []
         for row in rows:
             record = _mapping(steps.get(row["key"]))
@@ -726,9 +773,36 @@ class Library:
                 continue
             verdict = _str(result.get("verdict")) or "inconclusive"
             ledger = _read_json(folder / "ledger.json") or {}
-            found.append({"run": self._run_name(folder.name), "verdict": verdict, "verdict_text": replay_text(verdict),
+            text = _str(result.get("verdict_text"))          # kind-specific wording written by the replay
+            found.append({"run": self._run_name(folder.name), "verdict": verdict,
+                          "verdict_text": text or replay_text(verdict),
                           "created": stamp_to_iso(folder.name), "cost_usd": _number(ledger.get("spent_usd"))})
         return found
+
+
+def _research_block(record: Any) -> Dict[str, Any]:
+    """``{related, sources}`` from a research record: the model's cited note (when it was accepted) and the
+    public sources, titles and https links only. Context, never evidence."""
+
+    record = _mapping(record)
+    sources, seen = [], set()
+    for query in _list(record.get("queries")):
+        for result in _list(_mapping(query).get("results")):
+            url = _str(_mapping(result).get("url"))
+            if url and url.startswith("https://") and url not in seen:
+                seen.add(url)
+                sources.append({"title": _str(result.get("title")) or url, "url": url})
+    summary = _mapping(record.get("summary"))
+    related = None
+    if summary.get("status") == "interpreted":
+        parts = []
+        for entry in _list(summary.get("related_work")):
+            text = _str(_mapping(entry).get("text"))
+            if text:
+                ids = [i for i in _list(_mapping(entry).get("source_ids")) if isinstance(i, str)]
+                parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
+        related = "\n\n".join(parts) or None
+    return {"related": related, "sources": sources}
 
 
 def _default_inspect(workspace: Path, case_id: str) -> Mapping[str, Any]:
