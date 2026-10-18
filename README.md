@@ -1,11 +1,79 @@
 # Faultline — turn robot failures into replayable tests
 
-Built for the Nebius × NVIDIA hackathon. Faultline is a debugger for
-simulated robot-manipulation policies (vision-language-action models such as
-NVIDIA GR00T). It finds a failure, confirms that it repeats, reduces it to
-its minimal trigger, and saves it as a replayable regression test, with the
-evidence beside it. Scenario and occlusion cases also get a Nemotron
-explanation, and the earlier occlusion cases have Tavily research context.
+Built for the Nebius × NVIDIA hackathon. Faultline turns a robot-policy
+failure into the **smallest confirmed trigger** and keeps it as a **regression
+test** that reruns on every new checkpoint. It works on simulated manipulation
+policies (vision-language-action models such as NVIDIA GR00T).
+
+## The problem
+
+A team fine-tuning a robot policy works in a loop:
+
+1. **Evaluate.** Run hundreds of simulated episodes and get a success rate
+   (say 82%).
+2. **Triage.** Watch the failed episodes and sort them by hand: missed
+   grasp, wrong object, timeout.
+3. **Reproduce.** Try to make one failure happen again; the policy is
+   stochastic, so a failure seen once may not repeat.
+4. **Fix.** Guess what triggers it, then add training data or change
+   training, and retrain.
+5. **Re-check.** Did that failure go away, and did anything else break?
+
+Published accounts of VLA deployment and evaluation describe this iterative
+loop, with failure analysis done by people replaying videos and logs
+([factory-floor case study](https://arxiv.org/pdf/2605.27461),
+[VLA benchmarking](https://arxiv.org/pdf/2511.11298),
+[HELM](https://arxiv.org/pdf/2604.18791)). Two steps are weak:
+
+- **The average hides the failure.** A success rate says how often the
+  policy fails, not under which conditions
+  ([LIBERO-Plus](https://arxiv.org/pdf/2510.13626)).
+- **Re-checking known failures is not systematic.** Simulated evaluation can
+  gate a checkpoint release
+  ([NVIDIA](https://perspectives.nvidia.com/isaac-sim/task/faq/policy-testing-systems-ab-evaluation-gated-promotion-regression-baselines-robotics-cicd-1/)),
+  but a recent survey notes "a noticeable lack of systematic research on
+  regression testing for autonomous systems"
+  ([survey](https://arxiv.org/html/2506.16101v1)).
+
+## What Faultline does
+
+- **Confirms** a failure is real: it must fail at least 4 of 5 attempts, and
+  a nearby passing layout must pass 5 of 5.
+- **Reduces** it to the minimal trigger: of all the differences between the
+  failing and passing layouts, the smallest set the failure needs, found by
+  reruns (delta debugging, as compilers do with crashing programs). That is
+  the cause in the sense of *what* triggers it. *Why* the network fails under
+  those conditions is still for a person to work out; the minimal trigger is
+  the sharpest clue for it.
+- **Keeps** it as a case (videos, report, replay inputs) and **replays** it on
+  any checkpoint.
+- **Nemotron** proposes the order in which differences are tested and writes
+  a labelled reading of the verified result. The reruns, not the model, decide.
+
+Two ways to find failures feed the same suite: debug a failure you already
+have (Mode 1), or stress-test a passing start with image, scene and wording
+changes (Mode 2). A stress test that finds nothing is a result too.
+
+### What is regression testing?
+
+In software, a **regression** is something that used to work and breaks after
+a change. A **regression test** is a small saved check, rerun after every
+change, that catches it. Each test pins one known failure (or fix), so a
+change that silently undoes a fix is noticed at once.
+
+For robot policies, every fine-tune or retrain is a change. Faultline's cases
+are the saved checks:
+
+- `faultline replay CASE --spec replay.yaml --expect fixed` reruns the case's
+  minimal scene and its passing reference on a checkpoint (5 attempts each).
+  The exit code says whether you got the result you expected, so a script or
+  CI job can gate a checkpoint on its known failures.
+- `--expect reproduces` checks a failure is still there, for example before
+  you claim a fix. `policy.checkpoint` in the spec points the replay at
+  another checkpoint.
+
+A replay covers its saved scene and its attempts only, not every task or
+starting condition. That is why many small cases are more useful than one.
 
 The repository is
 [`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).

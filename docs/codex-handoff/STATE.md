@@ -99,8 +99,13 @@ Also on October 18:
   [disturbance families](../disturbance-families.md).
 - **Next:** the
   [report-first case page and traces plan](../superpowers/plans/2026-10-18-report-first-case-page-and-traces.md).
-  Part A (report-first page) is approved and in progress. Part B (per-step
-  traces) is **paused** until the project narrative and use cases are scoped.
+  Part A (the report-first page) is merged. Part B (per-step traces) is
+  **paused**.
+- **Narrative settled** (ADR 0034): the minimal trigger, kept as a regression
+  test. The README opens with the team workflow, the gap and regression
+  testing.
+- **Final runs:** fresh reduced cases plus a replay against a second
+  checkpoint, on a new image.
 
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851

@@ -71,6 +71,7 @@ All in [decisions/](decisions/). The ones that shape the product:
 | [0031](decisions/0031-faultline-diagnose.md) | One command that owns the whole cloud lifecycle and spend cap |
 | [0032](decisions/0032-breadth-pack.md) | Four suites, image catalog, paraphrase and scene families |
 | [0033](decisions/0033-control-panel-ui.md) | The control panel: a browser UI over the CLI, and the static gallery |
+| [0034](decisions/0034-narrative-regression-tests.md) | The story: the minimal trigger, kept as a regression test |
 | [0026](decisions/0026-m6-camera-reliance-and-scalar-families.md) | Camera reliance and scalar image families (M6) |
 | [0025](decisions/0025-m3-batched-inference-experiment.md) | The batched-inference experiment |
 | [0024](decisions/0024-m5d-tavily-research-context.md) | Tavily research context |
