@@ -95,6 +95,17 @@ Every branch ends with findings:
 
 ### 6. Docs
 
+**Additions from Jethro, October 18:**
+- **Videos for disturbance and wording cases.** The Jobs already record and
+  download them; only case building ignored them. Show the control, plus one
+  clip per family at its threshold (or at the top severity when robust). The
+  existing audit cases are re-registered to get theirs.
+- **Pass/fail colours.** Every pass/fail outcome is green or red (icon and
+  word kept), replacing "pass stays neutral". Record this in ADR 0033.
+- **The UI runbook** is rewritten for the single pipeline, merging demos
+  where the new flow makes them one.
+
+
 Reference (the pipeline, findings, replay per kind), UI runbook (the demos
 rewritten around one entry point), README (what Faultline does), ADR 0035
 implementation notes.
