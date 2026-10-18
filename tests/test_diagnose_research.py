@@ -246,6 +246,31 @@ class PipelineResearch(Base):
         self.assertEqual(self.header(runner)["steps"]["research-case"]["status"], "done")
         self.assertIn("scene layout", json.dumps(research.requests[0]["context"]["facts"]))
 
+    def test_the_import_route_researches_its_one_case_too(self):
+        import tempfile
+
+        from robot_debug.scenario_import import write_scenario_candidate
+        from tests.test_import_pipeline import failing_state, imported_reduce
+        from robot_debug.scenario_import import build_candidate
+
+        research = FakeResearch()
+        tools = ParaphraseTools()
+        tools.research_deps = research.deps()
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "failing.candidate.json"
+        write_scenario_candidate(path, build_candidate("libero_10", 3, failing_state(), {"kind": "benchmark",
+                                                                                         "init_state_index": 31}))
+        raw = dict(research_spec().raw, diagnose={"task": 3, "import": str(path), "probes": {"enabled": False}})
+        script = [screen_step(),
+                  finished(imported_reduce(stop_reason="reduced", selection=SOUP_ONLY, entity_minimal=True,
+                                           reduced=True))]
+        runner, backend, tools, ledger, lines = self.world(script, spec=sp.parse_spec(raw), tools=tools)
+        result = runner.diagnose()
+        self.assertEqual((result.status, result.route), ("completed", "layout"))
+        self.assertTrue((runner.run_dir / "research.json").is_file())
+        self.assertEqual(self.header(runner)["steps"]["research-case"]["status"], "done")
+
 
 if __name__ == "__main__":
     unittest.main()

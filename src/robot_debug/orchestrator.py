@@ -2051,7 +2051,9 @@ class Orchestrator:
         summary = screen.summary
         if imported is not None:
             self._set_route("layout")
-            return self._with_route(self._scenario_import(summary, imported), "layout")
+            result = self._with_route(self._scenario_import(summary, imported), "layout")
+            self._research_cases()
+            return result
         start = choose_start(summary, sc.task, sc.start)
         if sc.start is None:                 # a range of starts is searched for a failure: layout only
             if start is None:
