@@ -53,6 +53,30 @@ function JobsTable({ jobs, caption, total }: { jobs: DryRunJob[]; caption: strin
   );
 }
 
+/**
+ * The Jobs that the cap rule would refuse, in plan order: for each branch the required Job at which the
+ * running worst case (the check first, then that branch's Jobs) first passes the cap. The optional
+ * continuations run only if needed and are not counted, as in the plan's total.
+ */
+function refusedJobs(plan: DryRun): { name: string; branch?: Branch }[] {
+  const required = plan.jobs.filter((job) => !job.optional);
+  const lanes: (Branch | undefined)[] = required.some((job) => job.branch) ? ['layout', 'probes'] : [undefined];
+  const found: { name: string; branch?: Branch }[] = [];
+  for (const lane of lanes) {
+    let running = 0;
+    for (const job of required.filter((entry) => entry.branch === 'check' || entry.branch === lane)) {
+      running += job.worst_case_usd;
+      if (running > plan.cap_usd + 1e-9) {
+        found.push({ name: job.name, branch: job.branch === 'check' ? undefined : lane });
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+const REFUSED_BRANCH: Partial<Record<Branch, string>> = { layout: 'layout branch', probes: 'probe branch' };
+
 /** The spend cap and hour limit, with the cap rule: only the first Job must fit to start. */
 function CapFacts({ plan }: { plan: DryRun }) {
   const over = plan.worst_case_total_usd > plan.cap_usd;
@@ -70,9 +94,11 @@ function CapFacts({ plan }: { plan: DryRun }) {
           </strong>
         ) : over ? (
           <strong className="warn-text">
-            <Icon name="attention" /> The first Job fits, but not all of them. A later Job (for example a
-            reduction, which runs only if a failure is found) would be refused and the run would stop there;
-            you can raise the cap and resume.
+            <Icon name="attention" /> The first Job fits, but not all of them. Next to be refused:{' '}
+            {refusedJobs(plan)
+              .map((job) => (job.branch ? `${job.name} (${REFUSED_BRANCH[job.branch]})` : job.name))
+              .join('; ')}
+            . The run would stop there; you can raise the cap and resume.
           </strong>
         ) : (
           <span className="muted">(the worst case is {usd(plan.cap_usd - plan.worst_case_total_usd)} under it)</span>

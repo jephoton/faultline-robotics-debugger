@@ -318,6 +318,8 @@ export interface DryRunJob {
   name: string;
   deadline_seconds: number;
   worst_case_usd: number;
+  /** A Job that runs only if needed (a continuation); not counted in the worst case. */
+  optional?: boolean;
   /** Only in a diagnose plan. */
   branch?: Branch;
 }

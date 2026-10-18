@@ -76,6 +76,47 @@ describe('the branched dry run', () => {
     expect(screen.queryByText(/typical/i)).not.toBeInTheDocument();
   });
 
+  describe('the cap rule names the Job that would not fit', () => {
+    const capText = () => (screen.getByText('Spend cap').nextElementSibling as HTMLElement).textContent ?? '';
+
+    it('names the required probe Job, not "a reduction"', () => {
+      // check 1 + probe-images-1 1.5 + probe-images-2 1.5 = 4 > 3.5; the layout path (1 + 2 = 3) fits.
+      const jobs = [
+        { name: 'check', deadline_seconds: 1800, worst_case_usd: 1, branch: 'check' as const },
+        { name: 'reduce', deadline_seconds: 3000, worst_case_usd: 2, branch: 'layout' as const },
+        { name: 'probe-images-1', deadline_seconds: 2400, worst_case_usd: 1.5, branch: 'probes' as const },
+        { name: 'probe-images-2', deadline_seconds: 2400, worst_case_usd: 1.5, branch: 'probes' as const },
+      ];
+      render(<DryRunTable plan={plan({ jobs, cap_usd: 3.5, worst_case_total_usd: 4 })} />);
+      expect(capText()).toContain('The first Job fits, but not all of them');
+      expect(capText()).toContain('probe-images-2');
+      expect(capText()).not.toContain('reduce');
+      expect(capText()).not.toMatch(/a reduction/i);
+    });
+
+    it('names the layout Job and leaves out the optional continuations, which run only if needed', () => {
+      const jobs = [
+        { name: 'check', deadline_seconds: 1800, worst_case_usd: 1, branch: 'check' as const },
+        { name: 'reduce', deadline_seconds: 3000, worst_case_usd: 2, branch: 'layout' as const },
+        { name: 'reduce2', deadline_seconds: 3000, worst_case_usd: 2, branch: 'layout' as const, optional: true },
+      ];
+      render(<DryRunTable plan={plan({ jobs, cap_usd: 2.5, worst_case_total_usd: 3 })} />);
+      expect(capText()).toContain('reduce (layout branch)');
+      expect(capText()).not.toContain('reduce2');
+    });
+
+    it('names a Job of a flat plan by running total', () => {
+      const jobs = [
+        { name: 'screen', deadline_seconds: 1800, worst_case_usd: 1 },
+        { name: 'reference', deadline_seconds: 1500, worst_case_usd: 1 },
+        { name: 'reduce', deadline_seconds: 3000, worst_case_usd: 1 },
+      ];
+      render(<DryRunTable plan={plan({ branches: undefined, jobs, cap_usd: 2.5, worst_case_total_usd: 3 })} />);
+      expect(capText()).toContain('reduce');
+      expect(capText()).not.toContain('reference');
+    });
+  });
+
   it('puts the branch headings one level under the section heading', () => {
     render(<DryRunTable plan={plan()} headingLevel={4} />);
     expect(screen.getByRole('heading', { name: 'First: check the start untouched' }).tagName).toBe('H5');
