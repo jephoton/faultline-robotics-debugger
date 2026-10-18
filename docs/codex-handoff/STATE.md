@@ -99,9 +99,8 @@ Also on October 18:
   [disturbance families](../disturbance-families.md).
 - **Next:** the
   [report-first case page and traces plan](../superpowers/plans/2026-10-18-report-first-case-page-and-traces.md).
-  Part A (report-first page) is approved. Part B (per-step traces) awaits
-  Jethro's choice of recorded data and validation run, ahead of a planned
-  final round of fresh runs.
+  Part A (report-first page) is approved and in progress. Part B (per-step
+  traces) is **paused** until the project narrative and use cases are scoped.
 
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851

@@ -70,7 +70,11 @@ hypothesis) and shows only the reruns Nemotron cited (8 of 26 for
   Replay and run details, and falls back for a case without a report.
 - Static mode.
 
-## Part B: per-step traces (proposal; decisions at plan review)
+## Part B: per-step traces (PAUSED)
+
+**Paused by Jethro on October 18:** do not implement. First decide whether it is
+worth doing once the project narrative and target use cases are scoped. The
+design below is kept for that discussion only.
 
 ### Why
 
