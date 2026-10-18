@@ -931,6 +931,19 @@ class DefaultTools:
 
         return register_run(Path(run_dir))
 
+    # optional web context for new cases (``research: true`` in a diagnose spec)
+    research_deps: Any = None            # a pipeline_research.ResearchDeps; None: the real Tavily and Token Factory
+
+    def research_available(self, env_file: Optional[Path]) -> bool:
+        from robot_debug import pipeline_research
+
+        return pipeline_research.key_available(env_file, self.research_deps)
+
+    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path]) -> Optional[Dict[str, Any]]:
+        from robot_debug import pipeline_research
+
+        return pipeline_research.run(case, env_file, self.research_deps, now=self.now)
+
     def register_cases(self, run_dir: Path) -> List[str]:
         """Register every case of a pipeline run (``cases/<name>/`` folders), in route order."""
 
@@ -2039,7 +2052,9 @@ class Orchestrator:
         self._set_route("layout")
         plan = self._plan(screen_summary, self.spec.scenario.task, start)
         best, last, reason = self._reduce_loop(plan)
-        return self._with_route(self._finish_scenario(best, last, reason, screen_summary), "layout")
+        result = self._with_route(self._finish_scenario(best, last, reason, screen_summary), "layout")
+        self._research_cases()
+        return result
 
     def _passes(self, screen_summary: Mapping[str, Any]) -> RunResult:
         """The start passed and no probe was chosen: "passes untouched" is the finding."""
@@ -2223,8 +2238,60 @@ class Orchestrator:
         self.say("register", "{} viewer case(s)".format(len(ids)))
         return ids
 
+    def _case_folders(self) -> List[Tuple[str, Path]]:
+        """Where this run's cases live: ``cases/<name>/`` for a probing run, else the run folder itself."""
+
+        found = [(name, self.run_dir / "cases" / name) for name in ("audit", "wording")
+                 if (self.run_dir / "cases" / name / "case.json").is_file()]
+        if not found and (self.run_dir / "case.json").is_file():
+            found = [("case", self.run_dir)]
+        return found
+
     def _research_cases(self) -> None:
-        """Placeholder until the research step lands: nothing to add."""
+        """Add web context to each new case when the spec asks for it and a Tavily key is present.
+
+        The context is stored beside the case (``research.json``) and registered with it. Without the key, with
+        ``research: false`` or under ``--no-llm`` the step is skipped and the reason is noted in ``steps.json``; a
+        failure of the lookup never fails the run. Neither key is ever printed or logged."""
+
+        if self.spec.mode != "diagnose":
+            return
+        reason = None
+        if not self.spec.research:
+            reason = "research is off in the spec"
+        elif self.no_llm:
+            reason = "--no-llm"
+        elif not self.tools.research_available(self.env_file):
+            reason = "no Tavily key"
+        folders = self._case_folders()
+        if reason is not None or not folders:
+            self.steps.update("research", status="skipped", reason=reason or "no case to research")
+            if reason is not None and self.spec.research:
+                self.say("research", "skipped ({})".format(reason))
+            return
+        wrote = False
+        for name, folder in folders:
+            step = "research-" + name
+            if self.steps.is_done(step):
+                continue
+            try:
+                case = _read_json(folder / "case.json")
+                record = self.tools.research_case(case, self.env_file)
+            except Exception as error:          # noqa: BLE001 - web context is optional; only the type is logged
+                self.steps.update(step, status="failed", error=type(error).__name__)
+                self._warn(step, "no web context for the {} case ({})".format(name, type(error).__name__))
+                continue
+            if record is None:
+                self.steps.update(step, status="skipped", reason="no sources found")
+                continue
+            _write_json(folder / "research.json", record)
+            sources = sum(len(entry.get("results") or ()) for entry in record.get("queries") or ())
+            self.steps.update(step, status="done", sources=sources, summary=(record.get("summary") or {}).get("status"))
+            self.say(step, "web context for the {} case ({} sources)".format(name, sources))
+            wrote = True
+        self.steps.update("research", status="done", reason=None)
+        if wrote:
+            self._register_cases()
 
     # -- replay --------------------------------------------------------------------------------
 

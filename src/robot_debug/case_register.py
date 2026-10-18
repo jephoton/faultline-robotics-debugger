@@ -231,7 +231,8 @@ def register_run(run_dir: Any, root: Any = None, *, source: Any = None, label: O
     try:
         files = {}  # type: Dict[str, Optional[str]]
         for key, name in (("report", "report.md"), ("case", "case.json"), ("explanation", "explanation.json"),
-                          ("candidate", "minimal-candidate.json"), ("replay_inputs", "replay-inputs.json")):
+                          ("candidate", "minimal-candidate.json"), ("replay_inputs", "replay-inputs.json"),
+                          ("research", "research.json")):
             candidate_file = source_dir / name
             if (candidate_file.is_file() and not candidate_file.is_symlink()
                     and candidate_file.stat().st_size <= _MAX_JSON_BYTES):

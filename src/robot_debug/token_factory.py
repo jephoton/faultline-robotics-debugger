@@ -581,7 +581,7 @@ _MAX_REQUEST_BYTES_RESEARCH = 20_000
 _MAX_TOKENS_RESEARCH = 1500
 
 
-def _research_payload(context: dict) -> dict:
+def _research_payload(context: dict, system_prompt: str | None = None) -> dict:
     # Imported here because research_summary's dependency chain reaches this module.
     from .research_summary import RESEARCH_SYSTEM_PROMPT, context_source_ids
 
@@ -590,7 +590,7 @@ def _research_payload(context: dict) -> dict:
     payload = {
         "model": MODEL,
         "messages": [
-            {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or RESEARCH_SYSTEM_PROMPT},
             {"role": "user", "content": user},
         ],
         "max_tokens": _MAX_TOKENS_RESEARCH,
@@ -606,9 +606,9 @@ def _research_payload(context: dict) -> dict:
     return payload
 
 
-def check_research_request(context: dict) -> None:
+def check_research_request(context: dict, system_prompt: str | None = None) -> None:
     """Raise before any reservation if the request would exceed its size bound."""
-    _research_payload(context)
+    _research_payload(context, system_prompt)
 
 
 def _research_provenance(status: str, error_code: str | None, latency: float,
@@ -656,7 +656,8 @@ def _research_leaks_key(content: object, api_key: str) -> bool:
 
 
 def request_research_summary(context: dict, api_key: str,
-                             transport: Transport | None = None) -> dict:
+                             transport: Transport | None = None,
+                             *, system_prompt: str | None = None) -> dict:
     """Make exactly one bounded POST for a source-cited related-work summary.
 
     Returns ``response_json`` (the validated model text, else None), the
@@ -667,7 +668,7 @@ def request_research_summary(context: dict, api_key: str,
 
     if not _valid_key(api_key):
         raise TokenFactoryError("invalid_api_key")
-    payload = _research_payload(context)
+    payload = _research_payload(context, system_prompt)
     call = _default_transport if transport is None else transport
     started = time.monotonic()
     try:

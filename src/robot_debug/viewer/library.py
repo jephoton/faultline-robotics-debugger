@@ -515,6 +515,8 @@ class Library:
         detail["videos"].sort(key=lambda v: (VIDEO_ORDER.index(v["role"]) if v["role"] in VIDEO_ORDER
                                              else len(VIDEO_ORDER), v["role"]))
         detail["_run"] = entry.get("run")
+        if _mapping(entry.get("files")).get("research"):
+            detail["research"] = self._diagnosis_research(case_id)
         route = entry.get("route")
         detail["route"] = route if route in _ROUTES else None
         explanation = entry.get("explanation")
@@ -723,25 +725,13 @@ class Library:
             return None
         if not records:
             return None
-        record = _mapping(records[-1])
-        sources, seen = [], set()
-        for query in _list(record.get("queries")):
-            for result in _list(_mapping(query).get("results")):
-                url = _str(_mapping(result).get("url"))
-                if url and url.startswith("https://") and url not in seen:
-                    seen.add(url)
-                    sources.append({"title": _str(result.get("title")) or url, "url": url})
-        summary = _mapping(record.get("summary"))
-        related = None
-        if summary.get("status") == "interpreted":
-            parts = []
-            for entry in _list(summary.get("related_work")):
-                text = _str(_mapping(entry).get("text"))
-                if text:
-                    ids = [i for i in _list(entry.get("source_ids")) if isinstance(i, str)]
-                    parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
-            related = "\n\n".join(parts) or None
-        return {"related": related, "sources": sources}
+        return _research_block(records[-1])
+
+    def _diagnosis_research(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """The web context a pipeline run stored beside a case (``research.json``), as the page shows it."""
+
+        record = _read_json(self.diagnoses_root / case_id / "research.json")
+        return None if record is None else _research_block(record)
 
     # -- history and replays -------------------------------------------------------------------------
 
@@ -788,6 +778,31 @@ class Library:
                           "verdict_text": text or replay_text(verdict),
                           "created": stamp_to_iso(folder.name), "cost_usd": _number(ledger.get("spent_usd"))})
         return found
+
+
+def _research_block(record: Any) -> Dict[str, Any]:
+    """``{related, sources}`` from a research record: the model's cited note (when it was accepted) and the
+    public sources, titles and https links only. Context, never evidence."""
+
+    record = _mapping(record)
+    sources, seen = [], set()
+    for query in _list(record.get("queries")):
+        for result in _list(_mapping(query).get("results")):
+            url = _str(_mapping(result).get("url"))
+            if url and url.startswith("https://") and url not in seen:
+                seen.add(url)
+                sources.append({"title": _str(result.get("title")) or url, "url": url})
+    summary = _mapping(record.get("summary"))
+    related = None
+    if summary.get("status") == "interpreted":
+        parts = []
+        for entry in _list(summary.get("related_work")):
+            text = _str(_mapping(entry).get("text"))
+            if text:
+                ids = [i for i in _list(_mapping(entry).get("source_ids")) if isinstance(i, str)]
+                parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
+        related = "\n\n".join(parts) or None
+    return {"related": related, "sources": sources}
 
 
 def _default_inspect(workspace: Path, case_id: str) -> Mapping[str, Any]:
