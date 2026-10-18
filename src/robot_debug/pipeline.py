@@ -9,11 +9,13 @@ Probe grouping
     fewest balanced groups that each fit: image families first (they act on the pictures the policy
     receives), then the scene families (viewpoint, lighting; they act once, at reset).
 
-Cost rule for the dry run
-    ``typical_usd`` of a Job is ``TYPICAL_FRACTION`` (0.5) of its worst case. That is the ratio the
-    October 18 measurements gave for probe Jobs (about US$0.4-0.9 spent against US$1.2-1.4 reserved). It is
-    an estimate, not a promise; where nothing has been measured (the layout reduction) the typical cost is
-    unknown and reported as ``None``.
+Typical cost and time for the dry run
+    The worst case is what the ledger reserves; the *typical* figures say what a Job usually takes and costs.
+    They come from measured runs (see the constants below) and are estimates, not promises. A Job's typical
+    container minutes are modelled by :func:`typical_container_minutes`; its typical cost is those minutes at
+    the hourly rate plus the start allowance, as the ledger settles it (:func:`typical_cost`); its typical
+    end-to-end minutes add the time to submit and download (:func:`typical_total_minutes`). GPU waits for
+    capacity are not included.
 """
 
 from __future__ import annotations
@@ -25,7 +27,25 @@ from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tup
 from robot_debug import m6_experiment
 from robot_debug.workloads import DEFAULT_AUDIT_SEARCH
 
-TYPICAL_FRACTION = 0.5
+# --- measured references behind the typical figures (container minutes / US$ at US$1.7468/h) ---------------
+#   screen (the check):                                         10.6 min / US$0.43
+#   audit blur+noise+darken+contrast, LIBERO-Object:            20.4 min / US$0.59 (12.7 min of testing)
+#   audit jpeg+colour_cast+motion_blur+dead_pixels, LIBERO-Spatial: 24.3 min / US$0.82
+#   audit viewpoint+lighting:                                    9.6 min / US$0.40
+#   layout reduce Jobs:                                          18-21 min / US$0.65-0.72
+#   rewording screen:                                            7-8 min / US$0.31-0.35
+#   replay:                                                      10.2 min / US$0.41
+# An audit Job is modelled as a fixed start-up plus a per-family cost (the measurements above give about
+# 8 min plus 3-5 min per family; 4 is used), never more than the Job's own deadline.
+TYPICAL_CHECK_MINUTES = 10.6
+TYPICAL_LAYOUT_MINUTES = 19.5            # the middle of 18-21
+TYPICAL_REWORDING_SCREEN_MINUTES = 7.5   # the middle of 7-8
+TYPICAL_REWORDING_REDUCE_MINUTES = 19.5  # not measured: the layout figure; the Job is optional and never counted
+TYPICAL_REPLAY_MINUTES = 10.2
+TYPICAL_AUDIT_STARTUP_MINUTES = 8.0
+TYPICAL_AUDIT_FAMILY_MINUTES = 4.0
+TYPICAL_START_ALLOWANCE_MINUTES = 4.0    # ledger.DEFAULT_START_ALLOWANCE_SECONDS, billed on every Job
+TYPICAL_OVERHEAD_MINUTES = 5.0           # submitting the Job and downloading its evidence, on this machine
 ROUTES = ("layout", "probes", "passes", "flaky")
 BRANCHES = ("check", "layout", "probes")
 
@@ -94,8 +114,31 @@ def severity_text(value: float) -> str:
     return "{}.{}".format(whole, fraction.ljust(2, "0"))
 
 
-def typical_cost(worst_case_usd: float) -> float:
-    return round(worst_case_usd * TYPICAL_FRACTION, 2)
+def typical_container_minutes(kind: str, families: int = 0, deadline_seconds: Optional[float] = None) -> float:
+    """Typical container minutes of one Job: ``check``, ``layout``, ``probe`` (``families`` of them),
+    ``rewording-screen``, ``rewording-reduce`` or ``replay``. Clamped to the Job's deadline when given."""
+
+    if kind == "probe":
+        minutes = TYPICAL_AUDIT_STARTUP_MINUTES + TYPICAL_AUDIT_FAMILY_MINUTES * families
+    else:
+        minutes = {"check": TYPICAL_CHECK_MINUTES, "layout": TYPICAL_LAYOUT_MINUTES,
+                   "rewording-screen": TYPICAL_REWORDING_SCREEN_MINUTES,
+                   "rewording-reduce": TYPICAL_REWORDING_REDUCE_MINUTES, "replay": TYPICAL_REPLAY_MINUTES}[kind]
+    if deadline_seconds is not None:
+        minutes = min(minutes, deadline_seconds / 60.0)
+    return minutes
+
+
+def typical_cost(container_minutes: float, hourly_usd: float) -> float:
+    """What a Job of this many container minutes costs: the minutes plus the start allowance at the rate."""
+
+    return (container_minutes + TYPICAL_START_ALLOWANCE_MINUTES) / 60.0 * hourly_usd
+
+
+def typical_total_minutes(container_minutes: float) -> float:
+    """End to end for the person waiting: the container minutes plus submitting and downloading."""
+
+    return container_minutes + TYPICAL_OVERHEAD_MINUTES
 
 
 # --------------------------------------------------------------------------------------
@@ -154,14 +197,15 @@ def audit_control_failed(summary: Mapping[str, Any]) -> bool:
 # --------------------------------------------------------------------------------------
 
 REPLAY_TEXTS = {
-    ("audit", "no_longer_reproduces"): "The stress test no longer fails: no family fails at its threshold.",
+    ("audit", "no_longer_reproduces"): "no longer fails",
     ("audit", "reference_fails"): ("Inconclusive: the unperturbed control did not pass reliably, so no disturbance "
                                    "can be judged."),
-    ("audit", "invalid_scene"): "Inconclusive: a scene was invalid, so the replay says nothing about the policy.",
-    ("paraphrase", "still_reproduces"): "The wording still fails.",
-    ("paraphrase", "no_longer_reproduces"): "The wording no longer fails.",
+    ("audit", "incomplete"): "Inconclusive: the replay Job did not finish, so nothing can be said about the policy.",
+    ("paraphrase", "still_reproduces"): "the wording still fails",
+    ("paraphrase", "no_longer_reproduces"): "no longer fails",
     ("paraphrase", "reference_fails"): ("Inconclusive: the original wording did not pass both control attempts, so "
                                         "a failing wording cannot be attributed to the wording."),
+    ("paraphrase", "incomplete"): "Inconclusive: the replay Job did not finish, so nothing can be said about the policy.",
 }
 
 

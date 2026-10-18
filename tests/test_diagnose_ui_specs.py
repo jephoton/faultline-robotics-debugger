@@ -13,7 +13,7 @@ def template_mapping(service):
 
 
 class DiagnoseTemplate(ServiceCase):
-    def test_the_template_validates_with_every_family_and_ten_rewordings(self):
+    def test_the_template_validates_with_the_four_default_families(self):
         text = self.service.template("diagnose")["yaml"]
         result = self.service.validate(text)
         self.assertTrue(result["ok"], result["errors"])
@@ -21,9 +21,9 @@ class DiagnoseTemplate(ServiceCase):
         self.assertEqual((summary["mode"], summary["needs_import"], summary["uses_nemotron"]),
                          ("diagnose", False, True))
         mapping = yaml.safe_load(text)
-        self.assertEqual(sorted(mapping["diagnose"]["probes"]["families"]), sorted(sp.FAMILIES))
+        self.assertEqual(mapping["diagnose"]["probes"]["families"], ["blur", "noise", "darken", "contrast"])
         self.assertIs(mapping["research"], True)
-        self.assertEqual(mapping["diagnose"]["probes"]["rewordings"], 10)
+        self.assertEqual(mapping["diagnose"]["probes"]["rewordings"], 0)
 
     def test_validation_errors_name_the_diagnose_paths(self):
         mapping = template_mapping(self.service)

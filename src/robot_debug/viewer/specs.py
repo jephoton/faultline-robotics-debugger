@@ -56,7 +56,7 @@ _JOB_LINE = re.compile(r"^\s+(?P<step>\S+)\s+.*?\s+deadline\s+(?P<deadline>\d+) 
 _TOTAL_LINE = re.compile(r"^Worst case of the required Jobs: US\$(?P<total>\d+\.\d+)\.$")
 _BRANCH_HEADER = re.compile(r"^(CHECK|LAYOUT|PROBES) \(")
 _BRANCH_LINE = re.compile(r"^Branch (?P<branch>check|layout|probes): worst case US\$(?P<cost>\d+\.\d+), typical "
-                          r"(?:unknown|about US\$(?P<typical>\d+\.\d+))\.$")
+                          r"(?:unknown|about US\$(?P<typical>\d+\.\d+)(?: in about (?P<minutes>\d+) min)?)\.$")
 _SLUG = re.compile(r"[^a-z0-9-]+")
 
 
@@ -388,8 +388,9 @@ def parse_plan(lines: List[str], required: float) -> Tuple[List[Dict[str, Any]],
 
 
 def parse_plan_branches(lines: List[str], required: float) -> Tuple[List[Dict[str, Any]], float, List[Dict[str, Any]]]:
-    """:func:`parse_plan` plus the branch summaries of a diagnosis: ``{branch, worst_case_usd, typical_usd}``
-    (``typical_usd`` is ``None`` when unknown; empty list for the other modes)."""
+    """:func:`parse_plan` plus the branch summaries of a diagnosis: ``{branch, worst_case_usd, typical_usd,
+    typical_minutes}`` (the typical figures are estimates from measured runs, ``None`` when unknown; empty list
+    for the other modes). ``typical_minutes`` is end to end, excluding any wait for a GPU."""
 
     jobs: List[Dict[str, Any]] = []
     branches: List[Dict[str, Any]] = []
@@ -408,9 +409,10 @@ def parse_plan_branches(lines: List[str], required: float) -> Tuple[List[Dict[st
             continue
         summary = _BRANCH_LINE.match(line)
         if summary:
-            typical = summary.group("typical")
+            typical, minutes = summary.group("typical"), summary.group("minutes")
             branches.append({"branch": summary.group("branch"), "worst_case_usd": float(summary.group("cost")),
-                             "typical_usd": None if typical is None else float(typical)})
+                             "typical_usd": None if typical is None else float(typical),
+                             "typical_minutes": None if minutes is None else int(minutes)})
             continue
         found = _TOTAL_LINE.match(line)
         if found:

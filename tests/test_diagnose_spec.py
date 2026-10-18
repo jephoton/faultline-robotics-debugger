@@ -108,8 +108,8 @@ class DiagnoseMode(unittest.TestCase):
     def test_the_template_loads_with_every_default(self):
         spec = sp.load_spec(ROOT / "configs" / "specs" / "diagnose.yaml")
         self.assertEqual(spec.mode, "diagnose")
-        self.assertEqual(len(spec.diagnose.probes.families), len(sp.FAMILIES))
-        self.assertEqual(spec.diagnose.probes.rewordings, 10)
+        self.assertEqual(spec.diagnose.probes.families, ("blur", "noise", "darken", "contrast"))
+        self.assertEqual(spec.diagnose.probes.rewordings, 0)
         self.assertTrue(spec.diagnose.layout and spec.diagnose.probes.enabled)
 
     def test_research_is_an_optional_boolean_of_the_diagnose_mode_only(self):

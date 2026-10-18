@@ -69,26 +69,39 @@ class DryRunLines(unittest.TestCase):
         return lines, required, vs.parse_plan_branches(lines, required)
 
     def test_the_template_lists_three_branches_and_counts_the_larger_one_once(self):
-        lines, required, (jobs, total, branches) = self.plan(spec_of())
+        lines, required, (jobs, total, branches) = self.plan(spec_of(probes={"families": ALL, "rewordings": 10}))
         self.assertEqual([j["name"] for j in jobs], [
             "screen", "reduce", "reduce2", "reduce3", "reduce4", "probe-image-1", "probe-image-2",
             "probe-scene-1", "rewording-screen", "rewording-reduce"])
         self.assertEqual({j["branch"] for j in jobs}, {"check", "layout", "probes"})
         by = {b["branch"]: b for b in branches}
         self.assertEqual(set(by), {"check", "layout", "probes"})
-        self.assertIsNone(by["layout"]["typical_usd"])
-        self.assertAlmostEqual(by["probes"]["typical_usd"], by["probes"]["worst_case_usd"] / 2, delta=0.02)
+        self.assertGreater(by["layout"]["typical_usd"], 0)
+        self.assertGreater(by["probes"]["typical_minutes"], by["check"]["typical_minutes"])
         self.assertAlmostEqual(total, by["check"]["worst_case_usd"] + max(
             by["layout"]["worst_case_usd"], by["probes"]["worst_case_usd"]), delta=0.02)
         self.assertAlmostEqual(total, required, delta=0.02)
         optional = {j["name"] for j in jobs if j["optional"]}
         self.assertEqual(optional, {"reduce2", "reduce3", "reduce4", "rewording-reduce"})
-        self.assertNotIn("WARNING", "\n".join(lines))
 
-    def test_the_template_cap_covers_a_full_probe(self):
+    def test_the_template_defaults_to_the_four_families_that_failed_before(self):
         spec = spec_of()
-        _lines, required = orch.dry_run_lines(spec, FakeTools())
-        self.assertLess(required, spec.budget.max_spend_usd)
+        self.assertEqual(spec.diagnose.probes.families, ("blur", "noise", "darken", "contrast"))
+        self.assertEqual(spec.diagnose.probes.rewordings, 0)
+        self.assertIsNone(spec.paraphrase)
+        self.assertEqual((spec.budget.max_spend_usd, spec.budget.max_hours, spec.budget.max_candidates),
+                         (2.5, 1.5, 36))
+        self.assertTrue(spec.research)
+
+    def test_the_template_cap_covers_the_typical_cost_of_either_branch(self):
+        spec = spec_of()
+        lines, required, (_jobs, _total, branches) = self.plan(spec)
+        by = {b["branch"]: b for b in branches}
+        typical_probe = by["check"]["typical_usd"] + by["probes"]["typical_usd"]
+        self.assertLess(typical_probe, spec.budget.max_spend_usd)
+        self.assertLess(by["check"]["typical_usd"] + by["layout"]["typical_usd"], spec.budget.max_spend_usd)
+        self.assertTrue(any(line.startswith("WARNING") for line in lines), "the worst case is over the cap")
+        self.assertEqual([j["name"] for j in _jobs if j["branch"] == "probes"], ["probe-image-1"])
 
     def test_a_range_or_an_import_has_no_probe_branch(self):
         spec = sp.parse_spec(dict(template_file(),
@@ -136,7 +149,7 @@ class DryRunApi(ServiceCase):
         plan = self.service.dry_run(self.service.template("diagnose")["yaml"])
         self.assertEqual({j["branch"] for j in plan["jobs"]}, {"check", "layout", "probes"})
         self.assertEqual([b["branch"] for b in plan["branches"]], ["check", "layout", "probes"])
-        self.assertIsNone(plan["branches"][1]["typical_usd"])
+        self.assertGreater(plan["branches"][1]["typical_minutes"], 0)
         self.assertGreater(plan["branches"][2]["typical_usd"], 0)
         self.assertGreater(plan["worst_case_total_usd"], plan["branches"][0]["worst_case_usd"])
 
@@ -147,6 +160,7 @@ class DryRunApi(ServiceCase):
     def test_libero_10_plans_more_probe_jobs(self):
         mapping = template_mapping(self.service)
         mapping["policy"]["suite"] = "libero_10"
+        mapping["diagnose"]["probes"]["families"] = list(sp.FAMILIES)
         plan = self.service.dry_run(yaml.safe_dump(mapping))
         self.assertGreater(len([j for j in plan["jobs"] if j["name"].startswith("probe-")]), 3)
 

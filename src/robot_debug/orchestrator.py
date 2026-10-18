@@ -979,14 +979,26 @@ BRANCH_HEADERS = {
 PROBE_ONLY_HEADER = "PROBES (probe only: the layout is not diagnosed): disturbance families and rewordings"
 
 
+def _job_kind(step: str) -> str:
+    """The typical-time model's kind of a pipeline step name."""
+
+    if step == "screen":
+        return "check"
+    if step.startswith("reduce"):
+        return "layout"
+    if step.startswith("probe-"):
+        return "probe"
+    return step
+
+
 def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], float]:
     """The planned Jobs of a ``diagnose`` spec, grouped by branch, and the worst case of the required Jobs.
 
     Only one of the layout and probe branches runs, so the worst case is the check plus the *larger*
     branch, not the sum. Optional Jobs (the layout continuations, the wording reduction that runs only when
-    a rewording fails) are listed but not counted, as in the other modes. ``typical`` is
-    :data:`robot_debug.pipeline.TYPICAL_FRACTION` of the worst case for the check and the probe Jobs
-    (measured probe Jobs cost about half their reservation) and unknown for the layout reduction.
+    a rewording fails) are listed but not counted, as in the other modes. ``typical`` cost and minutes of a
+    branch are the sums over its required Jobs of the measured-run model in :mod:`robot_debug.pipeline`
+    (container minutes at the hourly rate plus the start allowance; end-to-end adds submission and download).
     """
 
     from robot_debug import pipeline
@@ -1008,6 +1020,7 @@ def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], f
     starts = _screen_starts(spec)
     screen = tools.screen_workload("dry-run", spec.suite, sc.task, starts, sc.confirm)
     branches: Dict[str, List[Tuple[str, str, int, bool]]] = {"check": [], "layout": [], "probes": []}
+    probe_sizes: Dict[str, int] = {}
     branches["check"].append(("screen", "screen task {} starts {}".format(sc.task, starts),
                               int(screen["deadline_seconds"]), False))
     if dg.layout:
@@ -1022,6 +1035,7 @@ def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], f
         families = dg.probes.families
         if families:
             groups = tools.probe_groups(spec)
+            probe_sizes.update({group.step: len(group.families) for group in groups})
             for number, group in enumerate(groups, 1):
                 branches["probes"].append((group.step, "stress test ({} of {}): {}".format(
                     number, len(groups), ", ".join(group.families)), group.deadline_seconds, False))
@@ -1035,23 +1049,28 @@ def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], f
     lines.append("Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
         spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours))
     totals: Dict[str, float] = {}
+    typical: Dict[str, Tuple[float, float]] = {}                  # branch -> (typical US$, typical end-to-end min)
     for name in ("check", "layout", "probes"):
         if not branches[name]:
             continue
         lines.append(PROBE_ONLY_HEADER if name == "probes" and not dg.layout else BRANCH_HEADERS[name])
-        required = 0.0
+        required = usd = minutes = 0.0
         for step, text, deadline, optional in branches[name]:
             cost = worst(deadline)
             lines.append("  {:<16} {:<56} deadline {:>4d} s  worst case US${:.2f}{}".format(
                 step, text, deadline, cost, " (optional)" if optional else ""))
             if not optional:
                 required += cost
+                container = pipeline.typical_container_minutes(
+                    _job_kind(step), probe_sizes.get(step, 0), deadline)
+                usd += pipeline.typical_cost(container, rate)
+                minutes += pipeline.typical_total_minutes(container)
         totals[name] = required
+        typical[name] = (usd, minutes)
     for name in ("check", "layout", "probes"):
         if name in totals:
-            typical = None if name == "layout" else pipeline.typical_cost(totals[name])
-            lines.append("Branch {}: worst case US${:.2f}, typical {}.".format(
-                name, totals[name], "unknown" if typical is None else "about US${:.2f}".format(typical)))
+            lines.append("Branch {}: worst case US${:.2f}, typical about US${:.2f} in about {:d} min.".format(
+                name, totals[name], typical[name][0], int(typical[name][1] + 0.5)))      # half up, not to even
     larger = max(totals.get("layout", 0.0), totals.get("probes", 0.0))
     required_total = totals["check"] + larger
     lines.append("Only one of the layout and probe branches runs, so the worst case is the check plus the larger "
