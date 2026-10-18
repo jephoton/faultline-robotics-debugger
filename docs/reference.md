@@ -96,6 +96,16 @@ next time. Every judgement therefore uses repeated attempts.
 
 ## 4. Mode 1: how a scenario reduction works
 
+### Three ways to name the failing start
+
+| Option | When to use it | What happens first |
+| --- | --- | --- |
+| **A benchmark start I know fails** (`scenario.start`) | Your evaluation already showed a failure on, say, start 14 of a task (LIBERO evaluations run the benchmark starts by number) | The start is confirmed: it must fail 4 of 5. |
+| **Search a range of starts** (`scenario.screen`) | You suspect the task has weak starts but do not know which | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. |
+| **A start file of my own** (`scenario.import`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. |
+
+After the failing start is confirmed, all three continue the same way.
+
 ### The flow
 
 Each step either stops the run or passes to the next.

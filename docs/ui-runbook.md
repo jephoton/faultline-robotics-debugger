@@ -225,7 +225,7 @@ worst-case cost; nothing is created until **Start**.
 | Goal | Card → option | Fields that matter | Planned Jobs at the form's defaults (worst case) |
 | --- | --- | --- | --- |
 | Explain a start you know fails | **Find why a start fails** → **A benchmark start I know fails** | Suite, Task, Start | screen US$1.22 and a reduction US$1.86: total US$3.09 against a US$3.50 cap. Continuations are listed but run only if the first reduction stops at its budget. |
-| Find a failing start first | **Find why a start fails** → **Search a range of starts** | Starts to search (for example `10-49`), Failures to confirm (of 5) | screen US$1.37 and a reduction US$1.86: total US$3.23 against US$4.00 |
+| Find a failing start first | **Find why a start fails** → **Search a range of starts** | Starts to search (for example `10-49`), **Confirmation attempts** (default 4: with the first try, the usual 4 of 5) | screen US$1.37 and a reduction US$1.86: total US$3.23 against US$4.00 |
 | Diagnose your own failing start | **Find why a start fails** → **A start file of my own** | Suite, Task, **Start file** (a JSON start state, not a video; under 1.5 MB) | as for a known start; the dry run also checks the file (Demo 9 names a file to try) |
 | Find the smallest disturbance that breaks a passing start | **Stress-test a passing start** | Start, **Disturbance families** (image: both cameras; scene: at reset) | one audit Job, US$1.34 for the default four image families |
 | Test rewordings | **Test rewordings** | Start, **Rewordings to ask for** (1–12); needs the Token Factory key | screen US$1.31, reduce US$1.51 (10 rewordings) |

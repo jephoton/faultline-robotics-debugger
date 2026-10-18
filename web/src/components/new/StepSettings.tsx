@@ -187,7 +187,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
                 aria-describedby={describedBy(id('range'), true, fieldErrors('range'))}
               />
             </Field>
-            <Field id={id('confirm')} label="Failures to confirm" hint="How many of 5 attempts must fail." errors={undefined}>
+            <Field id={id('confirm')} label="Confirmation attempts" hint="Extra attempts (4 to 8) for a start that fails its first try. It counts as failing reliably at 4 failures; the default 4 gives the usual 4 of 5." errors={undefined}>
               <input
                 id={id('confirm')}
                 type="text"
