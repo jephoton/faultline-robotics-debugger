@@ -258,3 +258,26 @@ tfoot td {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* The probe group of the settings, and the branches of the review */
+.probes {
+  margin: var(--space-4) 0;
+  background: var(--bg-panel);
+}
+.probes fieldset {
+  margin: var(--space-3) 0;
+}
+.probes > .field {
+  margin-top: var(--space-3);
+}
+.branch {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+.branch__title {
+  margin-top: 0;
+}

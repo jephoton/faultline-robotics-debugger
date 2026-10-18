@@ -1,6 +1,7 @@
 // A small in-memory implementation of the API contract, shared by the Vite dev middleware
 // (VITE_MOCK=1) and the tests. It is never imported by the production bundle.
-import type { DryRun, Environment as EnvironmentChecks, FieldError, Progress, ValidateResult } from '../api/types';
+import type { Branch, DryRun, DryRunBranch, DryRunJob, Environment as EnvironmentChecks, FieldError, Progress, ValidateResult } from '../api/types';
+import { AUDIT_FAMILIES } from '../data/tasks';
 import {
   IDS,
   RUN_IDS,
@@ -57,8 +58,8 @@ export function mockValidate(yaml: string): ValidateResult {
   const errors: FieldError[] = [];
   if (!/^faultline:\s*1\s*$/m.test(yaml)) errors.push({ path: 'faultline', message: 'must be 1' });
   const mode = line(yaml, 'mode');
-  if (!mode || !['scenario', 'audit', 'paraphrase', 'replay'].includes(mode)) {
-    errors.push({ path: 'mode', message: 'must be scenario, audit, paraphrase or replay' });
+  if (!mode || !['diagnose', 'scenario', 'audit', 'paraphrase', 'replay'].includes(mode)) {
+    errors.push({ path: 'mode', message: 'must be diagnose, scenario, audit, paraphrase or replay' });
   }
   const spend = Number(line(yaml, 'max_spend_usd'));
   if (!Number.isFinite(spend) || spend <= 0) {
@@ -69,18 +70,74 @@ export function mockValidate(yaml: string): ValidateResult {
     errors.push({ path: 'budget.max_hours', message: 'must be a positive number' });
   }
   const start = line(yaml, 'start');
-  if (mode === 'scenario' && start !== null && /^\d+$/.test(start) && Number(start) > 49) {
-    errors.push({ path: 'scenario.start', message: 'must be between 0 and 49' });
+  if ((mode === 'scenario' || mode === 'diagnose') && start !== null && /^\d+$/.test(start) && Number(start) > 49) {
+    errors.push({ path: `${mode}.start`, message: 'must be between 0 and 49' });
   }
   const families = /families:\s*\[(.*?)\]/.exec(yaml);
-  if (mode === 'audit' && families && (families[1] as string).trim() === '') {
-    errors.push({ path: 'audit.families', message: 'choose at least one family' });
+  const probing = mode === 'diagnose' && line(yaml, 'enabled') !== 'false';
+  if ((mode === 'audit' || probing) && families && (families[1] as string).trim() === '') {
+    errors.push({ path: mode === 'audit' ? 'audit.families' : 'diagnose.probes.families', message: 'choose at least one family' });
+  }
+  if (mode === 'diagnose') {
+    const rewordings = line(yaml, 'rewordings');
+    if (rewordings !== null && (!/^\d+$/.test(rewordings) || Number(rewordings) > 12)) {
+      errors.push({ path: 'diagnose.probes.rewordings', message: 'must be a whole number from 0 to 12' });
+    }
+    // Like the server: probes follow the untouched check of one start, so a range or a file cannot have them.
+    if (start === null && /^\s*probes:/m.test(yaml)) {
+      errors.push({ path: 'diagnose.probes', message: 'applies only to a single start, not to a range or a start file' });
+    }
   }
   return { ok: errors.length === 0, errors, summary: { name: line(yaml, 'name'), mode } };
 }
 
+const round = (value: number) => Math.round(value * 100) / 100;
+
+function job(name: string, deadline_seconds: number, worst_case_usd: number, branch?: Branch): DryRunJob {
+  return branch ? { name, deadline_seconds, worst_case_usd, branch } : { name, deadline_seconds, worst_case_usd };
+}
+
+/** A diagnose plan: the check, then the layout and probe branches (only one of which runs). */
+function diagnoseJobs(yaml: string): { jobs: DryRunJob[]; branches: DryRunBranch[]; total: number } {
+  const single = line(yaml, 'start') !== null;
+  const jobs: DryRunJob[] = [single ? job('check', 1800, 0.98, 'check') : job('screen', 1800, 0.98, 'check')];
+  if (line(yaml, 'layout') !== 'false') {
+    jobs.push(job('reference', 1500, 0.84, 'layout'), job('reduce', 3000, 1.27, 'layout'));
+  }
+  if (single && line(yaml, 'enabled') !== 'false') {
+    const chosen = /families:\s*\[(.*?)\]/.exec(yaml)?.[1]?.split(',').map((key) => key.trim()).filter(Boolean) ?? [];
+    const group = (kind: 'image' | 'scene') => chosen.filter((key) => AUDIT_FAMILIES.find((family) => family.key === key)?.group === kind);
+    // One audit Job holds at most four image families (the 40 minute limit), scene families share one Job.
+    for (let index = 0; index * 4 < group('image').length; index += 1) jobs.push(job(`probe-images-${index + 1}`, 2400, 1.3, 'probes'));
+    if (group('scene').length > 0) jobs.push(job('probe-scene', 2000, 1.2, 'probes'));
+    if (Number(line(yaml, 'rewordings') ?? '0') > 0) jobs.push(job('rewordings-screen', 1800, 0.98, 'probes'), job('rewordings-reduce', 2400, 1.22, 'probes'));
+  }
+  const worst = (branch: Branch) => round(jobs.filter((entry) => entry.branch === branch).reduce((sum, entry) => sum + entry.worst_case_usd, 0));
+  const present = (['check', 'layout', 'probes'] as Branch[]).filter((branch) => jobs.some((entry) => entry.branch === branch));
+  // Like the server: about half the worst case for a measured Job; unknown (null) for the layout branch.
+  const branches: DryRunBranch[] = present.map((branch) => ({
+    branch,
+    worst_case_usd: worst(branch),
+    typical_usd: branch === 'layout' ? null : round(worst(branch) * 0.5),
+  }));
+  return { jobs, branches, total: round(worst('check') + Math.max(worst('layout'), worst('probes'))) };
+}
+
 export function mockDryRun(yaml: string, importContent?: string): DryRun {
   const mode = line(yaml, 'mode') ?? 'scenario';
+  if (mode === 'diagnose') {
+    const plan = diagnoseJobs(yaml);
+    return {
+      plan_hash: djb2(`${yaml}
+${importContent ?? ''}`),
+      jobs: plan.jobs,
+      branches: plan.branches,
+      worst_case_total_usd: plan.total,
+      cap_usd: Number(line(yaml, 'max_spend_usd')) || 0,
+      max_hours: Number(line(yaml, 'max_hours')) || 0,
+      lines: plan.jobs.map((entry) => `${entry.branch}: ${entry.name}, deadline ${entry.deadline_seconds} s, worst case US$${entry.worst_case_usd.toFixed(2)}`),
+    };
+  }
   const jobs =
     mode === 'audit'
       ? [{ name: 'audit', deadline_seconds: 3000, worst_case_usd: 1.46 }]

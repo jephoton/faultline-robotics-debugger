@@ -9,7 +9,7 @@ import { JobPanel, LogTail, Meters, StepList, StopConfirm } from '../components/
 import { Section } from '../components/Section';
 import { usd } from '../lib/format';
 import { usePoll } from '../lib/polling';
-import { isTerminal, pendingCode, runStatusView } from '../lib/runs';
+import { isTerminal, pendingCode, routeView, runStatusView } from '../lib/runs';
 import { MODE_LABEL } from '../lib/status';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { LocalOnlyPage } from './NotFoundPage';
@@ -105,7 +105,8 @@ function Run({ controls }: { controls: boolean }) {
 
   const view = runStatusView(progress);
   const caseItem = progress.library_id ? items.find((item) => item.id === progress.library_id) : undefined;
-  const code = caseItem?.fault_code ?? pendingCode(progress.mode);
+  const code = caseItem?.fault_code ?? pendingCode(progress.mode, progress.route);
+  const route = progress.route ? routeView(progress.route) : null;
   const terminal = isTerminal(progress.status);
   const step = progress.steps.find((entry) => entry.status === 'running')?.label ?? progress.step;
 
@@ -159,6 +160,15 @@ function Run({ controls }: { controls: boolean }) {
         {`${progress.name}: ${view.word.toLowerCase()}${step ? `, step ${step}` : ''}, ${usd(progress.spent_usd)} spent.`}
       </p>
 
+      {route && (
+        <div className={`notice notice--${route.tone}`} role="status" data-testid="run-route">
+          <Icon name={route.icon} />
+          <div className="notice__body">
+            <p className="notice__title">{route.title}</p>
+            {route.detail && <p>{route.detail}</p>}
+          </div>
+        </div>
+      )}
       {terminal && progress.stop_text && progress.status !== 'completed' && (
         <div className="notice notice--attention" role="note">
           <Icon name="attention" />

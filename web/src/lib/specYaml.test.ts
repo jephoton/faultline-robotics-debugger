@@ -1,11 +1,14 @@
 import {
   REPLAY_DEFAULTS,
+  asksForRewordings,
   buildReplayYaml,
   buildYaml,
   defaultsFor,
   errorsByField,
   extractBackend,
   fieldForPath,
+  sortFamilies,
+  usesNemotron,
   yamlValue,
 } from './specYaml';
 
@@ -15,50 +18,86 @@ const BACKEND = `backend:
   image: cr.example.test/fake@sha256:0000`;
 
 describe('buildYaml', () => {
-  it('builds a scenario spec for a known failing start', () => {
-    const yaml = buildYaml('scenario-start', defaultsFor('scenario-start'), BACKEND);
+  it('builds one diagnose spec for a benchmark start, with every family, 10 rewordings and probes on', () => {
+    const yaml = buildYaml('start', defaultsFor('start'), BACKEND);
     expect(yaml).toContain('faultline: 1');
-    expect(yaml).toContain('mode: scenario');
-    expect(yaml).toContain('  start: 14');
-    expect(yaml).toContain('max_spend_usd: 3.5');
+    expect(yaml).toContain('mode: diagnose');
+    expect(yaml).toContain('diagnose:\n  task: 0\n  start: 14');
+    expect(yaml).toContain(
+      '    families: [blur, noise, darken, contrast, jpeg, colour_cast, motion_blur, dead_pixels, viewpoint, lighting]',
+    );
+    expect(yaml).toContain('    rewordings: 10');
+    expect(yaml).toContain('    enabled: true');
+    expect(yaml).toContain('  layout: true');
     expect(yaml).toContain('nemotron: {hypothesis: true, explain: true}');
+    expect(yaml).toContain('max_candidates: 36');
+    expect(yaml).not.toContain('mode: scenario');
     expect(yaml.trimEnd().endsWith('image: cr.example.test/fake@sha256:0000')).toBe(true);
   });
 
-  it('builds a range search and an import spec', () => {
-    const screen = buildYaml('scenario-screen', defaultsFor('scenario-screen'), BACKEND);
+  it('turns the probes off without losing the choices', () => {
+    const yaml = buildYaml('start', { ...defaultsFor('start'), probes: false, families: ['blur'], rewordings: '0' }, BACKEND);
+    expect(yaml).toContain('    families: [blur]');
+    expect(yaml).toContain('    rewordings: 0');
+    expect(yaml).toContain('    enabled: false');
+  });
+
+  it('writes the research choice as a top-level key', () => {
+    expect(buildYaml('start', defaultsFor('start'), null)).toMatch(/^research: true$/m);
+    expect(buildYaml('screen', { ...defaultsFor('screen'), research: false }, null)).toMatch(/^research: false$/m);
+  });
+
+  it('keeps the families in the server order however they were ticked', () => {
+    const form = { ...defaultsFor('start'), families: ['lighting', 'blur', 'jpeg'] };
+    expect(buildYaml('start', form, BACKEND)).toContain('families: [blur, jpeg, lighting]');
+    expect(sortFamilies(['lighting', 'nope', 'blur'])).toEqual(['blur', 'lighting', 'nope']);
+  });
+
+  it('builds a range search and an import spec with no probe block', () => {
+    const screen = buildYaml('screen', defaultsFor('screen'), BACKEND);
+    expect(screen).toContain('mode: diagnose');
     expect(screen).toContain('screen: {starts: "10-49", confirm: 4}');
-    const form = { ...defaultsFor('scenario-import'), importFile: { name: 'mine.json', content: '{}' } };
-    expect(buildYaml('scenario-import', form, BACKEND)).toContain('  import: mine.json');
-  });
-
-  it('builds an audit with the chosen families and Nemotron off', () => {
-    const form = { ...defaultsFor('audit'), families: ['blur', 'lighting'] };
-    const yaml = buildYaml('audit', form, BACKEND);
-    expect(yaml).toContain('mode: audit');
-    expect(yaml).toContain('families: [blur, lighting]');
-    expect(yaml).toContain('nemotron: {hypothesis: false, explain: false}');
-  });
-
-  it('builds a paraphrase spec that names the task instruction', () => {
-    const yaml = buildYaml('paraphrase', defaultsFor('paraphrase'), BACKEND);
-    expect(yaml).toContain('mode: paraphrase');
-    expect(yaml).toContain('count: 10');
-    expect(yaml).toContain('instruction: "pick up the alphabet soup and place it in the basket"');
+    expect(screen).not.toContain('probes:');
+    const form = { ...defaultsFor('import'), importFile: { name: 'mine.json', content: '{}' } };
+    const imported = buildYaml('import', form, BACKEND);
+    expect(imported).toContain('  import: mine.json');
+    expect(imported).not.toContain('probes:');
+    expect(imported).not.toContain('families');
   });
 
   it('quotes things that are not numbers so the server can name them', () => {
-    const yaml = buildYaml('audit', { ...defaultsFor('audit'), spend: 'lots' }, BACKEND);
+    const yaml = buildYaml('start', { ...defaultsFor('start'), spend: 'lots', rewordings: 'many' }, BACKEND);
     expect(yaml).toContain('max_spend_usd: "lots"');
+    expect(yaml).toContain('rewordings: "many"');
   });
 
   it('quotes an unusual name instead of letting it change the YAML', () => {
-    const yaml = buildYaml('audit', { ...defaultsFor('audit'), name: 'a: b' }, BACKEND);
+    const yaml = buildYaml('start', { ...defaultsFor('start'), name: 'a: b' }, BACKEND);
     expect(yaml).toContain('name: "a: b"');
   });
 
   it('leaves out the backend block when the template has none', () => {
-    expect(buildYaml('audit', defaultsFor('audit'), null)).not.toContain('backend:');
+    expect(buildYaml('start', defaultsFor('start'), null)).not.toContain('backend:');
+  });
+});
+
+describe('what a spec asks of Nemotron', () => {
+  it('asks for rewordings only for a single start with probes on and a count above zero', () => {
+    expect(asksForRewordings(buildYaml('start', defaultsFor('start'), null))).toBe(true);
+    expect(asksForRewordings(buildYaml('start', { ...defaultsFor('start'), probes: false }, null))).toBe(false);
+    expect(asksForRewordings(buildYaml('start', { ...defaultsFor('start'), rewordings: '0' }, null))).toBe(false);
+    expect(asksForRewordings(buildYaml('screen', defaultsFor('screen'), null))).toBe(false);
+    expect(asksForRewordings('mode: paraphrase\n')).toBe(true);
+    expect(asksForRewordings('mode: audit\n')).toBe(false);
+  });
+
+  it('uses Nemotron for a layout reading or for rewordings', () => {
+    const quiet = { ...defaultsFor('start'), nemotron: false, research: false };
+    expect(usesNemotron(buildYaml('start', quiet, null))).toBe(true);
+    expect(usesNemotron(buildYaml('start', { ...quiet, rewordings: '0' }, null))).toBe(false);
+    expect(usesNemotron(buildYaml('screen', defaultsFor('screen'), null))).toBe(true);
+    expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false }, null))).toBe(true); // research
+    expect(usesNemotron(buildYaml('screen', { ...defaultsFor('screen'), nemotron: false, research: false }, null))).toBe(false);
   });
 });
 
@@ -87,9 +126,9 @@ describe('helpers', () => {
   });
 
   it('reads values from the spec text', () => {
-    const yaml = buildYaml('audit', defaultsFor('audit'), null);
-    expect(yamlValue(yaml, 'mode')).toBe('audit');
-    expect(yamlValue(yaml, 'name')).toBe('audit-task0');
+    const yaml = buildYaml('start', defaultsFor('start'), null);
+    expect(yamlValue(yaml, 'mode')).toBe('diagnose');
+    expect(yamlValue(yaml, 'name')).toBe('soup-start14');
     expect(yamlValue(yaml, 'nothing')).toBeNull();
   });
 
@@ -100,6 +139,11 @@ describe('helpers', () => {
     expect(fieldForPath('audit.task')).toBe('task');
     expect(fieldForPath('scenario.screen.starts')).toBe('range');
     expect(fieldForPath('audit.families')).toBe('families');
+    expect(fieldForPath('diagnose.start')).toBe('start');
+    expect(fieldForPath('diagnose.screen.starts')).toBe('range');
+    expect(fieldForPath('diagnose.probes.families')).toBe('families');
+    expect(fieldForPath('diagnose.probes.rewordings')).toBe('rewordings');
+    expect(fieldForPath('diagnose.probes')).toBeNull();
     expect(fieldForPath('backend.image')).toBeNull();
     const { byField, other } = errorsByField([
       { path: 'budget.max_spend_usd', message: 'bad' },

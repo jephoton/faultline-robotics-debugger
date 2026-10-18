@@ -1,5 +1,5 @@
 import type { IconName } from '../components/Icon';
-import type { JobPhase, Progress } from '../api/types';
+import type { JobPhase, Progress, Route } from '../api/types';
 import type { Tone } from './status';
 
 export const TERMINAL: Progress['status'][] = ['completed', 'stopped', 'failed', 'interrupted'];
@@ -46,7 +46,44 @@ export function runStatusView(progress: Progress): RunStatusView {
 
 const KIND_LETTER: Record<string, string> = { scenario: 'S', audit: 'A', paraphrase: 'L', replay: 'R' };
 
-/** A code is assigned when the case is saved; until then the readout shows its shape. */
-export function pendingCode(mode: string): string {
+/**
+ * A code is assigned when the case is saved; until then the readout shows its shape. A diagnosis does not know
+ * its kind until the untouched check has chosen a route.
+ */
+export function pendingCode(mode: string, route?: Route | null): string {
+  if (mode === 'diagnose') {
+    const letter = route === 'layout' ? 'S' : route === 'probes' ? 'A' : '·';
+    return `FL-${letter}-····`;
+  }
   return `FL-${KIND_LETTER[mode] ?? 'X'}-····`;
+}
+
+export interface RouteView {
+  tone: Tone;
+  icon: IconName;
+  title: string;
+  /** One more sentence, when the title alone could be misread. */
+  detail?: string;
+}
+
+/**
+ * What the untouched check decided, in plain words. Red for the confirmed failure, green for a pass, amber for a start
+ * that cannot be judged.
+ */
+export function routeView(route: Route): RouteView {
+  switch (route) {
+    case 'layout':
+      return { tone: 'alarm', icon: 'alarm', title: 'The start failed untouched: finding the smallest layout change' };
+    case 'probes':
+      return { tone: 'pass', icon: 'check', title: 'The start passed: probing' };
+    case 'flaky':
+      return {
+        tone: 'attention',
+        icon: 'attention',
+        title: 'The start is flaky untouched: rewordings skipped',
+        detail: 'It does not pass reliably on its own, so no disturbance or wording can be blamed for a failure.',
+      };
+    case 'passes':
+      return { tone: 'pass', icon: 'check', title: 'Passes untouched', detail: 'The start did not fail, so there was no failure to reduce.' };
+  }
 }

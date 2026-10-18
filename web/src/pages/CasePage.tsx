@@ -15,7 +15,8 @@ import {
   RunDetails,
 } from '../components/case/CommonSections';
 import { OcclusionSection } from '../components/case/OcclusionSection';
-import { ReplaySection } from '../components/case/ReplaySection';
+import { FindingsList } from '../components/case/Findings';
+import { ReplaySection, showsReplay } from '../components/case/ReplaySection';
 import { ParaphraseSection } from '../components/case/ParaphraseSection';
 import { ScenarioSection } from '../components/case/ScenarioSection';
 import { Icon } from '../components/Icon';
@@ -61,7 +62,7 @@ function ReportFirstBody({ detail }: { detail: Detail }) {
       <ReportBody detail={detail} />
       <ReadingFold detail={detail} />
       <ResearchSection detail={detail} />
-      {detail.kind === 'scenario' && <ReplaySection detail={detail} purpose />}
+      {showsReplay(detail) && <ReplaySection detail={detail} purpose />}
       <RunDetails detail={detail} />
     </>
   );
@@ -79,7 +80,7 @@ function StructuredBody({ detail }: { detail: Detail }) {
       <HistorySection detail={detail} />
       <ExplanationSection detail={detail} />
       <ResearchSection detail={detail} />
-      {detail.kind === 'scenario' && <ReplaySection detail={detail} />}
+      {showsReplay(detail) && <ReplaySection detail={detail} />}
       <ReportSection detail={detail} />
     </>
   );
@@ -113,6 +114,7 @@ export function CaseView({ detail }: { detail: Detail }) {
         </div>
       )}
       <CaseFacts detail={detail} />
+      <FindingsList detail={detail} />
 
       {detail.report_markdown ? <ReportFirstBody detail={detail} /> : <StructuredBody detail={detail} />}
       <FilesSection detail={detail} />
