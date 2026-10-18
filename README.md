@@ -50,9 +50,14 @@ loop, with failure analysis done by people replaying videos and logs
 - **Nemotron** proposes the order in which differences are tested and writes
   a labelled reading of the verified result. The reruns, not the model, decide.
 
-Two ways to find failures feed the same suite: debug a failure you already
-have (Mode 1), or stress-test a passing start with image, scene and wording
-changes (Mode 2). A stress test that finds nothing is a result too.
+One **New diagnosis** does it. It runs your start untouched:
+- if it fails, Faultline finds the smallest change of layout that triggers
+  the failure;
+- if it passes, Faultline probes it with image, scene and wording
+  disturbances and finds the smallest one that breaks it.
+
+Every failing condition becomes a replayable case. "Nothing broke it in
+these ranges" is a valid finding too.
 
 ### What is regression testing?
 
@@ -103,29 +108,34 @@ reduction works, every severity, every report column and abbreviation, and
 the stop reasons. Its first walkthrough uses saved
 evidence and starts no new compute; setup instructions are separate.
 
-## Two modes, one engine
+## One diagnosis, routed on the untouched result
 
-| Mode | Question it answers | What you give it |
-| --- | --- | --- |
-| **1. Debug a failure you bring** | "My policy failed from this start. What is the minimal cause?" | A failing start: let Faultline **screen** benchmark starts for one that fails reliably, name a **benchmark start**, or **import your own failing start-state file** (`scenario.import`). It confirms the failure repeats, then delta-debugs its differences from the nearest passing start down to the shifts that are needed together. Nemotron proposes the order and a hypothesis; the simulator decides. Demonstrated on one case (LIBERO-10 task 0, start 14). |
-| **2. Audit a policy** | "What is the smallest disturbance that breaks this policy?" | A passing start and a list of families. **Audit families:** the eight image families (blur, noise, darken, contrast, JPEG compression, colour cast, motion blur, dead pixels) plus camera viewpoint and lighting, which change the simulated scene. **Paraphrase** is the language mode: Nemotron rewords the instruction and a failing wording is reduced to the minimal word change. |
+| The start, run untouched... | Route | What Faultline does | The case it keeps |
+| --- | --- | --- | --- |
+| **fails reliably** (4 of 5) | layout | Finds the nearest benchmark start that passes, then delta-debugs the differences (object positions, the arm's pose) down to the shifts needed together. Nemotron proposes the order; reruns decide. | The minimal layout trigger, with the original, minimal and reference videos |
+| **passes** | probes | Runs the chosen disturbances (by default blur, noise, darken and contrast; JPEG, colour cast, motion blur, dead pixels, camera viewpoint, lighting and Nemotron-written rewordings are one tick away) and finds the smallest severity or word change that breaks it | The failing disturbance at its threshold, or the failing wording, with videos |
+| **fails sometimes** | flaky | Reports the start as unreliable untouched; no disturbance is blamed | — |
 
-Occlusion (a black rectangle over a camera) is not an audit family. It ran
-through the earlier experiment modes (M4 to M6) and its results are listed
+You can also search a range of benchmark starts for one that fails, or import
+your own failing start-state file. Both go straight to the layout route.
+
+`faultline replay` (or **Replay** on any case page) reruns a case on any
+checkpoint, `policy.checkpoint` in the replay spec included, so you can test
+a retrained policy against the failures you found. Optionally, each new case
+also gets related public research (Tavily sources, summarised by Nemotron 3
+Nano), shown as context, not evidence.
+
+Typical cost and time with the defaults (one L40S, measured runs):
+- about US$1.25 and 45 minutes when the start passes;
+- about US$1.10 and 40 minutes when it fails.
+
+What everything means (routes, the gate, every severity, report columns,
+verdicts) is in the [Reference](docs/reference.md), which is also a page in
+the control panel.
+
+Occlusion (a grey rectangle over a camera) is not a probe family. It ran
+through the earlier experiment modes (M4 to M6); its results are listed
 below.
-
-Both modes share the same loop: a fixed compute budget, a repeatability gate
-(a failure must reproduce in at least 4 of 5 attempts while unperturbed
-controls succeed), a reducer, and a saved case. `faultline replay` re-runs a
-saved **scenario** case (audit and paraphrase cases are not replayed yet) and
-can aim at a different checkpoint through `policy.checkpoint` in the replay
-spec, so you can test a retrained policy against the failure you found.
-
-The UI currently presents three execution paths: scenario, visual/scene audit,
-and instruction rewordings. Rewordings are part of product Mode 2 (language
-robustness) but use word-edit search rather than the visual-audit severity
-search. See [the architecture and full UI reference](docs/architecture.md) for
-the diagrams, terminology, controls, evidence and current limitations.
 
 ## What it has found so far
 
@@ -133,7 +143,7 @@ All results are for GR00T N1.7 on LIBERO, one seed per run, on single Nebius
 L40S GPUs. Each is budget-local evidence for the tested task, start and
 family, not a general claim.
 
-- **A natural failure reduced to its cause (mode 1):** on LIBERO-10 task 0
+- **A natural failure reduced to its cause (layout route):** on LIBERO-10 task 0
   ("put both the alphabet soup and the tomato sauce in the basket"), start 14
   fails reliably while the nearby start 28 passes. No single difference
   causes it: the failure needs **five small shifts together** (the soup,
@@ -143,7 +153,7 @@ family, not a general claim.
   were not shrunk because the candidate budget ran out. Nemotron 3 Ultra
   predicted the soup; the reruns showed it is necessary but not sufficient.
   Replaying the case two days later with `faultline replay` still reproduced
-  it ([mode 1](docs/experiments/m7-scenario-reduction.md)).
+  it ([scenario reduction](docs/experiments/m7-scenario-reduction.md)).
 
 - **Minimal occlusion (LIBERO-Object task 0, start 0):** a black rectangle over the upper-right 14% of the
   third-person camera reproducibly breaks the task (reduced from 25%). The
@@ -224,7 +234,7 @@ family, not a general claim.
 
 M1–M6 are complete. **M7a** turns the engine into a product
 ([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)):
-scenario reduction (mode 1), `faultline diagnose / replay`, and the breadth
+scenario reduction, `faultline diagnose / replay`, and the breadth
 pack (four suites; image, scene and language families) and the **control
 panel** (a browser UI over the same commands,
 [ADR 0033](docs/decisions/0033-control-panel-ui.md)) and the public static
@@ -257,14 +267,20 @@ faultline ui --open
 
 (From a source checkout without installing: `PYTHONPATH=src python -m
 robot_debug.cli ui --open`.) The control panel is a browser UI over the same
-commands: a sidebar of runs and cases, a **New diagnosis** form that writes
-the spec, shows the dry run's Jobs and worst-case cost and starts the run
-only after you confirm, a live run page with a safe **Stop** (the current Job
-is cancelled and charged for the time it ran; `--resume` continues) and
-**Resume**, case pages for every kind (minimal cause with the original,
-minimal and reference videos in step, severity ladders, rewordings, the step
-timeline and cost, Nemotron's reading labelled for review), **Replay**, and a
-**Setup** page that checks the Nebius sign-in, keys and image.
+commands:
+- A sidebar of runs and cases.
+- **New diagnosis**: you choose the start and what to probe if it passes. The
+  review shows both branches with their worst-case and typical cost and
+  time, and the run starts only after you confirm.
+- A live run page showing the route, with a safe **Stop** (the current Job is
+  cancelled and charged for the time it ran; `--resume` continues) and
+  **Resume**.
+- Report-first case pages for every kind: a findings list, videos in step,
+  the full report, Nemotron's reading labelled for review, related research
+  as context.
+- **Replay** for every case kind.
+- A **Reference** page explaining everything shown.
+- A **Setup** page that checks the Nebius sign-in, keys and image.
 
 It listens on 127.0.0.1 only; every action needs the page's session token and
 a same-origin request, and one paid run runs at a time. Everything it does can
