@@ -84,6 +84,17 @@ Selected SHA-256 fingerprints:
   the recorded outcomes. Local screenshots and check scripts remain ignored
   under `artifacts/public-gallery-qa-20261017/`.
 
+## Redeploy, October 18
+
+Approved by Jethro to correct a false claim: the scene-goal case (control
+failed, nothing searched) read "No failure up to severity 1" and "no failure
+found" per family; it now reads "not tested". Fresh export
+`artifacts/public-gallery-20261018/` (ignored): the same five cases and 25
+videos, 56 files (the 55 before plus the bundle's `THIRD-PARTY-LICENSES.txt`),
+static session with no controls. The dry deploy listed no `.vercel`, `.env` or
+spec files. The production deployment is READY, and the public site serves the
+new bundle and the corrected case without a login.
+
 ## Regenerate and publish safely
 
 Use a fresh ignored output directory; do not overwrite original evidence or
