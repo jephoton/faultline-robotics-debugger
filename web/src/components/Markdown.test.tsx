@@ -1,5 +1,11 @@
-import { render, screen } from '@testing-library/react';
-import { Markdown, renderMarkdown } from './Markdown';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { LONG_TABLE_ROWS, Markdown, renderMarkdown } from './Markdown';
+
+function table(rows: number): string {
+  const body = Array.from({ length: rows }, (_, index) => `| ${index} | row ${index} |`).join('\n');
+  return `| n | label |\n| - | - |\n${body}\n`;
+}
 
 describe('Markdown', () => {
   it('renders headings (shifted below the page headings), lists, tables and code', () => {
@@ -41,5 +47,39 @@ describe('Markdown', () => {
 
   it('keeps ordinary https links', () => {
     expect(renderMarkdown('[docs](https://example.org/docs)')).toContain('href="https://example.org/docs"');
+  });
+
+  it('gives every heading an anchor id, unique within the report', () => {
+    const html = renderMarkdown('# Summary\n\n## Result\n\n## Result\n\n### Minimal `cause` (a/b)\n');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ids = Array.from(doc.querySelectorAll('h3, h4, h5')).map((heading) => heading.id);
+    expect(ids).toEqual(['md-summary', 'md-result', 'md-result-2', 'md-minimal-cause-a-b']);
+    // A second document starts again, so the ids do not depend on what was rendered before.
+    expect(new DOMParser().parseFromString(renderMarkdown('# Summary'), 'text/html').querySelector('h3')?.id).toBe('md-summary');
+  });
+
+  it('folds a table of more than 12 body rows behind a Show all toggle and leaves short ones open', async () => {
+    const user = userEvent.setup();
+    const source = `# Report\n\nbefore\n\n${table(LONG_TABLE_ROWS + 1)}\nafter\n\n${table(3)}`;
+    const { container } = render(<Markdown source={source} collapseAbove={LONG_TABLE_ROWS} />);
+    const more = container.querySelector('details.md__more') as HTMLDetailsElement;
+    expect(more).not.toBeNull();
+    expect(more.open).toBe(false);
+    expect(within(more).getByText('Show all 13 rows')).toBeInTheDocument();
+    expect(container.querySelectorAll('details')).toHaveLength(1);
+    expect(screen.getByText('before')).toBeInTheDocument();
+    expect(screen.getByText('after')).toBeInTheDocument();
+    // The long table is inside the fold; the short one (3 rows) is outside it.
+    expect(more.querySelectorAll('tbody tr')).toHaveLength(13);
+    expect(container.querySelectorAll('table')).toHaveLength(2);
+    await user.click(screen.getByText('Show all 13 rows'));
+    expect(more.open).toBe(true);
+  });
+
+  it('does not fold a table of exactly 12 rows, or any table without the option', () => {
+    const { container, rerender } = render(<Markdown source={table(LONG_TABLE_ROWS)} collapseAbove={LONG_TABLE_ROWS} />);
+    expect(container.querySelector('details')).toBeNull();
+    rerender(<Markdown source={table(40)} />);
+    expect(container.querySelector('details')).toBeNull();
   });
 });

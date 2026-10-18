@@ -1670,6 +1670,16 @@ def _fmt(value: float, digits: int = 1) -> str:
     return text[:-2] if text.endswith(".0") and digits == 1 else text
 
 
+def _every_part_shrunk(final_selection: Mapping[str, Mapping[str, float]],
+                       parts: Optional[Sequence[Mapping[str, Any]]], steps: int) -> bool:
+    """True when each kept (entity, component) has a shrink summary with all ``steps`` done."""
+
+    done = {(p.get("entity"), p.get("component")): p.get("steps_done") for p in parts or ()
+            if isinstance(p, Mapping)}
+    return all(isinstance(done.get((entity, component)), int) and done[(entity, component)] >= steps
+               for entity, components in final_selection.items() for component in components)
+
+
 def describe_minimal_cause(
     final_selection: Mapping[str, Mapping[str, float]],
     differences: Sequence[Mapping[str, Any]],
@@ -1679,18 +1689,22 @@ def describe_minimal_cause(
     reduced: bool = True,
     required_failures: int = 4,
     attempts: int = 5,
+    parts: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> str:
     """The minimal cause in one plain sentence.
 
     Sizes are the final fraction ``t`` of each part's original difference between the
-    failing start and the reference, so "of the original" is the measured size.
+    failing start and the reference, so "of the original" is the measured size. The
+    "resolved to within 1/N" claim is made only when ``parts`` (the reduction's shrink
+    summaries) show every kept part finished its ``bisection_steps``; otherwise the
+    sentence says the sizes are not fully shrunk.
     """
 
     rows = {row["entity"]: row for row in differences}
     pieces = []
-    for entity, parts in final_selection.items():
+    for entity, shares in final_selection.items():
         row = rows.get(entity) or {}
-        for component, fraction in parts.items():
+        for component, fraction in shares.items():
             if component == "position":
                 full = ((row.get("position") or {}).get("distance_m") or 0.0) * 100.0
                 pieces.append("moving {} by {} cm (of the original {} cm)".format(
@@ -1716,7 +1730,10 @@ def describe_minimal_cause(
         sentence += " from the passing start {}".format(reference)
     sentence += " (at least {} of {} attempts)".format(required_failures, attempts)
     if bisection_steps:
-        sentence += "; sizes are resolved to within 1/{} of the original difference".format(2 ** bisection_steps)
+        if _every_part_shrunk(final_selection, parts, bisection_steps):
+            sentence += "; sizes are resolved to within 1/{} of the original difference".format(2 ** bisection_steps)
+        else:
+            sentence += "; sizes not fully shrunk"
     if not reduced:
         sentence += "; the reduction stopped early, so this is the smallest cause found so far"
     return sentence + "."
@@ -1767,7 +1784,8 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
             "sentence": describe_minimal_cause(
                 selection or {}, summary.get("differences") or [], reference=reference,
                 bisection_steps=reduction.get("bisection_steps"), reduced=bool(reduction.get("reduced")),
-                required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5)),
+                required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5),
+                parts=reduction.get("parts")),
             "parts": reduction.get("parts"),
             "entity_minimal": reduction.get("entity_minimal"),
         },

@@ -28,11 +28,11 @@ async function audit(container: HTMLElement) {
 
 const PAGES: [string, string, () => Promise<unknown>][] = [
   ['home', '/', async () => screen.findByRole('heading', { name: 'Latest case' })],
-  ['scenario case', `/case/${IDS.soup}`, async () => screen.findByRole('heading', { name: 'The measurement' })],
-  ['imported scenario case', `/case/${IDS.imported}`, async () => screen.findByText(/your imported file/)],
+  ['scenario case', `/case/${IDS.soup}`, async () => screen.findByText('Show all 26 rows')],
+  ['imported scenario case', `/case/${IDS.imported}`, async () => screen.findByText(/imported file f00dfeedf00d/)],
   ['stopped case', `/case/${IDS.nominal}`, async () => screen.findByText('No minimal cause was found for this run.')],
-  ['audit case', `/case/${IDS.audit}`, async () => screen.findByRole('article', { name: 'Blur severity ladder' })],
-  ['language case', `/case/${IDS.wording}`, async () => screen.findByText('Changed meaning, discarded')],
+  ['audit case', `/case/${IDS.audit}`, async () => screen.findByText('Blur: fails from s = 0.50.')],
+  ['language case', `/case/${IDS.wording}`, async () => screen.findByText(/Rewordings: 5 screened/)],
   ['language case without failure', `/case/${IDS.quiet}`, async () => screen.findByText(/No wording failed reliably/)],
   ['occlusion case', `/case/${IDS.occlusion}`, async () => screen.findByText(/Trimmed the right edge/)],
   ['new diagnosis, step 1', '/new', async () => screen.findByRole('radio', { name: /test rewordings/i })],
@@ -49,6 +49,19 @@ describe('axe-core audit (jsdom)', () => {
   it.each(PAGES)('%s has no structural accessibility violations', async (_name, path, ready) => {
     const { container } = renderApp(path, { activeDemo: true });
     await ready();
+    expect(await audit(container)).toEqual([]);
+  });
+
+  it.each([
+    ['scenario', IDS.soup, 'The measurement'],
+    ['audit', IDS.audit, 'Severity by family'],
+    ['language', IDS.wording, 'Wordings tried'],
+  ])('the structured %s case, without a stored report, has none either', async (_kind, id, ready) => {
+    const harness = makeHarness({ activeDemo: true });
+    const base = await harness.api.detail(id);
+    vi.spyOn(harness.api, 'detail').mockResolvedValue({ ...base, report_markdown: null });
+    const { container } = renderApp(`/case/${id}`, { harness });
+    await screen.findByRole('heading', { name: ready });
     expect(await audit(container)).toEqual([]);
   });
 
@@ -124,10 +137,21 @@ describe('keyboard use', () => {
     play.focus();
     await user.keyboard('{Enter}');
     expect(await screen.findByRole('button', { name: /pause/i })).toBeInTheDocument();
-    const summary = screen.getByText(/Show all 6 reruns/);
-    summary.focus();
-    await user.keyboard('{Enter}');
-    expect(screen.getAllByRole('table').length).toBeGreaterThan(1);
+    // The folds are native details/summary: the browser makes each summary a tab stop and opens it with
+    // Enter or Space. jsdom has no such activation, so check the structure and open them by click.
+    const summary = screen.getByText('Show all 26 rows');
+    const fold = summary.closest('details') as HTMLDetailsElement;
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(fold.open).toBe(false);
+    await user.click(summary);
+    expect(fold.open).toBe(true);
+    for (const label of ['Show the reading (interpretation, not evidence)', 'Run details']) {
+      const toggle = screen.getByText(label);
+      expect(toggle.tagName).toBe('SUMMARY');
+      expect(toggle.closest('details')).not.toHaveAttribute('open');
+      await user.click(toggle);
+      expect(toggle.closest('details')).toHaveAttribute('open');
+    }
   });
 
   it('Escape closes the drawer and returns focus to the menu button', async () => {

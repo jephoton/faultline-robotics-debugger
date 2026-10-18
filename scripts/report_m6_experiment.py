@@ -441,10 +441,59 @@ def scope_target(summaries: Sequence[Mapping[str, Any]]) -> str:
     return "a LIBERO task (the summary does not record the suite, task or start)"
 
 
+def family_summary_line(family: str, result: Mapping[str, Any]) -> str:
+    """One family's result in the words the case page uses (``AuditSection``): fails from s, no failure up to
+    the highest level searched, incomplete, or not tested. A family the run never searched is not "robust"."""
+
+    label = FAMILY_LABELS.get(family, family)
+    levels = [level["severity"] for level in result.get("levels") or ()
+              if isinstance(level, Mapping) and isinstance(level.get("severity"), (int, float))]
+    threshold = result.get("threshold_severity")
+    if threshold is not None:
+        return "{}: fails from s = {:.2f}.".format(label, threshold)
+    if result.get("stop_reason") == "no_reproducible_failure" and levels:
+        return "{}: no failure up to s = {:.2f}.".format(label, max(levels))
+    if levels:
+        return "{}: incomplete (searched up to s = {:.2f}, then stopped).".format(label, max(levels))
+    return "{}: not tested (the run stopped before this family was searched).".format(label)
+
+
+def summary_section(summaries: Sequence[Mapping[str, Any]]) -> List[str]:
+    """A short bullet summary before the detail: the unperturbed control, then one line per family."""
+
+    lines = ["## Summary", ""]
+    for summary in summaries:
+        if summary["mode"] == "m6-threshold":
+            nominal = summary.get("nominal_controls") or {}
+            outcomes = nominal.get("outcomes") or {}
+            attempts = nominal.get("planned") or sum(v for v in outcomes.values() if isinstance(v, int))
+            failures = outcomes.get("policy_failure", 0)
+            if attempts:
+                control = "Unperturbed control: {} of {} attempts failed".format(failures, attempts)
+                control += ("; the unperturbed policy did not pass reliably, so no disturbance can be judged."
+                            if failures else ".")
+            else:
+                control = "Unperturbed control: not recorded."
+            lines.append("- " + control)
+            if summary.get("stop_reason"):
+                lines.append("- Stopped early: `{}`.".format(summary["stop_reason"]))
+            order = (summary.get("config") or {}).get("families") or ()
+            families = summary.get("families") or {}
+            lines += ["- " + family_summary_line(name, families[name]) for name in _ordered(families, order)]
+        else:
+            nominal = (summary.get("conditions") or {}).get("nominal")
+            if nominal is not None:
+                counts = _counts(nominal)
+                lines.append("- Wrist-camera check, unperturbed control: {} of {} runs succeeded.".format(
+                    counts["success"], counts["valid"] + counts["missing"]))
+    return lines + [""]
+
+
 def render_report(summaries: Sequence[Mapping[str, Any]]) -> str:
     lines = [
         "# M6 results: camera reliance and scalar image families",
         "",
+        *summary_section(summaries),
         "Scope: GR00T N1.7 on {}, on one L40S. Thresholds are budget-local "
         "(the attempts per level and bisection steps stated below) and describe reliable failure, not the "
         "onset of any failure. Image-space transforms approximate, not simulate, lighting and sensor effects."
