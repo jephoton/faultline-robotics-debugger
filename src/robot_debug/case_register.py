@@ -138,7 +138,61 @@ def _summary(case: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def register_run(run_dir: Any, root: Any = None) -> str:
+def _role_stem(role: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", role).strip("-") or "clip"
+
+
+def _episode_videos(base: Path) -> List[Path]:
+    """Every ordinary mp4 under one Job's evidence folder (links and oversize files left out)."""
+
+    found = []
+    try:
+        for path in sorted(base.rglob("*.mp4")):
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > _MAX_VIDEO_BYTES:
+                continue
+            try:
+                path.resolve().relative_to(base.resolve())
+            except (OSError, ValueError):
+                continue
+            found.append(path)
+    except OSError:
+        return []
+    return found
+
+
+def _find_episode_video(run_dir: Path, job: Any, case_id: Any,
+                        cache: Dict[Path, List[Path]]) -> Optional[Path]:
+    """The clip of one episode of an audit Job: the mp4 whose path holds the episode's ``case_id`` as a folder
+    (``evidence/.../runs/<case_id>/...``). Looks in the named Job's evidence first, then in the others."""
+
+    if type(case_id) is not str or not case_id or "/" in case_id or "\\" in case_id:
+        return None
+    jobs = run_dir / "jobs"
+    bases = []
+    if type(job) is str and job and "/" not in job and "\\" not in job and (jobs / job / "evidence").is_dir():
+        bases.append(jobs / job / "evidence")
+    if jobs.is_dir():
+        bases += [p / "evidence" for p in sorted(jobs.iterdir()) if p.is_dir() and (p / "evidence").is_dir()
+                  and (p / "evidence") not in bases]
+    for base in bases:
+        if base not in cache:
+            cache[base] = _episode_videos(base)
+        for path in cache[base]:
+            if case_id in path.relative_to(base).parts:
+                return path
+    return None
+
+
+def _ordered_roles(recorded: Mapping[str, Any]) -> List[str]:
+    """The clips' display order: the control first, then the reduction's clips, then the rest alphabetically."""
+
+    roles = [role for role in recorded if type(role) is str]
+    first = [role for role in ("control",) + VIDEO_ROLES if role in roles]
+    return first + sorted(role for role in roles if role not in first)
+
+
+def register_run(run_dir: Any, root: Any = None, *, source: Any = None, label: Optional[str] = None,
+                 order: int = 0) -> str:
     """Register one diagnosis run folder and return its case id.
 
     ``run_dir`` has the layout written by ``faultline diagnose`` (``spec.yaml``, ``report.md``,
@@ -147,12 +201,19 @@ def register_run(run_dir: Any, root: Any = None) -> str:
     is the diagnoses folder (default: ``diagnoses`` beside the run folder's ``runs`` parent).
     The case id is the case record's own id, or a digest of the run folder name for a run without
     a case (an audit).
+
+    ``source`` is the folder holding the case's own files when a run has several (``cases/audit``; see
+    :func:`register_cases`); the Job evidence and the spec still come from ``run_dir``. ``label`` is
+    appended to the entry's name and ``order`` is its place among the run's cases.
     """
 
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise RegisterError("the run folder does not exist")
-    report_path, case_path = run_dir / "report.md", run_dir / "case.json"
+    source_dir = run_dir if source is None else Path(source)
+    if not source_dir.is_dir():
+        raise RegisterError("the case folder does not exist")
+    report_path, case_path = source_dir / "report.md", source_dir / "case.json"
     case = _read_json(case_path)
     if case_path.exists() and case is None:
         raise RegisterError("case.json is not a valid JSON object")
@@ -171,31 +232,46 @@ def register_run(run_dir: Any, root: Any = None) -> str:
         files = {}  # type: Dict[str, Optional[str]]
         for key, name in (("report", "report.md"), ("case", "case.json"), ("explanation", "explanation.json"),
                           ("candidate", "minimal-candidate.json"), ("replay_inputs", "replay-inputs.json")):
-            source = run_dir / name
-            if source.is_file() and not source.is_symlink() and source.stat().st_size <= _MAX_JSON_BYTES:
-                shutil.copyfile(str(source), str(staging / name))
+            candidate_file = source_dir / name
+            if (candidate_file.is_file() and not candidate_file.is_symlink()
+                    and candidate_file.stat().st_size <= _MAX_JSON_BYTES):
+                shutil.copyfile(str(candidate_file), str(staging / name))
                 files[key] = name
             else:
                 files[key] = None
         videos = {}  # type: Dict[str, Optional[Dict[str, Any]]]
         scenario_dirs = _job_scenario_dirs(run_dir)
+        episode_cache = {}  # type: Dict[Path, List[Path]]
         recorded = case.get("videos") if case is not None and isinstance(case.get("videos"), Mapping) else {}
         for role in VIDEO_ROLES:
+            videos[role] = None                  # the three scenario roles are always listed, found or not
+        for role in _ordered_roles(recorded):
             entry = recorded.get(role) if isinstance(recorded.get(role), Mapping) else None
-            found = None if entry is None else _find_video(scenario_dirs, entry.get("video"))
-            if found is None:
-                videos[role] = None
+            if entry is None:
                 continue
+            if isinstance(entry.get("video"), str):
+                found = _find_video(scenario_dirs, entry.get("video"))
+            else:
+                found = _find_episode_video(run_dir, entry.get("job"), entry.get("case_id"), episode_cache)
+            if found is None:
+                continue
+            stem = _role_stem(role)
             (staging / "videos").mkdir(exist_ok=True)
-            shutil.copyfile(str(found), str(staging / "videos" / (role + ".mp4")))
-            videos[role] = {"file": "videos/{}.mp4".format(role), "outcome": entry.get("outcome"),
+            shutil.copyfile(str(found), str(staging / "videos" / (stem + ".mp4")))
+            videos[role] = {"file": "videos/{}.mp4".format(stem), "outcome": entry.get("outcome"),
                             "case_id": entry.get("case_id")}
-        explanation = _read_json(run_dir / "explanation.json")
+            if isinstance(entry.get("label"), str):
+                videos[role]["label"] = entry["label"][:200]
+        explanation = _read_json(source_dir / "explanation.json")
+        header = (_read_json(run_dir / "steps.json") or {}).get("run")
+        route = header.get("route") if isinstance(header, Mapping) else None
         index = {
             "schema_version": SCHEMA_VERSION, "kind": "diagnosis", "case_id": case_id,
-            "name": spec.get("name") or run_dir.name, "run": run_dir.name,
+            "name": (spec.get("name") or run_dir.name) + ("" if label is None else " - " + label),
+            "run": run_dir.name,
             "mode": spec.get("mode") or ("scenario" if case is not None else None),
-            "files": files, "videos": videos,
+            "files": files, "videos": videos, "order": order,
+            "route": route if route in ("layout", "probes", "passes", "flaky") else None,
             "explanation_status": None if explanation is None else explanation.get("interpretation_status"),
         }
         index.update(_summary(case))
@@ -208,6 +284,56 @@ def register_run(run_dir: Any, root: Any = None) -> str:
         shutil.rmtree(str(staging), ignore_errors=True)
         raise
     return case_id
+
+
+CASE_FOLDERS = (("audit", "stress test"), ("wording", "rewordings"))      # route order: the stress test first
+
+
+def register_cases(run_dir: Any, root: Any = None) -> List[str]:
+    """Register every case of a run folder and return their ids, in route order.
+
+    A single-case run (the layout diagnosis, the stand-alone modes) keeps ``case.json`` and ``report.md`` at the
+    top and registers exactly as :func:`register_run`. A pipeline run that probed keeps one folder per case,
+    ``cases/audit/`` and ``cases/wording/``, each with its own ``case.json``, ``report.md`` and (when it can be
+    replayed) ``replay-inputs.json``; each is registered, sharing the run's Job evidence and spec.
+    """
+
+    run_dir = Path(run_dir)
+    folders = [(run_dir / "cases" / name, label) for name, label in CASE_FOLDERS
+               if (run_dir / "cases" / name).is_dir()]
+    if not folders:
+        return [register_run(run_dir, root)]
+    return [register_run(run_dir, root, source=folder, label=label, order=order)
+            for order, (folder, label) in enumerate(folders)]
+
+
+def reregister_run(run_dir: Any, root: Any = None) -> List[str]:
+    """Register a finished run again from its folder, for cases registered before the clips existed.
+
+    An audit case made before the pipeline (or by the stand-alone audit mode) has no ``videos`` in its
+    ``case.json``; this reads the Job summary the case names, attaches the control and per-family clips
+    (:func:`robot_debug.pipeline_cases.audit_videos`) and registers the run again, replacing its entry. Cases
+    that already have clips, and every other kind, are registered unchanged. Returns the case ids. Nothing is
+    deleted and no cloud call is made; the coordinator decides when to run it on real artifacts.
+    """
+
+    run_dir = Path(run_dir)
+    case_path = run_dir / "case.json"
+    case = _read_json(case_path)
+    if isinstance(case, dict) and case.get("kind") == "audit" and not case.get("videos"):
+        summary = _read_json(_safe_child(run_dir, case.get("summary")) or run_dir / "none")
+        job = case.get("job_name")
+        if isinstance(summary, dict) and isinstance(job, str):
+            from robot_debug.pipeline_cases import audit_videos
+
+            videos = audit_videos([(job, summary)])
+            if videos:
+                case = dict(case, videos=videos)
+                temporary = case_path.with_name("case.json.tmp")
+                temporary.write_text(json.dumps(case, indent=1, sort_keys=True, allow_nan=False) + "\n",
+                                     encoding="utf-8", newline="\n")
+                os.replace(str(temporary), str(case_path))
+    return register_cases(run_dir, root)
 
 
 def _entry(directory: Path) -> Optional[Dict[str, Any]]:
@@ -258,5 +384,5 @@ def read_diagnosis(root: Any, case_id: str) -> Dict[str, Any]:
     return entry
 
 
-__all__ = ["DIAGNOSES_DIR", "RegisterError", "VIDEO_ROLES", "default_root", "list_diagnoses",
-           "read_diagnosis", "register_run"]
+__all__ = ["CASE_FOLDERS", "DIAGNOSES_DIR", "RegisterError", "VIDEO_ROLES", "default_root", "list_diagnoses",
+           "read_diagnosis", "register_cases", "register_run", "reregister_run"]

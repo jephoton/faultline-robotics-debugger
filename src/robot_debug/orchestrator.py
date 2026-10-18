@@ -109,6 +109,8 @@ class RunResult:
     reproduces: Optional[bool] = None
     verdict: Optional[str] = None          # replay only: still_reproduces | no_longer_reproduces | reference_fails | ...
     notes: List[str] = field(default_factory=list)
+    route: Optional[str] = None            # diagnose only: layout | probes | passes | flaky
+    case_ids: List[str] = field(default_factory=list)
 
     @property
     def exit_code(self) -> int:
@@ -478,6 +480,15 @@ def check_candidate_budget(spec: Spec, tools: Any) -> None:
 
 
 PARAPHRASE_DEFAULT_CANDIDATES = 24
+
+ROUTE_TEXTS = {
+    "layout": "the start fails reliably: diagnosing its layout",
+    "probes": "the start does not fail reliably: trying the chosen probes",
+    "passes": "the start passes untouched and no probes were chosen",
+    "flaky": "the start is flaky: its own control did not pass reliably",
+}
+# Stops of the rewording probe that must not lose the stress-test case already paid for.
+WORDING_DEFERRED = ("paraphrase_failed", "llm_required", "original_unknown")
 
 
 def paraphrase_candidates(spec: Spec) -> int:
@@ -856,10 +867,12 @@ class DefaultTools:
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
-    def audit_report(self, summary: Mapping[str, Any]) -> str:
+    def audit_report(self, summary: Any) -> str:
+        """The audit report for one summary, or for the summaries of several Jobs (a pipeline run's groups)."""
+
         module = _load_script("report_m6_experiment")
         try:
-            return module.render_report([summary])
+            return module.render_report(list(summary) if isinstance(summary, (list, tuple)) else [summary])
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
@@ -884,6 +897,13 @@ class DefaultTools:
         from robot_debug.case_register import register_run
 
         return register_run(Path(run_dir))
+
+    def register_cases(self, run_dir: Path) -> List[str]:
+        """Register every case of a pipeline run (``cases/<name>/`` folders), in route order."""
+
+        from robot_debug.case_register import register_cases
+
+        return register_cases(Path(run_dir))
 
 
 # --------------------------------------------------------------------------------------
@@ -1166,14 +1186,18 @@ class Orchestrator:
             return self._audit()
         if self.spec.mode == "paraphrase":
             return self._paraphrase()
+        if self.spec.mode == "diagnose":
+            return self._diagnose_pipeline()
         raise StopRun("wrong_mode", "a replay spec is used with `faultline replay`")
 
     # -- Jobs --------------------------------------------------------------------------------
 
     def job_name(self, step: str, number: int) -> str:
-        name = "{}-{}-{}".format(self.spec.name, self.tag, step)
-        if number:
-            name += "-" + ATTEMPT_SUFFIXES[number - 1]
+        suffix = "-" + step + ("-" + ATTEMPT_SUFFIXES[number - 1] if number else "")
+        # The provider limits a Job name to 63 characters. A long spec name is shortened (never a step or
+        # the run tag, which keep names unique); names that already fit are unchanged.
+        room = 63 - len(self.tag) - 1 - len(suffix)
+        name = "{}-{}{}".format(self.spec.name[:max(room, 1)].rstrip("-"), self.tag, suffix)
         if _JOB_NAME.fullmatch(name) is None:
             raise OrchestratorError("the Job name is not valid")
         return name
@@ -1851,6 +1875,8 @@ class Orchestrator:
             if not self.steps.is_done("case"):
                 case = self.tools.paraphrase_case(summary, screen_summary)
                 _write_json(case_path, case)
+                if isinstance(case.get("replay"), dict):
+                    _write_json(self.run_dir / REPLAY_INPUTS, case["replay"])
                 self.steps.update("case", status="done", case_id=case["case_id"])
                 self.say("case", "case.json {}".format(case["case_id"][:12]))
             case_id = self.steps.get("case").get("case_id")
@@ -1877,6 +1903,8 @@ class Orchestrator:
             self.say("report", "report.md")
         case = self._audit_case(summary, outcome)
         _write_json(self.run_dir / "case.json", case)
+        if isinstance(case.get("replay"), dict):
+            _write_json(self.run_dir / REPLAY_INPUTS, case["replay"])
         self.steps.update("case", status="done", case_id=case["case_id"])
         self._register("case")
         finished = bool(summary.get("complete")) and not outcome.partial
@@ -1907,7 +1935,244 @@ class Orchestrator:
         }
         if self.checkpoint is not None:         # only a run with a checkpoint override records one
             case["checkpoint"] = {"id": self.checkpoint[0], "revision": self.checkpoint[1], "pinned": True}
+        from robot_debug import pipeline_cases
+
+        videos = pipeline_cases.audit_videos([(outcome.job_name, outcome.summary)])
+        if videos:
+            case["videos"] = videos
+        replay = pipeline_cases.audit_replay_block([("audit", outcome.job_name, outcome.summary)])
+        if replay is not None:
+            case["replay"] = replay
         return case
+
+    # -- the one diagnosis pipeline (ADR 0035) ------------------------------------------------------
+
+    def _set_route(self, route: str) -> None:
+        self.steps.set_run(route=route)
+        self.say("route", ROUTE_TEXTS[route])
+
+    def _diagnose_pipeline(self) -> RunResult:
+        """Check the start untouched, then route on the result: layout diagnosis for a start that fails
+        reliably, the chosen probes for one that does not, "passes" when no probes were chosen."""
+
+        spec, sc, dg = self.spec, self.spec.scenario, self.spec.diagnose
+        imported = self._import_record() if sc.import_path else None
+        screen_workload = self.tools.screen_workload(
+            self.job_name("screen", 0), spec.suite, sc.task, _screen_starts(spec), sc.confirm,
+            **self._checkpoint_args())
+        screen = self.run_job("screen", screen_workload, int(screen_workload["deadline_seconds"]),
+                              "scenario_summary.json")
+        summary = screen.summary
+        if imported is not None:
+            self._set_route("layout")
+            return self._with_route(self._scenario_import(summary, imported), "layout")
+        start = choose_start(summary, sc.task, sc.start)
+        if sc.start is None:                 # a range of starts is searched for a failure: layout only
+            if start is None:
+                self._write_screen_only_report(summary, sc.task)
+                raise StopRun("no_reproducible_failure",
+                              "no start failed 4 of 5 attempts. " + "; ".join(screen_table(summary, sc.task)))
+            return self._layout_branch(summary, start)
+        if start is not None and dg.layout:
+            return self._layout_branch(summary, start)
+        if dg.probes.active:
+            return self._probes(summary)
+        return self._passes(summary)
+
+    def _with_route(self, result: RunResult, route: str) -> RunResult:
+        result.route = route
+        return result
+
+    def _layout_branch(self, screen_summary: Mapping[str, Any], start: int) -> RunResult:
+        self._set_route("layout")
+        plan = self._plan(screen_summary, self.spec.scenario.task, start)
+        best, last, reason = self._reduce_loop(plan)
+        return self._with_route(self._finish_scenario(best, last, reason, screen_summary), "layout")
+
+    def _passes(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        """The start passed and no probe was chosen: "passes untouched" is the finding."""
+
+        self._set_route("passes")
+        self._write_screen_only_report(screen_summary, self.spec.scenario.task)
+        self.steps.update("report", status="done")
+        self.steps.set_run(status="completed", reason=None)
+        self.say("done", "completed: the start passes untouched")
+        return RunResult("completed", None, self.run_dir, self.ledger.spent, notes=list(self.notes),
+                         route="passes")
+
+    def _probes(self, screen_summary: Mapping[str, Any]) -> RunResult:
+        from robot_debug import pipeline
+
+        spec, dg = self.spec, self.spec.diagnose
+        self._set_route("probes")
+        problems: List[str] = []                 # why the run is incomplete, in order
+        flaky = False
+        deferred: Optional[StopRun] = None
+        groups = self.tools.probe_groups(spec) if dg.probes.families else []
+        ran: List[Tuple[Any, JobOutcome]] = []
+        for group in groups:
+            workload = self.tools.probe_workload(spec, group.families, self.job_name(group.step, 0))
+            outcome = self.run_job(group.step, workload, int(workload["deadline_seconds"]), "m6_summary.json")
+            ran.append((group, outcome))
+            if pipeline.audit_control_failed(outcome.summary):
+                flaky = True
+                self.say(group.step, "the unperturbed control did not pass reliably: the start is flaky, so no "
+                         "disturbance is judged and the rewordings are skipped")
+                break
+            if outcome.partial or not outcome.summary.get("complete"):
+                problems.append(str(outcome.summary.get("stop_reason") or "incomplete"))
+        if ran:
+            self._audit_case_files(ran, list(dg.probes.families))
+        wording_flaky = False
+        if spec.paraphrase is not None and not flaky:
+            try:
+                problem, wording_flaky = self._wording_probe(screen_summary)
+                if problem:
+                    problems.append(problem)
+            except StopRun as stop:
+                if stop.reason not in WORDING_DEFERRED:
+                    raise
+                deferred = stop
+        elif spec.paraphrase is not None:
+            self.steps.update("rewording-screen", status="skipped", reason="flaky start")
+        route = "flaky" if (flaky or wording_flaky) else "probes"
+        self.steps.set_run(route=route)
+        ids = self._register_cases()
+        self._research_cases()
+        if deferred is not None:
+            raise deferred
+        reason = problems[0] if problems else None
+        self.steps.set_run(status="stopped" if reason else "completed", reason=reason)
+        self.say("done", "stopped: {}".format(reason) if reason else "completed ({})".format(ROUTE_TEXTS[route]))
+        return RunResult("stopped" if reason else "completed", reason, self.run_dir, self.ledger.spent,
+                         case_id=ids[0] if ids else None, notes=list(self.notes), route=route, case_ids=ids)
+
+    # -- the cases of a pipeline run: ``cases/<name>/`` folders ----------------------------------------
+
+    def _write_case_folder(self, name: str, case: Mapping[str, Any], report: Optional[str],
+                           replay: Optional[Mapping[str, Any]]) -> Path:
+        folder = self.run_dir / "cases" / name
+        folder.mkdir(parents=True, exist_ok=True)
+        _write_json(folder / "case.json", case)
+        if report is not None:
+            (folder / "report.md").write_text(report, encoding="utf-8", newline="\n")
+        if replay is not None:
+            _write_json(folder / REPLAY_INPUTS, replay)
+        self.steps.update("case-" + name, status="done", case_id=case["case_id"])
+        self.say("case", "{} case {}".format(name, str(case["case_id"])[:12]))
+        return folder
+
+    def _audit_case_files(self, ran: Sequence[Tuple[Any, JobOutcome]], requested: Sequence[str]) -> None:
+        from robot_debug import pipeline, pipeline_cases
+
+        spec, sc = self.spec, self.spec.scenario
+        groups = [(group.step, outcome.job_name, outcome.summary) for group, outcome in ran]
+        merged = pipeline.merge_audit_summaries([summary for _s, _j, summary in groups], requested)
+        folder = self.run_dir / "cases" / "audit"
+        _write_json(folder / "merged-summary.json", merged)
+        videos = pipeline_cases.audit_videos([(job, summary) for _s, job, summary in groups])
+        case = pipeline_cases.audit_case(
+            merged=merged, suite=spec.suite, task=sc.task, start=sc.start, run=self.run_dir.name,
+            requested=requested, groups=groups, summary_path="cases/audit/merged-summary.json",
+            checkpoint=self.checkpoint, videos=videos)
+        report = None
+        try:
+            report = self.tools.audit_report([summary for _s, _j, summary in groups])
+        except StopRun as stop:
+            self._warn("report", "no stress-test report written ({})".format(stop.reason))
+        self._write_case_folder("audit", case, report, case.get("replay"))
+
+    def _wording_original(self, screen_summary: Mapping[str, Any]) -> str:
+        """The task's own wording: the spec's, else the one the check screen recorded for the task."""
+
+        from robot_debug import paraphrase as pp
+
+        text = self.spec.paraphrase.instruction
+        if text is None:
+            tasks = screen_summary.get("tasks") or {}
+            entry = tasks.get(str(self.spec.scenario.task)) or tasks.get(self.spec.scenario.task) or {}
+            text = entry.get("instruction") if isinstance(entry, Mapping) else None
+        if not isinstance(text, str) or not text.strip():
+            raise StopRun("original_unknown", "the task's own wording is not known; give "
+                          "diagnose.probes.instruction to probe its rewordings")
+        try:
+            return pp.clean_instruction(text)
+        except pp.ParaphraseError:
+            raise StopRun("original_unknown", "the task's wording is not usable text") from None
+
+    def _wording_probe(self, screen_summary: Mapping[str, Any]) -> Tuple[Optional[str], bool]:
+        """Rewordings: write them, screen them (the original wording is the control), reduce a failing one.
+
+        Writes the wording case (registered even when nothing failed). Returns ``(problem, flaky)``: why the
+        probe is incomplete (a stop reason) or ``None``, and whether its own control failed."""
+
+        from robot_debug import pipeline_cases
+
+        spec = self.spec
+        original = self._wording_original(screen_summary)
+        paraphrases = self._generate_paraphrases(original)
+        workload = self.tools.paraphrase_screen_workload(
+            self.job_name("rewording-screen", 0), spec, original, paraphrases)
+        screen = self.run_job("rewording-screen", workload, int(workload["deadline_seconds"]),
+                              "language_summary.json")
+        summary = screen.summary
+        control = summary.get("control") or {}
+        problem = str(summary.get("stop_reason") or "incomplete") if screen.partial else None
+        reduction: Optional[JobOutcome] = None
+        flaky = False
+        case: Optional[Dict[str, Any]] = None
+        if control.get("original_matches_task") is False:
+            stop_reason = "original_mismatch"
+        else:
+            chosen = choose_paraphrase(summary)
+            if chosen is None:
+                dropped = choose_paraphrase(summary, include_dropped=True) is not None
+                stop_reason = problem or ("no_faithful_failure" if dropped else "no_reproducible_failure")
+            elif not control.get("passed"):
+                stop_reason, flaky = "control_not_passing", True
+            else:
+                self.say("choose", "{} fails {} of 5 ({} word edits): {}".format(
+                    chosen["label"], paraphrase_failures(chosen), chosen.get("edit_count"), chosen["text"]))
+                reduce_workload = self.tools.paraphrase_reduce_workload(
+                    self.job_name("rewording-reduce", 0), self.spec, original, chosen["text"])
+                reduction = self.run_job("rewording-reduce", reduce_workload,
+                                         int(reduce_workload["deadline_seconds"]), "language_summary.json")
+                minimal = reduction.summary.get("minimal")
+                detail = reduction.summary.get("reduction") or {}
+                if isinstance(minimal, Mapping) and minimal.get("verified"):
+                    case = self.tools.paraphrase_case(reduction.summary, summary)
+                    case = pipeline_cases.with_wording_clips(case, summary, screen.job_name)
+                    stop_reason = None if detail.get("reduced") else str(detail.get("stop_reason") or "incomplete")
+                else:
+                    stop_reason = str(detail.get("stop_reason") or reduction.summary.get("stop_reason")
+                                      or "incomplete")
+                if stop_reason is not None and problem is None:
+                    problem = stop_reason                  # the wording was not fully reduced or verified
+        if case is None:
+            case = pipeline_cases.wording_case_without_failure(
+                screen=summary, run=self.run_dir.name, stop_reason=stop_reason, job=screen.job_name)
+        report = None
+        try:
+            report = self.tools.paraphrase_report(summary, reduction.summary if reduction else None,
+                                                  self.spec.backend.hourly_usd)
+        except StopRun as stop:
+            self._warn("report", "no wording report written ({})".format(stop.reason))
+        replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else None
+        self._write_case_folder("wording", case, report, replay)
+        return problem, flaky
+
+    def _register_cases(self) -> List[str]:
+        try:
+            ids = list(self.tools.register_cases(self.run_dir))
+        except Exception as error:              # noqa: BLE001 - registration is a convenience
+            self._warn("register", "the cases were not registered in the viewer ({})".format(type(error).__name__))
+            return []
+        self.steps.update("register", status="done", case_id=ids[0] if ids else None, case_ids=ids)
+        self.say("register", "{} viewer case(s)".format(len(ids)))
+        return ids
+
+    def _research_cases(self) -> None:
+        """Placeholder until the research step lands: nothing to add."""
 
     # -- replay --------------------------------------------------------------------------------
 

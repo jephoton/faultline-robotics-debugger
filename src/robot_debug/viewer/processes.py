@@ -35,7 +35,10 @@ STEP_LABELS = {
     "reduce": "Reduce the cause", "report": "Write the report", "case": "Save the case",
     "explain": "Nemotron's reading", "register": "Add to the library", "paraphrase": "Write the paraphrases",
     "audit": "Run the audit", "replay": "Replay the case",
+    "rewording-screen": "Screen the rewordings", "rewording-reduce": "Reduce the wording",
+    "case-audit": "Save the stress-test case", "case-wording": "Save the wording case",
 }
+ROUTES = ("layout", "probes", "passes", "flaky")
 # Where a mode's step means something else (a paraphrase run screens rewordings, not starts).
 MODE_STEP_LABELS = {
     "paraphrase": {"screen": "Screen the rewordings", "reduce": "Reduce the wording"},
@@ -47,6 +50,8 @@ STEP_ORDER = {
     "replay": ["replay"],
 }
 _CONTINUATION = re.compile(r"reduce([2-9])\Z")
+_PROBE_STEP = re.compile(r"probe-(image|scene)-(\d+)\Z")
+_REPLAY_STEP = re.compile(r"replay-(\d+)\Z")
 # A drive letter not preceded by a letter (so ``s:/`` in ``https://`` is not one), then the rest of the path:
 # folder names may hold spaces ("First Last"), so it runs to the end of the line, a quote or bracket, or a
 # ``:``/``;``/``,`` followed by a space (the sentence continuing after the path).
@@ -237,7 +242,32 @@ def _ledger(run_dir: Path) -> Dict[str, Any]:
             "spent_usd": 0.0, "reserved_usd": 0.0, "elapsed_seconds": 0.0}
 
 
-def _step_keys(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any]) -> List[str]:
+def _diagnose_keys(steps: Mapping[str, Any], spec: Mapping[str, Any], route: Optional[str]) -> List[str]:
+    """The steps a diagnosis shows: the check first, then the branch the run took (known once the check is read)."""
+
+    keys = ["import", "screen"] if (isinstance(spec.get("diagnose"), Mapping) and "import" in spec["diagnose"]) \
+        else ["screen"]
+    if route == "layout":
+        later = sorted((k for k in steps if _CONTINUATION.match(k)), key=lambda k: int(k[6:]))
+        keys += ["plan", "reduce"] + later + ["report", "case", "explain", "register"]
+    elif route in ("probes", "flaky"):
+        keys += sorted(k for k in steps if _PROBE_STEP.match(k))
+        keys += [k for k in ("paraphrase", "rewording-screen", "rewording-reduce") if k in steps]
+        keys += ["case-audit", "case-wording"] if "case-wording" in steps or "rewording-screen" in steps \
+            else ["case-audit"]
+        keys += ["register"]
+    elif route == "passes":
+        keys += ["report"]
+    return keys
+
+
+def _step_keys(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any],
+               route: Optional[str] = None) -> List[str]:
+    if mode == "diagnose":
+        return _diagnose_keys(steps, spec, route)
+    if mode == "replay":
+        extra = sorted((k for k in steps if _REPLAY_STEP.match(k)), key=lambda k: int(k[7:]))
+        return ["replay"] + extra
     keys = list(STEP_ORDER.get(mode, []))
     scenario = spec.get("scenario")
     if mode == "scenario" and "import" not in steps and not (isinstance(scenario, Mapping) and "import" in scenario):
@@ -251,17 +281,24 @@ def _step_keys(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any]) -> 
 def _step_label(key: str, mode: str = "") -> str:
     if _CONTINUATION.match(key):
         return "Continue the reduction ({})".format(key[6:])
+    probe = _PROBE_STEP.match(key)
+    if probe:
+        return "Stress test: {} disturbances ({})".format(probe.group(1), probe.group(2))
+    again = _REPLAY_STEP.match(key)
+    if again:
+        return "Replay the case ({})".format(again.group(1))
     return MODE_STEP_LABELS.get(mode, {}).get(key) or STEP_LABELS.get(key, key.capitalize())
 
 
-def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], finished: Optional[str]) -> List[Dict]:
+def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], finished: Optional[str],
+              route: Optional[str] = None) -> List[Dict]:
     """The step timeline: the planned steps in order, with what each has done so far.
 
     A planned step the run never recorded is ``pending`` while the run can still reach it, ``skipped`` once the
     run completed without it (for example no explanation under ``--no-llm``) and ``pending`` after a stop."""
 
     rows = []
-    for key in _step_keys(mode, steps, spec):
+    for key in _step_keys(mode, steps, spec, route):
         record = steps.get(key) if isinstance(steps.get(key), Mapping) else None
         attempts = [a for a in (record or {}).get("attempts", []) if isinstance(a, Mapping)]
         status = (record or {}).get("status") or ("skipped" if finished == "completed" else "pending")
@@ -375,7 +412,8 @@ def run_progress(runs_root: Path, run: str, probe: Probe = default_probe,
         header = dict(header, status="completed")
     status = _status(active, stopping, header)
     spec = spec_raw(folder)
-    rows = step_rows(mode, steps, spec, header.get("status") if not active else None)
+    route = header.get("route") if header.get("route") in ROUTES else None
+    rows = step_rows(mode, steps, spec, header.get("status") if not active else None, route)
     current = _current_step(rows) if active else None
     ledger = _ledger(folder)
     elapsed = _money(ledger.get("elapsed_seconds")) or 0.0
@@ -399,8 +437,9 @@ def run_progress(runs_root: Path, run: str, probe: Probe = default_probe,
         "steps": rows, "job": job,
         "reserved_usd": _money(ledger.get("reserved_usd")) or 0.0, "elapsed_seconds": round(elapsed, 1),
         "max_hours": _money(ledger.get("max_hours")) or 0.0, "log_tail": log_tail(folder),
+        "route": route,
         "library_id": ("d-" + registered if isinstance(registered, str) and registered
-                       else "r-" + folder.name if negative and mode != "replay" else None),
+                       else "r-" + folder.name if (negative or route == "passes") and mode != "replay" else None),
         "resumable": (not active) and mode != "replay" and status in ("stopped", "failed", "interrupted"),
         "stoppable": active and not stopping,
     }
