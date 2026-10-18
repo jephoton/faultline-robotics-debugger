@@ -21,6 +21,15 @@ Modes:
     failing wording to its minimal word edits. ``paraphrase`` holds the task, the benchmark start,
     how many paraphrases to ask for, optionally the Token Factory model and the original
     instruction text (required unless the suite and task are one Faultline knows).
+``diagnose`` (ADR 0035)
+    One diagnosis that routes on the untouched result. ``diagnose`` holds the task and exactly one of
+    ``start`` (a benchmark start), ``screen`` (a range of starts: layout only) or ``import`` (your own
+    start file: layout only), plus ``probes`` (``families``, ``rewordings``, ``enabled``, and the original
+    ``instruction`` when the suite and task are not ones Faultline knows) and ``layout`` (false means
+    "probe only"). The start is screened first; a start that fails reliably gets the layout diagnosis,
+    one that does not gets the chosen probes. ``reference`` and ``pool`` (optional) are the scenario
+    mode's reference options. The parsed spec also carries a derived ``scenario`` (and, with rewordings, a
+    ``paraphrase``) so the existing steps run unchanged.
 ``replay``
     Used only with ``faultline replay`` (the case supplies the scenario); the spec
     gives the name, budget and backend.
@@ -44,7 +53,7 @@ from robot_debug import checkpoint_override as _checkpoint_module
 from robot_debug import paraphrase as _paraphrase_module
 
 SPEC_VERSION = 1
-MODES = ("scenario", "audit", "paraphrase", "replay")
+MODES = ("scenario", "audit", "paraphrase", "diagnose", "replay")
 SUITES = ("libero_10", "libero_object", "libero_spatial", "libero_goal")
 FAMILIES = ("darken", "noise", "blur", "contrast",
             "jpeg", "colour_cast", "motion_blur", "dead_pixels", "viewpoint", "lighting")
@@ -112,6 +121,29 @@ class Paraphrase:
 
 
 @dataclass(frozen=True)
+class Probes:
+    """``diagnose.probes``: what to try when the start passes untouched."""
+
+    families: Tuple[str, ...] = ()
+    rewordings: int = 0
+    enabled: bool = True
+    instruction: Optional[str] = None       # the task's own wording; None: not needed (no rewordings)
+
+    @property
+    def active(self) -> bool:
+        """Whether any probe will run (enabled, with at least one family or rewording)."""
+
+        return self.enabled and bool(self.families or self.rewordings)
+
+
+@dataclass(frozen=True)
+class Diagnose:
+    task: int
+    probes: Probes
+    layout: bool = True
+
+
+@dataclass(frozen=True)
 class Budget:
     max_spend_usd: float
     max_hours: float
@@ -158,13 +190,15 @@ class Spec:
     scenario: Optional[Scenario] = None
     audit: Optional[Audit] = None
     paraphrase: Optional[Paraphrase] = None
+    diagnose: Optional[Diagnose] = None
+    research: bool = False                  # diagnose mode: add web context to each new case (needs a Tavily key)
     checkpoint: Optional[Checkpoint] = None
     raw: Mapping[str, Any] = field(default_factory=dict, compare=False)
 
     @property
     def mode_label(self) -> str:
         return {"scenario": "mode 1", "audit": "mode 2", "paraphrase": "paraphrase",
-                "replay": "replay"}[self.mode]
+                "diagnose": "diagnosis", "replay": "replay"}[self.mode]
 
 
 # --- primitives -----------------------------------------------------------------------
@@ -249,44 +283,91 @@ def parse_starts(text: Any, path: str) -> Tuple[int, ...]:
 # --- sections -------------------------------------------------------------------------
 
 
-def _scenario(value: Any) -> Scenario:
-    data = _exact(value, "scenario", ("task",), ("start", "screen", "import", "reference", "pool"))
-    task = _int(data["task"], "scenario.task", 0, MAX_TASK)
+def _scenario(value: Any, section: str = "scenario") -> Scenario:
+    data = _exact(value, section, ("task",), ("start", "screen", "import", "reference", "pool"))
+    task = _int(data["task"], section + ".task", 0, MAX_TASK)
     chosen = [key for key in ("start", "screen", "import") if key in data]
     if len(chosen) != 1:
-        _fail("scenario", "give exactly one of start, screen or import")
+        _fail(section, "give exactly one of start, screen or import")
     reference = data.get("reference", "auto")
     if reference != "auto":
-        reference = _int(reference, "scenario.reference", 0, MAX_START)
+        reference = _int(reference, section + ".reference", 0, MAX_START)
     start = screen_starts = screen_text = import_path = None
     confirm = DEFAULT_CONFIRM
     pool_text = "0-19"
     if "pool" in data and chosen[0] == "screen":
-        _fail("scenario.pool", "only applies with scenario.start or scenario.import")
+        _fail(section + ".pool", "only applies with {0}.start or {0}.import".format(section))
     if "pool" in data:
         pool_text = data["pool"]
-        parse_starts(pool_text, "scenario.pool")
+        parse_starts(pool_text, section + ".pool")
     if chosen[0] == "start":
-        start = _int(data["start"], "scenario.start", 0, MAX_START)
+        start = _int(data["start"], section + ".start", 0, MAX_START)
         if reference == start:
-            _fail("scenario.reference", "must differ from scenario.start")
+            _fail(section + ".reference", "must differ from {}.start".format(section))
     elif chosen[0] == "screen":
-        screen = _exact(data["screen"], "scenario.screen", ("starts",), ("confirm",))
+        screen = _exact(data["screen"], section + ".screen", ("starts",), ("confirm",))
         screen_text = screen["starts"]
-        screen_starts = parse_starts(screen_text, "scenario.screen.starts")
-        confirm = _int(screen.get("confirm", DEFAULT_CONFIRM), "scenario.screen.confirm", MIN_CONFIRM, MAX_CONFIRM)
+        screen_starts = parse_starts(screen_text, section + ".screen.starts")
+        confirm = _int(screen.get("confirm", DEFAULT_CONFIRM), section + ".screen.confirm", MIN_CONFIRM, MAX_CONFIRM)
         if len(screen_starts) * (1 + confirm) > MAX_SCREEN_EPISODES:
-            _fail("scenario.screen", "screens more episodes than the Job allows ({})".format(MAX_SCREEN_EPISODES))
+            _fail(section + ".screen", "screens more episodes than the Job allows ({})".format(MAX_SCREEN_EPISODES))
         if reference != "auto" and reference not in screen_starts:
-            _fail("scenario.reference", "must be one of the screened starts")
+            _fail(section + ".reference", "must be one of the screened starts")
     else:
         path = data["import"]
         if type(path) is not str or not path.strip() or len(path) > 500 or any(ord(c) < 32 for c in path):
-            _fail("scenario.import", "must be a file path")
+            _fail(section + ".import", "must be a file path")
         import_path = path
     return Scenario(task=task, start=start, screen_starts=screen_starts, screen_text=screen_text,
                     confirm=confirm, import_path=import_path, reference=reference,
                     pool_text=pool_text.replace(" ", ""))
+
+
+def _probes(value: Any, suite: Optional[str], task: int) -> Probes:
+    data = _exact(value, "diagnose.probes", (), ("families", "rewordings", "enabled", "instruction"))
+    families = data.get("families", [])
+    if type(families) is not list or len(families) > len(FAMILIES):
+        _fail("diagnose.probes.families", "must be a list of perturbation families ([] for none)")
+    for item in families:
+        if type(item) is not str or item not in FAMILIES:
+            _fail("diagnose.probes.families", "unknown family (one of {})".format(", ".join(FAMILIES)))
+    if len(set(families)) != len(families):
+        _fail("diagnose.probes.families", "must not repeat a family")
+    rewordings = _int(data.get("rewordings", 0), "diagnose.probes.rewordings", 0, _paraphrase_module.MAX_COUNT)
+    enabled = _bool(data.get("enabled", True), "diagnose.probes.enabled")
+    instruction = data.get("instruction", _paraphrase_module.KNOWN_INSTRUCTIONS.get((suite, task)))
+    if instruction is not None:
+        # Without one the run reads the task's own wording from the check screen (the benchmark's language).
+        try:
+            instruction = _paraphrase_module.clean_instruction(instruction)
+        except _paraphrase_module.ParaphraseError:
+            _fail("diagnose.probes.instruction", "must be 1 to {} printable ASCII characters".format(
+                _paraphrase_module.MAX_CHARS))
+        if not _paraphrase_module.has_words(instruction):
+            _fail("diagnose.probes.instruction", "must contain words")
+    return Probes(families=tuple(families), rewordings=rewordings, enabled=enabled, instruction=instruction)
+
+
+def _diagnose(value: Any, suite: Optional[str]) -> Tuple[Diagnose, Scenario, Optional[Paraphrase]]:
+    data = _mapping(value, "diagnose")
+    base = {key: data[key] for key in data if key not in ("probes", "layout")}
+    scenario = _scenario(base, "diagnose")
+    layout = _bool(data.get("layout", True), "diagnose.layout")
+    probes = _probes(data.get("probes", {}), suite, scenario.task)
+    if scenario.start is None and probes.active:
+        _fail("diagnose.probes", "apply only with diagnose.start; a range of starts or a start file of your own "
+              "is diagnosed by its layout alone (remove probes or set probes.enabled to false)")
+    if not layout and scenario.start is None:
+        _fail("diagnose.layout", "can be false only with diagnose.start (a range of starts or a start file "
+              "has nothing but the layout to diagnose)")
+    if not layout and not probes.active:
+        _fail("diagnose.layout", "false with no probes leaves nothing to run; choose at least one family or "
+              "rewording and set probes.enabled to true, or set layout to true")
+    paraphrase = None
+    if scenario.start is not None and probes.enabled and probes.rewordings:
+        paraphrase = Paraphrase(task=scenario.task, start=scenario.start, count=probes.rewordings,
+                                instruction=probes.instruction)
+    return Diagnose(task=scenario.task, probes=probes, layout=layout), scenario, paraphrase
 
 
 def _audit(value: Any) -> Audit:
@@ -421,6 +502,8 @@ def parse_spec(data: Any) -> Spec:
         _fail("mode", "must be one of {}".format(", ".join(MODES)))
     required = ["faultline", "name", "mode", "budget", "backend"]
     optional = ["nemotron"]
+    if mode == "diagnose":
+        optional.append("research")
     if mode == "replay":
         optional.append("policy")
     else:
@@ -443,13 +526,19 @@ def parse_spec(data: Any) -> Spec:
                 _fail("policy.suite", "must be one of {}".format(", ".join(SUITES)))
         if "checkpoint" in policy:
             checkpoint = _checkpoint(policy["checkpoint"])
+    diagnose = scenario = paraphrase = None
+    if mode == "diagnose":
+        diagnose, scenario, paraphrase = _diagnose(top["diagnose"], suite)
+    elif mode == "scenario":
+        scenario = _scenario(top["scenario"])
+    elif mode == "paraphrase":
+        paraphrase = _paraphrase(top["paraphrase"], suite)
     return Spec(
         name=name, mode=mode, suite=suite, budget=_budget(top["budget"]),
         nemotron=_nemotron(top.get("nemotron", {})), backend=_backend(top["backend"]),
-        scenario=_scenario(top["scenario"]) if mode == "scenario" else None,
-        audit=_audit(top["audit"]) if mode == "audit" else None,
-        paraphrase=_paraphrase(top["paraphrase"], suite) if mode == "paraphrase" else None,
-        checkpoint=checkpoint, raw=top,
+        scenario=scenario, audit=_audit(top["audit"]) if mode == "audit" else None,
+        paraphrase=paraphrase, diagnose=diagnose, checkpoint=checkpoint, raw=top,
+        research=_bool(top.get("research", False), "research") if mode == "diagnose" else False,
     )
 
 
@@ -505,6 +594,7 @@ def load_spec(path: Any) -> Spec:
 
 
 __all__ = [
-    "Audit", "BackendSpec", "Budget", "Checkpoint", "Nemotron", "Paraphrase", "Scenario", "Spec", "SpecError",
+    "Audit", "BackendSpec", "Budget", "Checkpoint", "Diagnose", "Nemotron", "Paraphrase", "Probes", "Scenario",
+    "Spec", "SpecError",
     "load_spec", "parse_spec", "parse_spec_text", "parse_starts",
 ]

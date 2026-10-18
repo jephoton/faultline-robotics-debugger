@@ -44,7 +44,7 @@ SPECS_LOCAL = "specs-local"
 TEMPLATE_FILES = {
     "scenario-start": "scenario-start.yaml", "scenario-screen": "scenario-screen.yaml",
     "scenario-import": "scenario-import.yaml", "audit": "audit.yaml", "paraphrase": "paraphrase.yaml",
-    "replay": "replay.yaml",
+    "diagnose": "diagnose.yaml", "replay": "replay.yaml",
 }
 LOCAL_IMAGE = "local"                    # backend.image in a template: "the image pinned in my local spec"
 ID_KEYS = ("project", "subnet", "registry", "image_digest")      # backend keys that can hold resource ids
@@ -76,7 +76,7 @@ class Prepared:
 
         data = copy.deepcopy(self.mapping)
         if self.import_bytes is not None:
-            data["scenario"]["import"] = "sha256:" + str(self.import_sha256)
+            data[_import_section(self.spec)]["import"] = "sha256:" + str(self.import_sha256)
         return yaml.safe_dump(data, sort_keys=True, default_flow_style=False)
 
 
@@ -228,7 +228,7 @@ class SpecService:
             spec = sp.parse_spec(mapping)
         except sp.SpecError as error:
             raise _fail(_error_pairs(error)) from None
-        wants_import = spec.mode == "scenario" and bool(spec.scenario.import_path)
+        wants_import = _needs_import(spec)
         content: Optional[bytes] = None
         name: Optional[str] = None
         if import_file is not None:
@@ -242,7 +242,8 @@ class SpecService:
             if not content or len(content) > MAX_IMPORT_BYTES:
                 raise _fail([{"path": "import_file", "message": "must be 1 byte to 512 KiB"}])
         elif wants_import:
-            raise _fail([{"path": "scenario.import", "message": "attach the start file (a scenario candidate JSON)"}])
+            raise _fail([{"path": _import_section(spec) + ".import",
+                          "message": "attach the start file (a scenario candidate JSON)"}])
         return Prepared(spec, copy.deepcopy(dict(mapping)), content, name)
 
     def _staged(self, prepared: Prepared) -> Tuple[sp.Spec, Optional[Path]]:
@@ -254,7 +255,7 @@ class SpecService:
         path = staging / "import.json"
         path.write_bytes(prepared.import_bytes)
         mapping = copy.deepcopy(prepared.mapping)
-        mapping["scenario"]["import"] = str(path)
+        mapping[_import_section(prepared.spec)]["import"] = str(path)
         return sp.parse_spec(mapping), staging
 
     @staticmethod
@@ -292,15 +293,16 @@ class SpecService:
             orch.check_import(spec, tools)
             return orch.dry_run_lines(spec, tools)
         except orch.StopRun as stop:
-            path = {"candidates_too_large": "budget.max_candidates", "import_invalid": "scenario.import",
-                    "import_mismatch": "scenario.import"}.get(stop.reason, "")
+            path = {"candidates_too_large": "budget.max_candidates", "import_invalid": _import_section(spec) + ".import",
+                    "import_mismatch": _import_section(spec) + ".import"}.get(stop.reason, "")
             raise _fail([{"path": path, "message": stop.detail or str(stop)}]) from None
         except orch.OrchestratorError:
             raise ApiError(501, "Planning needs a source checkout of Faultline (the scripts folder).") from None
         except WorkloadError as error:
             # A plan the Job limits cannot hold (for example too many families for one audit Job) is the user's
             # to change, not a server fault: say what is too big instead of a generic error.
-            path = {"audit": "audit.families", "paraphrase": "paraphrase.count"}.get(spec.mode, "")
+            path = {"audit": "audit.families", "paraphrase": "paraphrase.count",
+                    "diagnose": "diagnose.probes"}.get(spec.mode, "")
             raise _fail([{"path": path, "message": _workload_message(str(error))}]) from None
 
     def new_directory(self, label: str) -> Path:
@@ -330,7 +332,7 @@ class SpecService:
         mapping = copy.deepcopy(prepared.mapping)
         if prepared.import_bytes is not None:
             (directory / "import.json").write_bytes(prepared.import_bytes)
-            mapping["scenario"]["import"] = str((directory / "import.json").resolve())
+            mapping[_import_section(prepared.spec)]["import"] = str((directory / "import.json").resolve())
         spec_path = directory / "spec.yaml"
         spec_path.write_text(yaml.safe_dump(mapping, sort_keys=False, default_flow_style=False),
                              encoding="utf-8", newline="\n")
@@ -355,11 +357,22 @@ def _load_mapping(text: str) -> Any:
         raise sp.SpecError("spec: not valid YAML{}".format("" if mark is None else " (line {})".format(mark.line + 1))) from None
 
 
+def _import_section(spec: sp.Spec) -> str:
+    """The spec section that holds ``import:`` (``scenario`` or, in the diagnosis mode, ``diagnose``)."""
+
+    return "diagnose" if spec.mode == "diagnose" else "scenario"
+
+
+def _needs_import(spec: sp.Spec) -> bool:
+    return spec.mode in ("scenario", "diagnose") and bool(spec.scenario.import_path)
+
+
 def _summary(spec: sp.Spec) -> Dict[str, Any]:
+    writes_wordings = spec.mode == "paraphrase" or (spec.mode == "diagnose" and spec.paraphrase is not None)
     return {"name": spec.name, "mode": spec.mode, "suite": spec.suite, "backend": spec.backend.kind,
             "cap_usd": spec.budget.max_spend_usd, "max_hours": spec.budget.max_hours,
-            "needs_import": bool(spec.mode == "scenario" and spec.scenario.import_path),
-            "uses_nemotron": spec.mode == "paraphrase" or spec.nemotron.hypothesis or spec.nemotron.explain}
+            "needs_import": _needs_import(spec),
+            "uses_nemotron": writes_wordings or spec.nemotron.hypothesis or spec.nemotron.explain}
 
 
 def parse_plan(lines: List[str], required: float) -> Tuple[List[Dict[str, Any]], float]:

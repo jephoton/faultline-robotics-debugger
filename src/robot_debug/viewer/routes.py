@@ -105,8 +105,8 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
         no_llm = request.body.get("no_llm")
         if no_llm is not None and not isinstance(no_llm, bool):
             raise ApiError(400, "no_llm must be true or false.")
-        if no_llm and prepared.spec.mode == "paraphrase":
-            raise ApiError(400, "Paraphrase mode needs Nemotron to write the rewordings; turn Nemotron on.")
+        if no_llm and (prepared.spec.mode == "paraphrase" or prepared.spec.paraphrase is not None):
+            raise ApiError(400, "Rewordings need Nemotron to write them; turn Nemotron on or set rewordings to 0.")
         refuse_if_busy()
         verify_plan(request)
         directory, spec_path = specs.persist(prepared)

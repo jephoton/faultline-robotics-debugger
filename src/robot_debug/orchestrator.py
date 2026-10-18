@@ -292,7 +292,7 @@ def check_import(spec: Spec, tools: Any, run_dir: Optional[Path] = None) -> Opti
     file (a resumed run) is read from there, so the original may have moved.
     """
 
-    if spec.mode != "scenario" or not spec.scenario.import_path:
+    if spec.mode not in ("scenario", "diagnose") or not spec.scenario.import_path:
         return None
     stored = None if run_dir is None else Path(run_dir) / IMPORT_COPY
     path = stored if stored is not None and stored.is_file() else spec.scenario.import_path
