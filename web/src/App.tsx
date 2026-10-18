@@ -10,6 +10,7 @@ import { CasePage } from './pages/CasePage';
 import { HomePage } from './pages/HomePage';
 import { EvidencePage } from './pages/EvidencePage';
 import { GuidePage } from './pages/GuidePage';
+import { ReferencePage } from './pages/ReferencePage';
 import { NewDiagnosisPage } from './pages/NewDiagnosisPage';
 import { SetupPage } from './pages/SetupPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -30,6 +31,7 @@ export function AppRoutes({ data }: { data: AppData }) {
           <Route path="run/:run" element={<RunPage />} />
           <Route path="setup" element={<SetupPage />} />
           <Route path="guide" element={<GuidePage />} />
+          <Route path="reference" element={<ReferencePage />} />
           <Route path="evidence" element={<EvidencePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -122,6 +122,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
       </nav>
       <div className="sidebar__foot">
         {local && <FootLink to="/setup" icon="setup" label="Setup" onNavigate={onNavigate} />}
+        <FootLink to="/reference" icon="info" label="Reference" onNavigate={onNavigate} />
         <FootLink to="/guide" icon="guide" label="Run your own" onNavigate={onNavigate} />
         {local && <FootLink to="/evidence" icon="evidence" label="All evidence" onNavigate={onNavigate} />}
         <ThemeToggle />

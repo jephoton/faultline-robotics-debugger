@@ -27,6 +27,8 @@ export default defineConfig(async ({ command }) => {
     },
     server: {
       port: 5173,
+      // The Reference page imports docs/reference.md from the repository root.
+      fs: { allow: [fileURLToPath(new URL('..', import.meta.url))] },
       proxy:
         process.env.VITE_MOCK === '1'
           ? undefined

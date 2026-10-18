@@ -130,3 +130,27 @@ describe('all evidence', () => {
     expect(screen.getByText('No episodes match.')).toBeInTheDocument();
   });
 });
+
+describe('reference page', () => {
+  it('renders the reference document with its sections and repository links', async () => {
+    const { prepareReference, referenceSections } = await import('./ReferencePage');
+    const body = prepareReference('# Title\n\nSee the [runbook](ui-runbook.md) and [web](https://example.com).\n\n## 1. What it is\n\n## 2. Glossary\n');
+    expect(body.startsWith('# Title')).toBe(false);
+    expect(body).toContain('](https://github.com/jephoton/faultline-robotics-debugger/blob/main/docs/ui-runbook.md)');
+    expect(body).toContain('](https://example.com)');
+    expect(referenceSections(body)).toEqual([
+      { id: 'md-1-what-it-is', title: '1. What it is' },
+      { id: 'md-2-glossary', title: '2. Glossary' },
+    ]);
+  });
+});
+
+describe('reference page in the app', () => {
+  it('is reachable from the sidebar and shows the documented sections', async () => {
+    renderApp('/reference');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reference' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /What Faultline is for/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Reading a report/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '/reference');
+  });
+});
