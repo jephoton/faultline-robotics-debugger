@@ -86,8 +86,22 @@ Two product fixes came out of checking it:
 - An audit family the run never searched (scene-goal, where the control
   failed) read "No failure up to severity 1" and "no failure found". It now
   reads "Not tested", and a partly searched family reads "Incomplete".
-The **published gallery still shows the old audit wording** until it is
-re-exported and redeployed, which needs Jethro's go.
+The gallery was redeployed with the corrected wording on October 18
+(`docs/experiments/m7-public-gallery.md`).
+
+Also on October 18:
+- A reduction bug was fixed: a verified smaller size was discarded when the
+  budget ended between a speculative bisection pair. `FL-S-AFB5`'s arm offset
+  was proven at 75% but recorded at 100%. Takes effect from the next image.
+- Keep in step now re-aligns clips.
+- New technical docs:
+  [how a scenario reduction works](../how-reduction-works.md) and
+  [disturbance families](../disturbance-families.md).
+- **Next:** the
+  [report-first case page and traces plan](../superpowers/plans/2026-10-18-report-first-case-page-and-traces.md).
+  Part A (report-first page) is approved. Part B (per-step traces) awaits
+  Jethro's choice of recorded data and validation run, ahead of a planned
+  final round of fresh runs.
 
 At refresh start, local and remote `main` both resolved to `9b39b5d`, with a
 clean working tree and successful GitHub CI for that commit. CI ran 2,851
