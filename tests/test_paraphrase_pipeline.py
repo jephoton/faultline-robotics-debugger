@@ -611,6 +611,45 @@ class ReportTests(unittest.TestCase):
         for candidate in self.reduction["reduction"]["candidates"]:
             self.assertIn(candidate["text"], text)
 
+    def summary_of(self, text):
+        start = text.index("## Summary")
+        return text[start:text.index("\n## ", start + 5)]
+
+    def test_the_summary_follows_the_title_with_control_rewordings_failures_and_the_smallest_wording(self):
+        text = self.module.build_report(self.screen, self.reduction, None)
+        self.assertLess(text.index("# Faultline paraphrase report"), text.index("## Summary"))
+        self.assertLess(text.index("## Summary"), text.index("## Setup"))
+        block = self.summary_of(text)
+        self.assertIn("- Control: the original wording passed (S S).", block)
+        dropped = sum(1 for text in PARAPHRASES if pp.meaning_check(ORIGINAL, text) == pp.MEANING_DROPPED)
+        self.assertIn("- Rewordings: {} screened; {} kept by the meaning check, {} dropped".format(
+            len(PARAPHRASES), len(PARAPHRASES) - dropped, dropped), block)
+        self.assertIn("- Failures: 1 rewording failed at least 4 of 5 attempts (p01).", block)
+        self.assertIn("- Smallest failing wording: 1 word edit from the original; each remaining edit is needed.",
+                      block)
+        self.assertIn('- Minimal wording: "{}"'.format(self.reduction["minimal"]["text"]), block)
+
+    def test_the_summary_counts_rewordings_the_meaning_check_dropped(self):
+        screen = lang_screen(paraphrases=PARAPHRASES[:2] + ["pick up the alphabet soup and place it in the container"],
+                             failing=("p03",))
+        block = self.summary_of(self.module.build_report(screen, None, None))
+        self.assertIn("- Rewordings: 3 screened; 2 kept by the meaning check, 1 dropped", block)
+        self.assertIn("- Smallest failing wording: not reduced.", block)
+
+    def test_the_summary_says_when_nothing_failed_and_when_the_control_did_not_pass(self):
+        block = self.summary_of(self.module.build_report(lang_screen(failing=()), None, None))
+        self.assertIn("- Failures: none. No rewording failed at least 4 of 5 attempts in this screen.", block)
+        self.assertNotIn("Smallest failing wording", block)
+        block = self.summary_of(self.module.build_report(lang_screen(failing=(), control=False), None, None))
+        self.assertIn("- Control: the original wording did not pass both attempts", block)
+
+    def test_the_summary_does_not_call_an_early_stop_fully_reduced(self):
+        self.reduction["minimal"]["edit_minimal"] = False
+        self.reduction["reduction"]["reduced"] = False
+        block = self.summary_of(self.module.build_report(self.screen, self.reduction, None))
+        self.assertIn("the reduction stopped early", block)
+        self.assertIn("(not fully reduced)", block)
+
     def test_the_report_flags_a_paraphrase_that_dropped_the_object_or_target(self):
         screen = lang_screen(paraphrases=PARAPHRASES[:2] + ["pick up the alphabet soup and place it in the container"],
                              failing=("p01", "p03"))

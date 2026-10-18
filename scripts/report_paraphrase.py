@@ -199,6 +199,45 @@ def reduction_section(summary: Mapping[str, Any], rate: Optional[float]) -> List
     return lines
 
 
+def summary_section(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any]] = None) -> List[str]:
+    """Bullets before the detail: the control, how many rewordings the meaning check kept and dropped, and
+    whether (and how small) a failing wording was found."""
+
+    original = screen.get("original")
+    control = screen.get("control") or {}
+    passed = bool(control.get("passed"))
+    lines = ["## Summary", "",
+             "- Control: the original wording {} ({}).".format(
+                 "passed" if passed else "did not pass both attempts, so a failure cannot be attributed to the "
+                 "wording", _letters(control.get("outcomes") or []))]
+    rewordings = [row for row in screen.get("instructions") or [] if row.get("kind") == "paraphrase"]
+    dropped = [row for row in rewordings if isinstance(original, str) and isinstance(row.get("text"), str)
+               and pp.meaning_check(original, row["text"]) == pp.MEANING_DROPPED]
+    lines.append("- Rewordings: {} screened; {} kept by the meaning check, {} dropped (an object or target word "
+                 "of the instruction was missing).".format(len(rewordings), len(rewordings) - len(dropped),
+                                                           len(dropped)))
+    reproducing = screen.get("reproducing") or []
+    if reproducing:
+        lines.append("- Failures: {} rewording{} failed at least 4 of 5 attempts ({}).".format(
+            len(reproducing), "" if len(reproducing) == 1 else "s", ", ".join(str(l) for l in reproducing)))
+    else:
+        lines.append("- Failures: none. No rewording failed at least 4 of 5 attempts in this screen.")
+    minimal = (reduction or {}).get("minimal")
+    if isinstance(minimal, Mapping):
+        reduced = bool(((reduction or {}).get("reduction") or {}).get("reduced"))
+        edits = len(minimal.get("labels") or [])
+        lines.append("- Smallest failing wording: {} word edit{} from the original; {}.".format(
+            edits, "" if edits == 1 else "s",
+            "each remaining edit is needed" if minimal.get("edit_minimal") else
+            "the reduction stopped early, so this is the smallest change verified so far"))
+        lines.append("- Minimal wording: \"{}\"{}".format(minimal.get("text"), "" if reduced else " (not fully reduced)"))
+    elif reduction is not None:
+        lines.append("- Smallest failing wording: none was verified by the reduction.")
+    elif reproducing:
+        lines.append("- Smallest failing wording: not reduced.")
+    return lines + [""]
+
+
 def build_report(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any]] = None,
                  hourly_usd: Optional[float] = None) -> str:
     if not isinstance(screen, Mapping) or screen.get("mode") != "paraphrase-screen":
@@ -208,6 +247,7 @@ def build_report(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any
     base = reduction if reduction is not None else screen
     original = screen.get("original", "")
     lines = ["# Faultline paraphrase report", ""]
+    lines += summary_section(screen, reduction)
     minimal = (reduction or {}).get("minimal")
     if reduction is not None and isinstance(minimal, Mapping):
         reduced = bool((reduction.get("reduction") or {}).get("reduced"))
