@@ -209,11 +209,11 @@ class ValidateTests(ServiceCase):
 class DryRunTests(ServiceCase):
     def test_a_scenario_dry_run_lists_the_jobs_and_the_worst_case(self):
         plan = self.service.dry_run(SCENARIO)
-        self.assertEqual(sorted(plan), ["cap_usd", "jobs", "lines", "max_hours", "plan_hash", "worst_case_total_usd"])
+        self.assertEqual(sorted(plan), ["branches", "cap_usd", "jobs", "lines", "max_hours", "plan_hash", "worst_case_total_usd"])
         self.assertEqual([j["name"] for j in plan["jobs"]], ["screen", "reduce", "reduce2", "reduce3", "reduce4"])
         self.assertEqual([j["optional"] for j in plan["jobs"]], [False, False, True, True, True])
         for job in plan["jobs"]:
-            self.assertEqual(sorted(job), ["deadline_seconds", "name", "optional", "worst_case_usd"])
+            self.assertEqual(sorted(job), ["branch", "deadline_seconds", "name", "optional", "worst_case_usd"])
             self.assertGreater(job["deadline_seconds"], 0)
             self.assertGreater(job["worst_case_usd"], 0)
         required = sum(j["worst_case_usd"] for j in plan["jobs"] if not j["optional"])

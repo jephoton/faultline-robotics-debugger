@@ -481,8 +481,13 @@ PARAPHRASE_DEFAULT_CANDIDATES = 24
 
 
 def paraphrase_candidates(spec: Spec) -> int:
-    """The reduction's candidate budget: ``budget.max_candidates`` when the spec sets it, else 24."""
+    """The reduction's candidate budget: ``budget.max_candidates`` when the spec sets it, else 24.
 
+    A ``diagnose`` spec's ``budget.max_candidates`` belongs to its layout reduction, so its wording
+    reduction always uses the default."""
+
+    if spec.mode == "diagnose":
+        return PARAPHRASE_DEFAULT_CANDIDATES
     budget = spec.raw.get("budget") if isinstance(spec.raw, Mapping) else None
     if isinstance(budget, Mapping) and "max_candidates" in budget:
         return spec.budget.max_candidates
@@ -661,7 +666,32 @@ class DefaultTools:
 
         if spec.mode in ("scenario", "paraphrase"):
             return self.candidate_limit_for(spec.mode)
+        if spec.mode == "diagnose" and spec.diagnose.layout:
+            return self.candidate_limit_for("scenario")      # the wording reduction uses its fixed default
         return None
+
+    def probe_groups(self, spec: Spec) -> List[Any]:
+        """The audit Jobs the spec's disturbance families split into (each fits one Job's deadline cap)."""
+
+        from robot_debug import pipeline
+        from robot_debug.workloads import WorkloadError
+
+        try:
+            return pipeline.probe_groups(spec.suite, spec.diagnose.probes.families)
+        except ValueError as error:
+            raise WorkloadError(str(error)) from None
+
+    def probe_workload(self, spec: Spec, families: Sequence[str], run_id: str) -> Dict[str, Any]:
+        """The ``m6-threshold`` workload for one group of probe families on the spec's start."""
+
+        from robot_debug.workloads import WorkloadError, audit_workload
+
+        mapping = {"policy": dict(spec.raw.get("policy") or {}),
+                   "audit": {"task": spec.scenario.task, "start": spec.scenario.start, "families": list(families)}}
+        try:
+            return self._checked(audit_workload(mapping, run_id))
+        except WorkloadError as error:
+            raise StopRun("workload_invalid", str(error)) from None
 
     def audit_workload(self, spec: Spec, run_id: str) -> Dict[str, Any]:
         from robot_debug.workloads import audit_workload
@@ -865,6 +895,8 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
     """The planned Jobs and their worst-case spend, built from the spec alone (no backend call)."""
 
     rate = spec.backend.hourly_usd if rate is None else rate
+    if spec.mode == "diagnose":
+        return _diagnose_dry_run(spec, tools, rate)
 
     def worst(deadline: float) -> float:
         return lg.worst_case_seconds(deadline) / 3600.0 * rate
@@ -917,6 +949,98 @@ def dry_run_lines(spec: Spec, tools: Any, *, rate: Optional[float] = None) -> Tu
         lines.append("WARNING: that exceeds the cap; the spend ledger will refuse a Job and the run will stop early.")
     lines.append("Each Job is reserved at its worst case before submission and settled at measured container time.")
     return lines, required
+
+
+BRANCH_HEADERS = {
+    "check": "CHECK (always runs): the start, run untouched",
+    "layout": "LAYOUT (if the start fails reliably): reduce it to the smallest set of differences",
+    "probes": "PROBES (if the start passes): disturbance families and rewordings",
+}
+PROBE_ONLY_HEADER = "PROBES (probe only: the layout is not diagnosed): disturbance families and rewordings"
+
+
+def _diagnose_dry_run(spec: Spec, tools: Any, rate: float) -> Tuple[List[str], float]:
+    """The planned Jobs of a ``diagnose`` spec, grouped by branch, and the worst case of the required Jobs.
+
+    Only one of the layout and probe branches runs, so the worst case is the check plus the *larger*
+    branch, not the sum. Optional Jobs (the layout continuations, the wording reduction that runs only when
+    a rewording fails) are listed but not counted, as in the other modes. ``typical`` is
+    :data:`robot_debug.pipeline.TYPICAL_FRACTION` of the worst case for the check and the probe Jobs
+    (measured probe Jobs cost about half their reservation) and unknown for the layout reduction.
+    """
+
+    from robot_debug import pipeline
+
+    dg, sc = spec.diagnose, spec.scenario
+
+    def worst(deadline: float) -> float:
+        return lg.worst_case_seconds(deadline) / 3600.0 * rate
+
+    preface: List[str] = []
+    if sc.import_path:
+        check_import(spec, tools)
+        preface = ["The imported start is validated on this machine; it is not screened (the check Job screens "
+                   "the benchmark starts that can serve as the passing reference)."]
+    if spec.paraphrase is not None:
+        preface.append("Before the wording probe, Nemotron ({}) writes {} rewordings of the task instruction on "
+                       "this machine (Token Factory; not on the GPU ledger).".format(
+                           spec.paraphrase.model, spec.paraphrase.count))
+    starts = _screen_starts(spec)
+    screen = tools.screen_workload("dry-run", spec.suite, sc.task, starts, sc.confirm)
+    branches: Dict[str, List[Tuple[str, str, int, bool]]] = {"check": [], "layout": [], "probes": []}
+    branches["check"].append(("screen", "screen task {} starts {}".format(sc.task, starts),
+                              int(screen["deadline_seconds"]), False))
+    if dg.layout:
+        reduce_deadline = tools.reduce_deadline(spec.budget.max_candidates)
+        branches["layout"].append(("reduce", "reduce the {} failing start ({} candidates)".format(
+            "imported" if sc.import_path else "chosen", spec.budget.max_candidates), reduce_deadline, False))
+        for number in range(1, MAX_CONTINUATIONS + 1):
+            branches["layout"].append(("reduce{}".format(number + 1),
+                                       "continuation {} (only if not entity-minimal)".format(number),
+                                       reduce_deadline, True))
+    if dg.probes.active:
+        families = dg.probes.families
+        if families:
+            groups = tools.probe_groups(spec)
+            for number, group in enumerate(groups, 1):
+                branches["probes"].append((group.step, "stress test ({} of {}): {}".format(
+                    number, len(groups), ", ".join(group.families)), group.deadline_seconds, False))
+        if spec.paraphrase is not None:
+            screen_deadline, reduce_deadline_w = tools.paraphrase_deadlines(spec)
+            branches["probes"].append(("rewording-screen", "screen {} rewordings of the instruction".format(
+                spec.paraphrase.count), screen_deadline, False))
+            branches["probes"].append(("rewording-reduce", "reduce a failing wording (only if one fails)",
+                                       reduce_deadline_w, True))
+    lines = list(preface)
+    lines.append("Planned Jobs ({} backend, US${:.4f}/h, cap US${:.2f}, {:g} h):".format(
+        spec.backend.kind, rate, spec.budget.max_spend_usd, spec.budget.max_hours))
+    totals: Dict[str, float] = {}
+    for name in ("check", "layout", "probes"):
+        if not branches[name]:
+            continue
+        lines.append(PROBE_ONLY_HEADER if name == "probes" and not dg.layout else BRANCH_HEADERS[name])
+        required = 0.0
+        for step, text, deadline, optional in branches[name]:
+            cost = worst(deadline)
+            lines.append("  {:<16} {:<56} deadline {:>4d} s  worst case US${:.2f}{}".format(
+                step, text, deadline, cost, " (optional)" if optional else ""))
+            if not optional:
+                required += cost
+        totals[name] = required
+    for name in ("check", "layout", "probes"):
+        if name in totals:
+            typical = None if name == "layout" else pipeline.typical_cost(totals[name])
+            lines.append("Branch {}: worst case US${:.2f}, typical {}.".format(
+                name, totals[name], "unknown" if typical is None else "about US${:.2f}".format(typical)))
+    larger = max(totals.get("layout", 0.0), totals.get("probes", 0.0))
+    required_total = totals["check"] + larger
+    lines.append("Only one of the layout and probe branches runs, so the worst case is the check plus the larger "
+                 "branch.")
+    lines.append("Worst case of the required Jobs: US${:.2f}.".format(required_total))
+    if required_total > spec.budget.max_spend_usd:
+        lines.append("WARNING: that exceeds the cap; the spend ledger will refuse a Job and the run will stop early.")
+    lines.append("Each Job is reserved at its worst case before submission and settled at measured container time.")
+    return lines, required_total
 
 
 def _screen_starts(spec: Spec) -> str:

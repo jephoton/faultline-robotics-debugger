@@ -25,10 +25,11 @@ diagnose:
     #     libero_object task 0.
   layout: true                  # false = "probe only": skip the layout branch even if the start fails
 budget:
-  # Sized for the worst branch: the check plus the larger of the layout branch and the probes
-  # (see `faultline diagnose --dry-run`; the probe Jobs usually cost about half of their reservation).
-  max_spend_usd: 9.0
-  max_hours: 5
+  # Sized for the worst branch: `faultline diagnose --dry-run` puts the required Jobs of a full probe at
+  # about US$6.6 (check US$1.2 + probes US$5.4); the optional wording reduction and layout continuations come
+  # on top, each only if the cap allows. Probe Jobs usually cost about half of their reservation (about US$4 in all).
+  max_spend_usd: 7.0
+  max_hours: 4
   max_candidates: 36
 nemotron: {hypothesis: true, explain: true}
 # Web context for each new case (Tavily source discovery, summarised by Nemotron 3 Nano). Shown as context,
