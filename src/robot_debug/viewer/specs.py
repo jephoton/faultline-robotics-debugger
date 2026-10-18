@@ -29,6 +29,15 @@ from robot_debug import ledger as lg
 from robot_debug import orchestrator as orch
 from robot_debug import spec as sp
 from robot_debug.viewer.security import ApiError
+from robot_debug.workloads import WorkloadError
+
+
+def _workload_message(detail: str) -> str:
+    match = re.search(r"more than the (\d+) s cap", detail)
+    if match:
+        return ("needs a longer Job than the {}-minute limit allows; choose fewer families or rewordings, or split "
+                "them across runs".format(int(match.group(1)) // 60))
+    return detail
 
 SPECS_UI = "specs-ui"
 SPECS_LOCAL = "specs-local"
@@ -288,6 +297,11 @@ class SpecService:
             raise _fail([{"path": path, "message": stop.detail or str(stop)}]) from None
         except orch.OrchestratorError:
             raise ApiError(501, "Planning needs a source checkout of Faultline (the scripts folder).") from None
+        except WorkloadError as error:
+            # A plan the Job limits cannot hold (for example too many families for one audit Job) is the user's
+            # to change, not a server fault: say what is too big instead of a generic error.
+            path = {"audit": "audit.families", "paraphrase": "paraphrase.count"}.get(spec.mode, "")
+            raise _fail([{"path": path, "message": _workload_message(str(error))}]) from None
 
     def new_directory(self, label: str) -> Path:
         """A fresh ``artifacts/specs-ui/<UTC stamp>-<label>/`` folder (never an existing one)."""

@@ -237,6 +237,15 @@ class DryRunTests(ServiceCase):
                 self.assertEqual([j["name"] for j in plan["jobs"]], names)
                 self.assertGreater(plan["worst_case_total_usd"], 0)
 
+    def test_a_plan_too_long_for_one_job_is_a_field_error_not_a_server_fault(self):
+        text = re.sub(r"families: \[[^\]]*\]", "families: [blur, noise, darken, contrast, jpeg, colour_cast, "
+                      "motion_blur, dead_pixels, viewpoint, lighting]", self.service.template("audit")["yaml"])
+        with self.assertRaises(ApiError) as caught:
+            self.service.dry_run(text)
+        self.assertEqual(caught.exception.status, 400)
+        self.assertEqual(caught.exception.errors[0]["path"], "audit.families")
+        self.assertIn("40-minute limit", caught.exception.errors[0]["message"])
+
     def test_a_spec_that_exceeds_its_cap_says_so_in_the_lines(self):
         plan = self.service.dry_run(SCENARIO.replace("max_spend_usd: 10.0", "max_spend_usd: 0.1"))
         self.assertTrue(any(line.startswith("WARNING: that exceeds the cap") for line in plan["lines"]))
