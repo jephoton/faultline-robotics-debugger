@@ -114,10 +114,15 @@ function ReplayForm({ detail }: { detail: Detail }) {
   );
 }
 
-export function ReplaySection({ detail }: { detail: Detail }) {
+/** What a replay is for, in one line (shown above the replay history in the report-first layout). */
+export const REPLAY_PURPOSE =
+  'Replay re-runs the minimal scene and its reference to check whether the failure still reproduces, for example after you change the policy.';
+
+export function ReplaySection({ detail, purpose = false }: { detail: Detail; purpose?: boolean }) {
   const controls = useControls();
   return (
     <Section title="Replays">
+      {purpose && <p className="replay__purpose">{REPLAY_PURPOSE}</p>}
       <ReplayHistory detail={detail} slot={(run) => <ReplayRunLink run={run} />} />
       {controls && detail.replayable && <ReplayForm detail={detail} />}
       {controls && !detail.replayable && (

@@ -93,10 +93,29 @@ article > h1 {
   }
 }
 
-details.reruns summary {
+details.reruns summary,
+details.fold > summary,
+details.md__more > summary {
   cursor: pointer;
   font-weight: 500;
   margin-bottom: var(--space-3);
+}
+/* Report-first case page: a folded block sits quietly under the report. */
+details.fold {
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+details.fold[open] > summary {
+  margin-bottom: var(--space-3);
+}
+details.fold > .panel {
+  margin-top: 0;
+}
+.replay__purpose {
+  margin: 0 0 var(--space-3);
+  max-width: 70ch;
 }
 
 /* Linked video player */
@@ -390,8 +409,15 @@ details.reruns summary {
   padding: var(--space-4) var(--space-5);
   overflow-x: auto;
 }
-.md > :first-child {
+.md > :first-child,
+.md > .md__chunk:first-child > :first-child {
   margin-top: 0;
+}
+.md__more {
+  margin: 0 0 var(--space-3);
+}
+.md__more > summary {
+  margin-bottom: var(--space-2);
 }
 .md h3,
 .md h4,

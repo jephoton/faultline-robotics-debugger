@@ -11,6 +11,7 @@ import type {
   RunSummary,
   Session,
 } from '../api/types';
+import { auditReport, importedReport, paraphraseReport, soupReport } from './reports';
 
 const hex = (prefix: string): string => (prefix + '0123456789abcdef'.repeat(4)).slice(0, 64);
 
@@ -167,30 +168,6 @@ const defaultHistorySteps = [
   { key: 'case', label: 'Save the case', status: 'completed', state: null, partial: false, cost_usd: null },
 ];
 
-const soupReport = `# Scenario reduction: put both the alphabet soup and the tomato sauce in the basket
-
-Suite \`libero_10\`, task 0. Reference runs decide everything below; the model only proposes an order and a hypothesis.
-
-## Result
-
-- Stop reason: \`budget_exhausted\`
-- Failing start: 14; reference (nearest passing start): 28
-- Entity-minimal: yes
-- Checkpoint: \`nvidia/gr00t17-lerobot-libero_10-640\`
-
-### Minimal cause
-
-Moving alphabet_soup_1 by 2.5 cm, cream_cheese_1 by 1.1 cm, milk_1 by 2.4 cm, orange_juice_1 by 3.7 cm and 6 joints of the robot 88% of the way to their failing values is enough to make the policy fail from the passing start 28 (at least 4 of 5 attempts).
-
-| entity | part | fraction t | resolution |
-| --- | --- | --- | --- |
-| alphabet_soup_1 | position | 0.875 | 0.125 |
-| robot | joints | 0.875 | 0.125 |
-| orange_juice_1 | position | 1.0 | 0.125 |
-
-This is a local minimum found by reruns, not proof of the globally smallest cause.
-`;
-
 function history(over?: Partial<NonNullable<Detail['history']>>): NonNullable<Detail['history']> {
   return {
     steps: defaultHistorySteps,
@@ -325,7 +302,7 @@ details[IDS.imported] = {
   research: null,
   history: history({ jobs: 3, spent_usd: 2.2, cap_usd: 3, elapsed_seconds: 3600, max_hours: 2 }),
   replays: [],
-  report_markdown: '# Scenario reduction: my-failing-start\n\nThe imported start was confirmed to fail 5 of 5 attempts.\n',
+  report_markdown: importedReport,
   files: [{ name: 'report.md', url: '/media/cases/7e31/report.md' }],
   replayable: true,
 };
@@ -435,7 +412,7 @@ details[IDS.audit] = {
     max_hours: 1.5,
   }),
   replays: [],
-  report_markdown: '# Stress test: audit-task0\n\nLIBERO-Object task 0, start 0, seed 7. Families: blur, noise, darken, contrast.\n',
+  report_markdown: auditReport,
   files: [{ name: 'report.md', url: '/media/cases/1c20/report.md' }],
   replayable: false,
 };
@@ -475,7 +452,7 @@ details[IDS.wording] = {
     max_hours: 3,
   }),
   replays: [],
-  report_markdown: '# Language test: paraphrase-task0\n\nThe control wording passed 5 of 5.\n',
+  report_markdown: paraphraseReport,
   files: [{ name: 'report.md', url: '/media/cases/4d9a/report.md' }],
   replayable: false,
 };

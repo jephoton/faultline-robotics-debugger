@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import type { Detail, HistoryStep } from '../../api/types';
 import { duration, shortDate, usd } from '../../lib/format';
 import { Icon, type IconName } from '../Icon';
-import { Markdown } from '../Markdown';
+import { LinkedPlayer } from '../LinkedPlayer';
+import { LONG_TABLE_ROWS, Markdown } from '../Markdown';
 import { Empty, Section } from '../Section';
 
 function stepIcon(step: HistoryStep): IconName {
@@ -18,41 +19,57 @@ function stateText(step: HistoryStep): string {
   return `${status}${state}${step.partial ? ' (partial)' : ''}`;
 }
 
-export function HistorySection({ detail }: { detail: Detail }) {
+/** The steps, Jobs, cost and time of the run that made the case. */
+function HistoryBody({ detail }: { detail: Detail }) {
   const h = detail.history;
+  if (!h) return <Empty>No run record is stored for this case.</Empty>;
+  return (
+    <>
+      <ol className="timeline">
+        {h.steps.map((step) => (
+          <li key={step.key} className={step.status === 'stopped' || step.status === 'failed' ? 'timeline__step timeline__step--attention' : 'timeline__step'}>
+            <Icon name={stepIcon(step)} />
+            <span className="timeline__label">{step.label}</span>
+            <span className="timeline__state muted">{stateText(step)}</span>
+            <span className="timeline__cost mono">{step.cost_usd !== null ? usd(step.cost_usd) : ''}</span>
+          </li>
+        ))}
+      </ol>
+      <dl className="facts">
+        <dt>Cloud Jobs</dt>
+        <dd>{h.jobs}</dd>
+        <dt>Spent</dt>
+        <dd>
+          {usd(h.spent_usd)} of a {usd(h.cap_usd)} cap
+          {h.hourly_usd !== null && <span className="muted"> (at {usd(h.hourly_usd, 4)} an hour)</span>}
+        </dd>
+        <dt>Time</dt>
+        <dd>
+          {duration(h.elapsed_seconds)}
+          {h.max_hours !== null && <span className="muted"> of a {h.max_hours} hour limit</span>}
+        </dd>
+      </dl>
+    </>
+  );
+}
+
+export function HistorySection({ detail }: { detail: Detail }) {
   return (
     <Section title="How it was made">
-      {!h ? (
-        <Empty>No run record is stored for this case.</Empty>
-      ) : (
-        <>
-          <ol className="timeline">
-            {h.steps.map((step) => (
-              <li key={step.key} className={step.status === 'stopped' || step.status === 'failed' ? 'timeline__step timeline__step--attention' : 'timeline__step'}>
-                <Icon name={stepIcon(step)} />
-                <span className="timeline__label">{step.label}</span>
-                <span className="timeline__state muted">{stateText(step)}</span>
-                <span className="timeline__cost mono">{step.cost_usd !== null ? usd(step.cost_usd) : ''}</span>
-              </li>
-            ))}
-          </ol>
-          <dl className="facts">
-            <dt>Cloud Jobs</dt>
-            <dd>{h.jobs}</dd>
-            <dt>Spent</dt>
-            <dd>
-              {usd(h.spent_usd)} of a {usd(h.cap_usd)} cap
-              {h.hourly_usd !== null && <span className="muted"> (at {usd(h.hourly_usd, 4)} an hour)</span>}
-            </dd>
-            <dt>Time</dt>
-            <dd>
-              {duration(h.elapsed_seconds)}
-              {h.max_hours !== null && <span className="muted"> of a {h.max_hours} hour limit</span>}
-            </dd>
-          </dl>
-        </>
-      )}
+      <HistoryBody detail={detail} />
     </Section>
+  );
+}
+
+/** Report-first layout: the steps, Jobs, cost and time, folded away until asked for. */
+export function RunDetails({ detail }: { detail: Detail }) {
+  return (
+    <section className="section">
+      <details className="fold">
+        <summary>Run details</summary>
+        <HistoryBody detail={detail} />
+      </details>
+    </section>
   );
 }
 
@@ -68,63 +85,82 @@ function EvidenceIds({ ids }: { ids: string[] }) {
   );
 }
 
-export function ExplanationSection({ detail }: { detail: Detail }) {
+function ExplanationBody({ detail }: { detail: Detail }) {
   const e = detail.explanation;
+  if (!e) return <Empty>No Nemotron reading was made for this case.</Empty>;
+  return (
+    <div className="panel">
+      <p className="explain__meta">
+        <span className="badge">
+          <Icon name="attention" /> Review required
+        </span>
+        {e.model && (
+          <span className="muted">
+            Written by <span className="mono">{e.model}</span>
+          </span>
+        )}
+      </p>
+      {e.disclaimer && <p className="muted">{e.disclaimer}</p>}
+      {e.hypotheses.length > 0 && (
+        <>
+          <h3>Hypotheses to test</h3>
+          <ul className="reading">
+            {e.hypotheses.map((item) => (
+              <li key={item.text}>
+                <p>{item.text}</p>
+                <EvidenceIds ids={item.evidence_ids} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {e.observations.length > 0 && (
+        <>
+          <h3>Observations</h3>
+          <ul className="reading">
+            {e.observations.map((item) => (
+              <li key={item.text}>
+                <p>{item.text}</p>
+                <EvidenceIds ids={item.evidence_ids} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {e.limitations.length > 0 && (
+        <>
+          <h3>Limits</h3>
+          <ul>
+            {e.limitations.map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function ExplanationSection({ detail }: { detail: Detail }) {
   return (
     <Section title="Nemotron's reading">
-      {!e ? (
-        <Empty>No Nemotron reading was made for this case.</Empty>
-      ) : (
-        <div className="panel">
-          <p className="explain__meta">
-            <span className="badge">
-              <Icon name="attention" /> Review required
-            </span>
-            {e.model && (
-              <span className="muted">
-                Written by <span className="mono">{e.model}</span>
-              </span>
-            )}
-          </p>
-          {e.disclaimer && <p className="muted">{e.disclaimer}</p>}
-          {e.hypotheses.length > 0 && (
-            <>
-              <h3>Hypotheses to test</h3>
-              <ul className="reading">
-                {e.hypotheses.map((item) => (
-                  <li key={item.text}>
-                    <p>{item.text}</p>
-                    <EvidenceIds ids={item.evidence_ids} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {e.observations.length > 0 && (
-            <>
-              <h3>Observations</h3>
-              <ul className="reading">
-                {e.observations.map((item) => (
-                  <li key={item.text}>
-                    <p>{item.text}</p>
-                    <EvidenceIds ids={item.evidence_ids} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {e.limitations.length > 0 && (
-            <>
-              <h3>Limits</h3>
-              <ul>
-                {e.limitations.map((text) => (
-                  <li key={text}>{text}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      <ExplanationBody detail={detail} />
+    </Section>
+  );
+}
+
+/** Report-first layout: Nemotron's reading after the report, folded, and labelled as interpretation. */
+export function ReadingFold({ detail }: { detail: Detail }) {
+  if (!detail.explanation) return null;
+  return (
+    <Section
+      title="Nemotron's reading"
+      hint="An interpretation written by a language model from the results above. It is not evidence and needs human review."
+    >
+      <details className="fold">
+        <summary>Show the reading (interpretation, not evidence)</summary>
+        <ExplanationBody detail={detail} />
+      </details>
     </Section>
   );
 }
@@ -189,6 +225,39 @@ export function ReportSection({ detail }: { detail: Detail }) {
   return (
     <Section title="Report">
       {detail.report_markdown ? <Markdown source={detail.report_markdown} /> : <Empty>No report was saved for this case.</Empty>}
+    </Section>
+  );
+}
+
+/** Report-first layout: the stored report is the body of the page; tables over 12 rows are folded. */
+export function ReportBody({ detail }: { detail: Detail }) {
+  if (!detail.report_markdown) return null;
+  return (
+    <Section title="Report">
+      <Markdown source={detail.report_markdown} collapseAbove={LONG_TABLE_ROWS} />
+    </Section>
+  );
+}
+
+/** The case's videos in the linked player, above the report. */
+export function CaseVideos({ detail }: { detail: Detail }) {
+  if (detail.videos.length === 0) {
+    return detail.kind === 'scenario' ? (
+      <Section title="Videos">
+        <Empty>No videos were saved for this case.</Empty>
+      </Section>
+    ) : null;
+  }
+  const scenario = detail.kind === 'scenario';
+  return (
+    <Section
+      title="Videos"
+      hint={scenario ? 'Original failing start, the reference with the minimal cause applied, and the passing reference.' : undefined}
+    >
+      <LinkedPlayer
+        title={scenario ? 'Original, minimal and reference videos' : detail.kind === 'audit' ? 'Audit videos' : 'Case videos'}
+        videos={detail.videos.map((video) => ({ key: video.role, label: video.label, url: video.url, outcome: video.outcome }))}
+      />
     </Section>
   );
 }

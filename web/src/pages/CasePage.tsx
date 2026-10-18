@@ -4,11 +4,15 @@ import { ApiError } from '../api/client';
 import type { Detail } from '../api/types';
 import { AuditSection } from '../components/case/AuditSection';
 import {
+  CaseVideos,
+  ExplanationSection,
   FilesSection,
   HistorySection,
-  ExplanationSection,
+  ReadingFold,
+  ReportBody,
   ReportSection,
   ResearchSection,
+  RunDetails,
 } from '../components/case/CommonSections';
 import { OcclusionSection } from '../components/case/OcclusionSection';
 import { ReplaySection } from '../components/case/ReplaySection';
@@ -49,6 +53,38 @@ function CaseFacts({ detail }: { detail: Detail }) {
   );
 }
 
+/** A case with a stored report: the report is the body, in the order the person reads it. */
+function ReportFirstBody({ detail }: { detail: Detail }) {
+  return (
+    <>
+      <CaseVideos detail={detail} />
+      <ReportBody detail={detail} />
+      <ReadingFold detail={detail} />
+      <ResearchSection detail={detail} />
+      {detail.kind === 'scenario' && <ReplaySection detail={detail} purpose />}
+      <RunDetails detail={detail} />
+    </>
+  );
+}
+
+/** A case with no stored report (the September occlusion case): the structured view. */
+function StructuredBody({ detail }: { detail: Detail }) {
+  return (
+    <>
+      {detail.kind === 'scenario' && <ScenarioSection detail={detail} />}
+      {detail.kind === 'audit' && <AuditSection detail={detail} />}
+      {detail.kind === 'paraphrase' && <ParaphraseSection detail={detail} />}
+      {detail.kind === 'occlusion' && <OcclusionSection detail={detail} />}
+
+      <HistorySection detail={detail} />
+      <ExplanationSection detail={detail} />
+      <ResearchSection detail={detail} />
+      {detail.kind === 'scenario' && <ReplaySection detail={detail} />}
+      <ReportSection detail={detail} />
+    </>
+  );
+}
+
 export function CaseView({ detail }: { detail: Detail }) {
   const status = statusFor(detail.verdict, detail.attention);
   useDocumentTitle(`${detail.fault_code} ${detail.name}`);
@@ -78,16 +114,7 @@ export function CaseView({ detail }: { detail: Detail }) {
       )}
       <CaseFacts detail={detail} />
 
-      {detail.kind === 'scenario' && <ScenarioSection detail={detail} />}
-      {detail.kind === 'audit' && <AuditSection detail={detail} />}
-      {detail.kind === 'paraphrase' && <ParaphraseSection detail={detail} />}
-      {detail.kind === 'occlusion' && <OcclusionSection detail={detail} />}
-
-      <HistorySection detail={detail} />
-      <ExplanationSection detail={detail} />
-      <ResearchSection detail={detail} />
-      {detail.kind === 'scenario' && <ReplaySection detail={detail} />}
-      <ReportSection detail={detail} />
+      {detail.report_markdown ? <ReportFirstBody detail={detail} /> : <StructuredBody detail={detail} />}
       <FilesSection detail={detail} />
     </article>
   );
