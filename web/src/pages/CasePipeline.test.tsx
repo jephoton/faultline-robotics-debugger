@@ -80,6 +80,7 @@ describe('findings of a diagnosis run', () => {
   it('shows a single finding when the run passed untouched, in green', async () => {
     await openChanged(IDS.quiet, (detail) => ({
       ...detail,
+      route: 'passes',
       findings: [{ id: detail.id, fault_code: detail.fault_code, kind: detail.kind, verdict: 'no_failure', verdict_text: detail.verdict_text }],
     }));
     const section = screen.getByRole('heading', { name: 'Findings of this diagnosis' }).closest('section') as HTMLElement;
@@ -91,11 +92,21 @@ describe('findings of a diagnosis run', () => {
   it('shows a single finding when the start is flaky untouched, in amber', async () => {
     await openChanged(IDS.nominal, (detail) => ({
       ...detail,
+      route: 'flaky',
       findings: [{ id: detail.id, fault_code: detail.fault_code, kind: detail.kind, verdict: 'stopped', verdict_text: detail.verdict_text }],
     }));
     const section = screen.getByRole('heading', { name: 'Findings of this diagnosis' }).closest('section') as HTMLElement;
     expect(within(section).getByText(/flaky untouched/)).toBeInTheDocument();
     expect(within(section).getByText('Stopped', { selector: '.badge' })).toHaveAttribute('data-tone', 'attention');
+  });
+
+  it('hides a one-item list for an older single-case run with no recorded route', async () => {
+    await openChanged(IDS.quiet, (detail) => ({
+      ...detail,
+      route: undefined,
+      findings: [{ id: detail.id, fault_code: detail.fault_code, kind: detail.kind, verdict: 'no_failure', verdict_text: detail.verdict_text }],
+    }));
+    expect(screen.queryByRole('heading', { name: 'Findings of this diagnosis' })).not.toBeInTheDocument();
   });
 
   it('uses the route when the server sends one', async () => {

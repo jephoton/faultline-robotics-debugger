@@ -22,8 +22,9 @@ export function routeOf(detail: Detail): Route | null {
 export function showsFindings(detail: Detail): boolean {
   const list = detail.findings ?? [];
   if (list.length > 1) return true;
-  const route = routeOf(detail);
-  return list.length > 0 && (route === 'passes' || route === 'flaky');
+  // A single finding is worth a list only when the server says the run ended without a failure to reduce;
+  // an older single-case run (route inferred, not recorded) has nothing to add to its own page.
+  return list.length > 0 && (detail.route === 'passes' || detail.route === 'flaky');
 }
 
 /** Every case one diagnosis run registered, in route order, with this one marked. */
