@@ -32,7 +32,9 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from robot_debug import scenario_experiment as se
+from robot_debug.scenario_hypothesis import compact_differences
 from robot_debug.scenario_import import ScenarioImportError, validate_scenario_candidate, write_scenario_candidate
+from robot_debug.viewer.library import _one_decimal, minimal_cause
 
 LETTERS = {"success": "S", "policy_failure": "F", "invalid_scene": "I"}
 
@@ -291,6 +293,74 @@ def _failing_text(plan: Mapping[str, Any]) -> str:
         str(imported.get("file_sha256"))[:12], str(imported.get("state_sha256"))[:12], where)
 
 
+def _share_text(fraction: float) -> str:
+    """A share as the page shows it: one decimal at most, half-up, no trailing ``.0`` (0.875 -> ``87.5%``)."""
+
+    text = _one_decimal(float(fraction) * 100.0)
+    return "{}%".format(text[:-2] if text.endswith(".0") else text)
+
+
+_STOPPED_AT = {
+    "budget_exhausted": "Stopped at the candidate budget",
+    "deadline_exhausted": "Stopped at the time limit",
+    "failing_not_reproducible": "Stopped because the failing start did not fail reliably",
+    "reference_not_passing": "Stopped because no reference passed 5 of 5 attempts",
+    "infrastructure_error": "Stopped by an infrastructure error",
+}
+
+
+def _summary_stop_text(reduction: Mapping[str, Any], has_cause: bool) -> str:
+    """The stop status in plain words, for example ``Stopped at the candidate budget: entity-minimal, sizes not
+    fully shrunk.`` The same facts as the case page, so the report and the page never disagree."""
+
+    reason = reduction.get("stop_reason")
+    if reduction.get("reduced"):
+        steps = reduction.get("bisection_steps")
+        return "Fully reduced: every kept shift was shrunk to within 1/{} of its original size.".format(
+            2 ** steps) if steps else "Fully reduced."
+    stopped = _STOPPED_AT.get(reason, "Stopped ({})".format(reason))
+    if not has_cause:
+        return "{}: no minimal cause was established.".format(stopped)
+    if reduction.get("entity_minimal"):
+        return "{}: entity-minimal (each kept entity is needed), sizes not fully shrunk.".format(stopped)
+    return "{}: not yet entity-minimal; this is the smallest cause found so far.".format(stopped)
+
+
+def summary_section(summary: Mapping[str, Any]) -> List[str]:
+    """A few bullets that answer the report's main questions before the detail: does it reproduce, from which
+    start, against which reference, which shifts are enough (with size and share), and why it stopped."""
+
+    plan, reduction = summary["plan"], summary.get("reduction") or {}
+    selection = reduction.get("final_selection")
+    kept = minimal_cause({
+        "differences": compact_differences(summary.get("differences") or []),
+        "minimal": {"selection": selection or {}}}) if selection else []
+    if kept:
+        verdict = ("Reproduces. Applying the kept shifts to the passing reference makes the policy fail at "
+                   "least {} of {} attempts.".format(reduction.get("required_failures", 4), reduction.get("attempts", 5)))
+    else:
+        verdict = "Not reproduced. No smaller cause than the whole arrangement was established."
+    if plan.get("failing_start") is not None:
+        failing = "benchmark start {}".format(plan["failing_start"])
+    else:
+        imported = plan.get("failing_import") or {}
+        source = plan.get("failing_source") or {}
+        failing = "imported file {}".format(str(imported.get("file_sha256"))[:12])
+        if source.get("kind") == "benchmark" and source.get("init_state_index") is not None:
+            failing += " (from benchmark start {})".format(source["init_state_index"])
+    reference = reduction.get("reference")
+    lines = ["## Summary", "",
+             "- Verdict: {}".format(verdict),
+             "- Failing start: {}.".format(failing),
+             "- Reference: {}.".format("none was established" if reference is None else
+                                       "benchmark start {}, the nearest start that passed".format(reference))]
+    for row in kept:
+        lines.append("- Kept shift: {} {}, {} ({} of the full difference).".format(
+            row["entity"], row["part"], row["magnitude"], _share_text(row["fraction"])))
+    lines += ["- Status: {}".format(_summary_stop_text(reduction, bool(kept))), ""]
+    return lines
+
+
 def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) -> List[str]:
     plan, reduction = summary["plan"], summary.get("reduction") or {}
     selection = reduction.get("final_selection")
@@ -404,9 +474,10 @@ def build_report(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]]
     plan = summary.get("plan")
     if not isinstance(plan, dict):
         raise ReportError("the summary has no plan")
-    lines = ["# Scenario reduction: {}".format(plan["instruction"]), "",
-             "Suite `{}`, task {}. Reference runs decide everything below; the model only proposes an order "
-             "and a hypothesis.".format(plan["suite"], plan["task_id"]), ""]
+    lines = ["# Scenario reduction: {}".format(plan["instruction"]), ""]
+    lines += summary_section(summary)
+    lines += ["Suite `{}`, task {}. Reference runs decide everything below; the model only proposes an order "
+              "and a hypothesis.".format(plan["suite"], plan["task_id"]), ""]
     if screen is not None:
         lines += screen_section(screen)
     lines += reduction_section(summary, hourly_rate)

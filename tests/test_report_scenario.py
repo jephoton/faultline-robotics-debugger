@@ -207,6 +207,27 @@ class ReportTests(RunTestCase):
         self.assertIn("task 0 start 9", text)
         self.assertIn("- task 0: put the alphabet soup in the basket", text)
 
+    def summary_block(self, text):
+        start = text.index("## Summary")
+        end = text.index("\n## ", start + 5)
+        return text[start:end]
+
+    def test_a_completed_reduction_opens_with_a_summary_of_the_answer(self):
+        summary = self.reduce_summary()
+        self.assertEqual(0, self.run_cli(summary, "--force")[0])
+        text = (summary.parent / "scenario_reduction_report.md").read_text(encoding="utf-8")
+        self.assertLess(text.index("# Scenario reduction"), text.index("## Summary"))
+        self.assertLess(text.index("## Summary"), text.index("## Result"))
+        block = self.summary_block(text)
+        self.assertIn("- Verdict: Reproduces. Applying the kept shifts to the passing reference makes the policy "
+                      "fail at least 4 of 5 attempts.", block)
+        self.assertIn("- Failing start: benchmark start 9.", block)
+        self.assertIn("- Reference: benchmark start 4, the nearest start that passed.", block)
+        self.assertIn("- Kept shift: alphabet_soup_1 position, 6.3 cm (12.5% of the full difference).", block)
+        self.assertIn("- Status: Fully reduced: every kept shift was shrunk to within 1/16 of its original size.",
+                      block)
+
+
     def test_a_reduction_report_can_include_its_screen(self):
         screen = self.screen_summary()
         summary = self.reduce_summary()
@@ -232,6 +253,85 @@ class ReportTests(RunTestCase):
 
     def test_pipes_in_text_do_not_break_tables(self):
         self.assertEqual("a/b", self.script._cell("a|b"))
+
+
+class SummaryTests(unittest.TestCase):
+    """The summary section for results a Job can stop with, built from stored summaries."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = load_script()
+
+    def summary(self, reduction=None, plan=None):
+        reduction = dict(rf.partial_reduction(), **(reduction or {}))
+        plan = dict(rf.partial_plan(), **(plan or {}))
+        return {
+            "schema_version": 1, "mode": "scenario-reduce", "plan": plan, "reduction": reduction,
+            "differences": [
+                {"entity": "soup", "kind": "object", "position": {"distance_m": 0.0289}, "rotation": None,
+                 "joints": [], "distance": 2.89},
+                {"entity": "cream", "kind": "object", "position": {"distance_m": 0.01},
+                 "rotation": {"angle_deg": 20.0}, "joints": [], "distance": 3.0},
+                {"entity": "milk", "kind": "object", "position": {"distance_m": 0.052}, "rotation": None,
+                 "joints": [], "distance": 5.2},
+                {"entity": "robot", "kind": "robot", "position": None, "rotation": None, "distance": 1.0,
+                 "joints": [{"name": "j%d" % i, "offset": 0.0 if i else 2.6, "unit": "deg"} for i in range(6)]}],
+            "videos": {}, "checkpoint": None}
+
+    def block(self, **changes):
+        text = self.script.build_report(self.summary(**changes))
+        start = text.index("## Summary")
+        return text[start:text.index("\n## ", start + 5)]
+
+    def test_a_budget_stop_says_entity_minimal_and_sizes_not_fully_shrunk(self):
+        block = self.block()
+        self.assertIn("- Status: Stopped at the candidate budget: entity-minimal (each kept entity is needed), "
+                      "sizes not fully shrunk.", block)
+        self.assertIn("- Failing start: benchmark start 7.", block)
+        self.assertIn("- Reference: benchmark start 28, the nearest start that passed.", block)
+
+    def test_each_kept_shift_has_a_size_in_people_units_and_a_share(self):
+        block = self.block()
+        self.assertIn("- Kept shift: soup position, 2.5 cm (87.5% of the full difference).", block)
+        self.assertIn("- Kept shift: cream position, 1.0 cm (100% of the full difference).", block)
+        self.assertIn("- Kept shift: milk position, 5.2 cm (100% of the full difference).", block)
+        self.assertIn("- Kept shift: robot joints, 6 joints, up to 2.3° (87.5% of the full difference).", block)
+
+    def test_sizes_and_shares_use_the_case_pages_rounding(self):
+        # 2.89 cm x 0.5 = 1.445 cm, shown with one decimal; 0.125 is 12.5%, 1/3 is 33.3%.
+        reduction = {"final_selection": {"soup": {"position": 0.5}}}
+        self.assertIn("soup position, 1.4 cm (50% of the full difference)", self.block(reduction=reduction))
+        reduction = {"final_selection": {"soup": {"position": 0.125}, "cream": {"position": 1 / 3}}}
+        block = self.block(reduction=reduction)
+        self.assertIn("soup position, 0.4 cm (12.5% of the full difference)", block)
+        self.assertIn("cream position, 0.3 cm (33.3% of the full difference)", block)
+
+    def test_an_imported_start_is_named_by_its_file_hash_and_the_start_it_came_from(self):
+        plan = {"failing_start": None, "failing_import": {"file_sha256": "f00dfeed" * 8, "state_sha256": "ab" * 32},
+                "failing_source": {"kind": "benchmark", "init_state_index": 14}}
+        self.assertIn("- Failing start: imported file f00dfeedf00d (from benchmark start 14).",
+                      self.block(plan=plan))
+        plan["failing_source"] = {"kind": "file"}
+        self.assertIn("- Failing start: imported file f00dfeedf00d.", self.block(plan=plan))
+
+    def test_a_fully_reduced_run_says_so(self):
+        block = self.block(reduction={"stop_reason": "reduced", "reduced": True, "bisection_steps": 3})
+        self.assertIn("- Status: Fully reduced: every kept shift was shrunk to within 1/8 of its original size.",
+                      block)
+
+    def test_a_run_cut_short_before_entity_minimal_is_not_called_minimal(self):
+        block = self.block(reduction={"entity_minimal": False, "stop_reason": "deadline_exhausted"})
+        self.assertIn("- Status: Stopped at the time limit: not yet entity-minimal; this is the smallest cause "
+                      "found so far.", block)
+
+    def test_a_run_without_a_cause_says_not_reproduced(self):
+        block = self.block(reduction={"stop_reason": "failing_not_reproducible", "final_selection": None,
+                                      "entity_minimal": False, "reference": None})
+        self.assertIn("- Verdict: Not reproduced.", block)
+        self.assertIn("- Reference: none was established.", block)
+        self.assertNotIn("Kept shift", block)
+        self.assertIn("- Status: Stopped because the failing start did not fail reliably: no minimal cause was "
+                      "established.", block)
 
 
 class PartialReductionReportTests(unittest.TestCase):
