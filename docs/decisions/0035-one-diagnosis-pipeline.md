@@ -60,3 +60,32 @@ validation risk before October 29.
   least one disturbance case. Blur and noise thresholds were found in the
   September experiments on LIBERO-Object, so a blur or noise probe there is
   the likeliest to produce one.
+
+## Implementation notes (October 19, 2026)
+
+- **How it was built.** Backend and front end were built in parallel against
+  the plan's contract, then integrated. A `mode: diagnose` spec and
+  template:
+  - defaults: blur, noise, darken and contrast; no rewordings; research on;
+    a US$2.50 cap and 1.5 hours (Jethro revised the defaults down from
+    "everything", which needed a US$6–7, 4-hour cap);
+  - other modes still work from the CLI.
+- **Routing.** The check reuses the layout screen Job. Routes are layout,
+  probes, flaky and passes. A failing audit control (flaky) skips the
+  rewordings.
+- **Probe Jobs.** Each audit Job is capped at 40 minutes, so families are
+  grouped (image 4+4, scene together). Jobs run one after another; parallel
+  Jobs would save wall-clock time but not cost, and are deferred.
+- **Review.** The dry run lists the branches with their worst cases (check
+  plus the larger branch) and typical figures modelled on measured runs:
+  check about 16 minutes and US$0.43; four families about 29 minutes and
+  US$0.82; layout about 25 minutes and US$0.68.
+- **Cases.** A run can register several cases: an audit case and a wording
+  case. Audit and wording cases carry videos (the control, and each family at
+  its threshold or top severity) and replay inputs. Replay reuses the
+  existing Job types, so no simulator image change was needed. The three
+  existing audit cases were re-registered locally to gain their videos (case
+  ids unchanged).
+- **Research.** An optional research step (Tavily sources, a Nemotron 3 Nano
+  summary) attaches context to each new case when a Tavily key is present.
+

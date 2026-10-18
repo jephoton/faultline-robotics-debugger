@@ -108,3 +108,18 @@ keep the structured view. Reports now open with a Summary, explain the
 Candidates columns, and claim a size resolution only when shrinking finished.
 Stored reports were regenerated locally; the committed demo report was
 regenerated. See `docs/superpowers/plans/2026-10-18-report-first-case-page-and-traces.md`.
+
+## Amendment (October 18–19, 2026): colours, readout and Reference
+
+- **Pass and fail colours (Jethro).** Every pass/fail outcome is coloured:
+  green for a pass (including "No failure found"), red for a failure. Amber
+  still marks anything needing attention. This replaces the original rule
+  that kept passes neutral; an icon and a word always go with the colour.
+- **Readout header.** The verdict and run-status fields take their own
+  colour and icon inside the green readout; the descriptive fields stay
+  green.
+- **Reference page.** `docs/reference.md` is bundled into the app at build
+  time and shown as **Reference** in the local panel and the gallery. It is
+  the single source for the modes, gate, reduction, severities, report
+  columns, verdicts and spend rules.
+
