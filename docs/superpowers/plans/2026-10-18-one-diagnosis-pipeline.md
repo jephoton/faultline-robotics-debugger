@@ -123,9 +123,14 @@ replay of that case.
 
 ## Decisions (Jethro, October 18)
 
-- **Q1. Default probes: everything.** All ten families plus 10 rewordings are
-  ticked by default. Jethro noted the worst case is expensive, so the review
-  step must show both the worst case and a typical cost.
+- **Q1. Default probes (revised October 19):** blur, noise, darken and
+  contrast, no rewordings; cap US$2.50 and 1.5 hours.
+  - These four are the only families where the policy has failed before.
+  - The other six families and the rewordings stay one tick away.
+  - Typical cost is about US$1.25 for a passing start and about US$1.15
+    for the layout branch.
+  - The first answer, everything ticked, would need a US$6–7, 4-hour cap,
+    which Jethro judged too expensive in money and time.
 - **Q2.** A flaky start (the stress test's control fails) skips the rewording
   probe too.
 - **Q3.** A findings list at the top of the run, linking to each existing
