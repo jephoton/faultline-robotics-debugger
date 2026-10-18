@@ -143,3 +143,49 @@ every probe Job, and the cap rule (the first Job must fit) is unchanged.
 - Then the validation run, with Jethro's go and cap.
 - Estimate: 2 days of build and integration, plus the run.
 - Conventional Commits, with no AI co-author trailers.
+
+## Contract between the backend and front-end agents (API v1 additions)
+
+The existing API (`docs/superpowers/plans/2026-10-17-control-panel-ui.md`)
+stays valid; these are additions.
+
+- **Spec mode `diagnose`:**
+
+  ```yaml
+  mode: diagnose
+  diagnose:
+    task: 0
+    # exactly one of:
+    start: 0
+    screen: {starts: "10-49", confirm: 4}
+    import: file.json
+    probes:
+      families: [blur, ...]   # [] for none
+      rewordings: 10          # 0 for none
+      enabled: true           # false = "don't probe"
+    layout: true              # false = "probe only": skip the layout branch even if the start fails
+  ```
+
+  Plus the usual `policy`, `budget`, `nemotron` and `backend`. The template
+  is `GET /api/specs/template?mode=diagnose`, with all ten families and
+  `rewordings: 10` by default. Probes apply only with `start`; `screen` and
+  `import` are layout-only, and validation says so.
+- **Dry run** (`POST /api/specs/dry-run`):
+  - each entry in `jobs[]` gains `"branch": "check" | "layout" | "probes"`;
+  - a new `branches: [{"branch", "worst_case_usd", "typical_usd": number | null}]`;
+  - `worst_case_total_usd` = check + the larger of layout and probes.
+  - `typical_usd` comes from measured history: about 0.5 × worst case for a
+    probe Job; null when unknown. The UI labels it as an estimate.
+- **Progress:** gains `"route": "layout" | "probes" | "passes" | "flaky" | null`.
+- **Detail:**
+  - gains `"findings": [{"id", "fault_code", "kind", "verdict", "verdict_text"}]`:
+    every library item registered by the same diagnosis run, in route order,
+    this case included. The UI shows the list only when it has more than one
+    entry, or when the run's route was "passes" or "flaky".
+  - `replayable` can now be true for `audit` and `paraphrase` cases.
+- **Replay:** `POST /api/library/{id}/replay` accepts audit and paraphrase
+  cases. Replay verdict texts:
+  - audit: "still fails at s = 0.50 (blur)" / "no longer fails";
+  - wording: "the wording still fails" / "no longer fails".
+- **Library ids** stay `d-<case_id>` and `r-<run>`. A pipeline run can
+  register more than one case: an audit case and a wording case.
