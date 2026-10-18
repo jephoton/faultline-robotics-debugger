@@ -43,7 +43,11 @@ export function sortFamilies(families: string[]): string[] {
   return [...families].sort((a, b) => rank(a) - rank(b));
 }
 
-export function defaultsFor(choice: DiagnosisChoice): FormState {
+/**
+ * The form's starting values for a kind of start. `research` follows the machine: related research needs a
+ * Tavily key, so it starts ticked only when the key is there (or not known to be missing).
+ */
+export function defaultsFor(choice: DiagnosisChoice, research = true): FormState {
   const base: FormState = {
     name: '',
     suite: 'libero_10',
@@ -60,7 +64,7 @@ export function defaultsFor(choice: DiagnosisChoice): FormState {
     spend: '2.5',
     hours: '1.5',
     nemotron: true,
-    research: true,
+    research,
     importFile: null,
   };
   switch (choice) {
@@ -137,9 +141,16 @@ export function asksForResearch(yaml: string): boolean {
   return /^research:\s*true\s*$/m.test(yaml);
 }
 
-/** True when a run of this spec would call Nemotron: a layout reading, rewordings, or the research summary. */
-export function usesNemotron(yaml: string): boolean {
-  return /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml) || asksForRewordings(yaml) || asksForResearch(yaml);
+/**
+ * True when a run of this spec would call Nemotron: a layout reading, rewordings, or the research summary.
+ * `researchRuns` is false when the research will be skipped (no Tavily key), so it needs no Nemotron.
+ */
+export function usesNemotron(yaml: string, researchRuns = true): boolean {
+  return (
+    /nemotron:\s*\{[^}]*(hypothesis|explain):\s*true/.test(yaml) ||
+    asksForRewordings(yaml) ||
+    (researchRuns && asksForResearch(yaml))
+  );
 }
 
 export type FieldKey = keyof FormState | 'file';

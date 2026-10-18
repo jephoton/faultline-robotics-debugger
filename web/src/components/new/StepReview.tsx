@@ -59,6 +59,8 @@ export function StepReview({
   const mode = yamlValue(yaml, 'mode') ?? 'scenario';
   const checking = mode === 'diagnose' ? describeSource(yaml) : null;
   const check = (key: string) => env.data?.checks.find((entry) => entry.key === key);
+  // Related research without a Tavily key is skipped by the run: a note, never a reason not to start.
+  const researchSkipped = asksForResearch(yaml) && check('tavily_key')?.ok === false;
 
   function blockers(): string[] {
     const list: string[] = [];
@@ -78,7 +80,7 @@ export function StepReview({
     const nebius = check('nebius_cli');
     if (nebius && !nebius.ok) list.push('You are not signed in to Nebius. Sign in, then start (see Setup for how).');
     const key = check('token_factory_key');
-    if (key && !key.ok && usesNemotron(yaml)) {
+    if (key && !key.ok && usesNemotron(yaml, !researchSkipped)) {
       list.push(
         mode === 'paraphrase'
           ? 'Rewordings are written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup).'
@@ -88,10 +90,6 @@ export function StepReview({
               ? 'Nemotron needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Nemotron off.'
               : 'The research summary is written by Nemotron, which needs NEBIUS_API_KEY in your .env file (see Setup). Add the key, or go back and turn Find related research off.',
       );
-    }
-    const tavily = check('tavily_key');
-    if (tavily && !tavily.ok && asksForResearch(yaml)) {
-      list.push('Related research needs a Tavily key (TAVILY_API_KEY) in your .env file (see Setup). Add the key, or go back and turn Find related research off.');
     }
     return list;
   }
@@ -183,6 +181,12 @@ export function StepReview({
         {env.loading && <p className="muted">Checking sign-in and keys.</p>}
         {env.error && <p className="muted">The environment could not be checked ({env.error.message}). You can still try to start.</p>}
         {env.data && <EnvironmentList environment={env.data} />}
+        {researchSkipped && (
+          <p className="muted" role="note">
+            Related research will be skipped: no Tavily key. Add TAVILY_API_KEY to your .env file to use it (see Setup); the
+            diagnosis itself is not affected.
+          </p>
+        )}
         <p className="muted">
           <Link to="/setup">Open Setup</Link> for how to fix anything above.
         </p>

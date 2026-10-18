@@ -95,6 +95,10 @@ case gets a **Research context** section:
 
 It is context, not evidence: it cannot say why this policy failed.
 
+The tickbox starts ticked only when the machine has a Tavily key. Ticking it
+without a key never stops a diagnosis: the Review shows a note and the run
+skips the research.
+
 ### Fault codes
 
 Each case gets a display code such as `FL-S-AFB5`: `FL`, a letter for the

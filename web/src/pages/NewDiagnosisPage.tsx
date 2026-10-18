@@ -31,6 +31,13 @@ function NewDiagnosis() {
   const first = useRef(true);
 
   const template = useAsync(() => api.specTemplate('diagnose'), [api]);
+  // Related research needs a Tavily key: it starts ticked only when the key is there (or not known to be missing).
+  const environment = useAsync(() => api.environment(), [api]);
+  const researchDefault = environment.data?.checks.find((entry) => entry.key === 'tavily_key')?.ok !== false;
+  const researchTouched = useRef(false);
+  useEffect(() => {
+    if (!researchTouched.current) setForm((previous) => ({ ...previous, research: researchDefault }));
+  }, [researchDefault]);
   const backend = template.data ? extractBackend(template.data) : null;
   const generated = buildYaml(choice, form, backend);
   const yaml = override ?? generated;
@@ -66,7 +73,8 @@ function NewDiagnosis() {
 
   function choose(next: DiagnosisChoice) {
     setChoice(next);
-    setForm(defaultsFor(next));
+    setForm(defaultsFor(next, researchDefault));
+    researchTouched.current = false;
     setOverride(null);
     setValidation({ status: 'idle' });
     setBlocked(null);
@@ -127,7 +135,10 @@ function NewDiagnosis() {
           <StepSettings
             choice={choice}
             form={form}
-            onChange={(patch) => setForm((previous) => ({ ...previous, ...patch }))}
+            onChange={(patch) => {
+              if (patch.research !== undefined) researchTouched.current = true;
+              setForm((previous) => ({ ...previous, ...patch }));
+            }}
             yaml={yaml}
             yamlEdited={override !== null}
             onYamlChange={(text) => setOverride(text)}

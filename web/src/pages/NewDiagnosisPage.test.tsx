@@ -443,21 +443,62 @@ describe('step 3: review and start', () => {
     expect(body.no_llm).toBe(true);
   });
 
-  it('asks for a Tavily key before related research, and the research summary needs Nemotron too', async () => {
+  const NO_TAVILY: Environment = {
+    checks: [
+      { key: 'nebius_cli', ok: true, detail: 'signed in' },
+      { key: 'token_factory_key', ok: true, detail: 'found' },
+      { key: 'tavily_key', ok: false, detail: 'TAVILY_API_KEY not found in .env', fix: 'Add TAVILY_API_KEY to .env.' },
+    ],
+  };
+
+  it('leaves related research off by default when there is no Tavily key, and on when there is one', async () => {
     const user = userEvent.setup();
-    const noTavily: Environment = {
+    await openNew({ environment: NO_TAVILY });
+    await toSettings(user);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Find related research' })).not.toBeChecked());
+    expect(yamlBox().value).toMatch(/^research: false$/m);
+  });
+
+  it('keeps related research on by default with a Tavily key', async () => {
+    const user = userEvent.setup();
+    const withKey: Environment = { checks: [...READY.checks, { key: 'tavily_key', ok: true, detail: 'found' }] };
+    await openNew({ environment: withKey });
+    await toSettings(user);
+    expect(screen.getByRole('checkbox', { name: 'Find related research' })).toBeChecked();
+  });
+
+  it('never stops the start for a missing Tavily key: ticking research only adds a note that it will be skipped', async () => {
+    const user = userEvent.setup();
+    const view = await openNew({ environment: NO_TAVILY });
+    await toSettings(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Find related research' }));
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByText('Total worst case');
+    expect(screen.getByRole('note')).toHaveTextContent('Related research will be skipped: no Tavily key');
+    await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
+    await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('asks for the Nebius key for the research summary only when the research will run', async () => {
+    const user = userEvent.setup();
+    const noKeys: Environment = {
       checks: [
         { key: 'nebius_cli', ok: true, detail: 'signed in' },
-        { key: 'token_factory_key', ok: true, detail: 'found' },
+        { key: 'token_factory_key', ok: false, detail: 'NEBIUS_API_KEY not found in .env', fix: 'Add NEBIUS_API_KEY to .env.' },
         { key: 'tavily_key', ok: false, detail: 'TAVILY_API_KEY not found in .env', fix: 'Add TAVILY_API_KEY to .env.' },
       ],
     };
-    const view = await openNew({ environment: noTavily });
-    await toReview(user);
-    await screen.findByText(/TAVILY_API_KEY not found/);
+    const view = await openNew({ environment: noKeys });
+    await toSettings(user);
+    await user.clear(screen.getByLabelText('Rewordings to ask for'));
+    await user.type(screen.getByLabelText('Rewordings to ask for'), '0');
+    await user.click(screen.getByRole('checkbox', { name: /ask nemotron for a hypothesis/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Find related research' }));
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await screen.findByText('Total worst case');
     await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Related research needs a Tavily key/);
-    expect(postsTo(view, '/api/runs')).toHaveLength(0);
+    await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
   });
 
   it('does not tell the run to skip Nemotron while related research is on', async () => {
