@@ -115,24 +115,31 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code
             </thead>
             <tbody>
               <tr>
+                <td className="mono">diagnose.yaml</td>
+                <td>
+                  The usual one (what New diagnosis writes): runs a start untouched; if it fails, reduces the layout to the smallest
+                  trigger; if it passes, probes the chosen disturbances and rewordings. Every failing condition becomes a replayable case.
+                </td>
+              </tr>
+              <tr>
                 <td className="mono">scenario-start.yaml</td>
-                <td>Mode 1 for a known failing benchmark start: screen a reference pool, reduce the failure to the shifts that cause it.</td>
+                <td>Layout reduction only, for a known failing benchmark start.</td>
               </tr>
               <tr>
                 <td className="mono">scenario-screen.yaml</td>
-                <td>Mode 1 that first searches a range of starts for one that fails reliably.</td>
+                <td>Layout reduction that first searches a range of starts for one that fails reliably.</td>
               </tr>
               <tr>
                 <td className="mono">scenario-import.yaml</td>
-                <td>Mode 1 for a failing start of your own, from a start-state file.</td>
+                <td>Layout reduction of a failing start of your own, from a start-state file.</td>
               </tr>
               <tr>
                 <td className="mono">audit.yaml</td>
-                <td>Mode 2: the smallest image or scene disturbance that breaks a passing start.</td>
+                <td>Disturbance probes only: the smallest image or scene disturbance that breaks a passing start.</td>
               </tr>
               <tr>
                 <td className="mono">paraphrase.yaml</td>
-                <td>Mode 2 for language: find a rewording that breaks the policy and reduce it to the minimal word change.</td>
+                <td>Rewording probes only: a rewording that breaks the policy, reduced to the minimal word change.</td>
               </tr>
               <tr>
                 <td className="mono">replay.yaml</td>
@@ -146,10 +153,10 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code
         </p>
         <h3>Bring your own failing start</h3>
         <p>
-          Scenario mode takes exactly one of <code>start</code> (a benchmark start index), <code>screen</code> (a range to search) or{' '}
-          <code>import</code> (a file of your own):
+          A diagnosis takes exactly one of <code>start</code> (a benchmark start index), <code>screen</code> (a range to search) or{' '}
+          <code>import</code> (a file of your own); the last two go straight to the layout reduction:
         </p>
-        <Code>{`scenario:
+        <Code>{`diagnose:
   task: 0
   import: my-failing-start.json`}</Code>
         <p>
@@ -204,10 +211,11 @@ faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixe
           Job, waits for the provider to confirm, settles the cost and leaves the run resumable.
         </p>
         <p>
-          <strong>Replay</strong> re-runs a saved scenario case (its minimal scene and its passing reference, five times each) and reports
-          &ldquo;still reproduces&rdquo; or &ldquo;no longer reproduces&rdquo;: the regression test after you change the policy.{' '}
-          <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a script
-          whether you got it. Audit and language cases are not replayed yet.
+          <strong>Replay</strong> re-runs a saved case and says whether its failing condition still fails: the regression test after you
+          change the policy. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at
+          its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts
+          each. <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a
+          script whether you got it.
         </p>
       </>
     ),
