@@ -196,6 +196,53 @@ class RenderTests(RunTestCase):
             self.assertEqual("-", report.physical_text(bad))
 
 
+class SummarySectionTests(unittest.TestCase):
+    """The bullet summary that opens an audit report, in the words the case page uses."""
+
+    def summary(self, nominal_failures=0, **families):
+        return {
+            "schema_version": 1, "mode": "m6-threshold", "conditions": {}, "families": families,
+            "config": dict(THRESHOLD_CONFIG, families=list(families)),
+            "nominal_controls": {"planned": 5, "outcomes": {"success": 5 - nominal_failures,
+                                                           "policy_failure": nominal_failures}}}
+
+    def block(self, summary):
+        return chr(10).join(report.summary_section([summary]))
+
+    def test_it_follows_the_title_and_gives_the_control_then_one_line_per_family(self):
+        text = report.render_report([self.summary(blur={"threshold_severity": 0.5, "lower_bound": 0.4,
+                                                        "stop_reason": "threshold_found",
+                                                        "levels": [{"severity": 0.5}]})])
+        self.assertLess(text.index("# M6 results"), text.index("## Summary"))
+        self.assertLess(text.index("## Summary"), text.index("Scope:"))
+        block = self.block(self.summary())
+        self.assertIn("- Unperturbed control: 0 of 5 attempts failed.", block)
+
+    def test_each_family_state_reads_like_the_case_page(self):
+        levels = [{"severity": 0.2}, {"severity": 0.4}]
+        block = self.block(self.summary(
+            blur={"threshold_severity": 0.5, "stop_reason": "threshold_found", "levels": levels},
+            noise={"threshold_severity": None, "stop_reason": "no_reproducible_failure",
+                   "levels": levels + [{"severity": 1.0}]},
+            darken={"threshold_severity": None, "stop_reason": "deadline_exhausted", "levels": levels},
+            jpeg={"threshold_severity": None, "stop_reason": "nominal_failed", "levels": []}))
+        self.assertIn("- Gaussian blur: fails from s = 0.50.", block)
+        self.assertIn("- Gaussian noise: no failure up to s = 1.00.", block)
+        self.assertIn("- Darkening: incomplete (searched up to s = 0.40, then stopped).", block)
+        self.assertIn("- JPEG compression: not tested (the run stopped before this family was searched).", block)
+        self.assertLess(block.index("Gaussian blur"), block.index("Gaussian noise"))
+        self.assertLess(block.index("Gaussian noise"), block.index("Darkening"))
+
+    def test_a_failed_control_is_said_before_any_family(self):
+        block = self.block(dict(self.summary(nominal_failures=2, blur={
+            "threshold_severity": None, "stop_reason": "nominal_failed", "levels": []}),
+            stop_reason="nominal_controls_failed"))
+        self.assertIn("- Unperturbed control: 2 of 5 attempts failed; the unperturbed policy did not pass "
+                      "reliably, so no disturbance can be judged.", block)
+        self.assertIn("- Stopped early: `nominal_controls_failed`.", block)
+        self.assertLess(block.index("Unperturbed control"), block.index("Gaussian blur"))
+
+
 class CameraEffectReportTests(RunTestCase):
     def test_smoke_tables_show_the_camera_ratios(self):
         summary = self.run_m6(ProbingWorld(smoke_decide), "m6-smoke")
