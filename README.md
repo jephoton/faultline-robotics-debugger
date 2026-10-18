@@ -97,10 +97,10 @@ python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.cli import
 Then open <http://127.0.0.1:8765> and select the case in the sidebar.
 
 For a click-by-click walkthrough and recipes for different goals, start with
-the [UI user runbook](docs/ui-runbook.md); for what each rerun in a diagnosis
-is for, read [how a scenario reduction works](docs/how-reduction-works.md);
-for what each stress-test severity means, read
-[disturbance families](docs/disturbance-families.md). Its first walkthrough uses saved
+the [UI user runbook](docs/ui-runbook.md). The [Reference](docs/reference.md)
+(also a page in the control panel) documents the modes, the gate, how a
+reduction works, every severity, every report column and abbreviation, and
+the stop reasons. Its first walkthrough uses saved
 evidence and starts no new compute; setup instructions are separate.
 
 ## Two modes, one engine

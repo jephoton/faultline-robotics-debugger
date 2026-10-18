@@ -426,7 +426,7 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
               "shares of each kept difference). A selection's number is its share: `robot (joints 0.75)` applies 75% "
               "of the arm's offset to the reference. Outcomes: S success, F policy failure, I invalid scene. "
               "`skipped`: attempts not run because the answer was already certain; `late`: attempts already running "
-              "when it was decided, shown but not counted. See docs/how-reduction-works.md.", ""]
+              "when it was decided, shown but not counted. See the Reference page (docs/reference.md).", ""]
     lines += _table(
         ["#", "phase", "role", "selection", "outcomes", "decision", "gate met", "skipped", "late"],
         [[c["index"], c["phase"], c["role"] + ("" if c.get("reference") is None else " " + str(c["reference"])),

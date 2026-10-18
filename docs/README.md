@@ -13,10 +13,10 @@ suite, task, start and perturbation family; none is a general claim.
   resume, replay.
 - [Architecture and full UI map](architecture.md): Mode 1 versus Mode 2,
   execution paths, local/cloud diagrams, user flow and current UI capabilities.
-- [Disturbance families and severity levels](disturbance-families.md): what
-  every stress-test family changes and what each severity means physically.
-- [How a scenario reduction works](how-reduction-works.md): the gates,
-  every rerun phase, and how to read the report's Candidates table.
+- [Reference](reference.md): the modes, the repeatability gate, how a
+  reduction works, every severity level, every report column and
+  abbreviation, verdicts, stop reasons and the spend cap (also a page in the
+  control panel).
 - [UI user runbook](ui-runbook.md): start with a saved-case walkthrough, then
   follow click-by-click recipes for diagnosis, stress tests, wording and replay.
 - The control panel: `faultline ui` (README, "Control panel"), a browser UI

@@ -93,7 +93,7 @@ and kept it as a replayable test.
    - **23–25** shrink: the arm offset at 50% and 25% does not reproduce; at
      75% it does.
 
-   [How a scenario reduction works](how-reduction-works.md) explains every
+   The [Reference](reference.md) (sidebar **Reference**) explains every
    phase and column.
 7. **Nemotron's reading** is collapsed: open it for the model's hypotheses,
    labelled as interpretation, not evidence. **Replays** says what a replay is
@@ -131,7 +131,7 @@ checkpoint."
 
 What each family and severity level means physically (for example dead
 pixels at s = 1.00 is 20% of the pixels) is in
-[disturbance families](disturbance-families.md). These four are the image
+the [Reference](reference.md), section 5. These four are the image
 catalog families; the New diagnosis form starts with a different four (Blur,
 Noise, Darken, Contrast) checked.
 

@@ -6,10 +6,8 @@
 > [the runbook](codex-handoff/RUNBOOK.md) for commands, and
 > [decisions](decisions/) for accepted design rationale.
 
-For **what each stress-test family and severity means**, read
-[disturbance families](disturbance-families.md).
-For **the reduction algorithm** (gates, probe, ddmin, split, shrink, the
-report's columns), read [how a scenario reduction works](how-reduction-works.md).
+For **the reduction algorithm, every severity level and every report
+column**, read the [Reference](reference.md).
 For **how to use the UI**, start with the [UI user runbook](ui-runbook.md):
 saved-case walkthrough, goal-based recipes, result interpretation and recovery.
 This document explains the system; it is not the first-use tutorial.
@@ -532,8 +530,8 @@ money. Copy such as "never pays twice" is not a promise that every retry is free
 A case without a report keeps the structured view: the September occlusion
 case (rectangles, episodes, lineage and research). Empty states mean evidence
 was absent, not that the policy failed. The algorithm behind a scenario report
-is in [how a scenario reduction works](how-reduction-works.md); audit
-severities in [disturbance families](disturbance-families.md).
+and audit severities
+are in the [Reference](reference.md).
 
 **"Nemotron's reading" is a saved interpretation panel, not a chatbot.** It
 shows model attribution, a Review required marker, hypotheses, observations,

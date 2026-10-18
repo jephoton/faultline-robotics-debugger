@@ -94,9 +94,8 @@ Also on October 18:
   budget ended between a speculative bisection pair. `FL-S-AFB5`'s arm offset
   was proven at 75% but recorded at 100%. Takes effect from the next image.
 - Keep in step now re-aligns clips.
-- New technical docs:
-  [how a scenario reduction works](../how-reduction-works.md) and
-  [disturbance families](../disturbance-families.md).
+- New technical documentation, consolidated on October 18 into the
+  [Reference](../reference.md), which is also a page in the control panel.
 - **Next:** the
   [report-first case page and traces plan](../superpowers/plans/2026-10-18-report-first-case-page-and-traces.md).
   Part A (the report-first page) is merged. Part B (per-step traces) is

@@ -146,7 +146,7 @@ The hypothesis text is free prose; this section compares only the ranking with t
 
 ## Candidates
 
-Every rerun, in order. Phases: `gate` (the failing start must fail 4 of 5, the reference pass 5 of 5), `probe` (one difference alone), `ddmin` (smaller and smaller groups of differences), `shrink` (smaller shares of each kept difference). A selection's number is its share: `robot (joints 0.75)` applies 75% of the arm's offset to the reference. Outcomes: S success, F policy failure, I invalid scene. `skipped`: attempts not run because the answer was already certain; `late`: attempts already running when it was decided, shown but not counted. See docs/how-reduction-works.md.
+Every rerun, in order. Phases: `gate` (the failing start must fail 4 of 5, the reference pass 5 of 5), `probe` (one difference alone), `ddmin` (smaller and smaller groups of differences), `shrink` (smaller shares of each kept difference). A selection's number is its share: `robot (joints 0.75)` applies 75% of the arm's offset to the reference. Outcomes: S success, F policy failure, I invalid scene. `skipped`: attempts not run because the answer was already certain; `late`: attempts already running when it was decided, shown but not counted. See the Reference page (docs/reference.md).
 
 | # | phase | role | selection | outcomes | decision | gate met | skipped | late |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
