@@ -1,8 +1,7 @@
 # One diagnosis pipeline: plan
 
 Decision: [ADR 0035](../../decisions/0035-one-diagnosis-pipeline.md). Status:
-**for Jethro's review**. Nothing is built until he approves. Questions for him
-are marked **Q**.
+**approved by Jethro on October 18** with the answers below.
 
 ## The flow
 
@@ -107,21 +106,33 @@ One pipeline run on a start expected to pass, with blur and noise probes
 for both families there). It should produce a disturbance case, then one
 replay of that case.
 
-## Questions for Jethro
+## Decisions (Jethro, October 18)
 
-- **Q1. Default probes** when the start passes:
-  - (a) the four image families blur, noise, darken and contrast, no
-    rewordings: worst case about US$1.34, the current audit default;
-  - (b) all ten families plus 10 rewordings: about US$3–4 worst case;
-  - (c) none checked by default: the user picks.
+- **Q1. Default probes: everything.** All ten families plus 10 rewordings are
+  ticked by default. Jethro noted the worst case is expensive, so the review
+  step must show both the worst case and a typical cost.
+- **Q2.** A flaky start (the stress test's control fails) skips the rewording
+  probe too.
+- **Q3.** A findings list at the top of the run, linking to each existing
+  report-first case page.
+- **Names** come after the build works.
+- Jethro continues the UI runbook demos on the current UI meanwhile.
 
-  Recommended: (a), with rewordings one tick away.
-- **Q2.** Skip the rewording probe when the stress test's control fails
-  (recommended: yes).
-- **Q3.** Findings list on top of the existing case pages (recommended), or
-  the findings list as the page.
-- **Names** for the single entry point and the three kinds of finding: after
-  the build works, as Jethro asked.
+### Consequence of Q1: probes split across Jobs
+
+One audit Job is limited to 40 minutes (2400 s). Ten families do not fit;
+found October 18 when a ten-family dry run failed, which now returns a clear
+field error. The pipeline therefore splits the probes:
+
+- image families in two Jobs (four and four);
+- scene families (viewpoint, lighting) in a third;
+- rewordings in the usual screen Job, plus a reduce Job only when a wording
+  fails.
+
+Each Job reserves about US$1.2–1.4 worst case. Measured Jobs of this size
+cost about US$0.4–0.9, so a full probe of a passing start should typically
+cost about US$2–2.5, against reservations of about US$4.5. The dry run lists
+every probe Job, and the cap rule (the first Job must fit) is unchanged.
 
 ## Agents and order
 
