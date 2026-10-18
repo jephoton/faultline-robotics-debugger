@@ -24,12 +24,12 @@ minimal scene and passing reference on any checkpoint and says whether the
 failure still reproduces (`--expect fixed` or `--expect reproduces` turns that
 into a pass/fail exit code for a script or CI job).
 
-### Mode 1 and Mode 2
+### Two kinds of diagnosis
 
 Both modes produce cases for the same suite. They differ in what you start
 from and what question is asked.
 
-| | **Mode 1: Find why a start fails** | **Mode 2: Stress-test a passing start / Test rewordings** |
+| | **Find why a start fails** | **Stress-test a passing start / Test rewordings** |
 | --- | --- | --- |
 | You start from | A start where the policy **fails**: a benchmark start you know, a range to search, or your own start-state file | A start where the policy **passes** |
 | Question | "Which of the differences between this failing layout and a passing one make it fail?" | "What change to what the policy sees or is told makes it fail, and how much is needed?" |
@@ -38,8 +38,9 @@ from and what question is asked.
 | Result | The minimal set of differences needed (a scenario case with videos and replay inputs) | The smallest severity that fails per family, or the smallest word change, or "no failure in the tested range" |
 | Replay | Yes (minimal scene and reference) | Not yet |
 
-Use Mode 1 when you already have a failure (from your own evaluation, or a
-start you suspect) and want its trigger. Use Mode 2 when the policy works and
+Use **Find why a start fails** when you already have a failure (from your own
+evaluation, or a start you suspect) and want its trigger. Use the stress test
+or rewordings when the policy works and
 you want to find what breaks it.
 
 ### Fault codes
@@ -57,9 +58,9 @@ The full case id is always shown as well.
 | **Suite, task** | LIBERO's four suites (Object, Spatial, Goal, 10), ten tasks each, each with an instruction such as "put both the alphabet soup and the tomato sauce in the basket". |
 | **Benchmark start** | One of the 50 fixed starting layouts LIBERO provides per task (where each object and the arm begin). |
 | **Episode / attempt** | One run of the policy from a start until success or the step limit. |
-| **Failing start** | The start being diagnosed in Mode 1: a benchmark start or an imported state file. |
-| **Reference** | In Mode 1, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
-| **Control** | In Mode 2, the start run with no disturbance; it must pass for any disturbance to be judged. |
+| **Failing start** | The start being diagnosed by *Find why a start fails*: a benchmark start or an imported state file. |
+| **Reference** | In *Find why a start fails*, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
+| **Control** | In a stress test or rewording test, the start run with no disturbance; it must pass for any disturbance to be judged. |
 | **Entity** | One object in the scene, or the robot. |
 | **Difference** | What differs for one entity between the failing start and the reference: position, rotation, or joints (the robot's arm joints, or an object's hinge/slide such as a drawer). |
 | **Part** | One kind of difference of one entity (position, rotation or joints). |
@@ -69,7 +70,7 @@ The full case id is always shown as well.
 | **Candidate / rerun** | One scene (failing start, reference or hybrid) judged by the gate. |
 | **Minimal trigger / minimal cause** | The smallest set of differences found that still fails. The cause in the sense of *what* triggers the failure, not *why* the network fails. |
 | **Entity-minimal** | Removing any one entity from the set makes the failure go away. |
-| **Severity (`s`)** | The strength of a Mode 2 disturbance, from 0 (none) to 1 (strongest tested); see section 5. |
+| **Severity (`s`)** | The strength of a stress-test disturbance, from 0 (none) to 1 (strongest tested); see section 5. |
 | **Threshold** | The smallest severity at which a family fails reproducibly. |
 | **Meaning check** | A rule that drops a rewording if it loses an object or target word of the instruction. |
 
@@ -94,7 +95,7 @@ next time. Every judgement therefore uses repeated attempts.
 - **Invalid scene** (`I`): objects started interpenetrating. Never counted as
   a policy failure.
 
-## 4. Mode 1: how a scenario reduction works
+## 4. Find why a start fails: how a scenario reduction works
 
 ### Three ways to name the failing start
 
@@ -168,7 +169,7 @@ LIBERO-10 task 0, an imported failing start (benchmark start 14), reference
 The budget ended there. The recorded case keeps the arm at 100%: a defect
 fixed on October 18 discarded the verified 75%; new runs record it.
 
-## 5. Mode 2: stress tests and rewordings
+## 5. Stress tests and rewordings
 
 ### How an audit searches
 
