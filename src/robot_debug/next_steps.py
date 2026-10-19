@@ -70,6 +70,8 @@ NEXT_STEPS_PROMPT = (
     "Do not suggest a test whose answer is already in the facts or evidence. If they say that a shift alone "
     "passes or that removing it passes, do not propose an ablation, a removal or a single-shift test of it; never "
     "propose a size or level already tested, or a replay that was already made. "
+    "If removing any single kept entity already makes the policy pass, do not suggest removing combinations of "
+    "them either: the answer is already known. "
     "Prefer steps about the robust findings (a part that is needed, a threshold that repeated) over borderline "
     "ones (a stress-test family whose latest replay did not repeat it, or a size that only just reproduced it); "
     "when a step rests on a borderline finding, say in the text that it is borderline. "
@@ -562,7 +564,7 @@ def rejection_reason(value: object, context: object) -> str:
 # --- record ----------------------------------------------------------------------------------------------
 
 _KEPT_PROVENANCE = ("model", "request_status", "error_code", "created_at", "latency_seconds", "prompt_tokens",
-                    "completion_tokens", "estimated_cost_usd")
+                    "completion_tokens", "estimated_cost_usd", "attempts")
 
 
 def build_record(result: Mapping[str, Any], context: Mapping[str, Any]) -> Dict[str, Any]:

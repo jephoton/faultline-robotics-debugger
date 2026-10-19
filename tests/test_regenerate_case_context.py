@@ -148,10 +148,11 @@ class RunFolderTests(unittest.TestCase):
         self.assertFalse(self.diagnoses.exists())
         self.assertEqual((0, [], []), (fakes.keys, fakes.explain_calls, fakes.steps_calls))
         self.assertIn("explanation: 1 Token Factory call, nvidia/Nemotron-3-Ultra-550b-a55b", text)
-        self.assertIn("next steps: 1 Token Factory call, nvidia/Nemotron-3-Ultra-550b-a55b", text)
+        self.assertIn("next steps: 1 call per case (2 if the first answer needs repair), "
+                      "nvidia/Nemotron-3-Ultra-550b-a55b", text)
         self.assertIn("3 cached source(s)", text)
         self.assertIn("Token Factory: 2 call(s). Estimated cost about US$0.02", text)
-        self.assertIn("ceiling US$0.04", text)
+        self.assertIn("ceiling US$0.06", text)
         self.assertIn("No cloud Job and no Tavily call", text)
         self.assertIn("Dry run: nothing was called", text)
         self.assertNotIn(KEY, text)

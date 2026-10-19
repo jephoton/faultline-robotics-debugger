@@ -1131,6 +1131,11 @@ NEXT_STEPS_MODEL = SCENARIO_EXPLAIN_MODEL
 NEXT_STEPS_RESERVATION_USD = Decimal("0.02")
 _MAX_REQUEST_BYTES_NEXT_STEPS = 24_000
 _MAX_TOKENS_NEXT_STEPS = 1200
+# The user turn of the one repair request; {reason} is a fixed rule name from next_steps.rejection_reason.
+NEXT_STEPS_REPAIR_MESSAGE = (
+    "Your answer was rejected: {reason}. Return the same JSON shape again, fixing only that problem. "
+    "Do not use the words prove, proof, caused, causes or causal; write 'may', 'is associated with' or "
+    "'degrades' instead.")
 
 
 def _next_steps_payload(context: dict) -> dict:
@@ -1169,20 +1174,27 @@ def next_steps_request_size(context: dict) -> int:
                           allow_nan=False).encode("utf-8"))
 
 
-def request_next_steps(context: dict, api_key: str, transport: Transport | None = None) -> dict:
-    """Make exactly one bounded POST for 2 to 4 source-cited next steps.
+def _next_steps_size(payload: dict) -> int:
+    return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8"))
 
-    Returns ``response_json`` (the model text, only when it passes
-    :func:`robot_debug.next_steps.validate_next_steps` against ``context``, else None) and the ``provenance``
-    (the model and request status; no price is pinned, so no cost estimate). Rejected model text is returned
-    only as ``rejected_content`` for local diagnosis, and withheld if it carries the key.
-    """
-    from .next_steps import validate_next_steps
 
-    if not _valid_key(api_key):
-        raise TokenFactoryError("invalid_api_key")
-    payload = _next_steps_payload(context)
-    call = _default_transport if transport is None else transport
+def _next_steps_repair_payload(payload: dict, rejected: str, reason: str) -> dict | None:
+    """The one repair request: the original messages, the rejected answer, then the reason.
+
+    ``None`` when it would exceed the same request size cap as the first call."""
+    message = NEXT_STEPS_REPAIR_MESSAGE.format(reason=reason)
+    repair = dict(payload, messages=list(payload["messages"]) + [
+        {"role": "assistant", "content": rejected}, {"role": "user", "content": message}])
+    return repair if _next_steps_size(repair) <= _MAX_REQUEST_BYTES_NEXT_STEPS else None
+
+
+def _next_steps_attempt(payload: dict, context: dict, api_key: str, call: Transport) -> tuple[dict, bool]:
+    """One POST and its checks. Returns the result and whether a repair request may follow.
+
+    Only an answer that is text, finished normally, and failed :func:`validate_next_steps` can be repaired;
+    a transport error, a wrong model, a cut-off or an answer that carries the key cannot."""
+    from .next_steps import NextStepsError, validate_next_steps
+
     started = time.monotonic()
     try:
         response = call("POST", "chat/completions", payload, api_key)
@@ -1192,7 +1204,7 @@ def request_next_steps(context: dict, api_key: str, transport: Transport | None 
         status = ("transport_error" if code == "timeout"
                   else "invalid_response" if code == "invalid_response" else "http_error")
         return {"response_json": None,
-                "provenance": _scenario_provenance(status, code, latency, NEXT_STEPS_MODEL)}
+                "provenance": _scenario_provenance(status, code, latency, NEXT_STEPS_MODEL)}, False
     latency = time.monotonic() - started
     try:
         if type(response) is not dict or response.get("model") != NEXT_STEPS_MODEL:
@@ -1203,23 +1215,28 @@ def request_next_steps(context: dict, api_key: str, transport: Transport | None 
     except Exception:
         return {"response_json": None,
                 "provenance": _scenario_provenance("invalid_response", "invalid_response", latency,
-                                                   NEXT_STEPS_MODEL)}
+                                                   NEXT_STEPS_MODEL)}, False
     choices = response.get("choices")
     if (type(choices) is list and len(choices) == 1 and type(choices[0]) is dict
             and choices[0].get("finish_reason") == "length"):
         return {"response_json": None,
                 "provenance": _scenario_provenance("invalid_response", "output_limit", latency,
-                                                   NEXT_STEPS_MODEL, prompt, completion)}
+                                                   NEXT_STEPS_MODEL, prompt, completion)}, False
     try:
         content = response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
         content = None
+    invalid_answer = False
     try:
         if (type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict
                 or choices[0].get("finish_reason") != "stop"
                 or type(choices[0].get("message")) is not dict or type(content) is not str):
             raise ValueError
-        items = validate_next_steps(content, context)
+        try:
+            items = validate_next_steps(content, context)
+        except NextStepsError:
+            invalid_answer = True
+            raise
         if _research_leaks_key(content, api_key) or _contains_secret(items, api_key):
             raise ValueError
     except Exception:
@@ -1228,6 +1245,48 @@ def request_next_steps(context: dict, api_key: str, transport: Transport | None 
                                                      NEXT_STEPS_MODEL, prompt, completion)}
         if type(content) is str and not _research_leaks_key(content, api_key):
             result["rejected_content"] = content
-        return result
+            return result, invalid_answer
+        return result, False
     return {"response_json": content,
-            "provenance": _scenario_provenance("completed", None, latency, NEXT_STEPS_MODEL, prompt, completion)}
+            "provenance": _scenario_provenance("completed", None, latency, NEXT_STEPS_MODEL, prompt,
+                                               completion)}, False
+
+
+def _sum_counts(first: int | None, second: int | None) -> int | None:
+    return None if first is None and second is None else (first or 0) + (second or 0)
+
+
+def request_next_steps(context: dict, api_key: str, transport: Transport | None = None) -> dict:
+    """Make one bounded POST for 2 to 4 source-cited next steps, plus at most one repair POST.
+
+    Returns ``response_json`` (the model text, only when it passes
+    :func:`robot_debug.next_steps.validate_next_steps` against ``context``, else None) and the ``provenance``
+    (the model, the final request status, ``attempts`` and token counts summed over the attempts; no price is
+    pinned, so no cost estimate). If the first answer arrives but fails validation, exactly one more request
+    sends the same messages, the rejected answer and the rejection reason; if that answer also fails, the result
+    is rejected (fail closed). A transport error or other unusable response is never retried. Rejected model
+    text is returned only as ``rejected_content`` for local diagnosis, and withheld if it carries the key.
+    """
+    from .next_steps import rejection_reason
+
+    if not _valid_key(api_key):
+        raise TokenFactoryError("invalid_api_key")
+    payload = _next_steps_payload(context)
+    call = _default_transport if transport is None else transport
+    result, repairable = _next_steps_attempt(payload, context, api_key, call)
+    result["provenance"]["attempts"] = 1
+    if not repairable:
+        return result
+    rejected = result["rejected_content"]
+    repair = _next_steps_repair_payload(payload, rejected, rejection_reason(rejected, context))
+    if repair is None:
+        return result
+    second, _ = _next_steps_attempt(repair, context, api_key, call)
+    first_p, final = result["provenance"], second["provenance"]
+    final["attempts"] = 2
+    final["latency_seconds"] = first_p["latency_seconds"] + final["latency_seconds"]
+    final["prompt_tokens"] = _sum_counts(first_p["prompt_tokens"], final["prompt_tokens"])
+    final["completion_tokens"] = _sum_counts(first_p["completion_tokens"], final["completion_tokens"])
+    if second["response_json"] is None and "rejected_content" not in second:
+        second["rejected_content"] = rejected
+    return second

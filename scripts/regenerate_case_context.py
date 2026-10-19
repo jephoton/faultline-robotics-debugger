@@ -46,8 +46,10 @@ from robot_debug import token_factory as tf                   # noqa: E402
 from robot_debug.case_register import reregister_run          # noqa: E402
 
 # Ultra's price is not pinned in code (ADR 0030), so the cost is bounded by the reservation figure the code
-# already uses for one explanation call, and described as about one cent each.
+# already uses for one explanation call, and described as about one cent each. A next-steps call whose first
+# answer fails validation is repaired with one more call, so its ceiling doubles.
 CEILING_USD_PER_CALL = float(tf.NEXT_STEPS_RESERVATION_USD)
+NEXT_STEPS_MAX_CALLS = 2
 TYPICAL_USD_PER_CALL = 0.01
 BYTES_PER_TOKEN = 3.0                    # a deliberately low figure: the token estimate is an upper bound
 
@@ -210,6 +212,7 @@ def describe(run_dir: Path, plans: Sequence[CasePlan], out: Callable[[str], None
     out("Run {}: {} case(s). No cloud Job and no Tavily call (stored search results are reused).".format(
         run_dir.name, len(plans)))
     calls = 0
+    repairable = 0                              # next-steps calls, each of which may need one repair call
     for plan in plans:
         out("  [{}] {} case".format(plan.name, plan.case.get("kind")))
         if plan.case_changed:
@@ -224,15 +227,16 @@ def describe(run_dir: Path, plans: Sequence[CasePlan], out: Callable[[str], None
                                  tf._MAX_TOKENS_SCENARIO_EXPLAIN))
         if plan.next_bytes is not None:
             calls += 1
-            out("    next steps: 1 Token Factory call, {}, request {} bytes (about {} input tokens, at most {} "
+            repairable += 1
+            out("    next steps: 1 call per case (2 if the first answer needs repair), {}, request {} bytes (about {} input tokens, at most {} "
                 "output), {} cached source(s)".format(
                     tf.NEXT_STEPS_MODEL, plan.next_bytes, estimate_tokens(plan.next_bytes),
                     tf._MAX_TOKENS_NEXT_STEPS, len(plan.next_context["sources"])))
         for note in plan.notes:
             out("    note: " + note)
-    ceiling = calls * CEILING_USD_PER_CALL
+    ceiling = (calls + repairable * (NEXT_STEPS_MAX_CALLS - 1)) * CEILING_USD_PER_CALL
     out("Token Factory: {} call(s). Estimated cost about US${:.2f} (US${:.2f} per call typically; ceiling US${:.2f} "
-        "at the US${:.2f} reservation per call). Nemotron 3 Ultra's price is not pinned in code: reconcile with "
+        "at the US${:.2f} reservation per call, counting a repair call for every next-steps call). Nemotron 3 Ultra's price is not pinned in code: reconcile with "
         "billing.".format(calls, calls * TYPICAL_USD_PER_CALL, TYPICAL_USD_PER_CALL, ceiling, CEILING_USD_PER_CALL))
     out("Then: register the run again (case ids unchanged).")
     return calls, ceiling

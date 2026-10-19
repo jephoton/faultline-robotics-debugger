@@ -177,6 +177,115 @@ class RequestTests(unittest.TestCase):
         self.assertIsNone(result["response_json"])
         self.assertEqual("transport_error", result["provenance"]["request_status"])
 
+    def sequence(self, *replies, context=CONTEXT):
+        """Fake transport answering each call with the next reply (an exception is raised)."""
+        sent = []
+        queue = list(replies)
+
+        def transport(method, path, payload, key):
+            sent.append(copy.deepcopy(payload))
+            reply = queue.pop(0)
+            if isinstance(reply, BaseException):
+                raise reply
+            return reply
+
+        return tf.request_next_steps(context, KEY, transport), sent
+
+    CAUSAL = answer(("This proves the basket caused the failure.", ["S1"]), ("Add a regression test.", ["c3"]))
+
+    def test_a_rejected_first_answer_gets_exactly_one_repair_that_can_be_accepted(self):
+        result, sent = self.sequence(completion(self.CAUSAL, usage=(900, 120)),
+                                     completion(GOOD, usage=(1100, 130)))
+        self.assertEqual(2, len(sent))
+        self.assertEqual(GOOD, result["response_json"])
+        self.assertNotIn("rejected_content", result)
+        provenance = result["provenance"]
+        self.assertEqual(("completed", 2, 2000, 250),
+                         (provenance["request_status"], provenance["attempts"], provenance["prompt_tokens"],
+                          provenance["completion_tokens"]))
+        record = ns.build_record(result, CONTEXT)
+        self.assertEqual(("interpreted", 2, 2), (record["status"], len(record["items"]),
+                                                 record["provenance"]["attempts"]))
+        self.assertNotIn("proves", json.dumps(record))
+
+    def test_the_repair_request_replays_the_conversation_and_states_the_reason(self):
+        _, sent = self.sequence(completion(self.CAUSAL), completion(GOOD))
+        first, repair = sent
+        self.assertEqual(first["messages"], repair["messages"][:2])
+        self.assertEqual(4, len(repair["messages"]))
+        self.assertEqual({"role": "assistant", "content": self.CAUSAL}, repair["messages"][2])
+        reason = ns.rejection_reason(self.CAUSAL, CONTEXT)
+        self.assertIn("proof or causation claim", reason)
+        self.assertEqual(
+            {"role": "user", "content": "Your answer was rejected: {}. Return the same JSON shape again, fixing "
+             "only that problem. Do not use the words prove, proof, caused, causes or causal; write 'may', 'is "
+             "associated with' or 'degrades' instead.".format(reason)}, repair["messages"][3])
+        self.assertEqual({k: v for k, v in first.items() if k != "messages"},
+                         {k: v for k, v in repair.items() if k != "messages"})
+        self.assertNotIn(KEY, json.dumps(repair))
+
+    def test_two_invalid_answers_fail_closed_and_the_record_holds_no_rejected_text(self):
+        bad_again = answer(("Removing it caused the failure.", ["S1"]), ("Add a regression test.", ["c3"]))
+        result, sent = self.sequence(completion(self.CAUSAL, usage=(900, 100)),
+                                     completion(bad_again, usage=(1000, 110)))
+        self.assertEqual(2, len(sent))
+        self.assertIsNone(result["response_json"])
+        self.assertEqual(bad_again, result["rejected_content"])
+        provenance = result["provenance"]
+        self.assertEqual(("invalid_response", 2, 1900, 210),
+                         (provenance["request_status"], provenance["attempts"], provenance["prompt_tokens"],
+                          provenance["completion_tokens"]))
+        record = ns.build_record(result, CONTEXT)
+        self.assertEqual(("rejected", []), (record["status"], record["items"]))
+        stored = json.dumps(record)
+        self.assertEqual(2, record["provenance"]["attempts"])
+        for text in ("proves", "caused", "basket", "regression"):
+            self.assertNotIn(text, stored)
+
+    def test_a_transport_error_on_the_first_call_is_not_repaired(self):
+        result, sent = self.sequence(TimeoutError())
+        self.assertEqual(1, len(sent))
+        self.assertEqual(("transport_error", 1), (result["provenance"]["request_status"],
+                                                  result["provenance"]["attempts"]))
+
+    def test_other_unusable_replies_are_not_repaired(self):
+        for name, reply in {"wrong model": completion(GOOD, model="nvidia/other"),
+                            "cut off": completion(self.CAUSAL, finish="length"),
+                            "key echoed": completion(answer(("Use {} now.".format(KEY), ["S1"]),
+                                                            ("Two.", ["S2"])))}.items():
+            with self.subTest(name):
+                result, sent = self.sequence(reply)
+                self.assertEqual(1, len(sent))
+                self.assertEqual(1, result["provenance"]["attempts"])
+                self.assertIsNone(result["response_json"])
+
+    def test_a_transport_error_on_the_repair_keeps_the_first_tokens_and_fails_closed(self):
+        result, sent = self.sequence(completion(self.CAUSAL, usage=(900, 100)), TimeoutError())
+        self.assertEqual(2, len(sent))
+        self.assertIsNone(result["response_json"])
+        provenance = result["provenance"]
+        self.assertEqual(("transport_error", 2, 900, 100),
+                         (provenance["request_status"], provenance["attempts"], provenance["prompt_tokens"],
+                          provenance["completion_tokens"]))
+        self.assertEqual(("provider_error", []), (ns.build_record(result, CONTEXT)["status"],
+                                                  ns.build_record(result, CONTEXT)["items"]))
+
+    def test_a_valid_first_answer_makes_one_call_and_records_one_attempt(self):
+        result, sent = self.sequence(completion(GOOD))
+        self.assertEqual((1, 1), (len(sent), result["provenance"]["attempts"]))
+
+    def test_a_repair_request_over_the_size_cap_is_not_sent(self):
+        padded = dict(CONTEXT, sources=[dict(CONTEXT["sources"][0], snippet="x" * 19500), CONTEXT["sources"][1]])
+        self.assertLess(tf.next_steps_request_size(padded), 24_000)   # the first call fits; the longer repair would not
+        result, sent = self.sequence(completion(self.CAUSAL), context=padded)
+        self.assertEqual(1, len(sent))
+        self.assertEqual(1, result["provenance"]["attempts"])
+        self.assertIsNone(result["response_json"])
+
+    def test_the_prompt_rules_out_combinations_when_one_removal_already_passes(self):
+        self.assertIn("If removing any single kept entity already makes the policy pass, do not suggest removing "
+                      "combinations of them either: the answer is already known.", ns.NEXT_STEPS_PROMPT)
+
     def test_the_size_bound_applies_before_any_call(self):
         big = dict(CONTEXT, sources=[dict(CONTEXT["sources"][0], snippet="x" * 30000)])
         with self.assertRaises(tf.TokenFactoryError):
