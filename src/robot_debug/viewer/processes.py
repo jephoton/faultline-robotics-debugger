@@ -290,6 +290,17 @@ def _step_label(key: str, mode: str = "") -> str:
     return MODE_STEP_LABELS.get(mode, {}).get(key) or STEP_LABELS.get(key, key.capitalize())
 
 
+def _check_label(spec: Mapping[str, Any]) -> Optional[str]:
+    """A diagnosis of one start checks it untouched; only a range search screens starts."""
+
+    diagnose = spec.get("diagnose") if isinstance(spec.get("diagnose"), Mapping) else {}
+    if "import" in diagnose:
+        return "Check the imported start"
+    if "start" in diagnose:
+        return "Check the start untouched"
+    return None
+
+
 def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], finished: Optional[str],
               route: Optional[str] = None) -> List[Dict]:
     """The step timeline: the planned steps in order, with what each has done so far.
@@ -302,7 +313,8 @@ def step_rows(mode: str, steps: Mapping[str, Any], spec: Mapping[str, Any], fini
         record = steps.get(key) if isinstance(steps.get(key), Mapping) else None
         attempts = [a for a in (record or {}).get("attempts", []) if isinstance(a, Mapping)]
         status = (record or {}).get("status") or ("skipped" if finished == "completed" else "pending")
-        rows.append({"key": key, "label": _step_label(key, mode), "status": status,
+        label = (_check_label(spec) if mode == "diagnose" and key == "screen" else None) or _step_label(key, mode)
+        rows.append({"key": key, "label": label, "status": status,
                      "state": (record or {}).get("state") if isinstance((record or {}).get("state"), str) else None,
                      "attempts": len(attempts),
                      "capacity_waits": sum(1 for a in attempts if a.get("state") == "capacity")})

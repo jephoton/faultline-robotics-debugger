@@ -369,6 +369,15 @@ class StepLabelTests(unittest.TestCase):
         rows = {row["key"]: row["label"] for row in px.step_rows("scenario", {}, {}, None)}
         self.assertEqual(rows["screen"], "Screen the starts")
 
+    def test_a_diagnosis_of_one_start_checks_it_untouched(self):
+        def label(diagnose):
+            rows = px.step_rows("diagnose", {}, {"diagnose": diagnose}, None)
+            return {row["key"]: row["label"] for row in rows}["screen"]
+
+        self.assertEqual(label({"start": 0}), "Check the start untouched")
+        self.assertEqual(label({"import": {"path": "start.json"}}), "Check the imported start")
+        self.assertEqual(label({"screen": {"starts": [0, 19]}}), "Screen the starts")
+
 
 class ScrubTextTests(unittest.TestCase):
     """The text scrubber hides local paths without damaging URLs (review L3)."""
