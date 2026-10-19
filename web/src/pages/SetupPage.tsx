@@ -10,16 +10,16 @@ import { LocalOnlyPage } from './NotFoundPage';
 // What each check is for and where to read more. The server's own `fix` text (when a check fails) comes first.
 const ABOUT: Record<string, { why: string; guide: string }> = {
   nebius_cli: {
-    why: 'Faultline runs its GPU work as Nebius Serverless Jobs through the Nebius CLI. The sign-in expires after about a day.',
+    why: 'The sign-in expires after about a day.',
     guide: 'prerequisites',
   },
-  docker: { why: 'Only needed to build the simulator image once. Runs do not need it.', guide: 'image' },
+  docker: { why: '', guide: 'image' },
   token_factory_key: {
-    why: 'Nemotron hypotheses, explanations and rewordings use a Token Factory key. It stays on this machine and never enters a Job. Presence is checked, the value is never shown.',
+    why: 'Used for Nemotron hypotheses, explanations and rewordings. It stays on this machine and never enters a Job.',
     guide: 'prerequisites',
   },
   spec_template: {
-    why: 'New diagnoses reuse the backend block (image and secret name) of a local spec. Only names are shown, never ids.',
+    why: 'New diagnoses reuse the backend block (image and secret name) of a local spec.',
     guide: 'spec',
   },
 };
@@ -40,7 +40,8 @@ function CheckCard({ check }: { check: EnvironmentCheck }) {
       )}
       {about && (
         <p className="muted">
-          {about.why} <Link to={`/guide#${about.guide}`}>Read the guide</Link>.
+          {about.why ? `${about.why} ` : ''}
+          <Link to={`/guide#${about.guide}`}>Read the guide</Link>.
         </p>
       )}
     </li>
@@ -61,7 +62,7 @@ function Setup() {
   return (
     <section>
       <h1>Setup</h1>
-      <p className="lede">What this machine needs before it can start a diagnosis. Nothing here creates or changes anything.</p>
+      <p className="lede">What this machine needs before it can start a diagnosis.</p>
       {env.loading && (
         <p role="status" aria-busy="true">
           Checking. The Nebius sign-in check can take a few seconds.
@@ -100,9 +101,6 @@ function Setup() {
         <button type="button" className="btn btn--secondary" onClick={env.reload}>
           <Icon name="restart" /> Check again
         </button>
-        <Link to="/guide" className="btn btn--secondary">
-          <Icon name="guide" /> Open the guide
-        </Link>
       </div>
     </section>
   );
