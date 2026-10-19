@@ -47,35 +47,35 @@ owned. A reviewer is read-only and checks acceptance criteria, not authorship.
 
 **Own:** `docs/submission/clean-checkout.md` only.
 
-- [ ] Use `git archive HEAD` into a fresh temporary directory. Record source
+- [x] Use `git archive HEAD` into a fresh temporary directory. Record source
   SHA and distinguish a clean local snapshot from an actual fresh machine.
-- [ ] Create a new Python 3.11 venv without system site packages. Install
+- [x] Create a new Python 3.11 venv without system site packages. Install
   `.[cli,cloud]` from the snapshot, not the existing editable environment.
-- [ ] From outside the source directory, check `faultline --help`, packaged
+- [x] From outside the source directory, check `faultline --help`, packaged
   viewer assets and installed imports; serve the snapshot's `demo/root` on
   an unused loopback port and check health, case data and video bytes.
-- [ ] Run the README's unittest command in the snapshot. Save lengthy raw
+- [x] Run the README's unittest command in the snapshot. Save lengthy raw
   output only in ignored/local paths; record counts, skips and limitations.
-- [ ] Do not build/push the 20 GB GPU image, sign in or run cloud diagnostics.
+- [x] Do not build/push the 20 GB GPU image, sign in or run cloud diagnostics.
   Missing optional tooling or network access is a bounded limitation, not a
   reason to claim an untested paid path works.
-- [ ] Write exact portable commands, observations and actionable defects.
+- [x] Write exact portable commands, observations and actionable defects.
 
 ## Task 2: Evidence-grounded submission draft (Green, evidence writer)
 
 **Own:** `docs/submission/devpost-draft.md` only.
 
-- [ ] Read README, FEEDBACK, final-showcase, workflow-evidence and relevant
+- [x] Read README, FEEDBACK, final-showcase, workflow-evidence and relevant
   ADR/experiment records. Cite repository-relative evidence next to numbers.
-- [ ] Draft tagline, problem/audience, solution, implementation, demonstrated
+- [x] Draft tagline, problem/audience, solution, implementation, demonstrated
   results, limitations, challenges, learning, next steps and Built With.
-- [ ] Explain genuine GR00T/Serverless and Nemotron/Token Factory roles,
+- [x] Explain genuine GR00T/Serverless and Nemotron/Token Factory roles,
   optional Tavily research and human-reviewed model suggestions.
-- [ ] State budget-local reduction, not global minimality, causal proof,
+- [x] State budget-local reduction, not global minimality, causal proof,
   universal compatibility or demonstrated end-to-end cost savings.
-- [ ] Identify four supported suites versus actual task/start coverage.
+- [x] Identify four supported suites versus actual task/start coverage.
   Separate public recorded gallery from runnable installed control panel.
-- [ ] No invented personal experience, costs, users or novel-research claim.
+- [x] No invented personal experience, costs, users or novel-research claim.
   Mark draft for human approval; do not update Devpost.
 
 ## Task 3: Rules, repository and cost-readiness review (Green/Amber, coordinator)
@@ -84,36 +84,36 @@ owned. A reviewer is read-only and checks acceptance criteria, not authorship.
 `docs/submission/video-plan.md`, README claim corrections if needed, and
 existing handoff/index/roadmap updates.
 
-- [ ] Read the current official rules/overview. Link primary sources and
+- [x] Read the current official rules/overview. Link primary sources and
   record deadline, hardware-free Physical AI wording, required artifacts,
   tool feedback, video constraints and judging access duration. Avoid
   unnecessary quotations; source-derived summary must remain concise.
-- [ ] Verify repository visibility/license and latest CI with GitHub CLI.
+- [x] Verify repository visibility/license and latest CI with GitHub CLI.
   Never change visibility. Inspect tracked files, snapshot link targets,
   known secret patterns and user-specific paths; do not print secret values.
   Distinguish current tree, reachable history and provider-side scanning.
-- [ ] Inspect existing cost records and list reconciliation inputs without
+- [x] Inspect existing cost records and list reconciliation inputs without
   adding overlapping experiment/session totals together. Do not claim billed
   totals or trigger authentication just to avoid requesting billing figures.
-- [ ] Write a timed sub-three-minute pitch outline using existing cases,
+- [x] Write a timed sub-three-minute pitch outline using existing cases,
   at least one minute of modules operating, explicit spoken required-tool
   attribution and clearly labeled saved evidence. No fabricated live runs.
-- [ ] Record the smallest human-input checklist: billing totals/periods,
+- [x] Record the smallest human-input checklist: billing totals/periods,
   feedback confirmation, narration/video choice, publication/submission go.
 
 ## Task 4: Review and verification (Green, reviewer then coordinator)
 
-- [ ] Independent reviewer checks draft/evidence agreement, install scope,
+- [x] Independent reviewer checks draft/evidence agreement, install scope,
   secret-handling boundaries, source links and remaining human gates.
-- [ ] Correct substantive findings before declaring readiness. Routine
+- [x] Correct substantive findings before declaring readiness. Routine
   documentation fixes stay in this step; code fixes require reproduction,
   tests and proportionate review rather than opportunistic refactoring.
-- [ ] Verify changed-document links and `git diff --check`. For code changes,
+- [x] Verify changed-document links and `git diff --check`. For code changes,
   run the affected tests and maintain red/green evidence.
-- [ ] Make atomic commits: plan; audit evidence; submission drafts; handoff.
+- [x] Make atomic commits: plan; audit evidence; submission drafts; handoff.
   Stage exact paths only. Check `gh auth status` before an authorized push;
   never publish draft submission contents externally without review.
-- [ ] Update STATE and PROJECT_PLAN with verified results, real limitations
+- [x] Update STATE and PROJECT_PLAN with verified results, real limitations
   and next human action. Report what is ready versus what remains untested.
 
 ## Acceptance
@@ -123,3 +123,24 @@ claims name the tested environment and source SHA; the free demo is usable
 without credentials. No new cloud/model charge, visibility change, redeployment
 or Devpost/YouTube submission occurs. Final readiness remains conditional on
 the explicit human gates, not merely passing unit tests.
+
+## Execution checkpoint — October 20
+
+All audit and drafting tasks above completed; independent spec and quality
+reviews passed. Luna handled installation evidence and the story draft, with
+coordinator-owned checks/integration and independent Sol reviews. Routine
+corrections stayed within the accepted scope. No application code was changed.
+
+Additional user request: condense root FEEDBACK, keep the table/first-hand
+notes and link the chronology. It is now about 870 words (from 4,596); the
+original body is preserved in `docs/experiments/tool-feedback-history.md`.
+A supplied consumption screenshot is recorded, not fully reconciled, in
+`docs/submission/billing-reconciliation.md`. No private screenshot was committed.
+
+Clean snapshot: 3,166 unittest tests run, 63 skipped, exit 0. Existing web
+environment: 336 tests and typecheck passed. Snapshot installation and offline
+case/video HTTP checks passed. Remaining human gates are listed in the
+submission package: billing scope, first-hand confirmation, story/narration,
+actual video/cover, rights/eligibility, judge access and final publication.
+The audit branch is kept local; this checkpoint does not approve a push,
+merge, deployment, paid run or submission.

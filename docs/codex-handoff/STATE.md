@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Gallery production refresh — October 20** for the latest work.
+> Read **Submission readiness audit — October 20** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,61 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Submission readiness audit — October 20
+
+Jethro authorized the bounded submission-readiness sequence. Work is on
+`codex/submission-readiness`, with the committed plan at
+`docs/superpowers/plans/2026-10-20-submission-readiness.md`. The
+[submission package](../submission/README.md) contains the clean-install audit,
+rules/repository review, human-review Devpost draft and timed video plan.
+These are drafts, not a Devpost/YouTube submission or another gallery release.
+
+- Fresh Git snapshot at `171abae`, isolated CPython 3.11.9 environment:
+  `.[cli,cloud]` installation, installed CLI/assets, `pip check`, offline
+  case/detail/video endpoints passed. README unittest command ran **3,166
+  tests**, **63 skipped**, exit 0. This is the same Windows host, not an
+  independent machine or a real cloud setup acceptance check.
+- Fresh front-end checks in the existing environment: **336 passed**,
+  typecheck passed; known non-failing React `act(...)` warnings remain.
+  Latest main GitHub CI `39283937968` was independently checked successful.
+- GitHub reports PUBLIC and MIT. Gitleaks 8.30.1 checked the tracked archive
+  and locally reachable history; findings were state-hash selectors and
+  planning prose, no confirmed credential leak. GitHub scanning/protection
+  is disabled; nothing was enabled without authorization. npm reports two
+  moderate React Router package entries; limited routing review and the
+  upstream declarative-mode exclusion are recorded, not a clean audit or
+  dependency upgrade. See the audit for limits.
+- Current official rules explicitly allow no-hardware Physical AI demos
+  with at least one minute showing application modules. Simulation is not
+  itself a blocker under that wording; do not imply organizer endorsement.
+- README universal-checkpoint/global-minimum/automatic-replay claims were
+  narrowed. Two historical handoffs' personal workstation paths were removed;
+  source code, experiments and the published site are unchanged.
+- Spec/evidence review and independent quality review passed after correcting
+  citations, the offline-install wording, judge-access disclosure and a history
+  heading link. All 180 checked local file targets resolve; reviewer also
+  checked feedback/submission heading anchors. The full archived log matches
+  the original body after only its wrapper/link rebase; both first-hand notes
+  are unchanged. `git diff --check` passed.
+- Next: reconcile billing screenshots,
+  confirm first-hand FEEDBACK, review script/story, then produce video/cover
+  and approve uploads/submission. Jethro said screenshots would follow and
+  reported **$0.82 remaining** without identifying service/account. This
+  is not usage or a new spending cap. First-hand FEEDBACK section was opened
+  in the app side panel; confirmation remains pending. A subsequently supplied
+  consumption crop shows **$42.04 including $3.47 VAT**; date/account scope and
+  currency code are absent. See [partial billing reconciliation](../submission/billing-reconciliation.md).
+- Jethro requested a shorter FEEDBACK. The root summary is now about 870
+  words instead of 4,596, retaining the table and both first-hand notes.
+  Original dated detail is preserved in
+  [tool feedback history](../experiments/tool-feedback-history.md), linked
+  from the table. This does not invent new first-hand confirmation or change
+  a historical estimate into a settled bill.
+
+No new cloud/model/search run, public deployment or repository-setting change.
+Draft branch remains local pending review; no draft publication is authorized
+by the audit alone. Existing gallery and `main` remain the judge-facing build.
 
 ## Gallery production refresh — October 20
 

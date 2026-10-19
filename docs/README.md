@@ -25,6 +25,8 @@ suite, task, start and perturbation family; none is a general claim.
   [ADR 0033](decisions/0033-control-panel-ui.md).
 - [Hackathon tool feedback](../FEEDBACK.md) and
   [third-party notices](../NOTICE.md).
+- [Submission preparation](submission/README.md): judge-facing audit,
+  clean installation checks, draft story/video plan and remaining human gates.
 - [Learning guide](../PROJECT-LEARNING-GUIDE.md) in plain language, and the
   [project plan](../PROJECT_PLAN.md) with the current status table.
 

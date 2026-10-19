@@ -19,7 +19,7 @@ a minimal trigger and saves it as a replayable regression case. The
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
 | **M7a product consolidation** | **Complete.** Post-walkthrough cleanup is integrated and the three-case [public gallery](https://faultline-robotics-debugger.vercel.app) was refreshed and verified October 20. Scenario reduction/import, `diagnose`/`replay`, breadth evidence and control panel remain in place. [Publication acceptance and limitations](docs/experiments/m7-public-gallery.md); [product decisions](docs/decisions/0027-m7-product-consolidation-and-access.md) |
-| M7b submission | Walkthroughs, cleanup and gallery refresh done. Remaining: billing reconciliation, first-hand FEEDBACK review, clean-checkout/public-repo audit, current rules re-check, Devpost story, video/cover and submission. Story: [ADR 0034](docs/decisions/0034-narrative-regression-tests.md). Details: `docs/codex-handoff/STATE.md`. |
+| M7b submission | Walkthroughs, cleanup and gallery refresh done. October 20: clean-snapshot installation/offline demo and tests passed; repository/rules audit and story/video drafts independently reviewed on `codex/submission-readiness`. FEEDBACK condensed with linked history. Remaining: billing reconciliation, first-hand FEEDBACK confirmation, human story/script review, video/cover production and approved submission. [Submission package](docs/submission/README.md); [story decision](docs/decisions/0034-narrative-regression-tests.md). |
 
 Spend so far is tracked per experiment note; every figure there is an estimate
 pending billing reconciliation, and the current Nebius balance is in the
@@ -31,6 +31,13 @@ or GPU run. The October 20 gallery refresh passed visitor/media integrity checks
 the six UI walkthroughs are finished. No new GPU/API run or public container
 image was needed or authorized by this redeployment. See the
 [execution record](docs/experiments/m7-public-gallery.md).
+
+The [readiness audit](docs/submission/readiness-audit.md) records the current
+Physical AI no-hardware video alternative, public MIT repository, scanner
+triage and dependency caveats. Clean snapshot: 3,166 tests run with 63 skipped;
+front-end: 336 passed and typecheck passed. Billing screenshots and first-hand
+feedback confirmation are pending; a reported $0.82 remaining balance is not
+a usage total or authority for more spending. No new paid work is required.
 
 **Everything below is the original September 12 startup plan, kept for
 history.** Its milestone table (section 6) is maintained; dated status notes
