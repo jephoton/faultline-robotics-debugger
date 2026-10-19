@@ -927,7 +927,8 @@ class DefaultTools:
 
         module = _load_script("report_m6_experiment")
         try:
-            return module.render_report(list(summary) if isinstance(summary, (list, tuple)) else [summary])
+            summaries = list(summary) if isinstance(summary, (list, tuple)) else [summary]
+            return module.render_report(summaries, title=module.stress_test_title(summaries))
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 

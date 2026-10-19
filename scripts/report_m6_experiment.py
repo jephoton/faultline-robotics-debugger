@@ -489,9 +489,29 @@ def summary_section(summaries: Sequence[Mapping[str, Any]]) -> List[str]:
     return lines + [""]
 
 
-def render_report(summaries: Sequence[Mapping[str, Any]]) -> str:
+LEGACY_TITLE = "M6 results: camera reliance and scalar image families"
+
+
+def stress_test_title(summaries: Sequence[Mapping[str, Any]]) -> Optional[str]:
+    """``Stress test: LIBERO-Object task 0, start 0`` from the first threshold summary that records its suite,
+    task and start; ``None`` when none does (the legacy M6 title then stays)."""
+
+    for summary in summaries:
+        config = summary.get("config")
+        if (summary.get("mode") != "m6-threshold" or not isinstance(config, Mapping)
+                or config.get("suite") is None):
+            continue
+        suite = str(config["suite"])
+        return "Stress test: {} task {}, start {}".format(
+            SUITE_LABELS.get(suite, suite), config.get("task_id", 0), config.get("init_state_index", 0))
+    return None
+
+
+def render_report(summaries: Sequence[Mapping[str, Any]], title: Optional[str] = None) -> str:
+    """The report as Markdown. ``title`` replaces the legacy M6 heading (see :func:`stress_test_title`)."""
+
     lines = [
-        "# M6 results: camera reliance and scalar image families",
+        "# " + (title or LEGACY_TITLE),
         "",
         *summary_section(summaries),
         "Scope: GR00T N1.7 on {}, on one L40S. Thresholds are budget-local "

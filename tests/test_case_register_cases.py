@@ -137,6 +137,45 @@ class MultipleCases(unittest.TestCase):
         self.assertEqual(cr.reregister_run(run), ids, "running it again changes nothing")
 
 
+class LegacyTitle(unittest.TestCase):
+    LEGACY = "# M6 results: camera reliance and scalar image families\n\nbody\n"
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.run = make_pipeline_run(self.root)
+        merged = dict(m6_summary(["blur", "noise"], thresholds={"blur": 0.4}),
+                      config={"suite": "libero_spatial", "task_id": 3, "init_state_index": 12})
+        write_json(self.run / "cases" / "audit" / "merged-summary.json", merged)
+        case = json.loads((self.run / "cases" / "audit" / "case.json").read_text())
+        case["summary"] = "cases/audit/merged-summary.json"
+        write_json(self.run / "cases" / "audit" / "case.json", case)
+        self.report = self.run / "cases" / "audit" / "report.md"
+        write_text(self.report, self.LEGACY)
+
+    def test_re_registering_retitles_a_legacy_report_and_keeps_the_case_id(self):
+        before = cr.register_cases(self.run)
+        ids = cr.reregister_run(self.run)
+        self.assertEqual(ids, before)
+        text = self.report.read_text()
+        self.assertEqual(text, "# Stress test: LIBERO-Spatial task 3, start 12\n\nbody\n")
+        self.assertEqual(cr.read_diagnosis(self.root / "diagnoses", AUDIT_ID)["report"], text)
+        self.assertEqual(cr.reregister_run(self.run), ids, "running it again changes nothing")
+        self.assertEqual(self.report.read_text(), text)
+
+    def test_a_report_that_is_not_the_legacy_one_is_left_alone(self):
+        write_text(self.report, "# My own title\n\nbody\n")
+        cr.reregister_run(self.run)
+        self.assertEqual(self.report.read_text(), "# My own title\n\nbody\n")
+
+    def test_a_summary_that_names_no_target_keeps_the_legacy_title(self):
+        write_json(self.run / "cases" / "audit" / "merged-summary.json",
+                   {key: value for key, value in m6_summary(["blur"]).items() if key != "config"})
+        cr.reregister_run(self.run)
+        self.assertEqual(self.report.read_text(), self.LEGACY)
+
+
 class AuditVideos(unittest.TestCase):
     def test_the_threshold_clip_is_the_first_failing_attempt_and_a_robust_family_uses_its_top_level(self):
         videos = pc.audit_videos([("job-1", m6_summary(["blur", "noise"], thresholds={"blur": 0.4125}))])

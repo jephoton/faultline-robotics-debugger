@@ -336,6 +336,36 @@ def _drop_superseded(run_dir: Path, root: Any, keep: List[str]) -> None:
             shutil.rmtree(str(base / entry["case_id"]), ignore_errors=True)
 
 
+def _retitle_audit_report(run_dir: Path, folder: Path) -> None:
+    """Give an audit report written under the legacy M6 title its stress-test title.
+
+    Only the first line changes, and only when it is exactly the legacy title: the title is rebuilt from the
+    summary the case names (its suite, task and start), so a report that cannot be matched is left alone."""
+
+    case = _read_json(folder / "case.json")
+    report = folder / "report.md"
+    if case is None or case.get("kind") != "audit" or not report.is_file():
+        return
+    summary = _read_json(_safe_child(run_dir, case.get("summary")) or run_dir / "none")
+    if summary is None:
+        return
+    try:
+        from robot_debug.orchestrator import _load_script
+
+        module = _load_script("report_m6_experiment")
+        title = module.stress_test_title([summary])
+        legacy = "# " + module.LEGACY_TITLE
+    except Exception:           # noqa: BLE001 - without the report script the old title simply stays
+        return
+    text = report.read_text(encoding="utf-8")
+    first, separator, rest = text.partition(chr(10))
+    if title is None or first.rstrip(chr(13)) != legacy:
+        return
+    temporary = report.with_name("report.md.tmp")
+    temporary.write_text("# " + title + separator + rest, encoding="utf-8", newline="")
+    os.replace(str(temporary), str(report))
+
+
 def reregister_run(run_dir: Any, root: Any = None) -> List[str]:
     """Register a finished run again from its folder, for cases registered before the clips existed.
 
@@ -347,6 +377,8 @@ def reregister_run(run_dir: Any, root: Any = None) -> List[str]:
     """
 
     run_dir = Path(run_dir)
+    for folder in (run_dir, run_dir / "cases" / "audit"):
+        _retitle_audit_report(run_dir, folder)
     case_path = run_dir / "case.json"
     case = _read_json(case_path)
     if isinstance(case, dict) and case.get("kind") == "audit" and not case.get("videos"):

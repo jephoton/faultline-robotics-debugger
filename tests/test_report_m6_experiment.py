@@ -196,6 +196,40 @@ class RenderTests(RunTestCase):
             self.assertEqual("-", report.physical_text(bad))
 
 
+class TitleTests(RunTestCase):
+    """A stress-test report names its target; the legacy M6 title stays when nothing names one."""
+
+    TARGET = dict(THRESHOLD_CONFIG, suite="libero_spatial", task_id=3, init_state_index=12)
+
+    def threshold_summary(self, config):
+        return self.run_m6(M6World(boundary_decide(BOUNDARIES)), "m6-threshold", dict(config))
+
+    def test_stress_test_title_names_the_suite_task_and_start(self):
+        summary = self.threshold_summary(self.TARGET)
+
+        title = report.stress_test_title([summary])
+        self.assertEqual("Stress test: LIBERO-Spatial task 3, start 12", title)
+        text = report.render_report([summary], title=title)
+        self.assertTrue(text.startswith("# Stress test: LIBERO-Spatial task 3, start 12"))
+        self.assertNotIn("M6 results", text)
+
+    def test_legacy_title_stays_without_a_title_or_a_target(self):
+        summary = self.threshold_summary(THRESHOLD_CONFIG)
+        self.assertTrue(report.render_report([self.threshold_summary(self.TARGET)]).startswith("# M6 results: camera"))
+        self.assertIsNone(report.stress_test_title([summary]))
+        self.assertIsNone(report.stress_test_title([self.run_m6(M6World(smoke_decide), "m6-smoke")]))
+        self.assertIsNone(report.stress_test_title([]))
+
+    def test_default_tools_title_a_stress_test_report_only(self):
+        from robot_debug import orchestrator as orch
+
+        tools = orch.DefaultTools()
+        titled = tools.audit_report([self.threshold_summary(self.TARGET)])
+        self.assertTrue(titled.startswith("# Stress test: LIBERO-Spatial task 3, start 12"))
+        legacy = tools.audit_report(self.threshold_summary(THRESHOLD_CONFIG))
+        self.assertTrue(legacy.startswith("# M6 results: camera"))
+
+
 class SummarySectionTests(unittest.TestCase):
     """The bullet summary that opens an audit report, in the words the case page uses."""
 
