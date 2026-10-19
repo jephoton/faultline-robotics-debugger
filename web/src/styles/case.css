@@ -5,6 +5,23 @@ article > h1 {
 .lede--tight {
   margin-bottom: var(--space-3);
 }
+/* The result under the case title: a lead line (.lede) and a plain bulleted list. */
+.case-result {
+  margin: 0 0 var(--space-5);
+}
+.case-result__list {
+  max-width: 62ch;
+  margin: 0;
+  padding-left: 1.25em;
+  line-height: 1.5;
+}
+.case-result__list li + li {
+  margin-top: var(--space-1);
+}
+.case-result__note {
+  max-width: 62ch;
+  margin: var(--space-3) 0 0;
+}
 .section__hint {
   margin-top: calc(var(--space-2) * -1);
   max-width: 70ch;

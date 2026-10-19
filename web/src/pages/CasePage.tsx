@@ -3,6 +3,7 @@ import { useApi } from '../api/context';
 import { ApiError } from '../api/client';
 import type { Detail } from '../api/types';
 import { AuditSection } from '../components/case/AuditSection';
+import { CaseResult } from '../components/case/CaseResult';
 import {
   CaseVideos,
   ExplanationSection,
@@ -103,7 +104,7 @@ export function CaseView({ detail }: { detail: Detail }) {
         foot={detail.instruction ?? undefined}
       />
       <h1>{detail.name}</h1>
-      <p className="lede">{detail.sentence ?? detail.verdict_text}</p>
+      <CaseResult detail={detail} />
       {detail.stop_text && (
         <div className={attentionNotice ? 'notice notice--attention' : 'notice notice--neutral'} role="note">
           <Icon name={attentionNotice ? 'attention' : 'info'} />
