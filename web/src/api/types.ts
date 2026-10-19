@@ -154,6 +154,29 @@ export interface HistoryStep {
   cost_usd: number | null;
 }
 
+/** One suggested next test. `cites` holds source ids from `NextSteps.sources` ("S2") or evidence ids from the case ("c12"). */
+export interface NextStepItem {
+  text: string;
+  cites: string[];
+}
+
+export interface NextStepSource {
+  id: string;
+  title: string;
+  url: string;
+}
+
+/**
+ * Nemotron's suggested next steps, grounded in retrieved public sources. Absent or null in older cases and in
+ * static exports made before the field existed.
+ */
+export interface NextSteps {
+  model: string;
+  status: string;
+  items: NextStepItem[];
+  sources: NextStepSource[];
+}
+
 export interface History {
   steps: HistoryStep[];
   jobs: number;
@@ -200,6 +223,8 @@ export interface Detail extends LibraryItem {
   occlusion?: OcclusionDetail;
   explanation: Explanation | null;
   research: { related: string | null; sources: { title: string; url: string }[] } | null;
+  /** Absent or null in older cases and in static exports made before the field existed. */
+  next_steps?: NextSteps | null;
   history: History | null;
   replays: ReplayRow[];
   report_markdown: string | null;

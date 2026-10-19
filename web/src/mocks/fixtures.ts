@@ -264,10 +264,21 @@ details[IDS.soup] = {
     reruns: [
       { index: 0, phase: 'gate', role: 'failing', selection: null, outcomes: ['policy_failure', 'policy_failure', 'policy_failure', 'policy_failure'], decision: 'reproduces' },
       { index: 1, phase: 'gate', role: 'reference', selection: null, outcomes: ['success', 'success', 'success', 'success', 'success'], decision: 'passes' },
+      // Each kept entity alone (probe), at its full difference.
       { index: 2, phase: 'probe', role: 'hybrid', selection: { alphabet_soup_1: { position: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
-      { index: 3, phase: 'probe', role: 'hybrid', selection: { robot: { joints: 1 }, alphabet_soup_1: { position: 1 } }, outcomes: ['policy_failure', 'success', 'policy_failure', 'policy_failure'], decision: 'reproduces' },
-      { index: 4, phase: 'shrink', role: 'hybrid', selection: { robot: { joints: 0.875 }, alphabet_soup_1: { position: 0.875 } }, outcomes: ['policy_failure', 'policy_failure', 'policy_failure', 'success', 'policy_failure'], decision: 'reproduces' },
-      { index: 5, phase: 'shrink', role: 'hybrid', selection: { robot: { joints: 0.75 }, alphabet_soup_1: { position: 0.75 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 3, phase: 'probe', role: 'hybrid', selection: { cream_cheese_1: { position: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 4, phase: 'probe', role: 'hybrid', selection: { milk_1: { position: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 5, phase: 'probe', role: 'hybrid', selection: { orange_juice_1: { position: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 6, phase: 'probe', role: 'hybrid', selection: { robot: { joints: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 7, phase: 'probe', role: 'hybrid', selection: { robot: { joints: 1 }, alphabet_soup_1: { position: 1 } }, outcomes: ['policy_failure', 'success', 'policy_failure', 'policy_failure'], decision: 'reproduces' },
+      // The kept set with one entity removed (ddmin).
+      { index: 8, phase: 'ddmin', role: 'hybrid', selection: { cream_cheese_1: { position: 1 }, milk_1: { position: 1 }, orange_juice_1: { position: 1 }, robot: { joints: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 9, phase: 'ddmin', role: 'hybrid', selection: { alphabet_soup_1: { position: 1 }, milk_1: { position: 1 }, orange_juice_1: { position: 1 }, robot: { joints: 1 } }, outcomes: ['success', 'policy_failure', 'success'], decision: 'does_not_reproduce' },
+      { index: 10, phase: 'ddmin', role: 'hybrid', selection: { alphabet_soup_1: { position: 1 }, cream_cheese_1: { position: 1 }, orange_juice_1: { position: 1 }, robot: { joints: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 11, phase: 'ddmin', role: 'hybrid', selection: { alphabet_soup_1: { position: 1 }, cream_cheese_1: { position: 1 }, milk_1: { position: 1 }, robot: { joints: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 12, phase: 'ddmin', role: 'hybrid', selection: { alphabet_soup_1: { position: 1 }, cream_cheese_1: { position: 1 }, milk_1: { position: 1 }, orange_juice_1: { position: 1 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
+      { index: 13, phase: 'shrink', role: 'hybrid', selection: { robot: { joints: 0.875 }, alphabet_soup_1: { position: 0.875 } }, outcomes: ['policy_failure', 'policy_failure', 'policy_failure', 'success', 'policy_failure'], decision: 'reproduces' },
+      { index: 14, phase: 'shrink', role: 'hybrid', selection: { robot: { joints: 0.75 }, alphabet_soup_1: { position: 0.75 } }, outcomes: ['success', 'success'], decision: 'does_not_reproduce' },
     ],
   },
   explanation: {
@@ -295,6 +306,23 @@ details[IDS.soup] = {
     ],
   },
   research: null,
+  next_steps: {
+    model: 'nvidia/nemotron-3-ultra',
+    status: 'ok',
+    items: [
+      {
+        text: 'Move the milk and the orange juice by smaller amounts while keeping the robot joints fixed, to see whether the failure depends on their exact positions or only on the workspace being crowded.',
+        cites: ['S1', 'c32'],
+      },
+      { text: 'Repeat the minimal scene on a second task in the same suite to check that the failure is not specific to this one.', cites: ['S2', 'S3'] },
+      { text: 'Rerun the reduction with a larger candidate budget so the shrink step can finish.', cites: ['c12'] },
+    ],
+    sources: [
+      { id: 'S1', title: 'Object placement sensitivity in vision-language-action policies', url: 'https://example.org/placement-sensitivity' },
+      { id: 'S2', title: 'LIBERO benchmark', url: 'https://example.org/libero' },
+      { id: 'S3', title: 'Robustness evaluation of manipulation policies', url: 'https://example.org/robustness-eval' },
+    ],
+  },
   history: history(),
   replays: [
     { run: 'replay-soup-20261011-153000', verdict: 'reproduces', verdict_text: 'Still reproduces: 4 of 5 attempts failed on the minimal scene, 5 of 5 passed on the reference.', created: '2026-10-11T15:30:00Z', cost_usd: 0.34, checkpoint: null, original: null },

@@ -15,14 +15,18 @@ import {
   ResearchSection,
   RunDetails,
 } from '../components/case/CommonSections';
+import { FullEvidence, NemotronBox, TrustSection } from '../components/case/TeamSections';
 import { OcclusionSection } from '../components/case/OcclusionSection';
 import { FindingsList } from '../components/case/Findings';
 import { ReplaySection, showsReplay } from '../components/case/ReplaySection';
 import { ParaphraseSection } from '../components/case/ParaphraseSection';
 import { ScenarioSection } from '../components/case/ScenarioSection';
 import { Icon } from '../components/Icon';
+import { Markdown } from '../components/Markdown';
+import { Section } from '../components/Section';
 import { ReadoutHeader } from '../components/ReadoutHeader';
 import { shortDate, suiteLabel } from '../lib/format';
+import { splitReport } from '../lib/reportSections';
 import { KIND_LABEL, statusFor } from '../lib/status';
 import { useAsync } from '../lib/useAsync';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
@@ -52,6 +56,26 @@ function CaseFacts({ detail }: { detail: Detail }) {
         </>
       )}
     </dl>
+  );
+}
+
+/**
+ * A scenario or stress-test case whose report has a Summary: the page a team reads. Summary, why it can be
+ * trusted, Nemotron's suggestions, the regression test, then everything else folded away.
+ */
+function TeamBody({ detail, summary, parts }: { detail: Detail; summary: string; parts: ReturnType<typeof splitReport> }) {
+  return (
+    <>
+      <CaseVideos detail={detail} />
+      <Section title="Summary">
+        <Markdown source={summary} headingOffset={1} />
+      </Section>
+      <TrustSection detail={detail} />
+      <NemotronBox detail={detail} />
+      {showsReplay(detail) && <ReplaySection detail={detail} />}
+      <FullEvidence detail={detail} parts={parts} />
+      <RunDetails detail={detail} />
+    </>
   );
 }
 
@@ -87,6 +111,15 @@ function StructuredBody({ detail }: { detail: Detail }) {
   );
 }
 
+function CaseBody({ detail }: { detail: Detail }) {
+  if (!detail.report_markdown) return <StructuredBody detail={detail} />;
+  if (detail.kind === 'scenario' || detail.kind === 'audit') {
+    const parts = splitReport(detail.report_markdown);
+    if (parts.summary) return <TeamBody detail={detail} summary={parts.summary} parts={parts} />;
+  }
+  return <ReportFirstBody detail={detail} />;
+}
+
 export function CaseView({ detail }: { detail: Detail }) {
   const status = statusFor(detail.verdict, detail.attention);
   useDocumentTitle(`${detail.fault_code} ${detail.name}`);
@@ -117,7 +150,7 @@ export function CaseView({ detail }: { detail: Detail }) {
       <CaseFacts detail={detail} />
       <FindingsList detail={detail} />
 
-      {detail.report_markdown ? <ReportFirstBody detail={detail} /> : <StructuredBody detail={detail} />}
+      <CaseBody detail={detail} />
       <FilesSection detail={detail} />
     </article>
   );

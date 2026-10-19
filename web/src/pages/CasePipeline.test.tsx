@@ -277,17 +277,39 @@ describe('videos on audit and wording cases', () => {
 });
 
 describe('research context on a case', () => {
-  it('shows the research as context, not evidence, whenever the case has it', async () => {
+  it('keeps the older research record inside Full evidence, as context and not evidence', async () => {
+    const user = userEvent.setup();
     await openCase(IDS.pipeAudit);
-    const section = screen.getByRole('heading', { level: 2, name: 'Research context' }).closest('section') as HTMLElement;
-    expect(within(section).getByText(/Context, not evidence/)).toBeInTheDocument();
-    expect(within(section).getByRole('link', { name: /Robustness of vision-based policies/ })).toHaveAttribute('href', 'https://example.org/image-corruptions');
-    // After the report and before the replays.
-    expect(before(screen.getByRole('heading', { level: 2, name: 'Report' }), section)).toBe(true);
-    expect(before(section, screen.getByRole('heading', { level: 2, name: 'Regression test' }))).toBe(true);
+    // No standalone section in the main flow.
+    expect(screen.queryByRole('heading', { level: 2, name: 'Research context' })).not.toBeInTheDocument();
+    const fold = screen.getByText(/^Show the rest of the report and the research context/).closest('details') as HTMLDetailsElement;
+    expect(fold.open).toBe(false);
+    await user.click(screen.getByText(/^Show the rest of the report and the research context/));
+    expect(within(fold).getByRole('heading', { level: 3, name: 'Research context' })).toBeInTheDocument();
+    expect(within(fold).getByText(/Context, not evidence/)).toBeInTheDocument();
+    expect(within(fold).getByRole('link', { name: /Robustness of vision-based policies/ })).toHaveAttribute('href', 'https://example.org/image-corruptions');
+    // After the regression test, which comes after the summary.
+    const replays = screen.getByRole('heading', { level: 2, name: 'Regression test' });
+    expect(before(screen.getByRole('heading', { level: 2, name: 'Summary' }), replays)).toBe(true);
+    expect(before(replays, fold)).toBe(true);
   });
 
-  it('comes after Nemotron\'s reading when the case has one', async () => {
+  it('puts the research sources into the Nemotron box and drops the standalone block when the case has next steps', async () => {
+    await openChanged(IDS.pipeAudit, (detail) => ({
+      ...detail,
+      next_steps: {
+        model: 'nvidia/nemotron-3-ultra',
+        status: 'ok',
+        items: [{ text: 'Try blur at 0.4 to find where the failure starts.', cites: ['S1'] }],
+        sources: [{ id: 'S1', title: 'Robustness of vision-based policies to image corruptions', url: 'https://example.org/image-corruptions' }],
+      },
+    }));
+    expect(screen.getByRole('heading', { level: 2, name: 'Nemotron' })).toBeInTheDocument();
+    expect(screen.queryByText(/Context, not evidence/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Show the rest of the report and the research context/)).not.toBeInTheDocument();
+  });
+
+  it("comes after Nemotron's full reading inside Full evidence when the case has one", async () => {
     await openChanged(IDS.pipeAudit, (detail) => ({
       ...detail,
       explanation: {
@@ -299,8 +321,8 @@ describe('research context on a case', () => {
         limitations: [],
       },
     }));
-    const reading = screen.getByRole('heading', { level: 2, name: "Nemotron's reading" });
-    const research = screen.getByRole('heading', { level: 2, name: 'Research context' });
+    const reading = screen.getByRole('heading', { level: 3, name: "Nemotron's full reading" });
+    const research = screen.getByRole('heading', { level: 3, name: 'Research context' });
     expect(before(reading, research)).toBe(true);
   });
 

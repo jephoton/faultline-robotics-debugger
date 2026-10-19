@@ -146,13 +146,7 @@ describe('keyboard use', () => {
     expect(await screen.findByRole('button', { name: /pause/i })).toBeInTheDocument();
     // The folds are native details/summary: the browser makes each summary a tab stop and opens it with
     // Enter or Space. jsdom has no such activation, so check the structure and open them by click.
-    const summary = screen.getByText('Show all 26 rows');
-    const fold = summary.closest('details') as HTMLDetailsElement;
-    expect(summary.tagName).toBe('SUMMARY');
-    expect(fold.open).toBe(false);
-    await user.click(summary);
-    expect(fold.open).toBe(true);
-    for (const label of ['Show the reading (interpretation, not evidence)', 'Run details']) {
+    for (const label of [/^Show the rest of the report and Nemotron's full reading/, 'Show all 26 rows', 'Run details']) {
       const toggle = screen.getByText(label);
       expect(toggle.tagName).toBe('SUMMARY');
       expect(toggle.closest('details')).not.toHaveAttribute('open');

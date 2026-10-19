@@ -58,15 +58,27 @@ describe('case page header', () => {
   });
 });
 
+/** Open the Full evidence fold and return it. */
+async function openEvidence(user: ReturnType<typeof userEvent.setup>) {
+  const summary = screen.getByText(/^Show the rest of the report/);
+  const fold = summary.closest('details') as HTMLDetailsElement;
+  expect(fold.open).toBe(false);
+  await user.click(summary);
+  expect(fold.open).toBe(true);
+  return fold;
+}
+
 describe('report-first scenario case', () => {
-  it('orders the page: videos, the report, the folded reading, replays, run details, files', async () => {
+  it('orders the page: videos, summary, why it is trustworthy, Nemotron, the regression test, full evidence, run details, files', async () => {
     await openCase(IDS.soup);
-    expect(h2Names()).toEqual(['Videos', 'Report', "Nemotron's reading", 'Regression test', 'Files']);
+    expect(h2Names()).toEqual(['Videos', 'Summary', "Why it's trustworthy", 'Nemotron', 'Regression test', 'Full evidence', 'Files']);
     const order = [
       screen.getByRole('group', { name: 'Original, minimal and reference videos' }),
-      screen.getByRole('heading', { level: 2, name: 'Report' }),
-      screen.getByRole('heading', { level: 2, name: "Nemotron's reading" }),
+      screen.getByRole('heading', { level: 2, name: 'Summary' }),
+      screen.getByRole('heading', { level: 2, name: "Why it's trustworthy" }),
+      screen.getByRole('heading', { level: 2, name: 'Nemotron' }),
       screen.getByRole('heading', { level: 2, name: 'Regression test' }),
+      screen.getByRole('heading', { level: 2, name: 'Full evidence' }),
       screen.getByText('Run details'),
       screen.getByRole('heading', { level: 2, name: 'Files' }),
     ];
@@ -75,22 +87,36 @@ describe('report-first scenario case', () => {
     }
   });
 
-  it('renders the stored report as the body, opening with its summary', async () => {
+  it('shows only the report summary in the main flow, under its own heading', async () => {
     await openCase(IDS.soup);
-    const title = screen.getByRole('heading', { name: /Scenario reduction: put both the alphabet soup/ });
-    expect(title.tagName).toBe('H3');
-    const summary = screen.getByRole('heading', { name: 'Summary' });
-    expect(summary.tagName).toBe('H4');
-    expect(summary).toHaveAttribute('id', 'md-summary');
-    expect(screen.getByText(/Verdict: Reproduces\./)).toBeInTheDocument();
-    expect(screen.getByText(/Kept shift: alphabet_soup_1 position, 2\.5 cm \(87\.5% of the full difference\)\./)).toBeInTheDocument();
-    expect(screen.getByText(/Stopped at the candidate budget: entity-minimal/)).toBeInTheDocument();
-    expect(title.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const section = screen.getByRole('heading', { level: 2, name: 'Summary' }).closest('section') as HTMLElement;
+    expect(within(section).getByText(/Verdict: Reproduces\./)).toBeInTheDocument();
+    expect(within(section).getByText(/Kept shift: alphabet_soup_1 position, 2\.5 cm \(87\.5% of the full difference\)\./)).toBeInTheDocument();
+    expect(within(section).getByText(/Stopped at the candidate budget: entity-minimal/)).toBeInTheDocument();
+    // The report's own title and its other sections are in Full evidence, not here.
+    expect(within(section).queryByText(/Scenario reduction: put both/)).not.toBeInTheDocument();
+    expect(within(section).queryAllByRole('heading')).toHaveLength(1);
+    const fold = screen.getByText(/^Show the rest of the report/).closest('details') as HTMLDetailsElement;
+    expect(fold).not.toContainElement(screen.getByText(/Verdict: Reproduces\./));
+    expect(within(fold).queryByText(/Scenario reduction: put both/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the rest of the report in Full evidence, collapsed, with headings one level under its h2', async () => {
+    const user = userEvent.setup();
+    await openCase(IDS.soup);
+    const fold = await openEvidence(user);
+    for (const name of ['Result', 'Hypothesis', 'Candidates', 'Effort']) {
+      expect(within(fold).getByRole('heading', { name }).tagName).toBe('H3');
+    }
+    expect(within(fold).getByRole('heading', { name: 'Minimal cause' }).tagName).toBe('H4');
+    expect(within(fold).queryByRole('heading', { name: 'Summary' })).not.toBeInTheDocument();
+    expect(within(fold).getByText(/Entity-minimal: yes/)).toBeInTheDocument();
   });
 
   it('folds the long Candidates table behind "Show all n rows" and opens it on request', async () => {
     const user = userEvent.setup();
     await openCase(IDS.soup);
+    await openEvidence(user);
     const toggle = screen.getByText('Show all 26 rows');
     const fold = toggle.closest('details') as HTMLDetailsElement;
     expect(fold.open).toBe(false);
@@ -100,29 +126,27 @@ describe('report-first scenario case', () => {
     expect(within(fold).getAllByRole('row')).toHaveLength(27);
   });
 
-  it('shows the videos above the report in the linked player', async () => {
+  it('shows the videos above the summary in the linked player', async () => {
     await openCase(IDS.soup);
     const player = screen.getByRole('group', { name: 'Original, minimal and reference videos' });
     expect(within(player).getByLabelText('Original failing start')).toBeInTheDocument();
     expect(within(player).getByLabelText('Passing reference')).toBeInTheDocument();
     expect(within(player).getByRole('button', { name: /play all/i })).toBeInTheDocument();
-    const report = screen.getByRole('heading', { level: 2, name: 'Report' });
-    expect(player.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const summary = screen.getByRole('heading', { level: 2, name: 'Summary' });
+    expect(player.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("keeps Nemotron's reading collapsed, labelled as interpretation, and opens it on request", async () => {
+  it("keeps Nemotron's full reading inside Full evidence, labelled as interpretation", async () => {
     const user = userEvent.setup();
     await openCase(IDS.soup);
-    expect(screen.getByText(/It is not evidence and needs human review/)).toBeInTheDocument();
-    const summary = screen.getByText('Show the reading (interpretation, not evidence)');
-    const fold = summary.closest('details') as HTMLDetailsElement;
-    expect(fold.open).toBe(false);
-    await user.click(summary);
-    expect(fold.open).toBe(true);
+    const fold = await openEvidence(user);
+    expect(within(fold).getByRole('heading', { level: 3, name: "Nemotron's full reading" })).toBeInTheDocument();
+    expect(within(fold).getByText(/It is not evidence and needs human review/)).toBeInTheDocument();
     expect(within(fold).getByText('Review required')).toBeInTheDocument();
     expect(within(fold).getByText('nvidia/nemotron-3-super-120b-a12b')).toBeInTheDocument();
     expect(within(fold).getByText('c12')).toBeInTheDocument();
     expect(within(fold).getByText(/there is no causal proof/)).toBeInTheDocument();
+    expect(within(fold).getByRole('heading', { level: 4, name: 'Hypotheses to test' })).toBeInTheDocument();
   });
 
   it('states what a replay is for, above the replay history', async () => {
@@ -161,7 +185,7 @@ describe('report-first scenario case', () => {
       expect(screen.queryByRole('heading', { name: gone })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole('heading', { name: 'The guess' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Show all 6 reruns/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Show all 15 reruns/)).not.toBeInTheDocument();
   });
 
   it('shows an imported start in the report, with an empty video slot and no Nemotron section', async () => {
@@ -183,7 +207,7 @@ describe('scenario case without a stored report', () => {
     expect(screen.getByRole('heading', { name: 'The guess' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The measurement' })).toBeInTheDocument();
     expect(screen.getByText(/ranked the orange juice first/)).toBeInTheDocument();
-    expect(screen.getByText('Show all 6 reruns')).toBeInTheDocument();
+    expect(screen.getByText('Show all 15 reruns')).toBeInTheDocument();
     const player = screen.getByRole('group', { name: 'Original, minimal and reference videos' });
     expect(within(player).getByLabelText('Original failing start')).toBeInTheDocument();
     expect(screen.getByText('No report was saved for this case.')).toBeInTheDocument();

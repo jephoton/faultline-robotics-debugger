@@ -85,7 +85,9 @@ function EvidenceIds({ ids }: { ids: string[] }) {
   );
 }
 
-function ExplanationBody({ detail }: { detail: Detail }) {
+/** `level` is the heading level of the block's own sub-headings: 3 under a section's h2, 4 under an h3. */
+export function ExplanationBody({ detail, level = 3 }: { detail: Detail; level?: 3 | 4 }) {
+  const H = `h${level}` as 'h3' | 'h4';
   const e = detail.explanation;
   if (!e) return <Empty>No Nemotron reading was made for this case.</Empty>;
   return (
@@ -103,7 +105,7 @@ function ExplanationBody({ detail }: { detail: Detail }) {
       {e.disclaimer && <p className="muted">{e.disclaimer}</p>}
       {e.hypotheses.length > 0 && (
         <>
-          <h3>Hypotheses to test</h3>
+          <H>Hypotheses to test</H>
           <ul className="reading">
             {e.hypotheses.map((item) => (
               <li key={item.text}>
@@ -116,7 +118,7 @@ function ExplanationBody({ detail }: { detail: Detail }) {
       )}
       {e.observations.length > 0 && (
         <>
-          <h3>Observations</h3>
+          <H>Observations</H>
           <ul className="reading">
             {e.observations.map((item) => (
               <li key={item.text}>
@@ -129,7 +131,7 @@ function ExplanationBody({ detail }: { detail: Detail }) {
       )}
       {e.limitations.length > 0 && (
         <>
-          <h3>Limits</h3>
+          <H>Limits</H>
           <ul>
             {e.limitations.map((text) => (
               <li key={text}>{text}</li>
@@ -165,14 +167,12 @@ export function ReadingFold({ detail }: { detail: Detail }) {
   );
 }
 
-export function ResearchSection({ detail }: { detail: Detail }) {
+/** The older research record: a Nano summary and a source list. Newer cases carry next steps instead. */
+export function ResearchBody({ detail }: { detail: Detail }) {
   const r = detail.research;
   if (!r) return null;
   return (
-    <Section
-      title="Research context"
-      hint="Context, not evidence: public sources found with Tavily and summarised by Nemotron 3 Nano. It does not show that anything above is true."
-    >
+    <>
       {r.related && <p>{r.related}</p>}
       {r.sources.length > 0 ? (
         <ul>
@@ -187,6 +187,18 @@ export function ResearchSection({ detail }: { detail: Detail }) {
       ) : (
         <Empty>No sources were listed.</Empty>
       )}
+    </>
+  );
+}
+
+export const RESEARCH_HINT =
+  'Context, not evidence: public sources found with Tavily and summarised by Nemotron 3 Nano. It does not show that anything above is true.';
+
+export function ResearchSection({ detail }: { detail: Detail }) {
+  if (!detail.research) return null;
+  return (
+    <Section title="Research context" hint={RESEARCH_HINT}>
+      <ResearchBody detail={detail} />
     </Section>
   );
 }
