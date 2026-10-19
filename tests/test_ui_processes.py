@@ -430,7 +430,7 @@ class StopTextTests(unittest.TestCase):
         self.assertEqual(stop_text("stopped_by_user"), "Stopped from the control panel or `faultline stop`.")
         self.assertEqual(stop_text("something_new"), "Stopped: something_new.")
         self.assertIsNone(stop_text(None))
-        self.assertEqual(len(STOP_TEXTS), 21)
+        self.assertEqual(len(STOP_TEXTS), 22)
         self.assertIn("Resume re-attaches", stop_text("process_ended"))
 
     def test_attention_excludes_only_a_clean_negative_result(self):

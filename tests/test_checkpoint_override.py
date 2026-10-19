@@ -11,6 +11,7 @@ from pathlib import Path
 from robot_debug import checkpoint_override as co
 from robot_debug import job_entry
 from robot_debug import job_runtime as jr
+from robot_debug import orchestrator as orch
 from robot_debug import spec as sp
 from robot_debug import workloads
 from robot_debug.job_entry import ImageLayout, model_server_argv, prefetch_command
@@ -341,7 +342,7 @@ class ParaphraseRun(unittest.TestCase):
 
 
 class AuditRun(unittest.TestCase):
-    def test_the_audit_case_names_the_checkpoint_only_with_an_override(self):
+    def test_the_audit_case_names_the_checkpoint_it_used_the_override_or_the_suites_pin(self):
         from tests.test_orchestrator import Mode2AndReplay, finished, make_world, spec_for
 
         for checkpoint in (None, {"id": ID, "revision": REV}):
@@ -357,7 +358,8 @@ class AuditRun(unittest.TestCase):
                 self.assertEqual("completed", runner.diagnose().status)
                 case = json.loads((runner.run_dir / "case.json").read_text())
                 if checkpoint is None:
-                    self.assertNotIn("checkpoint", case)
+                    pinned = orch.pinned_checkpoint("libero_10")
+                    self.assertEqual({"id": pinned[0], "revision": pinned[1], "pinned": True}, case["checkpoint"])
                 else:
                     self.assertEqual({"id": ID, "revision": REV, "pinned": True}, case["checkpoint"])
 
@@ -406,9 +408,12 @@ class ReplayRun(unittest.TestCase):
         for case_checkpoint in (None, default):
             with self.subTest(case_checkpoint=case_checkpoint):
                 inputs, runner, _lines = self.replay(None, case_checkpoint)
-                self.assertNotIn("checkpoint", inputs)
+                self.assertNotIn("checkpoint", inputs, "the Job serves the suite's own pin")
                 saved = json.loads((runner.run_dir / "replay-result.json").read_text())
-                self.assertNotIn("checkpoint", saved)
+                pinned = orch.pinned_checkpoint("libero_10")
+                self.assertEqual({"id": pinned[0], "revision": pinned[1]},
+                                 {key: saved["checkpoint"][key] for key in ("id", "revision")},
+                                 "the replay records the checkpoint it used")
 
     def test_a_case_found_with_an_override_replays_on_it_unless_the_spec_says_otherwise(self):
         found = {"id": ID, "revision": REV, "pinned": True}
