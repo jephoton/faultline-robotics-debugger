@@ -1,5 +1,9 @@
 # Fixed-Area Position-Grid Search Implementation Plan
 
+> **Historical path note:** Guest paths in this plan use `<guest-home>` as a
+> placeholder. Substitute the target guest's home directory before adapting
+> these historical commands; this is not the current runbook.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build and locally validate a bounded driver that searches eight new positions for the accepted 25%-area agent-view occlusion, confirms the first apparent failure, and checks it against fresh matched nominal controls.
@@ -30,8 +34,8 @@ Nebius spending.
 | Local driver/config implementation and tests | Green | Smaller implementation model proceeds and commits. |
 | Exact preregistered order, sentinel, and conditional controls | Amber | Implement as specified; explain evidence at the checkpoint. |
 | Viewer coordinate labels | Green | Keep to existing MVP workbench; no heatmap. |
-| Cloud preflight and run | Red | Stop until Jethro approves a fresh cap after live-rate verification. |
-| Any model/task/failure-rule/perturbation change | Red | Return to Jethro before dependent work. |
+| Cloud preflight and run | Red | Stop until the project owner approves a fresh cap after live-rate verification. |
+| Any model/task/failure-rule/perturbation change | Red | Return to the project owner before dependent work. |
 
 The automatic implementation handoff uses `gpt-5.6-terra` at medium reasoning
 when available. The stronger-model coordinator owns integration, final review,
@@ -603,7 +607,7 @@ deadline behavior, Python 3.8 compatibility, test strength, viewer escaping,
 and maintainability. The implementation owner fixes findings and reruns the
 complete suite before integration.
 
-- [x] **Step 3: Present the learning checkpoint to Jethro**
+- [x] **Step 3: Present the learning checkpoint to the project owner**
 
 Explain:
 
@@ -615,7 +619,7 @@ Explain:
    expansion or a second family; unstable nominal controls require benchmark
    diagnosis before more perturbations.
 
-Invite Jethro to predict which cell will fail before cloud execution. Do not
+Invite the project owner to predict which cell will fail before cloud execution. Do not
 turn the prediction into a claim.
 
 ## RED GATE: Fresh Nebius authorization
@@ -624,7 +628,7 @@ Tasks 1--5 do not authorize Task 6. Before any VM start, the integration owner
 must renew CLI/browser authentication if needed and recheck the account,
 balance, expiry, exact L40S preset, capacity/quota, compute and disk rates,
 existing VM/disk state, and temporary-public-IP procedure. Recalculate a hard
-maximum from the live all-in rate and the 26-minute ceiling. Jethro must approve
+maximum from the live all-in rate and the 26-minute ceiling. The project owner must approve
 that new cap explicitly.
 
 The historical estimate is about US$0.834 including GST, not an authorization
@@ -654,11 +658,11 @@ not repair or redesign inside a billable experiment.
 - [x] **Step 3: Run the position driver once**
 
 ```bash
-/home/robot/.venvs/vla-eval/bin/python \
+<guest-home>/.venvs/vla-eval/bin/python \
   scripts/run_position_grid_search.py \
-  --upstream-root /home/robot/vla-evaluation-harness \
+  --upstream-root <guest-home>/vla-evaluation-harness \
   --project-root "$PWD" \
-  --results-root /home/robot/results/position-grid-search-1 \
+  --results-root <guest-home>/results/position-grid-search-1 \
   --launch-cutoff-seconds 1320
 ```
 

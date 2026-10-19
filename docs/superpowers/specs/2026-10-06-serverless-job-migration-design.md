@@ -2,7 +2,7 @@
 
 ## Accepted scope
 
-Jethro approved the recommended single-Job topology and private Object Storage
+The project owner approved the recommended single-Job topology and private Object Storage
 export. Implement and locally validate it, then seek a fresh numeric spending
 cap after read-only cloud preflight. Historical VM evidence stays untouched.
 This does not resume expanded M3, external replay, Nemotron retries, a model

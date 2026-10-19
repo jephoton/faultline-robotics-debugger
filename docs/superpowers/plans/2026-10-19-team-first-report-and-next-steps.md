@@ -1,12 +1,12 @@
 # Plan: a team-first case page and research-backed next steps (October 19, 2026)
 
-**Status:** approved by Jethro on October 19, 2026.
+**Status:** approved by the project owner on October 19, 2026.
 - Report: "team-first plus one Nemotron box".
 - Research: "make it feed next steps".
 
 ## Problem
 
-Walking through Demo 1, Jethro found the case page bloated for a robotics
+Walking through Demo 1, the project owner found the case page bloated for a robotics
 team.
 - **Nemotron's reading** mostly restates **Hypothesis vs result**. Its one
   actionable part is its suggested next tests.
@@ -107,7 +107,7 @@ The web uses the existing fields for everything else:
     calls);
   - checks in the browser;
   - updates the Reference and runbook and the ADR 0030 amendment;
-  - asks Jethro for the gallery redeploy.
+  - asks the project owner for the gallery redeploy.
 
 **Autonomy:** green or amber inside these decisions. Stop and report if a
 change would need a new simulator image, a paid Job, or a different model.

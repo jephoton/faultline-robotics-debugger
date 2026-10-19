@@ -1,6 +1,6 @@
 # ADR 0022: Position grid keeps searching after unreproducible failures
 
-**Status:** Accepted by Jethro on October 11, 2026.
+**Status:** Accepted by the project owner on October 11, 2026.
 
 ## Context
 

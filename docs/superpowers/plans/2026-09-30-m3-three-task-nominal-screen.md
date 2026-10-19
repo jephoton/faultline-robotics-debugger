@@ -8,11 +8,11 @@
 
 **Tech Stack:** Python 3.11, existing `robot_debug.portfolio_*` modules, pinned VLA harness/GR00T checkpoint, Nebius CLI, exact-VM watchdog, JSON/trace/MP4 artifacts.
 
-**Authority boundary:** Jethro approved task IDs `(0, 1, 2)` as *screening candidates*. This document does not authorize a VM start, a dollar cap, a public push, a different VM shape, or a claim that IDs 1 and 2 are nominally reliable. The former single-loop live comparison remains paused.
+**Authority boundary:** the project owner approved task IDs `(0, 1, 2)` as *screening candidates*. This document does not authorize a VM start, a dollar cap, a public push, a different VM shape, or a claim that IDs 1 and 2 are nominally reliable. The former single-loop live comparison remains paused.
 
-**Execution update, September 30:** Jethro separately approved US$3/60 minutes. The local test was integrated at `9344c62` and passed; one guarded exact-shape start then timed out with Nebius `NotEnoughResources` before any episode. The VM is confirmed stopped, temporary ingress removed, and guard unregistered. See [the attempt record](../../experiments/m3-three-task-screen.md). No automatic retry or different shape is authorized by this attempt.
+**Execution update, September 30:** the project owner separately approved US$3/60 minutes. The local test was integrated at `9344c62` and passed; one guarded exact-shape start then timed out with Nebius `NotEnoughResources` before any episode. The VM is confirmed stopped, temporary ingress removed, and guard unregistered. See [the attempt record](../../experiments/m3-three-task-screen.md). No automatic retry or different shape is authorized by this attempt.
 
-**Retry update, September 30:** Jethro approved one same-cap retry and waived a fresh balance check. It timed out with the same `NotEnoughResources` result before guest access. The exact VM is again confirmed stopped, no temporary ingress exists, and the second guard was unregistered. No task-validity conclusion follows; another start or resource change requires a new decision.
+**Retry update, September 30:** the project owner approved one same-cap retry and waived a fresh balance check. It timed out with the same `NotEnoughResources` result before guest access. The exact VM is again confirmed stopped, no temporary ingress exists, and the second guard was unregistered. No task-validity conclusion follows; another start or resource change requires a new decision.
 
 ---
 
@@ -31,21 +31,21 @@
 
 - [x] Add a focused dry-run test for the three exact task-nominal requests, ownership, no search, and `physical_attempts == 3`.
 - [x] Run focused/full Windows tests and focused WSL lifecycle/driver tests; commit the related test at `9344c62`.
-- [x] Record Jethro's candidate choice as **accepted for screening**, not a passed runtime baseline.
+- [x] Record the project owner's candidate choice as **accepted for screening**, not a passed runtime baseline.
 
 ## Task 2 — Read-only resource and model preflight (green/amber)
 
 **Files:** `docs/experiments/m3-three-task-screen.md` (create after observation), `FEEDBACK.md` only if a new provider behavior is materially observed.
 
 - [ ] Recheck CLI-authenticated tenant/project/region and exact stopped instance by ID, current calculator prices, on-demand availability and quota. Read current account balance/expiry in the Nebius console; do not infer it from September 29's US$10.42. Record only non-sensitive summarized figures in the experiment note.
-- [ ] Confirm local `main` source is what will run on the VM. The main checkout is currently ahead of GitHub, so either obtain Jethro's approval to push this reviewed code to the existing remote or transfer the exact commit to the VM over the existing guarded SSH path. Do not run the older VM checkout as if it contained the new task selector.
+- [ ] Confirm local `main` source is what will run on the VM. The main checkout is currently ahead of GitHub, so either obtain the project owner's approval to push this reviewed code to the existing remote or transfer the exact commit to the VM over the existing guarded SSH path. Do not run the older VM checkout as if it contained the new task selector.
 - [ ] After a separately approved cap but before any evaluator launch, verify the VM's pinned harness/container digest, model cache and actual served checkpoint revision, and task catalog IDs/instructions. If those are not observable, stop rather than trust the manifest label alone.
 
 ## Task 3 — Explicit paid-start gate and one-owner screen (red, then amber)
 
 **Files:** ignored run directory and watchdog log; no tracked code file is required for execution.
 
-- [ ] Present the current balance, rate, capacity, exact task identities, the three-episode screen, and US$3/60-minute proposal to Jethro. Wait for an explicit numeric cap/deadline decision. A candidate-ID approval alone is not spend approval.
+- [ ] Present the current balance, rate, capacity, exact task identities, the three-episode screen, and US$3/60-minute proposal to the project owner. Wait for an explicit numeric cap/deadline decision. A candidate-ID approval alone is not spend approval.
 - [ ] With approved bounds, arm the existing exact-VM workstation watchdog while stopped, check its live scheduled-task/process ownership and durable `armed` event, and set guest shutdown backup. Recheck CLI auth and VM `STOPPED` immediately before a single regular-instance start. If launch capacity is unavailable, do not switch to preemptible or another shape.
 - [ ] Use a fresh exact manifest and ignored results root; run the existing `scripts/run_diagnostic_portfolio.py` without `--dry-run`, with `--mode adaptive-portfolio --episodes 3 --seconds 2700 --estimated-usd 1.5 --hourly-rate 1.7468`. Resolve and record the actual upstream/project paths before launch. Stop if any case is invalid, uncertain, or attached to the wrong task ID. Do not continue into a search/reduction experiment.
 - [ ] Copy compact JSON and traces first, then MP4s. Independently stop/poll the exact VM to `STOPPED`; remove temporary SSH ingress and verify watchdog/guest state. An unconfirmed stop is urgent manual-console action, not success. Do not delete the retained disk without a separate decision.
@@ -55,11 +55,11 @@
 **Files:** `docs/experiments/m3-three-task-screen.md`, `docs/codex-handoff/STATE.md`, `PROJECT_PLAN.md`, `FEEDBACK.md` for actual Nebius/NVIDIA observations only.
 
 - [ ] Validate three exact task/episode outcomes and artifact paths against the saved ledger/aggregates; annotate any mismatch or missing media as infrastructure-invalid. Summarize per-task nominal outcome and actual physical launches. Reconcile calculator estimate with console billing when posted; never call estimated warm time a bill.
-- [ ] Ask Jethro to interpret the results before turning them into a product claim. If all three pass once, recommend a separately bounded repeatability baseline and then matched sequential-versus-portfolio sessions. If a task fails nominally, diagnose or choose a different task *with Jethro*; if infrastructure fails, repair and re-propose the same screen. Update relevant handoff/feedback files and commit a factual `docs(experiment): record three-task screen`.
+- [ ] Ask the project owner to interpret the results before turning them into a product claim. If all three pass once, recommend a separately bounded repeatability baseline and then matched sequential-versus-portfolio sessions. If a task fails nominally, diagnose or choose a different task *with the project owner*; if infrastructure fails, repair and re-propose the same screen. Update relevant handoff/feedback files and commit a factual `docs(experiment): record three-task screen`.
 
 ## Dependency and agent ownership
 
-Task 1 and read-only Task 2 can proceed independently. A smaller implementation agent may own only the Task 1 test/docs slice; the coordinator owns all Nebius CLI/console lifecycle checks, the single paid run, Git integration, and final claims. An independent reviewer gets the frozen manifest, session summary, ledgers, and acceptance criteria after the run, not VM mutation authority. Task 3 depends on Task 1, a fresh Task 2 preflight, and Jethro's numeric cap. Task 4 depends on verified stop and copied evidence. Green work may proceed autonomously; task IDs, cap/VM start, alternative shape/family, and claims are red.
+Task 1 and read-only Task 2 can proceed independently. A smaller implementation agent may own only the Task 1 test/docs slice; the coordinator owns all Nebius CLI/console lifecycle checks, the single paid run, Git integration, and final claims. An independent reviewer gets the frozen manifest, session summary, ledgers, and acceptance criteria after the run, not VM mutation authority. Task 3 depends on Task 1, a fresh Task 2 preflight, and the project owner's numeric cap. Task 4 depends on verified stop and copied evidence. Green work may proceed autonomously; task IDs, cap/VM start, alternative shape/family, and claims are red.
 
 ## Completion boundary
 

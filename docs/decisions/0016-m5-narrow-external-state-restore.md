@@ -1,6 +1,6 @@
 # ADR 0016: Narrow external LIBERO state restoration
 
-Status: Accepted October 5, 2026, by Jethro's explicit design checkpoint.
+Status: Accepted October 5, 2026, by the project owner's explicit design checkpoint.
 
 Support only LIBERO Object task 0, demo_0, state 0 from the acquired HDF5.
 Restore scene XML and the selected state against pinned installed dependencies,

@@ -1,7 +1,7 @@
 # One diagnosis pipeline: plan
 
 Decision: [ADR 0035](../../decisions/0035-one-diagnosis-pipeline.md). Status:
-**approved by Jethro on October 18** with the answers below.
+**approved by the project owner on October 18** with the answers below.
 
 ## The flow
 
@@ -95,7 +95,7 @@ Every branch ends with findings:
 
 ### 6. Docs
 
-**Additions from Jethro, October 18:**
+**Additions from the project owner, October 18:**
 - **Videos for disturbance and wording cases.** The Jobs already record and
   download them; only case building ignored them. Show the control, plus one
   clip per family at its threshold (or at the top severity when robust). The
@@ -121,7 +121,7 @@ One pipeline run on a start expected to pass, with blur and noise probes
 for both families there). It should produce a disturbance case, then one
 replay of that case.
 
-## Decisions (Jethro, October 18)
+## Decisions (the project owner, October 18)
 
 - **Q1. Default probes (revised October 19):** blur, noise, darken and
   contrast, no rewordings; cap US$2.50 and 1.5 hours.
@@ -130,13 +130,13 @@ replay of that case.
   - Typical cost is about US$1.25 for a passing start and about US$1.15
     for the layout branch.
   - The first answer, everything ticked, would need a US$6–7, 4-hour cap,
-    which Jethro judged too expensive in money and time.
+    which the project owner judged too expensive in money and time.
 - **Q2.** A flaky start (the stress test's control fails) skips the rewording
   probe too.
 - **Q3.** A findings list at the top of the run, linking to each existing
   report-first case page.
 - **Names** come after the build works.
-- Jethro continues the UI runbook demos on the current UI meanwhile.
+- The project owner continues the UI runbook demos on the current UI meanwhile.
 
 ### Consequence of Q1: probes split across Jobs
 
@@ -155,7 +155,7 @@ cost about US$2–2.5, against reservations of about US$4.5. The dry run lists
 every probe Job, and the cap rule (the first Job must fit) is unchanged.
 
 
-**Sequential, not parallel (Jethro asked, October 18):**
+**Sequential, not parallel (the project owner asked, October 18):**
 - The probe Jobs run one after another, as every Faultline run does.
 - Running them at once would not save cost: each Job pays its own startup
   on its own GPU, and each is billed for its own container time.
@@ -171,7 +171,7 @@ every probe Job, and the cap rule (the first Job must fit) is unchanged.
   - **backend:** steps 1–4;
   - **front end:** step 5, against fixtures.
 - The coordinator integrates, updates the docs and runs a review.
-- Then the validation run, with Jethro's go and cap.
+- Then the validation run, with the project owner's go and cap.
 - Estimate: 2 days of build and integration, plus the run.
 - Conventional Commits, with no AI co-author trailers.
 

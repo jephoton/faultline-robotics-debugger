@@ -23,7 +23,7 @@ call, report persistence, secret loading or viewer change occurred.
 
 ## Authority, ownership and dependencies
 
-Jethro approved the exact contract on October 4:
+The project owner approved the exact contract on October 4:
 `docs/superpowers/specs/2026-10-04-m5-offline-explanation-contract-design.md`.
 The contract is authoritative for every field, bound and claim limitation.
 All implementation is green within that contract. No provider, SDK, CLI,

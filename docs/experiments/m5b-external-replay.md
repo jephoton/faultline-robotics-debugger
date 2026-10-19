@@ -1,7 +1,7 @@
 # M5B: external-start reduction and certified-case re-run
 
 October 10–11, 2026. One Nebius Serverless Job (`faultline-m5b-20261010`,
-image `cc23a893ea25` → `sha256:2c7245ff…`, 1× L40S), approved by Jethro with a
+image `cc23a893ea25` → `sha256:2c7245ff…`, 1× L40S), approved by the project owner with a
 US$2 cap. Plan: `docs/superpowers/plans/2026-10-10-m5b-external-replay.md`.
 
 ## What ran
@@ -65,7 +65,7 @@ Python 3.8 in the image (pass on 3.11).
 
 ## Follow-up: position grid from the external start (October 11)
 
-Jethro chose to look for a reproducible failure from the external start before
+The project owner chose to look for a reproducible failure from the external start before
 reducing. The search driver sweeps 20 benchmark start states, so the
 single-start **position grid** was used instead, chained into the reducer only
 if it confirms a failure (`m5b-grid` mode, `4507e66`/`9e0902d`; reducer now
@@ -117,7 +117,7 @@ from the benchmark start and from demo_0 — was **not tested** from demo_1.
 
 ## Result: reduced failure from external demo_1 (October 11)
 
-Jethro asked to test the top-right region directly from demo_1. Job
+The project owner asked to test the top-right region directly from demo_1. Job
 `faultline-m5b-demo1-tr-20261011` (`m5b` mode: certified re-run, then the
 unchanged reducer with the M4 parent from the external start; image
 `9413ad4ea434`), ~16 minutes, 193 files verified, 23 videos decode, all 22

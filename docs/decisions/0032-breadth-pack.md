@@ -1,6 +1,6 @@
 # ADR 0032: Breadth pack — suites, image catalog, language and scene families
 
-**Status:** Accepted by Jethro on October 15, 2026 (M7a step 3 checkpoint).
+**Status:** Accepted by the project owner on October 15, 2026 (M7a step 3 checkpoint).
 
 ## Problem
 
@@ -30,7 +30,7 @@ physical-scene layers, without LIBERO-Plus.
    engine. Bounds are calibrated on CPU before any paid run.
 
 **Spend cap:** US$6.00 for the breadth pack's live runs (raised from US$4.00 by
-Jethro on October 15). Verification order,
+the project owner on October 15). Verification order,
 cutting from the end if the ledger runs low: suite smokes -> catalog audit ->
 paraphrase screen and reduction -> viewpoint and lighting audit.
 

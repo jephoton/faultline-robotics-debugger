@@ -14,7 +14,7 @@ Use a disk snapshot to create a **separate** H100 VM in the same Nebius project,
 
 - Retry or wait for L40S-A: least migration work, but two unchanged starts timed out and current capacity advice remains low.
 - Clone onto L40S-D: lower hourly estimate but similarly low advised availability and still requires a snapshot/new VM.
-- Clone onto H100: higher hourly cost and untested compatibility, but the strongest observed availability signal. This is Jethro's choice for the next bounded screen, not a permanent platform standard.
+- Clone onto H100: higher hourly cost and untested compatibility, but the strongest observed availability signal. This is the project owner's choice for the next bounded screen, not a permanent platform standard.
 
 ## Consequences and safeguards
 

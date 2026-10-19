@@ -10,18 +10,18 @@
 
 **Current authority boundary:** The October 1 approval below authorized one bounded attempt, now completed without an episode. It does not authorize another start or clone. The original VM/disk, task/family/model, publication status, and HPC claim boundary remain unchanged. Further paid work needs a new bounded decision after access diagnosis.
 
-**October 1 approval:** Jethro accepted the US$7.50 bounded attempt cap, one H100 start with at most 60 minutes VM-on, and deletion of only the temporary H100 clone/managed disk and snapshot after evidence copy within 24 hours. The original L40S VM/disk remain retained. This approval supersedes the pending-cap wording below; refresh live readiness before spending. CLI access was renewed for this attempt.
+**October 1 approval:** the project owner accepted the US$7.50 bounded attempt cap, one H100 start with at most 60 minutes VM-on, and deletion of only the temporary H100 clone/managed disk and snapshot after evidence copy within 24 hours. The original L40S VM/disk remain retained. This approval supersedes the pending-cap wording below; refresh live readiness before spending. CLI access was renewed for this attempt.
 
 ## Task 1 — Read-only financial and technical preflight (green)
 
 **Files:** `docs/experiments/m3-three-task-screen.md`, `FEEDBACK.md` only for new observed provider behavior.
 
 - [ ] Read the intended Nebius tenant/project/region and the exact original VM/disk IDs and states. Require original VM `STOPPED`, disk `READY`, 200 GiB, and no change to its managed ownership. Check the H100 1-GPU preset, quota, capacity advice, and current calculator rate. Capacity advice is not a reservation.
-- [ ] Check the console balance/expiry and current snapshot, cloned Network SSD, and H100 pricing, including any effective-date rate change and tax treatment. If snapshot price or billing behavior cannot be established, pause before snapshot creation and present the uncertainty to Jethro; do not assume it is free. Estimate a bounded worst case that includes VM-on time and both disks/snapshot during approved retention.
+- [ ] Check the console balance/expiry and current snapshot, cloned Network SSD, and H100 pricing, including any effective-date rate change and tax treatment. If snapshot price or billing behavior cannot be established, pause before snapshot creation and present the uncertainty to the project owner; do not assume it is free. Estimate a bounded worst case that includes VM-on time and both disks/snapshot during approved retention.
 - [ ] Confirm the source disk can produce a snapshot and the selected H100 preset can boot from a snapshot-backed managed disk with compatible image architecture. Inspect CLI options without mutating resources. Record non-sensitive observations and timestamps.
 - [ ] Recheck that the locally reviewed source includes the exact three-case dry-run regression and that the run will request only `task-00--nominal-01`, `task-01--nominal-01`, and `task-02--nominal-01`.
 
-**Historical gate, satisfied October 1:** Present a numeric cap including storage, VM-on minutes, retention, and current balance. Jethro approved the bounded attempt; that one-start authority is now exhausted. The prior L40S cap is closed.
+**Historical gate, satisfied October 1:** Present a numeric cap including storage, VM-on minutes, retention, and current balance. The project owner approved the bounded attempt; that one-start authority is now exhausted. The prior L40S cap is closed.
 
 **Historical read-only preflight, September 30:** The exact original VM/disk, H100 preset/capacity, console balance (US$9.89), CLI compute/disk estimates, and published snapshot tariff were checked. The three-case CLI contract passed 7/7 focused WSL tests. The US$7.50/60-minute/24-hour proposal was pending then and approved October 1 after refreshed checks. No credit-expiry date was displayed. This historical paragraph is not authority for another attempt.
 
@@ -49,11 +49,11 @@
 
 - [ ] Independently reconcile every requested case, launch attempt, terminal outcome, trace, MP4, and task instruction. Record nominal success/failure per task without inferring repeatability from one episode. Separate placement, clone/boot, model, and evaluator failures.
 - [ ] Reconcile estimated cost with posted billing when available; label unposted amounts as estimates. Record H100-vs-L40S environment difference, so the previous 1/2/4-worker throughput numbers are not reused as H100 evidence.
-- [ ] Ask Jethro to interpret the screen before making a product claim. If all three nominal cases pass, propose a separately capped repeatability baseline before matched sequential-vs-portfolio runs. If one fails, investigate that task or choose another with Jethro. Commit factual documentation with a Conventional Commit; do not push without separate publication direction.
+- [ ] Ask the project owner to interpret the screen before making a product claim. If all three nominal cases pass, propose a separately capped repeatability baseline before matched sequential-vs-portfolio runs. If one fails, investigate that task or choose another with the project owner. Commit factual documentation with a Conventional Commit; do not push without separate publication direction.
 
 ## Dependency, ownership, and review map
 
-Task 1 is read-only and may run before cap approval. Task 2 depends on the Task 1 price/account/capacity checks and Jethro's new numeric cap; Task 3 depends on verified guest/model/task preflight; Task 4 depends on copied evidence and verified stop. One coordinator owns all Nebius state, spending, watchdog registration, and final interpretation. A smaller model may independently review the local command/test contract or evidence parser, but may not mutate the same cloud resource. A reviewer should check frozen request IDs, validity criteria, and copied evidence against ledgers rather than repeat the paid run. Checkpoints are: before snapshot creation (red cap), after compatibility preflight (go/no-go within cap), and after evidence synthesis (human interpretation).
+Task 1 is read-only and may run before cap approval. Task 2 depends on the Task 1 price/account/capacity checks and the project owner's new numeric cap; Task 3 depends on verified guest/model/task preflight; Task 4 depends on copied evidence and verified stop. One coordinator owns all Nebius state, spending, watchdog registration, and final interpretation. A smaller model may independently review the local command/test contract or evidence parser, but may not mutate the same cloud resource. A reviewer should check frozen request IDs, validity criteria, and copied evidence against ledgers rather than repeat the paid run. Checkpoints are: before snapshot creation (red cap), after compatibility preflight (go/no-go within cap), and after evidence synthesis (human interpretation).
 
 ## Completion boundary
 

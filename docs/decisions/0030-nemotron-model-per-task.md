@@ -1,12 +1,12 @@
 # ADR 0030: Nemotron model per task, chosen by measurement
 
-**Status:** Accepted by Jethro on October 13–14, 2026.
+**Status:** Accepted by the project owner on October 13–14, 2026.
 
 ## Problem
 
 Faultline calls Nemotron on Nebius Token Factory for four jobs. Nano was the
 default everywhere until the first scenario explanation (M7 mode 1) misread
-its evidence. Jethro asked to choose each model by measurement rather than
+its evidence. The project owner asked to choose each model by measurement rather than
 assumption: the smallest model that states the known facts correctly and
 passes Faultline's output checks.
 
@@ -45,7 +45,7 @@ plain sentence per rerun and the list of shrink sizes already tested.
 
 ## Amendment (October 19, 2026): next steps replace the research summary
 
-Jethro found the research section was only a list of sources that nothing
+The project owner found the research section was only a list of sources that nothing
 used. Nano's summary was also rejected as invalid for `FL-S-8E0D`. Under
 the plan `docs/superpowers/plans/2026-10-19-team-first-report-and-next-steps.md`,
 the research step now asks **Nemotron 3 Ultra** for two to four suggested

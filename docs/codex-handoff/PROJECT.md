@@ -40,6 +40,6 @@ Keep `robot_debug`, historical identities and the local checkout name intact.
 Further M3/HPC is optional stretch. No global-minimality, universal-coverage,
 causal-proof or formal-verification claim follows from a reduced case.
 New paid work/publication requires its own authorization and checks. The
-US$75 cloud-credit planning ceiling remains until Jethro changes it; the
+US$75 cloud-credit planning ceiling remains until the project owner changes it; the
 GPU ledger is not an all-services bill. Never commit secrets or private
 infrastructure data. Original code is MIT; see `NOTICE.md` for external terms.

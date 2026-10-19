@@ -1,11 +1,11 @@
 # Report-first case page and per-step traces: plan
 
-Decisions by Jethro, October 18, 2026:
+Decisions by the project owner, October 18, 2026:
 
 - **Case page:** report-first. The readout header and the linked videos, then
   the rendered report (opening with a bullet summary, long tables
   collapsible), then Replay with a one-line purpose, then the files.
-- **Trace feature:** plan it now. Jethro intends a final round of fresh runs
+- **Trace feature:** plan it now. The project owner intends a final round of fresh runs
   once the product is settled, and wants those runs to carry traces. The data
   set and the validation run are decided at this plan's review (below). No
   paid run or image push is approved by this plan.
@@ -59,7 +59,7 @@ hypothesis) and shows only the reruns Nemotron cited (8 of 26 for
    the summary and legend. No new compute.
 5. **Docs:** update `docs/ui-runbook.md` (Demos 1–5 describe the new page),
    `docs/architecture.md` (UI reference) and ADR 0033 implementation notes.
-6. **Gallery:** re-export and redeploy only with Jethro's go at the time.
+6. **Gallery:** re-export and redeploy only with the project owner's go at the time.
 
 ### Tests
 
@@ -72,7 +72,7 @@ hypothesis) and shows only the reruns Nemotron cited (8 of 26 for
 
 ## Part B: per-step traces (PAUSED)
 
-**Paused by Jethro on October 18:** do not implement. First decide whether it is
+**Paused by the project owner on October 18:** do not implement. First decide whether it is
 worth doing once the project narrative and target use cases are scoped. The
 design below is kept for that discussion only.
 
@@ -115,7 +115,7 @@ recorded on October 18.
 - **Replays** record traces too, so a replayed case can be compared with the
   saved one.
 
-### Decisions for Jethro at plan review
+### Decisions for the project owner at plan review
 
 1. **What to record:**
    - **(a) arm, gripper, actions and task objects** (recommended);
@@ -144,6 +144,6 @@ carries all three Job-side changes.
   `src/robot_debug/viewer/library.py`, `web/` and tests.
 - **Coordinator:** regenerates the stored reports, updates the docs, does
   browser verification and integration.
-- **Part B:** a second agent after Jethro's decisions.
+- **Part B:** a second agent after the project owner's decisions.
 - Commits follow Conventional Commits, with no AI co-author trailers. Agents
   never push.

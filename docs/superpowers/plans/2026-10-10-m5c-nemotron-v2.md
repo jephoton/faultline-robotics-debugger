@@ -4,7 +4,7 @@
 nominal-versus-mask contrasts with correct citations and propose testable
 spatial hypotheses, while keeping evidence binding and human review.
 
-**Approval (October 10, Jethro):** "continue trying Nemotron, improve the prompt
+**Approval (October 10, the project owner):** "continue trying Nemotron, improve the prompt
 and stuff." Model stays `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on Token Factory.
 Spend cap for this iteration: **US$0.10 total**, at most five live attempts,
 each with its own US$0.02 reservation (actual cost about US$0.001 per call).
@@ -54,5 +54,5 @@ Full Windows suite and Python 3.11 only (workstation path). Commits:
 ## Live attempts and acceptance
 
 Offline `prepare --packet-version 2` first, then attempt `v2-01`. Judge against
-the diagnosis above; iterate the prompt only, within the cap. Jethro decides
+the diagnosis above; iterate the prompt only, within the cap. The project owner decides
 M5C acceptance from the stored report in the viewer.

@@ -20,7 +20,7 @@ If the workstation sleeps, powers off, loses network, or the CLI authentication 
 
 ## Local validation and live gate
 
-Use fake CLI subprocesses and a clock seam to test: exact-ID-only stop, parent mismatch refusal, no stop before deadline, stop/poll success, retry exhaustion, malformed records, single-arm behavior, and durable log on exception. A dry run may query the real stopped VM read-only but must never send `stop` or `start`. Before paid use, verify real Nebius account/project, credit balance and expiry, one-L40S quota/capacity, full running VM plus disk rate, the VM's stopped state, the proposed deadline and tax/margin calculation, and Jethro's **separate approval of a numeric run-specific cap**. Test arming/health and guest backup first. If any input is unavailable, do not start.
+Use fake CLI subprocesses and a clock seam to test: exact-ID-only stop, parent mismatch refusal, no stop before deadline, stop/poll success, retry exhaustion, malformed records, single-arm behavior, and durable log on exception. A dry run may query the real stopped VM read-only but must never send `stop` or `start`. Before paid use, verify real Nebius account/project, credit balance and expiry, one-L40S quota/capacity, full running VM plus disk rate, the VM's stopped state, the proposed deadline and tax/margin calculation, and the project owner's **separate approval of a numeric run-specific cap**. Test arming/health and guest backup first. If any input is unavailable, do not start.
 
 ## Alternatives considered
 

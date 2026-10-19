@@ -3,7 +3,7 @@
 Generated audit, not organizer approval or a security certification. Source
 snapshot: `171abae003a79093f986adacdcc04047659a714f` (application unchanged
 from the October 20 published checkpoint). Findings below distinguish recorded
-evidence, new checks, and work still requiring Jethro.
+evidence, new checks, and work still requiring the project owner.
 
 Independent spec/evidence and final quality reviews passed. Corrections
 included explicit paid-execution disclosure, bounded README claims, exact
@@ -95,7 +95,7 @@ Keep [NOTICE.md](../../NOTICE.md) and bundled third-party license texts with
 the test build. The external HDF5 dataset's conflicting license metadata is
 already documented; do not add that private source dataset to the gallery or
 repository. Rendered scene assets retain upstream terms. The notices are not
-a legal clearance of all derivative media; Jethro must confirm permitted use
+a legal clearance of all derivative media; the project owner must confirm permitted use
 before final publication/submission. No image/model-weight publication is
 part of this audit.
 
@@ -112,7 +112,8 @@ seek organizer clarification if they require unrestricted paid execution.
    if making a lifetime/account-wide cost claim; one AI Cloud account was used.
    See [the period reconciliation](billing-reconciliation.md). Do not add
    overlapping session estimates.
-2. Jethro confirms first-hand feedback and entrant/right-to-use declarations.
+2. Feedback is approved, with a neutral heading and unchanged note text.
+   Entrant/right-to-use declarations remain for the project owner.
 3. Review the draft story and timed video plan, then record/edit and check
    the actual final video's duration and at least one minute of module footage.
 4. Approve the final public uploads/submission and preserve the judge build.

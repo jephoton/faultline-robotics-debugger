@@ -1,6 +1,6 @@
 # M5C bounded Nemotron client and evidence-bound sidecars
 
-Status: Accepted boundary October 5. Jethro approved immutable per-call
+Status: Accepted boundary October 5. The project owner approved immutable per-call
 sidecars bound to case/packet identity; CLI-first, read-only viewer, text-only
 model/data scope and ten-call / US$0.02 ceiling are already accepted.
 Implementation fields below are bounded implementation choices, not new

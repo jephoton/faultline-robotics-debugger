@@ -26,12 +26,12 @@
 - Live check from the panel done (paraphrase, LIBERO-Spatial 0, US$0.31,
   no failure; `m7-breadth-pack.md`). Its findings are fixed (run survival on
   Windows, interrupted state, quota errors, resume polling, cap rule).
-  Suite 2851 OK. Next: publishing the gallery (M7a step 5, needs Jethro's go).
+  Suite 2851 OK. Next: publishing the gallery (M7a step 5, needs the project owner's go).
 
 ## October 16 review fixes and import replication (Claude Code)
 
 - Independent whole-project review: claims scoped to evidence, FEEDBACK
-  rewritten with Jethro's first-hand notes, quickstart completed, Python
+  rewritten with the project owner's first-hand notes, quickstart completed, Python
   3.10–3.11, NOTICE.md, docs index, `demo/` (one real diagnosis the viewer
   shows offline). Code: `scenario.import`, `policy.checkpoint` override, pinned
   Cosmos-Reason2, capacity retry on resume, candidate-budget check (36/42),
@@ -82,7 +82,7 @@
   US$5.23; reconcile). Top up before `faultline diagnose` work.
 - L40S capacity was scarce; scratchpad resubmitter reused one bucket. Tenant
   bucket access-policy quota is 10: old M3/M6 buckets still hold objects and
-  must be emptied by Jethro before deletion.
+  must be emptied by the project owner before deletion.
 - Done: measured hypothesis check (soup `necessary_not_sufficient`), report and
   case in ignored `artifacts/m7-scenario-case-t0s14/`, and a stored Nemotron 3
   Ultra explanation (Ultra chosen over Nano and Super by a measured comparison;
@@ -96,7 +96,7 @@
   agent-view mask + black wrist never grasps (12/12 fail); blur fails
   reliably from sigma 3.9 px, noise from sigma 95; darkening and contrast
   never fail in range. Image v11 `8af6806c24d0`. Spend ≈ US$0.99; balance
-  ≈ US$5.28 after Jethro's top-up to US$6.27 (estimate; reconcile).
+  ≈ US$5.28 after the project owner's top-up to US$6.27 (estimate; reconcile).
 - M7 direction accepted (ADR 0027): M7a product consolidation
   (`faultline diagnose <spec>`, spec-driven job mode, automatic viewer cases,
   `faultline replay`, optional service-account auth; access via public
@@ -117,7 +117,7 @@
   script now enforces it.
 - Download identities revoked. Buckets `faultline-m3-{smoke,measure,rerun,rerun2}-20261012`
   expire after one day; delete them once empty. The October 10–11 buckets
-  were deleted by Jethro.
+  were deleted by the project owner.
 - Next (ADR 0023): portfolio fallback is not needed since batching worked;
   move to M6 (wrist-camera lead and LIBERO-Plus family), then M7 by Oct 23.
 
@@ -130,14 +130,14 @@
   all fixed. Full suite 960 OK (58 skips).
 - Live run on the certified case: 3 Tavily credits used of the 50 cap, and
   3 of 5 Nemotron attempts (about US$0.0007). See
-  `docs/experiments/m5d-tavily-research.md`. Next: Jethro judges usefulness;
+  `docs/experiments/m5d-tavily-research.md`. Next: the project owner judges usefulness;
   then M3 batched inference (3 days), portfolio fallback (2 days), M6, and M7
   from October 23 at the latest (ADR 0023 timeboxes accepted).
 - Commit history from October 9 was rewritten to drop AI co-author trailers
-  (`docs/history-rewrite-2026-10-11.md`) and force-pushed by Jethro. The three
+  (`docs/history-rewrite-2026-10-11.md`) and force-pushed by the project owner. The three
   local Codex branches were rewritten the same way on October 12. Local
   backup refs: `refs/backup/pre-trailer-rewrite*`.
-- October 12: Jethro accepted M5D. A free frame check found the reduced mask
+- October 12: the project owner accepted M5D. A free frame check found the reduced mask
   hides the arm's lift path, not an object; all reduced attempts time out
   after grasping. The wrist-camera lead is recorded under M6 in
   `PROJECT_PLAN.md`.
@@ -156,10 +156,10 @@
 - Image v9 `05dd5fd7b862` → `sha256:23286ac986d9…` pushed and confirmed in the
   private registry; it includes ADR 0022 (grid keeps searching after flukes).
   Use v9 for any further grid Jobs.
-- Nebius AI Cloud balance reported by Jethro: **US$3.68** (October 11).
+- Nebius AI Cloud balance reported by the project owner: **US$3.68** (October 11).
 - Roadmap order (ADR 0023): M5D → M3 batched inference → portfolio fallback →
   M6 → M7 (due Oct 30 10:00 PT). Proposed timeboxes in ADR 0023 still need
-  Jethro's confirmation.
+  the project owner's confirmation.
 - `TAVILY_API_KEY` is now set in the ignored `.env` (value never printed).
   Next: M5D design checkpoint — trigger, query construction from allowlisted
   case descriptors, caching/provenance, request cap, viewer display — then a
@@ -169,7 +169,7 @@
   `faultline-m5b-demo1-tr-20261011` once their 1-day lifecycle empties them
   (all by ≈04:00 UTC Oct 12). Their download identities are already revoked.
 
-## October 11 M5 complete (Jethro sign-off)
+## October 11 M5 complete (the project owner sign-off)
 
 **Visibility correction:** GitHub reports `jephoton/faultline-robotics-debugger`
 as **public**, and its event log shows a single `PublicEvent` by `jephoton` on
@@ -180,12 +180,12 @@ Nebius resource IDs in tracked files (docs use shortened IDs); evidence, the
 external dataset extract and credentials stay in ignored `artifacts/` and `.env`.
 Keep that discipline: anything committed is public.
 
-Jethro marked **M5 complete** on October 11. M5A case workbench/viewer; saved
+The project owner marked **M5 complete** on October 11. M5A case workbench/viewer; saved
 case reproduced in fresh Serverless sessions (certified M4 rectangle failed in
 two runs); M5B external demo_1 start → reduced failure identical to M4
 (`docs/experiments/m5b-external-replay.md`); M5C Nemotron v2-06 accepted
 (ADR 0021). Serverless migration complete. M5 ran October 3–11. Next: M3
-(refresh the frozen expanded-M3 status, then Jethro chooses portfolio versus
+(refresh the frozen expanded-M3 status, then the project owner chooses portfolio versus
 batched inference and a spending cap). Outstanding housekeeping: delete the four
 expired-object buckets after their lifecycle windows; rebuild/push an image
 before the next grid run (ADR 0022 not yet in an image).
@@ -199,12 +199,12 @@ result — with 5/5 nominal controls; 22 restores verified; 193 files verified.
 ADR 0022 (grid keeps searching after unreproducible failures, 30-episode cap)
 is committed (`3c6a718`, `0e94767`) but not yet in a pushed image. Download
 identity revoked; bucket `faultline-m5b-demo1-tr-20261011` joins the deletion
-queue (≈03:53 UTC Oct 12). M5 sub-parts all complete pending Jethro's sign-off;
+queue (≈03:53 UTC Oct 12). M5 sub-parts all complete pending the project owner's sign-off;
 then push and move to M3.
 
 ## October 11 M5C accepted; demo_1 external run (Claude Code)
 
-ADR 0021: Jethro accepted Nemotron report v2-06 (`58c2ad9f…`) as the M5C
+ADR 0021: the project owner accepted Nemotron report v2-06 (`58c2ad9f…`) as the M5C
 demonstration interpretation (**M5C complete**) and accepted external `demo_1`
 (same scene XML, own pinned first-state hash `39fcb000…`) as a second external
 start (`0f61d8f`). CPU probe in the image restored demo_1 through the real
@@ -234,7 +234,7 @@ Oct 10–11 ≈ US$2.1 pre-tax across five Jobs; reconcile with billing.
 M5B download identity (key, service account, group) revoked. Both buckets
 (`faultline-pilot-20261010`, `faultline-m5b-20261010`) refuse deletion until
 their 1-day lifecycle expiry empties them (pilot ≈12:45 UTC Oct 11, M5B ≈02:45
-UTC Oct 12); then delete both (Jethro approved bucket deletion).
+UTC Oct 12); then delete both (the project owner approved bucket deletion).
 
 ## October 11 M5B result (Claude Code)
 
@@ -246,13 +246,13 @@ the M4 failure did not transfer to the external demo start. Restore verified in
 all four external episodes (pre-settle = dataset hash; post-settle `935fee19…`
 on Nebius vs `e029f8dc…` on the workstation CPU). 48/48 files verified, all
 MP4s decode. Record: `docs/experiments/m5b-external-replay.md`. Next decision
-(Jethro): run `search` from the external start to find a failing mask, or close
+(the project owner): run `search` from the external start to find a failing mask, or close
 M5B on this evidence. Bucket `faultline-m5b-20261010` and its read-only key
 remain until that decision.
 
 ## October 10 M5B external-start reduction submitted (Claude Code)
 
-Jethro reframed M5B: the goal is automatic find/confirm/reduce from an external
+The project owner reframed M5B: the goal is automatic find/confirm/reduce from an external
 file, not a standalone restore check. Approved: one Job (`m5b` mode) running the
 certified M4 rectangle `(0.625,0,.375,.375)` once from the benchmark start, then
 the existing reducer entirely from the external demo_0 state; **US$2 cap**, no
@@ -278,22 +278,22 @@ armed. Candidate stays in ignored `artifacts/serverless-m5b-20261010/`.
 
 ## October 10 M5C Nemotron v2 and M5B scope (Claude Code)
 
-Jethro asked to keep improving Nemotron (Token Factory) and to include M5B in
+The project owner asked to keep improving Nemotron (Token Factory) and to include M5B in
 M5; the push waits until M5 is complete. Nemotron v2 (`cbe1bb6`..`6a3ed39`):
 geometry-aware packet v2, deterministic counts/totals/mask groups sent with the
 packet, v2 prompt, thinking disabled, attempt labels `v2-01`..`v2-05` capped at
 US$0.10. Four calls cost ≈US$0.0024; `v2-05` unused. Best report `8f469903…`
 (v2-03) was superseded by v2-06 (`58c2ad9f…`, ≈US$0.0033 total so far, v2-07
 unused): no factual errors found, states the key x 0.625 vs x 0.75 contrast,
-proposes untested masks. Recommended for the M5C demo; acceptance is Jethro's. Details: `docs/experiments/m5-nemotron-pilot.md`.
+proposes untested masks. Recommended for the M5C demo; acceptance is the project owner's. Details: `docs/experiments/m5-nemotron-pilot.md`.
 
 Serverless pilot mask correction: `(0.5,0,.375,.375)` is not the certified M4
 rectangle `(0.625,0,.375,.375)`. Next: M5B external restore plan and its
-Serverless wiring, then a paid validation needing Jethro's cap.
+Serverless wiring, then a paid validation needing the project owner's cap.
 
 ## October 10 Serverless pilot validated (Claude Code)
 
-Jethro approved one retry within the original US$3 cap (AI Cloud balance
+The project owner approved one retry within the original US$3 cap (AI Cloud balance
 US$5.99 at the time). `faultline-pilot-20261010b` (v5 image `f87ebb5`) COMPLETED
 in about 13 minutes: export preflight OK, pinned prefetch 369 s, nominal
 **success** (138 steps), reduced mask x=.5,y=0,w=h=.375 **policy_failure**
@@ -310,19 +310,19 @@ area, different position. It is not a reproduction of the certified case.
 Estimated spend for both Jobs ≈ US$0.75 pre-tax plus small storage; reconcile
 with posted billing.
 
-Deleted with Jethro's approval (Oct 10, 13:49 UTC): the stopped
+Deleted with the project owner's approval (Oct 10, 13:49 UTC): the stopped
 `robot-debug-pilot` VM and its managed 200 GiB boot disk. The project now has no
 instances or disks, ending the ~US$0.47/day disk charge. Historical evidence
 was already local; the VM's pre-installed environment is gone (Serverless
 replaces it).
 
-Jethro approved bucket deletion. The read-only access key, its service
+The project owner approved bucket deletion. The read-only access key, its service
 account, group membership and `faultline-pilot-readers` group are deleted.
 The bucket delete was refused (`BucketNotEmpty`, 371 KB); its 1-day lifecycle
 rule expires the objects by about 12:45 UTC Oct 11, after which the empty
-bucket must be deleted (or Jethro empties it in the console first). Registry
+bucket must be deleted (or the project owner empties it in the console first). Registry
 images are kept. The local 21.7 GB image is kept as the rebuild cache for M3
-Serverless work, per Jethro.
+Serverless work, per the project owner.
 
 The viewer (loopback 8765) catalogs the recovered Serverless pair without
 changes: nominal `eee1af5c99a80e72` versus masked `80681a5f1443988c`, shown
@@ -341,7 +341,7 @@ probe launch exits 3 rather than 143; nothing is leaked.
 Pushed v5: tag `b233199a9abc` → `sha256:decd037a74cddc0857b22e10fcb742641bfebe1bfa74b520945e3ba696cbca3c`.
 Retry `faultline-pilot-20261010b` re-prepared against v5; registry tag check and
 provider dry-run pass. This supersedes the v4 retry readiness below. **Not
-submitted:** the paid retry still needs Jethro's explicit approval.
+submitted:** the paid retry still needs the project owner's explicit approval.
 
 ## October 10 resumed quality-review gate (Codex)
 
@@ -367,7 +367,7 @@ the bounded preflight ran end to end and the job/workload tests passed.
 Pushed v4 image: tag `b12047e3f7d8` → `sha256:01439a7e7fa118bcc0b041c51e80aada150a333cd2c3bdc6c7010f63fe13fa15`
 (registry lookup confirms). Retry `faultline-pilot-20261010b` is prepared and its
 provider dry-run passed, reusing the private bucket (1-day object expiry) and the
-read-only download key. **Not submitted:** a retry needs Jethro's explicit cap.
+read-only download key. **Not submitted:** a retry needs the project owner's explicit cap.
 
 ## October 10 Serverless recovery checkpoint (Codex)
 
@@ -407,7 +407,7 @@ unpinned Cosmos commit, then the model server runs offline without the token.
 SIGTERM is deferred during owned-group cleanup. Independent review approved
 with fixes, all applied. Full Windows suite 740 OK/36 skips; WSL job suites OK.
 
-Image built locally and pushed to private registry `faultline-serverless`: digest `sha256:34b5d399f82c95e94116e0c539ee90e9fd4e8ed266fffe8ba3a2fae9b3ae9825`; GPU-free probes passed (see `docs/experiments/serverless-job-pilot.md`). Earlier blocker: workstation disk was full. Jethro chose to
+Image built locally and pushed to private registry `faultline-serverless`: digest `sha256:34b5d399f82c95e94116e0c539ee90e9fd4e8ed266fffe8ba3a2fae9b3ae9825`; GPU-free probes passed (see `docs/experiments/serverless-job-pilot.md`). Earlier blocker: workstation disk was full. The project owner chose to
 build in Nebius (option A: private registry + short cpu-d3 builder VM,
 proposed cap US$1.50, separate from the US$3 L40S Job). Nothing created yet.
 
@@ -416,8 +416,8 @@ H100 clone test Oct 1 (1.72 GPU-h, US$7.73) + the stopped `robot-debug-pilot`
 200 GiB boot disk (about US$0.47/day, US$4.05 so far) + snapshot US$0.02.
 Balance went from US$9.69 to −US$3.17. Only the stopped VM, its boot disk,
 default network and an IP allocation exist; no snapshots, buckets, registries,
-Jobs or endpoints. **Correction from Jethro:** the US$25 hackathon promo credit
-is for Token Factory, not AI Cloud; AI Cloud needs a top-up, which Jethro plans.
+Jobs or endpoints. **Correction from the project owner:** the US$25 hackathon promo credit
+is for Token Factory, not AI Cloud; AI Cloud needs a top-up, which the project owner plans.
 Proposed: keep the stopped VM/disk as a known-good fallback until the
 Serverless pilot returns valid evidence or Oct 16, whichever is first, then
 delete with explicit approval. Awaiting top-up, that confirmation and the
@@ -443,8 +443,8 @@ Docker build, GPU or provider call was made at this checkpoint; nothing pushed.
 
 ## October 9 license override
 
-Jethro explicitly selected MIT for original Faultline code. Root LICENSE and
-the active README statement now use MIT, copyright 2026 Jethro Tan; existing
+The project owner explicitly selected MIT for original Faultline code. Root LICENSE and
+the active README statement now use MIT with the attribution in LICENSE; existing
 package metadata points to that file. ADR 0020 supersedes the September 15
 Apache decision. Older Apache references below are historical, not the current
 license. Third-party licenses/notices, model and dataset rights, and private
@@ -498,11 +498,11 @@ M5 is not complete.
 
 ## October 8 official name and scope
 
-Jethro selected **Faultline** as the official name and requested branding updates.
+The project owner selected **Faultline** as the official name and requested branding updates.
 All further M3/HPC work is optional stretch; he may pursue focused HPC learning
 in another project. Preserve the existing result and do not restart batching,
 portfolio scheduling or scale-out automatically. ADR 0019 records the accepted
-decision and compatibility boundary. Jethro subsequently authorized the GitHub
+decision and compatibility boundary. The project owner subsequently authorized the GitHub
 repository rename to `jephoton/faultline-robotics-debugger`; the repository
 remains private, retains its original GitHub identity, and all 12 registered
 worktrees use the new origin URL for fetch and push. Branding, roadmap and rename
@@ -524,7 +524,7 @@ the local folder is still `nebius-nvidia-hackathon`.
 
 ## October 8 roadmap additions
 
-Jethro requested three future roadmap entries: optional M3 batched inference
+The project owner requested three future roadmap entries: optional M3 batched inference
 using the upstream dispatcher plus a narrow GR00T adapter; M6 LIBERO-Plus reuse
 for additional perturbation families; and optional M5D Tavily public-research
 context alongside source-linked Nemotron interpretations. See the matching
@@ -545,7 +545,7 @@ Historical VM results remain untouched; no reruns to change their provenance.
 define local work and the fresh paid validation gate. Nebius CLI sign-in renewed
 and read-only project access works; exact resource/balance preflight is not yet
 complete. One US$3 / one-hour L40S validation and 24-hour private output retention
-are now approved; actual balance/expiry remain unknown after Jethro declined the
+are now approved; actual balance/expiry remain unknown after the project owner declined the
 console check and asserted sufficient funds. Local image checks precede spending.
 Read-only Job dry-run succeeded with no resource created. The original VM is
 freshly observed STOPPED. No bucket/image publication/Job submission occurred.
@@ -553,7 +553,7 @@ Local Docker Desktop failed before engine readiness on an inaccessible runtime
 inference socket; targeted reversible folder repair is awaiting user approval.
 Expanded M3 frozen, external replay deferred, M5C human acceptance remains open.
 
-**Active human checkpoint:** Jethro chose to defer external replay and review
+**Active human checkpoint:** the project owner chose to defer external replay and review
 the real Nemotron report first. External-state identity planning/wiring is
 not approved; do not start it or paid GPU work. Root freshly reread the actual
 stored interpretation and recomputed packet facts: nominal6/6successes,
@@ -592,7 +592,7 @@ and live factual fallback) are readable with no warnings. No useful model
 interpretation exists yet, so M5C is not complete. FullUS$0.02 reservation is
 retained; do not retry or remove/refund its marker. The [pilot record](../experiments/m5-nemotron-pilot.md)
 proposes another separately approvedUS$0.02 attempt with4096output tokens and
-90-second socket timeout. Jethro approved that separate attempt on October 6;
+90-second socket timeout. The project owner approved that separate attempt on October 6;
 a committed exact implementation plan and independent reviews still precede
 another POST. No GPU start approved.
 
@@ -604,7 +604,7 @@ restriction for the GitHub repository only. The local folder remains unchanged.
 Repository visibility is still PRIVATE; public audit/approval remains a
 submission gate. Earlier entries below preserve historical review stages.
 
-Jethro requested naming first, a fresh rules/judging check, then continued M5.
+The project owner requested naming first, a fresh rules/judging check, then continued M5.
 The [alignment review](../research/2026-10-06-submission-alignment.md) records
 the submission gaps and historical provisional name options; Faultline was
 later finalized under ADR 0019. M5A remains complete; M5B/C are not complete. Main is clean at
@@ -648,7 +648,7 @@ CI; later client integration is pending publication and full-suite acceptance.
 
 ## Expanded M3 frozen as optional stretch — October 2
 
-Jethro accepted freezing expanded M3 and keeping it as a stretch goal if time
+The project owner accepted freezing expanded M3 and keeping it as a stretch goal if time
 and interest permit; see `docs/decisions/0011-freeze-expanded-m3.md`. Do not
 resume the launcher implementation, portfolio comparison or associated UI
 automatically. Existing run caps are exhausted; future paid work requires fresh
@@ -664,12 +664,12 @@ instructions below. The portfolio overview is optional, not a core M5 gate.
 The scope-approved `docs/superpowers/plans/2026-10-03-m5-case-workbench.md` divides M5
 into A: offline case inspection/export on existing evidence; B: one externally
 supplied, genuinely restorable simulation episode; C: grounded Nemotron
-explanations. Jethro accepted the read-only-viewer/CLI boundary. An isolated
+explanations. The project owner accepted the read-only-viewer/CLI boundary. An isolated
 Luna builder completed the approved task-local media fix, integrated as
 `1d79c01` after independent spec and quality review. IDs 0/1/2 all resolve saved
 screen video/trace; M4 retains 22/22 videos and traces with no warnings. Root prepared
 `docs/superpowers/specs/2026-10-03-m5-case-contract-design.md` for the exact A1
-review gate; Jethro approved it with "go". The bounded schema-kernel plan
+review gate; the project owner approved it with "go". The bounded schema-kernel plan
 `docs/superpowers/plans/2026-10-03-m5-case-schema.md` was implemented by a balanced
 smaller agent in isolated `codex/m5-case-schema` and integrated as `46a3419`/
 `d29f87a` after independent spec/quality review. `cases.py` validates structure,
@@ -738,7 +738,7 @@ follows from that transient observation. Read-only explanation viewer work
 now proceeds independently fromCLI after store integration under the updated
 plan; baseline42viewer tests passed in its clean isolated worktree.
 
-October 5 Token Factory readiness update: Jethro reports the inference account
+October 5 Token Factory readiness update: the project owner reports the inference account
 is funded. Root verified a single nonempty `NEBIUS_API_KEY` entry in the known
 repo-root `.env`, which is ignored and untracked; no key value was displayed.
 The key is not in the current process environment, so the future CLI must
@@ -753,7 +753,7 @@ Completed offline M5C increment: the accepted packet/report contract is
 It strips arbitrary case strings and paths, keeps reported raw/gate outcomes
 separate, validates cited episode IDs and preserves deterministic summaries
 when supplied interpretations fail. No API client, key loader or provider call
-is included. Jethro approved this contract with "yes go"; the bounded
+is included. The project owner approved this contract with "yes go"; the bounded
 `docs/superpowers/plans/2026-10-04-m5-offline-explanation-kernel.md` is implemented
 and integrated through `557eb36` after independent spec and quality reviews.
 `evidence_packet.py` provides make/validate/hash functions;
@@ -780,7 +780,7 @@ steps, 110-value simulator states, matching init_state, model XML and paired
 not self-contained or exercised. See the new external-sample research note.
 The isolated h5py environment needed pip truststore, with TLS kept enabled.
 No relevant inference key is configured in process/user/machine variables or
-a repo env file; an async request asks Jethro to save NEBIUS_API_KEY in ignored
+a repo env file; an async request asks the project owner to save NEBIUS_API_KEY in ignored
 root .env and report Token Factory balance/expiry. Never print or commit it.
 Public cookbook lowercase API identifier and regional base differ from older
 examples; verify exact account catalog before requests. No inference or VM
@@ -843,7 +843,7 @@ start occurred. Next is adapter design/client planning, not live replay.
 
 ## Next material decision
 
-Jethro redirected M3's next experiment toward portfolio-first HPC: schedule
+The project owner redirected M3's next experiment toward portfolio-first HPC: schedule
 distinct LIBERO Object task-level find → confirm → reduce jobs across one GPU,
 starting with the existing occlusion family. The decision is recorded in
 `docs/decisions/0009-portfolio-first-hpc.md`; the design spec is approved and
@@ -874,7 +874,7 @@ prefix with `max_tasks`; `episode_indices` select reset states rather than
 tasks. Local fake-upstream adapter and config tests pass, but real LIBERO
 task IDs/instructions beyond task 0 and live selector compatibility were
 then unverified; the later live nominal screen verified task mapping, not
-multi-worker performance. Jethro approved the narrow adapter and the work-conserving
+multi-worker performance. The project owner approved the narrow adapter and the work-conserving
 round-robin scheduler rule. Its pure policy is implemented and independently
 reviewed; a fairness bug under changing task readiness was caught and fixed
 before runner integration. The runner supplies all frozen manifest job keys,
@@ -887,7 +887,7 @@ complete, live, budget-matched, and outcome-consistent. Two fresh synthetic
 CLI sessions passed a paired smoke test without a speedup claim. Windows
 Python 3.11 passed 344 tests (four POSIX-only skips); focused WSL lifecycle
 and driver tests passed 66. An independent reviewer approved the report
-claim guard. Jethro accepted task IDs `(0, 1, 2)` as nominal-screening
+claim guard. The project owner accepted task IDs `(0, 1, 2)` as nominal-screening
 candidates; their runtime catalog and one nominal episode each were verified
 in the later hotspot retry below, not during this local checkpoint.
 The [bounded screening plan](../superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md)
@@ -896,7 +896,7 @@ separately approved same-cap retry were both blocked before guest access by
 `NotEnoughResources`, despite one `LOW`-availability slot in capacity advice.
 No task episode ran in those two attempts. The VM was confirmed
 `STOPPED`; temporary SSH ingress and both OS-owned guards were removed after
-verification. Jethro waived the fresh balance check for the retry, so the
+verification. The project owner waived the fresh balance check for the retry, so the
 prior US$9.96 reading is not a current balance. The then-open resource choice
 was superseded by the separate H100 decision below. Read-only diagnosis found two scheduler-level capacity timeouts on an
 unchanged VM, not a guest/model/runner error; the existing platform is
@@ -904,7 +904,7 @@ immutable and its managed boot disk must not be lost during migration. H100
 has stronger advised availability but a higher hourly rate and untested
 runtime compatibility. See
 [`m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
-Jethro chose a snapshot-based **separate H100 VM** on September 30.
+The project owner chose a snapshot-based **separate H100 VM** on September 30.
 [ADR 0010](../decisions/0010-h100-snapshot-migration.md) and the
 [H100 screen plan](../superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md)
 preserve the original L40S VM/disk. The subsequent approved attempt and its
@@ -914,7 +914,7 @@ The September 30 H100 read-only preflight found the original VM `STOPPED`, its
 fabrics. The console balance was US$9.89, and detailed Nebius pricing lists
 US$0.071/GiB/730h for snapshots. A conservative US$7.50 total cap for one
 60-minute H100 start and at most 24 hours of all three 200-GiB storage objects
-was proposed on September 30. Jethro approved it on October 1, including
+was proposed on September 30. The project owner approved it on October 1, including
 cleanup of only the new clone/managed disk and snapshot. Fresh balance was
 US$9.55 and H100 compute was US$4.50/hour pre-tax; no expiry was displayed.
 The snapshot-backed H100 clone reached `RUNNING`, but SSH and a Windows
@@ -960,11 +960,11 @@ task-level diagnosis. No additional paid start is authorized. Do not infer
 H100 worker performance from historical L40S timings. Posted billing remains
 unreconciled and the original disk continues accruing storage charges.
 
-Jethro clarified that autonomous execution should continue through the full
+The project owner clarified that autonomous execution should continue through the full
 sequential/adaptive comparison, not end at media packaging for the nominal
 screen. The [new execution plan](../superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
 preserves the working H100 stack and proposes US$8 total/90 minutes/one start,
-with identical per-mode bounds and adaptive cap 2. Jethro approved US$8/90
+with identical per-mode bounds and adaptive cap 2. The project owner approved US$8/90
 minutes/one start and temporary-resource cleanup. This allocation was interrupted
 during startup before guest execution: zero comparison episodes or new media.
 The watchdog confirmed STOPPED within 90 minutes; temporary clone/managed disk,
@@ -993,7 +993,7 @@ are integrated; the fresh Windows suite passes 385 tests (four platform skips).
 The unfinished fixed-purpose host assembly is preserved on
 `codex/m3-reusable-launcher`, including uncommitted adapter/CLI/test files;
 no builder is active. It is not approved for paid use. Independent review exposed the storage-deadline gap if the controller
-dies; Jethro approved the separate cleanup task and requested the shortest
+dies; the project owner approved the separate cleanup task and requested the shortest
 fixed-purpose path back to M3. The plan now permits independent guest-script
 porting alongside targeted record review, followed by one controller/cleanup
 assembly and scheduled fake acceptance. No generic workflow engine or new robot
@@ -1002,14 +1002,14 @@ authorized. Its intended boundary is surviving chat interruption, not
 arbitrary laptop/network/authentication failures. This is the immediate
 execution blocker only if the optional stretch is resumed; preserve experiment settings.
 
-**Historical naming task — completed October 8:** Jethro chose Faultline;
+**Historical naming task — completed October 8:** the project owner chose Faultline;
 ADR 0019 supersedes the earlier queued brainstorming. The
 [commit audit](../milestone-commit-audit.md) records M1/M2/M3/M4 as
 13/38/132/17 at frozen checkpoint `7d08e01`; these are scope-attributed
 non-merge commits, not hours worked.
 
 M4's bounded live run and evidence validation are complete; details are in
-`docs/experiments/m4-reducer.md`. Jethro accepted the M3 equal-work
+`docs/experiments/m4-reducer.md`. The project owner accepted the M3 equal-work
 1/2/4-worker design on one GPU VM with a shared GR00T server, using fixed
 repeats of the real M4 case. The M3 local implementation now uses the accepted
 durable attempt-ownership design, exact launch-identity sidecars, and a
@@ -1029,7 +1029,7 @@ intervals, before separate disk accrual; posted billing is pending. The root
 `FEEDBACK.md` tracks submission feedback by actual tool.
 
 The M4 reducer kernel's September 21 external-provider handoff is historical
-provenance only. Jethro has retired that provider from future routing after
+provenance only. The project owner has retired that provider from future routing after
 integration issues. See the archived handoff under `docs/codex-handoff/tasks/`
 only when investigating M4 history; do not treat it as an active instruction.
 
@@ -1039,7 +1039,7 @@ only when investigating M4 history; do not treat it as an active instruction.
   task IDs 1/2 use local-ordinal `task0000` filenames; the existing viewer's
   global-ID glob does not resolve them. They are recorded and recovered, not
   missing. A scoped compatibility fix is pending; preserve one representative
-  nominal visible by default as Jethro requested.
+  nominal visible by default as the project owner requested.
 
 - The WSL `.venv` may lack NumPy for the complete suite. The focused WSL
   lifecycle and driver tests, including real process signals, have passed;

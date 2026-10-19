@@ -14,12 +14,12 @@ a minimal trigger and saves it as a replayable regression case. The
 | M1 reproducible runner, M2 first failure | Complete (September) |
 | M3 parallel replay | Complete: 3.715× with four workers (September 29) |
 | M3 batched inference | Complete: +18% at 12 workers, none at 8 ([ADR 0025](docs/decisions/0025-m3-batched-inference-experiment.md)) |
-| M3 latency | Early-decided gates are done (with mode 1). The Job startup cut was deferred by Jethro at the `faultline diagnose` checkpoint ([ADR 0031](docs/decisions/0031-faultline-diagnose.md), amendment in [ADR 0029](docs/decisions/0029-m3-latency-startup-and-early-decided-gates.md)); a warm Endpoint stays a stretch near judging |
+| M3 latency | Early-decided gates are done (with mode 1). The Job startup cut was deferred by the project owner at the `faultline diagnose` checkpoint ([ADR 0031](docs/decisions/0031-faultline-diagnose.md), amendment in [ADR 0029](docs/decisions/0029-m3-latency-startup-and-early-decided-gates.md)); a warm Endpoint stays a stretch near judging |
 | M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
 | **M7a product consolidation** | **Complete.** Post-walkthrough cleanup is integrated and the three-case [public gallery](https://faultline-robotics-debugger.vercel.app) was refreshed and verified October 20. Scenario reduction/import, `diagnose`/`replay`, breadth evidence and control panel remain in place. [Publication acceptance and limitations](docs/experiments/m7-public-gallery.md); [product decisions](docs/decisions/0027-m7-product-consolidation-and-access.md) |
-| M7b submission | Walkthroughs, cleanup and gallery refresh done. October 20: clean-snapshot installation/offline demo and tests passed; repository/rules audit and story/video drafts independently reviewed on `codex/submission-readiness`. FEEDBACK condensed with linked history. Remaining: billing reconciliation, first-hand FEEDBACK confirmation, human story/script review, video/cover production and approved submission. [Submission package](docs/submission/README.md); [story decision](docs/decisions/0034-narrative-regression-tests.md). |
+| M7b submission | Walkthroughs, cleanup and gallery refresh done. October 20: clean-snapshot installation/offline demo and tests passed; repository/rules audit and story/video drafts independently reviewed on `codex/submission-readiness`. FEEDBACK condensed, approved and anonymized; current-tree privacy audit documented. Remaining: human story/script review, video/cover, rights/entrant declarations and approved submission. Broader cost claims need broader billing evidence. [Submission package](docs/submission/README.md); [story decision](docs/decisions/0034-narrative-regression-tests.md). |
 
 Spend so far is tracked per experiment note; every figure there is an estimate
 pending billing reconciliation, and the current Nebius balance is in the
@@ -37,7 +37,7 @@ Physical AI no-hardware video alternative, public MIT repository, scanner
 triage and dependency caveats. Clean snapshot: 3,166 tests run with 63 skipped;
 front-end: 336 passed and typecheck passed. Billing views now record September
 19–October 19: $42.04 AI Cloud and $0.13 Token Factory including VAT, not
-lifetime/per-run reconciliation. First-hand feedback confirmation is pending;
+lifetime/per-run reconciliation. First-hand feedback is approved;
 a reported $0.82 remaining balance is not usage or authority for more spending.
 No new paid work is required.
 
@@ -261,7 +261,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
 | M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
 | M3 base: useful parallelism — complete | Retain the equal-work 1/2/4-worker replay scheduler and measured throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput at four workers; no end-to-end diagnosis/cost claim |
-| M3 expanded: portfolio HPC — optional stretch, frozen | If Jethro resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
+| M3 expanded: portfolio HPC — optional stretch, frozen | If the project owner resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
 | M3 alternative: batched inference — **complete (Oct 12): +18% at 12 workers, none at 8** | Reuse the upstream batch dispatcher and assess a GR00T/LeRobot batch adapter instead of building another inference engine | Matched unbatched/batched workload; session isolation, outcome agreement, throughput, latency, memory and cost measurements |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
 | M5: diagnostic report and viewer — **complete (Oct 3–11)** | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
@@ -272,12 +272,12 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 
 ### Roadmap additions — October 8: reuse before rebuilding
 
-Jethro requested these roadmap entries. Their placement is accepted; exact
+The project owner requested these roadmap entries. Their placement is accepted; exact
 implementation designs, new experiments and spending remain separate gates.
 They do not reopen expanded M3 or displace the approved Serverless migration
 and remaining core M5 acceptance work.
 
-Jethro reaffirmed that all additional M3/HPC work is optional stretch and may
+The project owner reaffirmed that all additional M3/HPC work is optional stretch and may
 be better explored in a separate project. Retain the completed replay result;
 neither batching nor expanded portfolio diagnosis is required to finish
 Faultline. The proposed batching experiment combines concurrent simulator
@@ -308,7 +308,7 @@ episode parallelism; compare the same workers with batching disabled/enabled.
 - **M6 LIBERO-Plus reuse:** the current stack is original LIBERO Object, not
   LIBERO-Plus. Inspect and reuse the [existing perturbation implementations](https://github.com/sylvestf/LIBERO-plus)
   before writing camera, lighting, background, layout or other families from
-  scratch. Select one family with Jethro; pin assets/dependencies and verify
+  scratch. Select one family with the project owner; pin assets/dependencies and verify
   nominal compatibility. Distinguish evaluating predefined variants from
   exposing replayable parameters that our reducer can shrink. Broader task
   and suite coverage remains M6, not an automatic model/simulator change.
@@ -355,13 +355,13 @@ We have completed **M1: reproducible runner** and the engineering gate for
   reach the same certified rectangle, and the reporter refuses a fake timing
   claim. This is not a measured end-to-end cloud speedup, and its new summaries
   are not yet represented in the viewer.
-- Jethro accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. Jethro selected task IDs `(0, 1, 2)` as **screening candidates** on September 30 and approved the [bounded nominal-screen plan](docs/superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md) with a US$3/60-minute cap. Two separately approved exact-shape starts failed with `NotEnoughResources` before an episode; see the [attempt record](docs/experiments/m3-three-task-screen.md). The later October 1 hotspot H100 retry verified runtime task mapping and one successful nominal episode per task. The full diagnostic comparison remains pending. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
+- The project owner accepted a [portfolio-first HPC direction](docs/decisions/0009-portfolio-first-hpc.md): target three distinct jobs within LIBERO Object using the existing occlusion family, with one-at-a-time jobs as the baseline and bounded adaptive allocation as the product approach. The [design](docs/superpowers/specs/2026-09-29-multi-job-diagnostics-design.md) and [implementation plan](docs/superpowers/plans/2026-09-30-m3-multi-job-portfolio.md) are approved. The local runner, CLI, and report passed synthetic paired-mode acceptance and independent claim-safety review. The project owner selected task IDs `(0, 1, 2)` as **screening candidates** on September 30 and approved the [bounded nominal-screen plan](docs/superpowers/plans/2026-09-30-m3-three-task-nominal-screen.md) with a US$3/60-minute cap. Two separately approved exact-shape starts failed with `NotEnoughResources` before an episode; see the [attempt record](docs/experiments/m3-three-task-screen.md). The later October 1 hotspot H100 retry verified runtime task mapping and one successful nominal episode per task. The full diagnostic comparison remains pending. Exploring other suites and another failure family belongs to M6. The earlier single-loop live comparison proposal remains paused.
 - M5's proposed portfolio overview is now optional alongside expanded M3, not core UI work. The core viewer prioritizes per-case videos, reducer lineage, evidence and replay recipes. The portfolio summary/report integration is not implemented or a release prerequisite.
-- **H100 resource decision and October 1 result:** Jethro selected a separate snapshot-backed H100 VM, preserving the original L40S VM/disk under [ADR 0010](docs/decisions/0010-h100-snapshot-migration.md) and the [migration plan](docs/superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md). The approved US$7.50/one-start/60-minute attempt created and booted the clone, but SSH remained unreachable despite a verified narrow rule and serial evidence of healthy network setup and an SSH listener. The clone was stopped early without an episode; temporary clone/managed disk, snapshot, ingress, and watchdog were removed and cleanup independently verified after local evidence copy. A separately approved US$6/one-start/45-minute hotspot retry then completed all three nominal tasks with videos/traces. CUDA and pinned-model inference passed; temporary-resource cleanup is verified. This establishes compatibility, not reliability or HPC speedup. The access difference does not prove hotel filtering. See the [experiment record](docs/experiments/m3-three-task-screen.md).
+- **H100 resource decision and October 1 result:** the project owner selected a separate snapshot-backed H100 VM, preserving the original L40S VM/disk under [ADR 0010](docs/decisions/0010-h100-snapshot-migration.md) and the [migration plan](docs/superpowers/plans/2026-09-30-m3-h100-snapshot-screen.md). The approved US$7.50/one-start/60-minute attempt created and booted the clone, but SSH remained unreachable despite a verified narrow rule and serial evidence of healthy network setup and an SSH listener. The clone was stopped early without an episode; temporary clone/managed disk, snapshot, ingress, and watchdog were removed and cleanup independently verified after local evidence copy. A separately approved US$6/one-start/45-minute hotspot retry then completed all three nominal tasks with videos/traces. CUDA and pinned-model inference passed; temporary-resource cleanup is verified. This establishes compatibility, not reliability or HPC speedup. The access difference does not prove hotel filtering. See the [experiment record](docs/experiments/m3-three-task-screen.md).
 
 ### Immediate decision after the bounded session
 
-Interpret the raw counts, timings, and cost with Jethro before choosing the next
+Interpret the raw counts, timings, and cost with the project owner before choosing the next
 implementation plan. Follow the branch supported by the evidence:
 
 | Bounded-session result | Immediate next work |
@@ -467,7 +467,7 @@ These are target weeks; access delays consume the buffer. If no real policy epis
 ## 9. Submission checklist
 
 - [ ] Record substantive NVIDIA model usage and Nebius execution with exact model and job identifiers, excluding secrets.
-- [ ] Complete the required tool feedback using [FEEDBACK.md](FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether Jethro would build with it again. Do not imply Token Factory was used unless its pilot runs.
+- [ ] Complete the required tool feedback using [FEEDBACK.md](FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether the project owner would build with it again. Do not imply Token Factory was used unless its pilot runs.
 - [ ] Recheck official Physical AI requirements before finalizing the submission.
 - [ ] Prepare a public judge-runnable repository: visible Apache-2.0 license, attribution/third-party rights, pinned setup and sample-artifact access, one verified smoke-test path, and a tracked-file/history secret scan before visibility changes.
 - [x] Select the product name: **Faultline**, accepted October 8; no folder/repository rename implied.
@@ -497,7 +497,7 @@ The task-selection adapter, shared runner, CLI, and report are
 locally implemented and tested; synthetic sessions never produce a speedup
 claim. The former single-loop US$4/90-minute proposal is paused, not approved
 for execution. Any live run still needs fresh balance, quota/capacity, VM/disk
-state, price, model-readiness, and independent-stop checks plus Jethro's
+state, price, model-readiness, and independent-stop checks plus the project owner's
 run-specific numeric cap. The fixed-work 3.715× throughput result must not be
 presented as an end-to-end diagnosis speedup. The replayable-case import
 design, Nemotron product pilot, and disk retention/teardown also remain.
@@ -509,7 +509,7 @@ needs a scoped compatibility fix before showing task IDs 1/2 correctly.
 No further paid work is implied by local implementation.
 The next scoped [live portfolio comparison plan](docs/superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
 preserves the successful H100/model/simulator configuration and pairs whole-job
-sequential execution with a two-evaluator adaptive portfolio. Jethro requested
+sequential execution with a two-evaluator adaptive portfolio. The project owner requested
 autonomy through recovery of all videos/traces. The approved US$8/90-minute
 one-start allocation was interrupted during startup before either comparison
 command launched: zero new episodes, videos or traces. The watchdog confirmed
@@ -519,23 +519,23 @@ verified on resumption. The three-hour storage deadline was missed. See the
 authority is exhausted; another paid attempt requires balance/billing checks,
 a new numeric cap, and review of an interruption-safe execution controller.
 
-Jethro accepted the reusable workstation-controller design; the committed
+The project owner accepted the reusable workstation-controller design; the committed
 [launcher implementation plan](docs/superpowers/plans/2026-10-01-m3-reusable-launcher.md)
 was partially implemented with smaller-model builders and independent
 review, and is now frozen under ADR 0011. Preserve the unfinished work without
 merging unreviewed host code. Reuse the working robot configuration if the
 stretch goal is explicitly resumed. The independent storage-cleanup
-task is now approved. Jethro requested the shortest path: finish record review,
+task is now approved. The project owner requested the shortest path: finish record review,
 port existing guest scripts in parallel, assemble one fixed controller/cleanup
 unit, prove local scheduled durability, then return to the unchanged comparison.
 No general cloud framework or billable execution is included in this step.
 
-**Naming complete:** Jethro selected Faultline on October 8, superseding the
+**Naming complete:** the project owner selected Faultline on October 8, superseding the
 earlier brainstorming task. The [milestone commit audit](docs/milestone-commit-audit.md)
 records M1/M2/M3/M4 counts of 13/38/132/17 at frozen checkpoint `7d08e01`.
 Tool feedback is
 tracked in [FEEDBACK.md](FEEDBACK.md). The video pitch and judge-run public
-repository audit are explicit submission gates after M3, as Jethro requested.
+repository audit are explicit submission gates after M3, as the project owner requested.
 
 The parallel sample check found no external file in this repository. Upstream
 LIBERO HDF5 does contain actions, observations, simulator states, model XML,

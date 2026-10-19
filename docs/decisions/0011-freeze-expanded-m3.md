@@ -1,9 +1,9 @@
 # ADR 0011: Freeze expanded M3 as an optional stretch goal
 
-**Status:** Accepted by Jethro on 2026-10-02.
+**Status:** Accepted by the project owner on 2026-10-02.
 
 **October 8 reaffirmation:** under ADR 0019, Faultline keeps all further HPC
-work (including batched inference) as optional stretch. Jethro may pursue deeper
+work (including batched inference) as optional stretch. The project owner may pursue deeper
 HPC learning in another project. Retain this decision and existing evidence;
 no M3 restart is implied by adding alternatives to the roadmap.
 
@@ -14,7 +14,7 @@ Four evaluators delivered 3.715× warm replay throughput versus one on the same
 GPU VM. Expanded multi-task diagnosis is locally implemented, but its live
 comparison has not run. Much of the remaining effort is workstation/cloud
 lifecycle reliability rather than additional robotics or GPU optimization.
-Jethro judged its remaining cost/value insufficient for a core prerequisite.
+The project owner judged its remaining cost/value insufficient for a core prerequisite.
 
 ## Decision
 
@@ -25,7 +25,7 @@ Jethro judged its remaining cost/value insufficient for a core prerequisite.
   and replay as the core product. Expanded M3 does not block M5 or submission.
 - Preserve unfinished work and artifacts without deletion or merging unreviewed
   host code. Do not resume automatically because an old plan remains approved.
-- Jethro may explicitly resume the stretch later. Refresh its defects/review
+- The project owner may explicitly resume the stretch later. Refresh its defects/review
   status, resource readiness and numeric spending approval first.
 - A bounded formal-methods component may be discussed separately; this decision
   does not approve a new verification tool, algorithm or implementation.

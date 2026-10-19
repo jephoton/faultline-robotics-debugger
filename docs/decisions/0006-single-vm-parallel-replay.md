@@ -33,4 +33,4 @@ The first M3 claim is limited to confirmation/replay throughput and cost on the
 known case. End-to-end adaptive reducer or discovery speedup requires a new
 algorithmic experiment. The fixed-repeat workload is a systems benchmark, not
 evidence of robustness across new initial states. A separate live-price check
-and Jethro-approved run cap precede provisioning.
+and the run cap approved by the project owner precede provisioning.

@@ -21,7 +21,7 @@
 | POSIX signal and final review | independent reviewer read-only; coordinator integrates | `tests/test_m3_posix_lifecycle.py` only if needed; docs below | After implementation |
 | Handoff and docs | coordinator | `docs/experiments/m3-parallel.md`, `docs/codex-handoff/STATE.md`, `RUNBOOK.md` | After review |
 
-Green: pure ledger, tests, local refactor, docs. Amber: timeout/finalization bookkeeping inside approved M3 design; explain at checkpoint. Red: changing workload, failure semantics, cloud architecture, spending cap, or public claims—stop for Jethro. No paid run is authorized. One implementation agent edits the two coupled code areas sequentially; reviewer does not edit them. Coordinator owns Git integration and any later Nebius lifecycle.
+Green: pure ledger, tests, local refactor, docs. Amber: timeout/finalization bookkeeping inside approved M3 design; explain at checkpoint. Red: changing workload, failure semantics, cloud architecture, spending cap, or public claims—stop for the project owner. No paid run is authorized. One implementation agent edits the two coupled code areas sequentially; reviewer does not edit them. Coordinator owns Git integration and any later Nebius lifecycle.
 
 ## Task 1: Pure ledger and derived summary
 
@@ -65,7 +65,7 @@ Green: pure ledger, tests, local refactor, docs. Amber: timeout/finalization boo
 - [ ] **Step 1: Independent spec review, then code-quality review.** Give the reviewer the accepted spec, this plan, commit range, and red/green evidence. Require explicit checks for every transition boundary, result uniqueness, reporter compatibility, true OS SIGTERM, process-group containment, and no invented cleanup guarantee. Resolve Important findings before claiming local readiness.
 - [ ] **Step 2: Fresh final verification.** Windows Python 3.11 full suite, WSL `test_m3_posix_lifecycle` plus driver, `git diff --check`, clean scoped status, and inspect staged paths for secrets/large artifacts. Report exact counts and platform skips. A passing fake suite does not certify real Docker or Nebius.
 - [ ] **Step 3: Update the persistent handoff and commit.** Record state-machine rationale, verified commands, current local result, Docker-daemon residual uncertainty, and the no-cloud gate in the three named docs. Commit `docs(hpc): record M3 attempt ownership`.
-- [ ] **Step 4: Learning checkpoint before any paid work.** Explain what the ledger fixes and what it cannot prove. A later live pilot still needs refreshed Nebius account/price/credit/quota preflight, an external exact-VM stop watchdog, a calculated run-specific cap, and Jethro's separate spending approval. Do not start the VM from this plan.
+- [ ] **Step 4: Learning checkpoint before any paid work.** Explain what the ledger fixes and what it cannot prove. A later live pilot still needs refreshed Nebius account/price/credit/quota preflight, an external exact-VM stop watchdog, a calculated run-specific cap, and the project owner's separate spending approval. Do not start the VM from this plan.
 
 ## Completion boundary
 

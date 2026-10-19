@@ -1,6 +1,6 @@
 # ADR 0017: One separately approved longer Nemotron attempt
 
-Status: Accepted October 6, 2026, by Jethro's explicit reply.
+Status: Accepted October 6, 2026, by the project owner's explicit reply.
 
 The first real Nemotron attempt returned1096input/600output tokens and no
 valid interpretation. Truncation is plausible, not proven: no finish reason
@@ -28,6 +28,6 @@ viewer remain unchanged. Socket timeout is not a hard overall time deadline.
 Alternatives were retaining deterministic reports only or first investigating
 a documented hosted non-reasoning mode. The chosen experiment directly tests
 the leading output-budget hypothesis without changing the project model.
-Another failed output does not authorize another request; reassess with Jethro.
+Another failed output does not authorize another request; reassess with the project owner.
 Recorded costs remain estimates until billing is reconciled. Useful output
 still needs human interpretation review and viewer acceptance.

@@ -2,7 +2,7 @@
 
 **Status:** complete (October 19, 2026).
 
-**Scope (Jethro, October 19):** the gallery shows fresh cases made by the
+**Scope (the project owner, October 19):** the gallery shows fresh cases made by the
 single diagnosis pipeline (ADR 0035). Each case is replayed on the same
 checkpoint to show the regression loop (ADR 0034):
 1. **Probe route.** LIBERO-Object task 0, start 0, with the four default image
@@ -83,7 +83,7 @@ not record one. The UI shows "checkpoint not recorded".
 
 Run `l10-start14-20261019T032219Z`, started from the control panel on image
 v17. It used the default US$2.50 cap and 1.5 hours, raised by hand to US$3.20
-and 3 hours with Jethro's approval.
+and 3 hours with the project owner's approval.
 
 | Step | Cost |
 | --- | --- |

@@ -1,6 +1,6 @@
 # ADR 0014: Bounded external sample and text-only Nemotron pilot
 
-Status: Accepted October 4, 2026, by Jethro's "go" following the two proposals.
+Status: Accepted October 4, 2026, by the project owner's "go" following the two proposals.
 
 Acquire one official-mirror LIBERO Object task HDF5 file, 744.1 MiB with an
 800,000,000-byte ceiling, into ignored local storage; checksum and inspect

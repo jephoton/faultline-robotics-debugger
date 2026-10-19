@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.8+ standard library, dataclasses, `http.server`, JSON/JSONL, HTML5 video, vanilla JavaScript, CSS custom properties, Canvas 2D, and standard-library `unittest`.
 
-**Status:** Proposed for user review. Do not implement until Jethro approves this plan.
+**Status:** Proposed for user review. Do not implement until the project owner approves this plan.
 
 ---
 
@@ -1197,6 +1197,6 @@ git commit -m "docs(viewer): add local demo workflow"
 - Follow the red/green TDD steps and make the listed Conventional Commits.
 - Stop after Task 2 for a code review checkpoint because path containment and
   HTTP range handling are the highest-risk parts.
-- Stop again after Task 4 for Jethro to review the visual direction before the
+- Stop again after Task 4 for the project owner to review the visual direction before the
   final demo pass.
 - Preserve unrelated changes and do not push commits without explicit review.

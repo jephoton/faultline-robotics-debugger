@@ -31,6 +31,6 @@ The controller's warm cost estimate is advisory, not a spending enforcement mech
 
 ## Gates
 
-1. Jethro approves or changes the specific cap and deadline. The design and local implementation approval did not approve this run.
+1. The project owner approves or changes the specific cap and deadline. The design and local implementation approval did not approve this run.
 2. Execution owner rechecks account, balance, exact price, quota/capacity, VM/disk state, model cache, CLI auth, and backup/primary stop guards. If the exact shape cannot restart, stop and present alternatives.
 3. Run both modes only within the approved boundary; verify evidence and stop state, remove temporary SSH ingress, then reconcile billing and update `FEEDBACK.md` with provider-specific observations.

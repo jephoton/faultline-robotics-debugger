@@ -1,6 +1,6 @@
 # M3 Reusable Launcher Implementation Plan
 
-**Execution status (October 2): Frozen, optional M3 stretch.** Jethro accepted
+**Execution status (October 2): Frozen, optional M3 stretch.** the project owner accepted
 [ADR 0011](../../decisions/0011-freeze-expanded-m3.md). Preserve partial work;
 do not resume agents, integrate unfinished host code or start cloud compute
 from the approvals below. Explicit resumption and fresh spending gates apply.
@@ -13,13 +13,13 @@ from the approvals below. Explicit resumption and fresh spending gates apply.
 
 **Tech Stack:** Python standard library, unittest, Windows Task Scheduler, existing WSL Nebius CLI and SSH/scp, existing guest Python/Bash and portfolio code. No new cloud service or Python dependency.
 
-**Authority:** Jethro approved the [design](../specs/2026-10-01-m3-reusable-launcher-design.md) and asked to execute local implementation. The prior cloud cap is exhausted. Real scheduled-controller release, billable provisioning/start and resource deletion require a fresh separately approved run record and preflight. Local fake tasks may be registered and removed against their exact test name only.
+**Authority:** the project owner approved the [design](../specs/2026-10-01-m3-reusable-launcher-design.md) and asked to execute local implementation. The prior cloud cap is exhausted. Real scheduled-controller release, billable provisioning/start and resource deletion require a fresh separately approved run record and preflight. Local fake tasks may be registered and removed against their exact test name only.
 
 ## Owners, concurrency and review
 
 ### Shortest-path execution override (accepted October 1)
 
-Jethro approved the independent temporary-resource cleanup task and asked for
+The project owner approved the independent temporary-resource cleanup task and asked for
 the shortest route back to M3 evidence. This overrides the sequential execution
 order below, not the safety, experimental or spending boundaries:
 
@@ -66,7 +66,7 @@ are deferred. Fresh cloud preflight and numeric approval remain mandatory.
 
 **Independent review gate:** Task 1 proceeds independently. Before controller
 integration, settle storage cleanup after controller death: the stop-only
-watchdog cannot guarantee the snapshot/disk deadline. Jethro accepted a
+watchdog cannot guarantee the snapshot/disk deadline. The project owner accepted a
 separately prearmed exact-temporary-resource cleanup task. A
 confirmed watchdog stop is evidence, not a guarantee that every future stop
 succeeds; exhausted retries report unconfirmed stop. Human emergency exact-ID

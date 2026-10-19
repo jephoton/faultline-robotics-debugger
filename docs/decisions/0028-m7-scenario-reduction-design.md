@@ -1,6 +1,6 @@
 # ADR 0028: Scenario reduction (mode 1) design
 
-**Status:** Accepted by Jethro on October 13, 2026 (M7 design checkpoint),
+**Status:** Accepted by the project owner on October 13, 2026 (M7 design checkpoint),
 including the screen size, spend cap and Nemotron model below. The remaining
 M7a items are decided at their own checkpoints.
 
@@ -28,7 +28,7 @@ is enough") with original, minimal and nominal videos.
    from the breadth pack) and pick a start that fails at least 4 of 5
    attempts. The demo then exports that run in LIBERO format and imports it
    as a user would. If no reproducible natural failure appears, stop and
-   return to Jethro; an engineered start is not an automatic fallback.
+   return to the project owner; an engineered start is not an automatic fallback.
 2. **Granularity: hierarchical.** First whole entities (each object's pose,
    the robot's joint pose), then split surviving entities into position and
    rotation, then shrink sizes. Fewer reruns and readable answers.
@@ -78,7 +78,7 @@ verifies" visible and gives it a real role in the loop.
 
 ## What would change direction
 
-- The screen finds only flaky failures (below 4 of 5): return to Jethro
+- The screen finds only flaky failures (below 4 of 5): return to the project owner
   (wider screen, another suite, or an engineered start labelled as such).
 - Most candidates are invalid scenes: revisit granularity or interpolation.
 - Nemotron's ordering never beats the fixed order: keep it as hypothesis and
@@ -109,7 +109,7 @@ measured result, citing rerun ids.
 
 ## Amendment (October 13): explanation model for scenario cases
 
-Jethro chose to decide the explainer by measurement. On the same packet
+The project owner chose to decide the explainer by measurement. On the same packet
 (with plain-language rerun descriptions and the shrink history), Nemotron 3
 Nano kept calling "only this entity applied" "this entity reverted" and
 proposed reruns already done; Nemotron 3 Super inverted a correct prediction

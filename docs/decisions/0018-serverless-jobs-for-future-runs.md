@@ -1,22 +1,22 @@
 # ADR 0018: Serverless Jobs for future robot evaluations
 
 Status: accepted topology and output-storage direction, October 6, 2026.
-Paid execution: Jethro subsequently approved one US$3 incremental allowance,
+Paid execution: the project owner subsequently approved one US$3 incremental allowance,
 one L40S Job for at most one hour, and a private output bucket retained for at
 most 24 hours, including recovery of at most 1 GiB and assumed tax. Local image
 validation precedes any provisioning/submission. No Job has been submitted.
-Jethro stated the AI Cloud balance is sufficient and asked us to proceed rather
+The project owner stated the AI Cloud balance is sufficient and asked us to proceed rather
 than supplying its current value/expiry; neither value has been independently
 verified. Do not substitute the Token Factory balance or invent a balance.
 
-Jethro approved migrating future evaluations to one finite, single-GPU Nebius
+The project owner approved migrating future evaluations to one finite, single-GPU Nebius
 Serverless Job. Keep the model server and one simulator evaluator in the same
 container, communicating over localhost. Endpoints and Devlabs are not needed
 for this first migration. Preserve existing VM videos, traces and conclusions
 with their original provenance; do not rerun experiments merely to change the
 deployment label. Expanded M3 stays frozen and external-state replay deferred.
 
-Jethro also approved private Object Storage for Job outputs. Write live
+The project owner also approved private Object Storage for Job outputs. Write live
 SQLite/JSONL/MP4 evidence to the container's local disk. Copy closed output
 files into a unique run prefix and publish a checksum manifest last. A bucket
 mount is an export destination, not a transactional experiment filesystem.

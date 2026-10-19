@@ -104,7 +104,7 @@ preserved.
 
 - No new cloud run, spend cap, GPU shape, or additional perturbation family is
   approved by this design document. Present a calculated dollar cap and get
-  Jethro's approval before provisioning.
+  the project owner's approval before provisioning.
 - Stop launching new episodes on the approved wall-clock or dollar cutoff,
   repeated infrastructure errors, invalid evidence, model-server instability,
   or resource exhaustion. Keep partial data labeled partial; tear down the VM.

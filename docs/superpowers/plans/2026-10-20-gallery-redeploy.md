@@ -1,6 +1,6 @@
 # Post-cleanup gallery redeployment
 
-**Authority:** Jethro's October 20 request to carry on without more decisions
+**Authority:** the project owner's October 20 request to carry on without more decisions
 authorizes publication of the already-reviewed three-case static gallery to
 the existing Vercel project. It does not authorize new robot/model runs,
 hosting upgrades, a new domain, additional cases or repository visibility changes.

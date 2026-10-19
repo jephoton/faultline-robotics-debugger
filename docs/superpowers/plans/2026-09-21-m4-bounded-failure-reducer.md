@@ -18,8 +18,8 @@
 - **Failure gate:** accept at four `policy_failure` results; reject at two valid non-failures; maximum five valid attempts per case.
 - **Geometry:** parent `(0.50, 0.00, 0.50, 0.50)`; edge order `left, bottom, right, top`; strip sizes `0.125`, then `0.0625`.
 - **First-session ceiling:** 23 valid episodes: 1 sentinel, at most 5 parent attempts, 12 candidate attempts, and 5 matched nominal controls.
-- **Red checkpoint before paid execution:** Jethro approves the live dollar cap after price, balance, quota, instance state, and estimated duration are refreshed. This plan authorizes no provisioning.
-- **Red checkpoint before DeepSeek execution:** Jethro explicitly authorizes sending the isolated kernel task to the configured `deepseek` profile. Scoping it here is not execution authorization.
+- **Red checkpoint before paid execution:** the project owner approves the live dollar cap after price, balance, quota, instance state, and estimated duration are refreshed. This plan authorizes no provisioning.
+- **Red checkpoint before DeepSeek execution:** the project owner explicitly authorizes sending the isolated kernel task to the configured `deepseek` profile. Scoping it here is not execution authorization.
 
 ## File map and exclusive ownership
 
@@ -521,7 +521,7 @@ runs. Keep all existing catalog and video behavior unchanged.
 ```
 
 Use repository-relative placeholders such as `<repo-root>` and
-`<upstream-root>`, never Jethro-specific paths.
+`<upstream-root>`, never personal workstation paths.
 
 - [ ] **Step 4: Test and commit**
 
@@ -565,23 +565,23 @@ First run creates evidence; second run proves resume/idempotence. Verify the
 catalog has no duplicate logical episodes and no missing media references in
 the fixture result.
 
-- [ ] **Step 4: Present the learning checkpoint to Jethro**
+- [ ] **Step 4: Present the learning checkpoint to the project owner**
 
 Explain the problem, the rejected binary/exhaustive alternatives, why adaptive
-four-of-five saves episodes, and what result would cause a redesign. Ask Jethro
+four-of-five saves episodes, and what result would cause a redesign. Ask the project owner
 to predict which edge will be removable before revealing live evidence later.
 
 ### Task 7: Execute one bounded Nebius reducer session
 
 **Owner:** OpenAI coordinator only  
-**Autonomy:** Red until Jethro approves the fresh dollar cap  
+**Autonomy:** Red until the project owner approves the fresh dollar cap
 **Files:** ignored artifacts only during execution
 
 - [ ] **Step 1: Perform read-only preflight**
 
 Verify the selected CLI profile/account, project, region, balance/expiry, GPU
 quota/capacity, current all-in instance and disk price, existing instance state,
-and absence of stale public firewall access. Ask Jethro to renew local login if
+and absence of stale public firewall access. Ask the project owner to renew local login if
 needed; never request a credential pasted into chat.
 
 - [ ] **Step 2: Calculate and request a run-specific cap**
@@ -621,7 +621,7 @@ record evidence and estimated actual cost.
 - [ ] **Step 1: Show raw evidence before the conclusion**
 
 Present the candidate sequence, valid outcomes, budget consumption, timings,
-cost, parent/final area, nominal controls, and stop reason. Ask Jethro to
+cost, parent/final area, nominal controls, and stop reason. Ask the project owner to
 interpret whether the result supports “reduced counterexample” before writing
 the submission claim.
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use subagent-driven-development for the isolated
 > viewer/metadata task. Root owns documentation, integration and local viewer
-> verification. All changes implement Jethro's explicit naming/scope request.
+> verification. All changes implement the project owner's explicit naming/scope request.
 
 **Goal:** Name the product Faultline without breaking replay or existing commands.
 

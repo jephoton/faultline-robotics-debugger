@@ -1,6 +1,6 @@
 # ADR 0036: Case-first navigation, without a global evidence page
 
-- Status: accepted by Jethro, October 19, 2026.
+- Status: accepted by the project owner, October 19, 2026.
 - Context: the unified diagnosis pipeline makes engine-based sidebar groups
   confusing. A proposed replacement with small type labels adds taxonomy
   without helping the demonstrated workflow. The global episode browser has

@@ -3,7 +3,7 @@
 > **For agentic workers:** Use parallel audit tasks with independent file
 > ownership, then coordinator review. Do not launch experiments or publish.
 
-**Goal:** Give Jethro an evidence-backed judge-access audit and submission
+**Goal:** Give the project owner an evidence-backed judge-access audit and submission
 drafts, leaving billing confirmation, personal feedback and final publication
 as explicit human gates.
 
@@ -17,7 +17,7 @@ viewer, Git/GitHub read-only checks, official Devpost rules.
 
 ## Authority and exclusions
 
-Jethro approved proceeding with the submission-readiness sequence on October
+The project owner approved proceeding with the submission-readiness sequence on October
 20. Green: local tests, tracked-file inspection, evidence synthesis and draft
 documentation. Amber: wording corrections that narrow unsupported claims.
 Red: new costs, model calls, public deployment, changing repository visibility,

@@ -1,6 +1,6 @@
 # ADR 0029: M3 latency — startup cut and early-decided gates
 
-**Status:** Accepted by Jethro on October 13, 2026. Labelled M3 (throughput
+**Status:** Accepted by the project owner on October 13, 2026. Labelled M3 (throughput
 and latency) although delivered inside M7 work; commits use the `m3` scope.
 
 ## Problem
@@ -34,7 +34,7 @@ has a low ceiling.
   Face, and slim the image. Target startup about 5 to 6 minutes instead of
   about 12 (a replay about 13 to 6 minutes, an audit about 20 to 13), to be
   confirmed by measurement before any claim.
-- **D. Warm Serverless Endpoint: stretch goal**, for Jethro to try closer to
+- **D. Warm Serverless Endpoint: stretch goal**, for the project owner to try closer to
   the judging period, under the concerns in ADR 0027 (idle billing, auth,
   spend cap).
 - **C. More hardware** (bigger preset or two GPUs): not planned; optional HPC
@@ -52,5 +52,5 @@ has a low ceiling.
 B is implemented and measured: early-decided gates skipped 13 screen
 attempts and 31 and 33 attempts in the two LIBERO-10 reduction Jobs
 (`docs/experiments/m7-scenario-reduction.md`). A (startup cut) is skipped for
-now by Jethro's choice at the `faultline diagnose` checkpoint (ADR 0031).
+now by the project owner's choice at the `faultline diagnose` checkpoint (ADR 0031).
 

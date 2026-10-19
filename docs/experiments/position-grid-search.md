@@ -102,6 +102,6 @@ Git.
 
 The live preflight found the exact VM stopped, no stale grid rule, 13 available
 on-demand instances against a limit of 32, a US$19.66 balance, and a 26-minute
-maximum of about US$0.835 including GST. Jethro's cumulative US$2 cap covered
+maximum of about US$0.835 including GST. The project owner's cumulative US$2 cap covered
 this session. Any later cloud experiment requires its own scoped design and
 fresh preflight; this completion is not authorization for reduction or scaling.

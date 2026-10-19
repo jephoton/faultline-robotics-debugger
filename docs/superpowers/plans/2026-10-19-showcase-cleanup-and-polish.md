@@ -1,6 +1,6 @@
 # Plan: showcase cleanup, polish pass and workflow evidence (October 19, 2026)
 
-**Status:** approved by Jethro on October 19, 2026.
+**Status:** approved by the project owner on October 19, 2026.
 
 ## A. Polish pass (green; one Sonnet agent, worktree)
 
@@ -52,7 +52,7 @@ No cloud use, and no simulator image change.
    - The run page offers new values next to **Resume** for a run stopped by
      `spend_cap` or `max_hours`; the panel writes them to the run's spec.
    - On October 19, run 2 was raised by hand to US$3.20 and 3 hours, as
-     Jethro approved.
+     the project owner approved.
 
 **Owner:** the polish agent owns `src/robot_debug/**`, `scripts/**`,
 `web/src/components/**` and `web/src/lib/**`, plus their tests. It does not

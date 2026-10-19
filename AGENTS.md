@@ -1,23 +1,31 @@
 # Project collaboration instructions
 
+## Public documentation privacy
+
+Use “the project owner” in public project documentation; omit personal email
+addresses and personal workstation home paths. Preserve intentional copyright
+attribution and the public repository identity. Synthetic test fixtures and
+generic runtime service paths are not personal data; label historical path
+examples as placeholders when documenting them.
+
 ## Product name and core scope (October 8, 2026)
 
 - The official product name is **Faultline**, not a provisional/KIV name.
 - The canonical GitHub repository slug is `jephoton/faultline-robotics-debugger`.
-  Jethro authorized that repository rename on October 8, 2026. This does not
+  The project owner authorized that repository rename on October 8, 2026. This does not
   authorize renaming the local checkout folder or changing repository visibility.
 - Preserve `robot_debug` imports, schema/case IDs, environment variables,
   historical resource identities and artifact paths when updating branding.
   Any future folder rename requires separate user direction.
 - Further M3/HPC work, including batched inference, portfolio scheduling and
-  scale-out, is optional stretch work. Jethro may pursue deeper HPC exploration
+  scale-out, is optional stretch work. The project owner may pursue deeper HPC exploration
   in another project. Retain the measured replay-throughput result, but do not
   make new HPC implementation or claims a core Faultline/submission gate.
 - The core remains robotics failure discovery, confirmation, reduction,
   inspection and replay; this does not approve a formal-verification feature.
   See `docs/decisions/0019-faultline-name-and-hpc-scope.md`.
 
-These preferences were explicitly provided by Jethro on September 12, 2026. Apply them throughout this project.
+These preferences were explicitly provided by the project owner on September 12, 2026. Apply them throughout this project.
 
 ## Resources and credentials
 
@@ -28,7 +36,7 @@ These preferences were explicitly provided by Jethro on September 12, 2026. Appl
 
 ## Cloud budget and account isolation (September 13, 2026)
 
-- The total intended Nebius-credit envelope for this project is **US$75**. Treat it as a hard planning ceiling until Jethro changes it explicitly.
+- The total intended Nebius-credit envelope for this project is **US$75**. Treat it as a hard planning ceiling until the project owner changes it explicitly.
 - The account currently authenticated in the local Nebius CLI has an initial US$25 balance. Use it for the first bounded baseline and integration runs; do not deliberately burn credit merely to exhaust it.
 - The intended main account will have US$50 available: US$25 from its required initial balance plus US$25 from the hackathon promo code. Reserve it for the perturbation, reduction, parallel-evaluation, and demo work.
 - Nebius projects cannot be moved between tenants or regions. When changing accounts, create or select a separate project and local CLI profile, reuse this Git repository, and preserve the account boundary in run records.
@@ -69,14 +77,14 @@ These preferences were explicitly provided by Jethro on September 12, 2026. Appl
   Attribute project setup mistakes and upstream-harness defects separately
   from provider behavior; link to the relevant experiment note when useful.
 - Keep untested tools explicitly marked untested. Reconcile cost estimates
-  against billing before making final claims, and ask Jethro for first-hand
+  against billing before making final claims, and ask the project owner for first-hand
   experience before submission. Do not record secrets, account IDs, or private
   infrastructure details in the log.
 
 ## Multi-agent development with human learning
 
 Use **parallel work between learning checkpoints** as the default operating
-model. Agents accelerate evidence gathering and implementation; Jethro retains
+model. Agents accelerate evidence gathering and implementation; the project owner retains
 control over the questions, tradeoffs, budgets, and conclusions.
 
 ### When plans should use multiple agents
@@ -85,7 +93,7 @@ control over the questions, tradeoffs, budgets, and conclusions.
 - Keep tasks with tight sequential dependencies in one agent. Do not create agents merely to increase agent count or split a small change.
 - Every multi-agent plan must include a dependency/concurrency map, exact task boundaries, file ownership, expected outputs, an integration owner, and review checkpoints.
 - Avoid overlapping file ownership. Prefer isolated worktrees or branches when agents edit code concurrently; only the integration owner merges or resolves conflicts.
-- Give a reviewing agent evidence and acceptance criteria rather than asking it to repeat the builder's implementation. Preserve disagreements and escalate material ones to Jethro with context.
+- Give a reviewing agent evidence and acceptance criteria rather than asking it to repeat the builder's implementation. Preserve disagreements and escalate material ones to the project owner with context.
 - Use one execution owner for any shared or stateful external resource: Nebius lifecycle and spending, a live experiment, Git integration, artifact publication, or submission changes. Other agents may inspect, analyze, or prepare work without independently mutating that resource.
 
 ### Autonomy levels
@@ -94,16 +102,16 @@ Classify plan steps explicitly when the boundary may be unclear:
 
 - **Green — autonomous:** reversible routine work inside an approved design, including tests, parsing, formatting, documentation maintenance, local analysis, and small implementation fixes. Proceed and report evidence.
 - **Amber — explain and execute within the accepted boundary:** implementation structure, worker allocation inside an approved experiment, retry policy, metric calculation, or another choice that affects results without changing the project's goal or authorized cap. Explain the choice and rationale at the next checkpoint. Stop first if new evidence turns it into a material architecture, experiment, or cost decision.
-- **Red — Jethro decides before dependent execution:** model or simulator changes, new perturbation families, failure definitions, search/reduction algorithms, cloud architecture, increases to a spending cap, destructive actions, public publishing, and claims used in the submission.
+- **Red — the project owner decides before dependent execution:** model or simulator changes, new perturbation families, failure definitions, search/reduction algorithms, cloud architecture, increases to a spending cap, destructive actions, public publishing, and claims used in the submission.
 
 Existing approval persists. Do not repeatedly ask about a red decision that
-Jethro has already accepted unless scope changes or new evidence materially
+the project owner has already accepted unless scope changes or new evidence materially
 changes its tradeoff.
 
 ### Learning checkpoints
 
 Place a checkpoint before a new red decision and after a meaningful parallel
-work batch. Present enough context for Jethro to learn and decide, answering:
+work batch. Present enough context for the project owner to learn and decide, answering:
 
 1. What problem are we solving?
 2. What alternatives were considered?
@@ -112,8 +120,8 @@ work batch. Present enough context for Jethro to learn and decide, answering:
 
 After agents finish a batch, the coordinating agent must synthesize their work
 into decisions, evidence, unresolved disagreements, cost implications, and the
-next question. Do not make Jethro reconstruct the result from individual agent
-logs. For experiments, invite Jethro to predict or interpret the result before
+next question. Do not make the project owner reconstruct the result from individual agent
+logs. For experiments, invite the project owner to predict or interpret the result before
 turning it into a project claim; then compare that interpretation with the raw
 evidence.
 
@@ -131,24 +139,24 @@ human question or material decision
 ## Plan-first model handoff
 
 For every new material project step, separate design reasoning from routine
-execution so Jethro can learn from the decision without paying the strongest
+execution so the project owner can learn from the decision without paying the strongest
 model's token cost for mechanical implementation.
 
 1. Use the stronger currently selected model to inspect evidence, explain the
-   decision, settle red choices with Jethro, and write a committed implementation
+   decision, settle red choices with the project owner, and write a committed implementation
    plan under `docs/superpowers/plans/`.
 2. Make the plan self-contained: include exact scope, files, tests, conventional
    commit boundaries, autonomy levels, agent ownership, review checkpoints, and
    any cloud or spending gate. Do not start billable work merely because the plan
    exists.
-3. After Jethro approves the design and plan, hand green and bounded amber
+3. After the project owner approves the design and plan, hand green and bounded amber
    implementation to a smaller capable model by default. Prefer a balanced
    implementation model such as `gpt-5.6-terra` at medium reasoning when it is
    available. The stronger-model coordinator remains the integration owner and
    synthesizes reviews and learning checkpoints.
 4. If the product cannot change the active task's model directly, use a
    smaller-model sub-agent for the implementation handoff or pause and tell
-   Jethro exactly what model change is needed. Never imply that the active model
+   the project owner exactly what model change is needed. Never imply that the active model
    was changed when it was not.
 5. Escalate back to a stronger model when evidence exposes a new red decision,
    experiment-validity ambiguity, architectural conflict, difficult live-system

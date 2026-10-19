@@ -1,5 +1,9 @@
 # Global Scene Occlusion Implementation Plan
 
+> **Historical path note:** Guest paths in this plan use `<guest-home>` as a
+> placeholder. Substitute the target guest's home directory before adapting
+> these historical commands; this is not the current runbook.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a replayable rectangular occlusion to LIBERO's global agent-view image and validate one recorded GR00T episode through the pinned cloud stack.
@@ -290,15 +294,15 @@ pinned simulator digest.
 
 - [x] **Step 2: Copy source/config to the stopped pilot disk after startup**
 
-Place the repository source at `/home/robot/nebius-nvidia-hackathon/src` and
-the YAML at `/home/robot/occlusion-smoke.yaml`. Do not transfer `.git`, local
+Place the repository source at `<guest-home>/nebius-nvidia-hackathon/src` and
+the YAML at `<guest-home>/occlusion-smoke.yaml`. Do not transfer `.git`, local
 artifacts, credentials, or model files.
 
 - [x] **Step 3: Validate import inside the pinned image before model startup**
 
 ```bash
 docker run --rm \
-  -v /home/robot/nebius-nvidia-hackathon/src:/workspace/robot-debug-src:ro \
+  -v <guest-home>/nebius-nvidia-hackathon/src:/workspace/robot-debug-src:ro \
   -e PYTHONPATH=/workspace/robot-debug-src:/workspace/src \
   --entrypoint conda \
   ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0 \
@@ -314,13 +318,13 @@ above matches the evaluator's normal runtime and passed on September 13, 2026.
 
 - [x] **Step 4: Run one recorded episode**
 
-From `/home/robot/vla-evaluation-harness`, wait for the existing model server's
+From `<guest-home>/vla-evaluation-harness`, wait for the existing model server's
 health endpoint, then run:
 
 ```bash
-ROBOT_DEBUG_SRC=/home/robot/nebius-nvidia-hackathon/src \
-  /home/robot/.venvs/vla-eval/bin/vla-eval run \
-  --config /home/robot/occlusion-smoke.yaml --yes
+ROBOT_DEBUG_SRC=<guest-home>/nebius-nvidia-hackathon/src \
+  <guest-home>/.venvs/vla-eval/bin/vla-eval run \
+  --config <guest-home>/occlusion-smoke.yaml --yes
 ```
 
 Expected: one completed `success` or `fail` episode, with no infrastructure

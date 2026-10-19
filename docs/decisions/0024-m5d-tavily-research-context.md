@@ -1,6 +1,6 @@
 # ADR 0024: M5D Tavily research context
 
-**Status:** Accepted by Jethro on October 11, 2026. M5D outcome accepted October 12, 2026
+**Status:** Accepted by the project owner on October 11, 2026. M5D outcome accepted October 12, 2026
 (`docs/experiments/m5d-tavily-research.md`).
 
 ## Problem

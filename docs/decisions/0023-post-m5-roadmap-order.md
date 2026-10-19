@@ -1,12 +1,12 @@
 # ADR 0023: Post-M5 roadmap order
 
-**Status:** Order accepted by Jethro on October 11, 2026. Timeboxes accepted
+**Status:** Order accepted by the project owner on October 11, 2026. Timeboxes accepted
 the same day in a tighter form (see Guards).
 
 ## Decision (accepted)
 
 1. **M5D** — Tavily public-research context beside the Nemotron interpretation.
-2. **M3 batched inference** — a learning-focused stretch; Jethro wants to learn
+2. **M3 batched inference** — a learning-focused stretch; the project owner wants to learn
    what he can from it.
 3. If batching gets stuck: **M3 Serverless portfolio** (several diagnosis jobs
    sharing one GPU inside a Serverless Job; the old VM launcher is obsolete).
@@ -17,7 +17,7 @@ the same day in a tighter form (see Guards).
 
 ## Guards (accepted October 11, tighter than first proposed)
 
-Jethro chose a tighter M3 window than the first proposal (4 and 3 days).
+The project owner chose a tighter M3 window than the first proposal (4 and 3 days).
 
 - M5D: about 1.5 days (October 12–13). Design in ADR 0024.
 - Batched inference: up to 3 working days. "Stuck" = GR00T cannot produce

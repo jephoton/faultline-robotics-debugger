@@ -4,20 +4,48 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Submission readiness audit — October 20** for the latest work.
+> Read **Privacy cleanup and feedback approval — October 20** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
 
-Jethro finished the six demo walkthroughs and explicitly authorized the complete
+The project owner finished the six demo walkthroughs and explicitly authorized the complete
 cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
 
+## Privacy cleanup and feedback approval — October 20
+
+The user approved the rest of FEEDBACK and requested a neutral first-hand
+heading plus a codebase personal-data/path check. FEEDBACK now says **First-hand
+notes**, with both bullet paragraphs unchanged. No further first-hand feedback
+confirmation is needed unless the content changes.
+
+Narrative owner-name references across tracked Markdown and two source comments
+were anonymized; historical home examples use marked placeholders. Intentional
+MIT copyright and canonical public repository identity remain. Generic legacy
+guest-service contracts and synthetic redaction/traversal fixtures remain
+unchanged; they are not actual personal paths or a portability certification.
+
+The [privacy audit](../submission/privacy-audit.md) records 583 snapshot files,
+including all 12 packaged viewer assets, pattern/metadata screening and limits.
+No confirmed sensitive personal-data finding was identified in that scope.
+Current-tree Gitleaks reported four reviewed false positives, not a zero-hit
+scan: three state-hash video selectors and planning prose. Focused Python
+checks: **116 passed**; Token Factory AST unchanged. No private artifacts,
+credentials or screenshots were committed. No Git-history rewrite, author
+metadata change, push or deployment; old commits can retain historical details.
+
+Next remains human review of the Devpost story/video script, rights/entrant
+declarations, final video/cover production and approved publication/submission.
+Billing is scoped to the supplied period; do not request screenshots or feedback
+confirmation already provided. Broader lifetime/per-run cost claims still need
+their own evidence. Work remains on `codex/submission-readiness`.
+
 ## Submission readiness audit — October 20
 
-Jethro authorized the bounded submission-readiness sequence. Work is on
+The project owner authorized the bounded submission-readiness sequence. Work is on
 `codex/submission-readiness`, with the committed plan at
 `docs/superpowers/plans/2026-10-20-submission-readiness.md`. The
 [submission package](../submission/README.md) contains the clean-install audit,
@@ -49,17 +77,18 @@ These are drafts, not a Devpost/YouTube submission or another gallery release.
   citations, the offline-install wording, judge-access disclosure and a history
   heading link. All 180 checked local file targets resolve; reviewer also
   checked feedback/submission heading anchors. The full archived log matches
-  the original body after only its wrapper/link rebase; both first-hand notes
+  the original body after only its wrapper/link rebase at that earlier
+  checkpoint, before the later narrative anonymization; both first-hand notes
   are unchanged. `git diff --check` passed.
 - Next: reconcile billing screenshots,
   confirm first-hand FEEDBACK, review script/story, then produce video/cover
-  and approve uploads/submission. Jethro said screenshots would follow and
+  and approve uploads/submission. The project owner said screenshots would follow and
   reported **$0.82 remaining** without identifying service/account. This
   is not usage or a new spending cap. First-hand FEEDBACK section was opened
   in the app side panel; confirmation remains pending. A subsequently supplied
   consumption crop shows **$42.04 including $3.47 VAT**; date/account scope and
   currency code are absent. See [partial billing reconciliation](../submission/billing-reconciliation.md).
-- Jethro subsequently confirmed this is the **only AI Cloud account used for
+- The project owner subsequently confirmed this is the **only AI Cloud account used for
   Faultline**. Do not request a second account's bill based on the earlier
   intended account split. The subsequent date selector reads **September 19–
   October 19, 2026**. Token Factory's supplied view shows **$0.12 subtotal,
@@ -68,7 +97,7 @@ These are drafts, not a Devpost/YouTube submission or another gallery release.
   lifetime total. Rounded token usage is not exact per-call accounting.
   No need to request these screenshots again; only other dates/project-filter
   scope/currency remain relevant if final claims require a broader total.
-- Jethro requested a shorter FEEDBACK. The root summary is now about 870
+- The project owner requested a shorter FEEDBACK. The root summary is now about 870
   words instead of 4,596, retaining the table and both first-hand notes.
   Original dated detail is preserved in
   [tool feedback history](../experiments/tool-feedback-history.md), linked
@@ -81,7 +110,7 @@ by the audit alone. Existing gallery and `main` remain the judge-facing build.
 
 ## Gallery production refresh — October 20
 
-Jethro authorized carrying on with the existing three-case gallery, without
+The project owner authorized carrying on with the existing three-case gallery, without
 new product choices. The stable
 [public gallery](https://faultline-robotics-debugger.vercel.app) now serves the
 cleanup from source checkpoint `5f23cae`: unified Cases navigation, rewritten
@@ -165,7 +194,7 @@ Execution plan: [final cleanup batch](../superpowers/plans/2026-10-19-final-clea
 M1–M6 and **M7a steps 1–5 are complete**, including the control panel's live
 acceptance check and the published
 [static gallery](https://faultline-robotics-debugger.vercel.app).
-Jethro explicitly authorized publication after the handoff refresh on
+The project owner explicitly authorized publication after the handoff refresh on
 October 17. Execution plan:
 [public gallery](../superpowers/plans/2026-10-17-public-gallery.md).
 Publication is authorized for the filtered gallery only, not the repository's
@@ -220,7 +249,7 @@ three execution paths, source anchors and a full page/field/action/evidence UI
 inventory. `PROJECT.md` is a short handoff pointer, not a duplicate architecture.
 Rewordings belong to the policy-audit intention but retain a separate word-edit
 engine. Regrouping the three New diagnosis cards under two intentions is a
-proposal for Jethro's review, not an implemented redesign.
+proposal for the project owner's review, not an implemented redesign.
 Token Factory costs remain outside the GPU ledger; the diagram is not an
 all-services budget guarantee. Source audit also identified over-broad UI copy
 about causes/minimality, retry cost and incomplete audit coverage; these are
@@ -298,7 +327,7 @@ with every finding a replayable case. Built, reviewed and fixed on October
 - research never blocks Start;
 - the form defaults to LIBERO-Object task 0, start 0.
 
-Default cap kept at US$2.50 (Jethro, October 19). Validation approved the
+Default cap kept at US$2.50 (the project owner, October 19). Validation approved the
 same day with US$4 in total: a diagnosis of LIBERO-Object task 0, start 0 with
 the four default families, then one replay of any case it makes. See
 `docs/experiments/` once it finishes. Names come after the build. The
@@ -306,7 +335,7 @@ Reference no longer uses "Mode 1 / Mode 2".
 
 ## UI walkthrough follow-up — October 19
 
-- Jethro completed Demo 6 and authorized the full inline cleanup batch above.
+- The project owner completed Demo 6 and authorized the full inline cleanup batch above.
   The earlier wait-for-walkthrough gate is cleared. Public redeploy and the
   submission-readiness checks remain separate gates; no new GPU work was run.
 - **FL-A-F526 table fix:** its older single-audit case has a saved `audit`
@@ -324,7 +353,7 @@ Reference no longer uses "Mode 1 / Mode 2".
   `synthetic_aggregate.json: KeyError` per file. The warning list is a scan
   diagnostic, not robot-policy failures; the API still returned 2,022 episodes
   during inspection. No evidence or archive data was removed.
-- **Latest accepted UI scope (supersedes the earlier proposals):** Jethro
+- **Latest accepted UI scope (supersedes the earlier proposals):** the project owner
   rejected arbitrary type labels for the unified pipeline and explicitly asked
   to remove All evidence. Use one Cases list without type headings/badges in
   navigation and the static home gallery. Keep names, fault codes, outcomes,
@@ -372,7 +401,7 @@ Reference no longer uses "Mode 1 / Mode 2".
 ### Historical branch briefs (both integrated; do not redo)
 
 1. **`worktree-agent-a3b9101bc186fa838`: UI copy changes.** It applies every
-   item in `docs/superpowers/specs/2026-10-19-ui-copy-review.md` (Jethro
+   item in `docs/superpowers/specs/2026-10-19-ui-copy-review.md` (the project owner
    approved all of them), except items 51, 52 and 54. Those are in
    `web/src/components/case/TeamSections.tsx`.
    - Merge the branch.
@@ -423,7 +452,7 @@ file for (1), the description above for (2).
    - Keep `research.json` out (it has third-party snippets), or ship a copy
      with snippets stripped so the offline demo shows its next steps.
    - Drop `research` from `diagnosis.json` `files` if it is left out.
-7. **Gallery redeploy (needs Jethro's go):**
+7. **Gallery redeploy (needs the project owner's go):**
    - `faultline export --out artifacts/public-gallery-<date>`, with a
      `--case` flag for each of `d-8e0dbd…`, `d-d5825d…` and `d-f52646…`;
    - copy `.vercel/project.json` from `artifacts/public-gallery-20261019/`;
@@ -446,18 +475,18 @@ file for (1), the description above for (2).
 ### Remaining to submission
 
 Target October 29; deadline October 30, 10:00 PT.
-1. **Finish the demo walkthrough.** Jethro is at Demo 6. Demos 7–8 are paid
+1. **Finish the demo walkthrough.** the project owner is at Demo 6. Demos 7–8 are paid
    (a replay, and start/stop/resume), so they need a go and a cap, or can be
    skipped.
 2. **Integrate, check and redeploy** (above).
-3. **Billing reconciliation.** Jethro reads the Nebius billing page. Ledger
+3. **Billing reconciliation.** the project owner reads the Nebius billing page. Ledger
    estimates:
    - showcase runs US$3.87;
    - earlier live runs about US$8.21;
    - Token Factory about US$0.15 on October 19 (Ultra's price is not pinned).
 
    Correct `FEEDBACK.md` and the README costs to match.
-4. **`FEEDBACK.md` final pass,** with Jethro's first-hand notes. Add the
+4. **`FEEDBACK.md` final pass,** with the project owner's first-hand notes. Add the
    October 19 observations:
    - the per-object download retries and the resume download fix;
    - Ultra's structured output and its rejection rate;
@@ -473,14 +502,14 @@ Target October 29; deadline October 30, 10:00 PT.
    `docs/architecture.md`, **plus a cover image.**
 9. **Submit:** freeze versions and tag the release.
 
-**Agreed order (Jethro, October 18):** demos → stale public gallery → remaining
+**Agreed order (the project owner, October 18):** demos → stale public gallery → remaining
 things → video and cover → submission. Roadmap target October 29; deadline
 October 30, 10:00 PT.
 
 1. **Demos.** The runbook is restructured into six demos around the showcase
-   cases (October 19). Jethro walks through them next and reports what each
+   cases (October 19). The project owner walks through them next and reports what each
    exposes.
-2. **Gallery refresh: done October 19** (Jethro's go). The live gallery holds
+2. **Gallery refresh: done October 19** (the project owner's go). The live gallery holds
    the three showcase cases (`docs/experiments/m7-public-gallery.md`). The
    old cases moved out of the local panel to `artifacts/archive-2026-10-19/`,
    which can be restored. Redeploy once more after the demo walkthrough's
@@ -498,9 +527,9 @@ October 30, 10:00 PT.
       `nvidia/GR00T-N1.7-LIBERO` is in a format the override does not load.
    2. **Results refresh:** README "What it has found", built around the
       showcase cases.
-   3. **Billing reconciliation:** Jethro reads the Nebius billing page; compare
+   3. **Billing reconciliation:** the project owner reads the Nebius billing page; compare
       it with the run ledgers; correct FEEDBACK and README costs.
-   4. **FEEDBACK.md** final pass, with Jethro's first-hand notes.
+   4. **FEEDBACK.md** final pass, with the project owner's first-hand notes.
    5. **Fresh-machine test** of the README and quickstart from a clean checkout
       (judge usability).
    6. **Rules re-check:** Devpost rules and updates, including any "what changed

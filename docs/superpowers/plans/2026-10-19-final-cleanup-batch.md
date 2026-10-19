@@ -1,6 +1,6 @@
 # Final cleanup batch implementation plan
 
-> **For agentic workers:** use executing-plans. Jethro explicitly requested
+> **For agentic workers:** use executing-plans. The project owner explicitly requested
 > inline execution in one pass, overriding the usual smaller-agent handoff.
 
 **Goal:** finish the post-walkthrough integration, quiet background commands,

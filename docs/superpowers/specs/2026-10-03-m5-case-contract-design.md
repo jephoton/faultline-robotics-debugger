@@ -1,6 +1,6 @@
 # M5A case contract
 
-**Status:** Accepted by Jethro on October 3 ("go" after the contract review).
+**Status:** Accepted by the project owner on October 3 ("go" after the contract review).
 M5 scope and the CLI-first, read-only-viewer boundary are accepted. Proceed
 through bounded offline implementation plans. External reset adapters, model
 calls and cloud starts remain separately gated.

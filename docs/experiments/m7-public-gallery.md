@@ -2,7 +2,7 @@
 
 ## October 20 production refresh — verified
 
-Jethro authorized carrying on with the reviewed redeployment without another
+The project owner authorized carrying on with the reviewed redeployment without another
 product decision. Published to the existing
 [Faultline gallery](https://faultline-robotics-debugger.vercel.app), with no
 new project, domain, hosting upgrade, GPU Job, Nemotron call or Tavily search.
@@ -48,14 +48,14 @@ The post-walkthrough cleanup prepared the ignored local export
 cases, 13 videos, refreshed D582 suggestions and F526 per-family tables, unified
 Cases navigation and rewritten Reference/Run your own. Exporter privacy guards
 passed; a local browser preview had no controls, page errors or failed requests.
-At preparation time publication still needed Jethro's go; that gate was cleared
+At preparation time publication still needed the project owner's go; that gate was cleared
 on October 20 above. The wording example/private run artifacts remain excluded.
 
 ## Result — October 17, 2026
 
 Published and verified:
 [Faultline gallery](https://faultline-robotics-debugger.vercel.app).
-Jethro authorized publication after refreshing the handoff. The site is a
+The project owner authorized publication after refreshing the handoff. The site is a
 read-only export of recorded cases, not the local control panel and not a
 hosted robot simulator. No new GPU Job, Nemotron generation or Tavily search
 was performed for this publication; no paid hosting upgrade or domain purchase
@@ -137,7 +137,7 @@ Selected SHA-256 fingerprints:
 
 ## Redeploy, October 18
 
-Approved by Jethro to correct a false claim: the scene-goal case (control
+Approved by the project owner to correct a false claim: the scene-goal case (control
 failed, nothing searched) read "No failure up to severity 1" and "no failure
 found" per family; it now reads "not tested". Fresh export
 `artifacts/public-gallery-20261018/` (ignored): the same five cases and 25
@@ -177,7 +177,7 @@ public image publication remain separate decisions.
 
 ## October 19 redeploy: the showcase cases
 
-Jethro gave the go on October 19. The export `artifacts/public-gallery-20261019`
+The project owner gave the go on October 19. The export `artifacts/public-gallery-20261019`
 (ignored) holds **three cases and 13 videos** (13 MB):
 - `FL-S-8E0D`: the layout route;
 - `FL-A-D582`: the probe route;

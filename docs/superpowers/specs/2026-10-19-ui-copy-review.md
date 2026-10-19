@@ -1,6 +1,6 @@
 # UI copy review: proposed removals and trims (October 19, 2026)
 
-**Status:** proposed. Jethro selects items by number; nothing has been changed
+**Status:** proposed. The project owner selects items by number; nothing has been changed
 yet.
 
 **Paths** are under `web/src/`.

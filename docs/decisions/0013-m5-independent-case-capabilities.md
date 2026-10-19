@@ -1,6 +1,6 @@
 # ADR 0013: Independent case capabilities
 
-**Status:** Accepted by Jethro on October 3, 2026, after the exact contract review.
+**Status:** Accepted by the project owner on October 3, 2026, after the exact contract review.
 
 ## Decision
 

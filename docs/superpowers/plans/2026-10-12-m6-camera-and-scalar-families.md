@@ -6,7 +6,7 @@ find, confirm and reduce loop to four single-strength image families and
 report each family's smallest reproducibly failing severity.
 
 **Design:** ADR 0026 (accepted October 12). **Spend cap:** US$3.00 after
-Jethro's top-up; no GPU Job before he confirms the new balance. **Target:**
+the project owner's top-up; no GPU Job before the new balance is confirmed. **Target:**
 built and reviewed by October 14, results by October 16, M7 from October 23
 at the latest.
 
@@ -122,12 +122,12 @@ TDD with fakes; full Windows suite green before each commit. Commits:
 2. Coordinator builds image v11, runs the in-image test subset and a
    no-network check that the LIBERO observation image keys are `agentview`
    and `wrist`, pushes, and verifies tag to digest.
-3. **After Jethro confirms the top-up:** smoke Job (deadline 1080 s, worst
-   case about US$0.55). Show Jethro the wrist result and frames proving each
+3. **After the project owner confirms the top-up:** smoke Job (deadline 1080 s, worst
+   case about US$0.55). Show the project owner the wrist result and frames proving each
    family perturbs both cameras.
 4. Main threshold Job (deadline sized from the smoke timings, at most
    2400 s, worst case about US$0.85). Watchdogs enforce the remaining cap.
-5. Jethro interprets the wrist and threshold results before any claim.
+5. The project owner interprets the wrist and threshold results before any claim.
 
 ## What would change direction
 

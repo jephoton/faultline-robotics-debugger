@@ -316,7 +316,7 @@ catalog warnings. No new robotics runs, provider calls or artifacts were created
 The proposed M5A case contract is separate: independent inspection, recipe,
 exercised-replay and historical-confirmation capabilities. Root incorporated
 review findings requiring aggregate/summary reconciliation, dependency-specific
-source invalidation and validated normalized reimport before asking Jethro to
+source invalidation and validated normalized reimport before asking the project owner to
 approve that contract. Importer and dependent UI code have not started.
 
 ## M3: parallel replay, pilot, and equal-work comparison
@@ -355,7 +355,7 @@ proposed the existing one-worker `sequential-jobs` mode instead; the later real
 CLI check below corrected that unexecuted proposal. Do not reuse
 L40S allocation measurements as H100 performance evidence.
 
-After Jethro switched from hotel Wi-Fi to a phone hotspot on October 1,
+After the project owner switched from hotel Wi-Fi to a phone hotspot on October 1,
 credential-free WSL probes received SSH protocol banners from `github.com:22`
 and the control endpoint `ssh.github.com:443`. The hotspot therefore permits
 outbound SSH to these endpoints. This is not an A/B comparison with the hotel
@@ -551,7 +551,7 @@ unconfirmed truncation hypothesis are in the M5 pilot note and FEEDBACK.md.
 
 The first paid attempt exhausted the configured600-token output allowance
 without a valid interpretation; no finish reason was retained, so truncation
-was a hypothesis. Jethro separately approved one4096-token/90-second attempt
+was a hypothesis. The project owner separately approved one4096-token/90-second attempt
 with a newUS$0.02 allowance. The six-file patch `8110001` extends strict usage
 validation consistently across client/store and fixes the reservation path
 to a new approved directory, preserving the old marker. A safe `output_limit`
@@ -568,7 +568,7 @@ Both reservations stay consumed; no further request is approved.
 
 ## October 8 — Faultline name and HPC scope
 
-Jethro finalized **Faultline** and reaffirmed that further HPC work is optional
+The project owner finalized **Faultline** and reaffirmed that further HPC work is optional
 stretch, potentially better suited to a separate project. ADR 0019 records the
 decision; the roadmap retains the actual M3 result without making batching or
 portfolio diagnosis a core gate. Product docs and viewer/package presentation

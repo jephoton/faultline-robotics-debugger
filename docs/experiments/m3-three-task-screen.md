@@ -4,7 +4,7 @@
 
 ## Completed hotspot retry
 
-Jethro approved a new US$6 total / one H100 start / 45-minute maximum and
+The project owner approved a new US$6 total / one H100 start / 45-minute maximum and
 cleanup of only the temporary clone, its managed disk, and snapshot. Fresh
 preflight showed US$9.53 balance, no displayed expiry, US$4.50/hour H100
 compute before tax, and the original L40S VM stopped with its disk ready.
@@ -85,7 +85,7 @@ pending full multi-job find → confirm → reduce comparison.
 
 ## Frozen scope and local proof
 
-Jethro selected LIBERO Object task IDs `(0, 1, 2)` as nominal-screening candidates and approved a maximum **US$3 incremental spend / 60 minutes VM-on** on the existing L40S VM. The run would use only the first nominal episode of each task (`episodes=3` shared attempt ceiling), no occlusion search, and no benchmark speedup claim. Commit `9344c62` added an exact three-case dry-run regression. The Windows suite passed 345 tests (4 skips); the focused WSL lifecycle/driver suites passed 66.
+The project owner selected LIBERO Object task IDs `(0, 1, 2)` as nominal-screening candidates and approved a maximum **US$3 incremental spend / 60 minutes VM-on** on the existing L40S VM. The run would use only the first nominal episode of each task (`episodes=3` shared attempt ceiling), no occlusion search, and no benchmark speedup claim. Commit `9344c62` added an exact three-case dry-run regression. The Windows suite passed 345 tests (4 skips); the focused WSL lifecycle/driver suites passed 66.
 
 Before the start, the console showed US$9.96 balance. The Nebius calculator quoted US$1.7468/hour for the VM and US$0.0194444/hour for the retained disk, pre-tax. Capacity advice showed one available on-demand slot for the exact `gpu-l40s-a` shape in `eu-north1`, but labeled availability `LOW`. The exact VM was read back as `STOPPED` in the intended project. These figures are preflight observations, not a posted invoice.
 
@@ -99,7 +99,7 @@ The temporary workstation-`/32` SSH ingress rule was deleted. The exact instance
 
 ## Second attempt under renewed approval
 
-Later on September 30, Jethro explicitly requested a same-VM retry under the prior US$3/60-minute maximum and asked to skip a fresh balance check. The prior US$9.96 reading was **not** treated as a current balance. The CLI again read the exact VM `STOPPED`; fresh calculator estimates were unchanged at US$1.7468/hour for compute and US$0.0194444/hour for disk. Capacity advice again showed one exact-shape on-demand slot but `LOW` availability. A separate reviewed source bundle contained commit `e64f5e8`.
+Later on September 30, the project owner explicitly requested a same-VM retry under the prior US$3/60-minute maximum and asked to skip a fresh balance check. The prior US$9.96 reading was **not** treated as a current balance. The CLI again read the exact VM `STOPPED`; fresh calculator estimates were unchanged at US$1.7468/hour for compute and US$0.0194444/hour for disk. Capacity advice again showed one exact-shape on-demand slot but `LOW` availability. A separate reviewed source bundle contained commit `e64f5e8`.
 
 The fresh OS-owned exact-VM guard logged `verified` and `armed` at 13:33:11 UTC, with a 14:31:00 UTC deadline. One regular-instance start was requested at 13:34:10 UTC. Operation `computeoperation-e00d6gt…` ended at 13:39:40 UTC with the same `NotEnoughResources` VM scheduling timeout for `1gpu-16vcpu-64gb`. It did not reach guest access; no source transfer, model preflight, or evaluator occurred. The exact VM was independently read back as `STOPPED`, the security group still contained only its standing egress rule (no retry ingress rule had been created), and then the guard was stopped and unregistered. The second ignored guard log is retained locally. Posted billing remains unverified.
 
@@ -117,11 +117,11 @@ At the September 30 calculator rate, L40S-D was US$1.8172/hour with four advised
 
 ## Historical next gate (superseded by approved H100 attempts below)
 
-Do not count either attempt as a nominal screen or automatically retry with preemptible capacity, another GPU shape, or a different task. Decide with Jethro whether to wait for the current VM's exact shape or investigate a new resource and cache-transfer path under a separately priced cap. Before another paid start, revisit the balance/retention risk that was explicitly skipped for this retry. If the task screen eventually runs, verify served checkpoint and runtime task catalog before launching any evaluator, and interpret each task's episode separately.
+Do not count either attempt as a nominal screen or automatically retry with preemptible capacity, another GPU shape, or a different task. Decide with the project owner whether to wait for the current VM's exact shape or investigate a new resource and cache-transfer path under a separately priced cap. Before another paid start, revisit the balance/retention risk that was explicitly skipped for this retry. If the task screen eventually runs, verify served checkpoint and runtime task catalog before launching any evaluator, and interpret each task's episode separately.
 
 ## H100 migration preflight (September 30, read-only)
 
-Jethro selected a separate snapshot-backed H100 VM, preserving the original L40S VM and disk. The CLI again read the exact original VM as `STOPPED` and its 200-GiB Network SSD boot disk as `READY`, AMD64, and still managed by that VM. The intended console project matched the CLI project. No snapshot or new VM existed at this check; no billable mutation was made.
+The project owner selected a separate snapshot-backed H100 VM, preserving the original L40S VM and disk. The CLI again read the exact original VM as `STOPPED` and its 200-GiB Network SSD boot disk as `READY`, AMD64, and still managed by that VM. The intended console project matched the CLI project. No snapshot or new VM existed at this check; no billable mutation was made.
 
 The H100 `gpu-h100-sxm` / `1gpu-16vcpu-200gb` preset is available to this project. On-demand capacity advice for its four `eu-north1` fabrics showed 32/32 `HIGH`, 28/32 `MEDIUM`, 32/32 `HIGH`, and 32/32 `HIGH` at its effective timestamp. This is a much stronger placement signal than L40S-A's `LOW`, but not a reservation or successful start. The project calculator returned US$3.85 per H100 VM-on hour before tax on September 30; [Nebius's detailed pricing](https://docs.nebius.com/compute/resources/pricing#nvidia-h100-nvlink) lists US$4.50/hour from October 1, so the higher rate governs the proposed cap. The signed-in console showed US$9.89 balance; no credit-expiry date was displayed. Recheck balance, rate, and capacity immediately before an approved creation/start.
 
@@ -133,7 +133,7 @@ The local WSL `unittest` run of `tests.test_diagnostic_portfolio_cli` passed 7/7
 
 ## October 1 approved H100 attempt
 
-Jethro approved US$7.50 total, one H100 start, at most 60 minutes VM-on,
+The project owner approved US$7.50 total, one H100 start, at most 60 minutes VM-on,
 and deletion of only the temporary clone/managed disk and snapshot after
 evidence copy within 24 hours. Fresh preflight found US$9.55 balance, no
 displayed expiry, the original VM stopped with its managed disk ready, and

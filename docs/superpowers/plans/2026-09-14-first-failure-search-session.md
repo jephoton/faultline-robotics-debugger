@@ -296,7 +296,7 @@ git commit -m "docs(search): record first bounded failure search"
 - Starting the stopped VM is already within the accepted combined-session scope
   once the preflight proves the hard maximum remains below US$1 and the active
   account is the intended one.
-- Ask Jethro to renew/sign in only if the existing Nebius or Hugging Face
+- Ask the project owner to renew/sign in only if the existing Nebius or Hugging Face
   authentication is actually unavailable; never request tokens in chat.
 - Do not begin the later parallel/HPC comparison in this session. This session
   deliberately measures sequential behavior and discovers the case that the

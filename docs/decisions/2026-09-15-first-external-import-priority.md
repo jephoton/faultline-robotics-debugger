@@ -1,6 +1,6 @@
 # First external import priority
 
-Status: accepted direction from Jethro's September 15, 2026 instruction to
+Status: accepted direction from the project owner's September 15, 2026 instruction to
 prioritize the option that makes the product usable and scalable. Exact schema,
 implementation and cloud experiment remain proposed.
 

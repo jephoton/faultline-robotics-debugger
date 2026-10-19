@@ -6,7 +6,7 @@ deleted. This is an execution interruption, not a robot-policy result.
 
 ## Approved scope and prepared work
 
-Jethro approved US$8 total, one H100 start, a 90-minute maximum, and cleanup
+The project owner approved US$8 total, one H100 start, a 90-minute maximum, and cleanup
 of the temporary snapshot-backed VM/disk and snapshot, preserving the
 original L40S setup. The frozen [execution plan](../superpowers/plans/2026-10-01-m3-live-portfolio-comparison.md)
 uses the same three LIBERO Object tasks, checkpoint, simulator, masks,
@@ -73,4 +73,4 @@ after the VM has become billable. Reusing the model/simulator configuration
 does not solve that orchestration gap. Prepare/review any such controller
 locally before spending; keep it separate from policy and scheduler behavior.
 The then-next project-name brainstorming task was completed October 8:
-Jethro chose Faultline (ADR 0019). No paid compute was needed for naming.
+The project owner chose Faultline (ADR 0019). No paid compute was needed for naming.

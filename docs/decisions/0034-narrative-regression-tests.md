@@ -1,12 +1,12 @@
 # ADR 0034: Narrative — the minimal trigger, kept as a regression test
 
-**Status:** Accepted by Jethro on October 18, 2026.
+**Status:** Accepted by the project owner on October 18, 2026.
 
 ## Context
 
 By October 18 the product worked end to end, but its story was unsettled:
 it read in places as a debugger that explains why a policy fails, and in
-others as a robustness audit. Jethro has no robotics background to judge
+others as a robustness audit. The project owner has no robotics background to judge
 which a robotics team would value, so the options were compared against
 published accounts of how teams work and against the four equally weighted
 judging criteria (technological implementation, design, potential impact,
@@ -39,7 +39,7 @@ Tell story **A**:
 
 ## Consequences
 
-- **Final runs:** Jethro's planned final round should produce one or two
+- **Final runs:** the project owner's planned final round should produce one or two
   fresh reduced cases (ideally on another task), plus one replay of a case
   against a second checkpoint, so the regression loop is shown end to end.
   These need a new image with the October 18 fixes, and spend approval at
@@ -53,7 +53,7 @@ Tell story **A**:
 
 ## Amendment (October 19, 2026): scope stated up front
 
-Jethro chose to state the scope right under the README's title, and in the
+The project owner chose to state the scope right under the README's title, and in the
 Reference's "Where it applies":
 - what Faultline covers today: GR00T N1.7 on LIBERO;
 - what an adapter for another simulator would need;

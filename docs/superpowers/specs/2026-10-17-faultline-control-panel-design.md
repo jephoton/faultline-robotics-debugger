@@ -1,6 +1,6 @@
 # Faultline control panel: UI overhaul design
 
-**Status:** Accepted by Jethro on October 17, 2026 (M7a step 4). Decision
+**Status:** Accepted by the project owner on October 17, 2026 (M7a step 4). Decision
 record: ADR 0033. The implementation plan follows from this spec.
 
 ## Problem
@@ -13,7 +13,7 @@ for (import, diagnose, reduced case, replay), audits show almost nothing, and
 the home page's run list takes about two minutes to load on a full
 `artifacts/` folder and re-requests on a timer, so it hangs.
 
-## Decisions (Jethro, October 17)
+## Decisions (the project owner, October 17)
 
 | Question | Decision |
 | --- | --- |
@@ -44,7 +44,7 @@ the home page's run list takes about two minutes to load on a full
 - **Static export (`faultline export`):** writes the bundle, JSON for the
   chosen cases and their videos into a folder, plus a `vercel.json` rewrite
   for app routes. With no server, the app shows cases only. Deploying it is
-  M7a step 5 and needs Jethro's go.
+  M7a step 5 and needs the project owner's go.
 
 ### Read APIs
 
@@ -203,7 +203,7 @@ and every action, and shows a short intro panel; case pages are identical.
 - Vitest: the form steps and inline errors, the run page states, each case
   kind, static-mode hiding.
 - Browser checks in the preview pane at each stage (light, dark, phone width).
-- One real run started from the UI as the final check, with Jethro's go and
+- One real run started from the UI as the final check, with the project owner's go and
   cap at the time (expected: a paraphrase run, about US$0.35).
 
 ## Also fixed
@@ -214,7 +214,7 @@ and every action, and shows a short intro panel; case pages are identical.
 
 ## Out of scope
 
-Hosted runs on Jethro's account (rejected in ADR 0027), sign-in or user
+Hosted runs on the project owner's account (rejected in ADR 0027), sign-in or user
 accounts, more than one concurrent paid run, a form field for every spec key
 (the YAML panel covers the rest), and deploying the export (step 5).
 

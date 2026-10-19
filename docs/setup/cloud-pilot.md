@@ -122,7 +122,7 @@ The workstation had no existing default WSL SSH public key, so a dedicated
 project key was created locally with restrictive file permissions. It is not
 tracked and its private material is never printed or copied to the VM.
 
-Jethro selected a temporary public IP for the pilot. The provider's default
+The project owner selected a temporary public IP for the pilot. The provider's default
 security group allows all ingress, so the VM will instead use a dedicated
 security group with only stateful TCP/22 ingress from the workstation's current
 public IPv4 `/32` and stateful outbound access for package/model downloads. No

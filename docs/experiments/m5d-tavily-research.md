@@ -54,5 +54,5 @@ compensate. Recorded under M6 in `PROJECT_PLAN.md`.
 
 ## Status
 
-Accepted by Jethro on October 12, 2026. Records and snippets stay in ignored
+Accepted by the project owner on October 12, 2026. Records and snippets stay in ignored
 `artifacts/`.

@@ -1,6 +1,6 @@
 # Multi-job robot failure diagnosis — design
 
-**Status:** Design direction approved by Jethro on 2026-09-29; written spec awaiting review. No implementation or paid run authorized by this document.
+**Status:** Design direction approved by the project owner on 2026-09-29; written spec awaiting review. No implementation or paid run authorized by this document.
 
 ## Product question and change in emphasis
 

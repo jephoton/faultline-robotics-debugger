@@ -29,7 +29,7 @@ It bundles the task's demos, not a standalone episode. The mirror card declares
 Apache-2.0, conflicting with the upstream README's CC BY 4.0. Do not conceal the
 discrepancy or present mirror metadata as an authoritative relicensing grant.
 One-file acquisition/isolated h5py metadata inspection with an 800 MB bound was
-requested from Jethro; no download happened merely because the source is public.
+requested from the project owner; no download happened merely because the source is public.
 
 Recommendation: identify one official Object task file, bound acquisition size
 and inspect one episode's metadata before proposing an adapter. Dataset/frame

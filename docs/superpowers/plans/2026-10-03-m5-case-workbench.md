@@ -5,7 +5,7 @@
 > Steps use checkboxes. This is a proposed milestone plan, not approval to
 > implement undecided interfaces, send data to providers, or spend credits.
 
-**Status:** Scope/design and CLI-first entry point approved by Jethro on
+**Status:** Scope/design and CLI-first entry point approved by the project owner on
 October 3. A3 media compatibility is implemented and independently reviewed;
 A1's exact case contract is accepted; the bounded schema kernel is implemented
 and reviewed. Case-I/O/store/CLI are integrated and reviewed (`4851908` through
@@ -41,7 +41,7 @@ are approved. Verify the actual hosted Nemotron API before choosing a client.
   `server.py` serves read-only GET APIs and local assets in `viewer/web/`.
 - The viewer already supports paired videos, traces, reduction lineage and
   representative-nominal filtering. Preserve equal evidence-panel sizing and
-  Jethro's one-representative-nominal default.
+  the project owner's one-representative-nominal default.
 - Task-filtered runs can use local `task0000` filenames for global task IDs
   1/2. Resolve this by evidenced identity, never guess among ambiguous videos.
 - No general case importer or Nemotron product client exists. An external
@@ -86,7 +86,7 @@ playback do not prove counterfactual policy replay.
 
 Alternatives at the checkpoint: the replay-feasible HDF5 adapter if proven;
 an inspection-only adapter honestly labeled as such; or another artifact
-direction selected by Jethro. Do not silently replace external import with
+direction selected by the project owner. Do not silently replace external import with
 our own bundle and describe it as frictionless production interoperability.
 
 ### D3 — Nemotron role and input (red)
@@ -94,7 +94,7 @@ our own bundle and describe it as frictionless production interoperability.
 Recommend a bounded explanation service: known outcomes and perturbation
 metadata, selected trace events, and timestamped frames only if the verified
 endpoint supports them. Compare text-only simplicity versus multimodal symptom
-inspection with Jethro after current model/API, data handling and price checks.
+inspection with the project owner after current model/API, data handling and price checks.
 No inference/model choice or spending is approved by this plan. No raw-video
 upload or general chat interface is required.
 
@@ -162,7 +162,7 @@ Keep these questions separate:
 
 Missing metadata cannot become guessed replay readiness. Imported claims are
 not fresh confirmations. A known seed is not a portable world snapshot.
-Review the schema and state transitions with Jethro before implementation.
+Review the schema and state transitions with the project owner before implementation.
 
 ### A2: Import and export existing supported evidence (green after A1)
 
@@ -220,7 +220,7 @@ this fix alone is not the completed workbench.
 **A exit gate:** A fresh operator registers existing saved evidence, identifies
 what is/is not replayable, inspects parent/reduced videos and gate counts, and
 exports validated metadata (and a recipe only when complete). This proves offline usability, not a new live replay
-or external-input diagnosis. Checkpoint with Jethro before B/C implementation.
+or external-input diagnosis. Checkpoint with the project owner before B/C implementation.
 
 ## 5. M5B — One genuinely replayable external artifact
 
@@ -251,7 +251,7 @@ or external-input diagnosis. Checkpoint with Jethro before B/C implementation.
 **B exit gate:** One external case has a verified import/restoration path and
 an audited bounded diagnosis result. Failure confirmation requires fresh valid
 outcomes and controls; reduction is conditional on a repeatable failure.
-If feasibility fails, Jethro chooses the revised product boundary; do not
+If feasibility fails, the project owner chooses the revised product boundary; do not
 silently claim B complete or make many-format support a prerequisite.
 
 ## 6. M5C — Evidence-grounded Nemotron explanation
@@ -315,7 +315,7 @@ verify remote identity; commit-only is reported if networking blocks push.
 
 - **Red:** D1/A1 interface and case state semantics; external format/reset
   adapter; failure/search/reducer changes; new model/data transfer; live
-  topology/spend; deletion; submission claims. Jethro decides first.
+  topology/spend; deletion; submission claims. The project owner decides first.
 - **Amber:** approved viewer presentation, metadata reconciliation and bounded
   report parsing. Explain evidence/tradeoffs at the next batch checkpoint;
   stop before executing if uncertainty changes the accepted boundary.
@@ -323,7 +323,7 @@ verify remote identity; commit-only is reported if networking blocks push.
   local analysis, documentation and scoped bug fixes. Smaller agents execute.
 
 After each parallel batch root synthesizes what works, what does not, evidence,
-cost implications and the next decision. Do not ask Jethro to reconstruct agent
+cost implications and the next decision. Do not ask the project owner to reconstruct agent
 logs. Invite interpretation of live results before turning them into claims.
 
 ### Final M5 acceptance and next milestones
@@ -335,7 +335,7 @@ logs. Invite interpretation of live results before turning them into claims.
 - [ ] Demonstrate actual Nemotron use and honest deterministic fallback.
 - [x] Document a fresh-operator walkthrough in `docs/setup/case-workbench.md`
   and known limitations; no universal video-to-regression promise.
-- [x] Jethro selected Faultline on October 8 (ADR 0019), completing naming. M6 adds
+- [x] The project owner selected Faultline on October 8 (ADR 0019), completing naming. M6 adds
   broader validation under separate scope; M7 handles final video pitch,
   feedback reconciliation, licensing/data rights and judge-run public-repo audit.
 

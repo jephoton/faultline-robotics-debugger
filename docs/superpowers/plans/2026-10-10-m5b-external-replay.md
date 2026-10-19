@@ -5,7 +5,7 @@ external LIBERO demo state (ADR 0016) and (2) re-running M4's certified reduced
 case in a fresh Serverless session, which exercises the saved replay recipe.
 
 **Status:** proposed October 10. Local implementation is within ADR 0016's
-approval. The episode set and the paid Job need Jethro's explicit approval.
+approval. The episode set and the paid Job need the project owner's explicit approval.
 
 ## Facts this plan builds on
 

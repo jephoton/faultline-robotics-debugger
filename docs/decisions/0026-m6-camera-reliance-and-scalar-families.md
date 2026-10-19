@@ -1,6 +1,6 @@
 # ADR 0026: M6 camera reliance and scalar image families
 
-**Status:** Accepted by Jethro on October 12, 2026. **Outcome (October 13):**
+**Status:** Accepted by the project owner on October 12, 2026. **Outcome (October 13):**
 wrist + agent-view masking stops the grasp; blur fails reliably from sigma
 3.9 px, noise from sigma 95; darkening and contrast never fail in range. See
 `docs/experiments/m6-camera-and-scalar-families.md`.
@@ -37,7 +37,7 @@ perturbations defined by a single strength number.
 4. **Execution:** reuse the M3 batched 12-worker setup. A smoke Job runs the
    wrist conditions plus one sweep level per family; a main Job runs the four
    families concurrently.
-5. **Spend cap: US$3.00** for M6, after Jethro tops up, keeping about US$0.6
+5. **Spend cap: US$3.00** for M6, after the project owner tops up, keeping about US$0.6
    for M7.
 
 ## Not chosen

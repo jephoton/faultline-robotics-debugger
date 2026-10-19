@@ -5,7 +5,7 @@ read-only metadata inspection, not a simulated result or executed robot replay.
 
 ## Provenance and acquisition
 
-Jethro approved the bounded acquisition in ADR 0014. Downloaded one file from
+The project owner approved the bounded acquisition in ADR 0014. Downloaded one file from
 the official-endorsed `yifengzhu-hf/LIBERO-datasets` mirror at immutable revision
 `97773100c1474cd0d686ebd173cc0e4fd5442466`:
 

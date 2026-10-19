@@ -20,7 +20,7 @@
 | 2. Safe resume | smaller implementation agent | `scripts/run_parallel_eval.py`, `src/robot_debug/attempt_ledger.py` only if validation API needs it, `tests/test_parallel_eval_driver.py`, `tests/test_parallel_eval_report.py` | after Task 1 |
 | 3. Review and integration | coordinator; independent reviewer read-only | handoff docs and branch | after Tasks 1–2 |
 
-Green: tests, sidecar persistence, explicit CLI flag, docs. Amber: the conservative resume eligibility check and cost-report rejection; explain at next learning checkpoint. Red: extending resume to unknown/active attempts, accepting resumed modes in speed comparisons, changing live spending or workload—ask Jethro first. One agent edits the coupled runner tasks sequentially; reviewer does not edit; coordinator alone integrates and controls external resources.
+Green: tests, sidecar persistence, explicit CLI flag, docs. Amber: the conservative resume eligibility check and cost-report rejection; explain at next learning checkpoint. Red: extending resume to unknown/active attempts, accepting resumed modes in speed comparisons, changing live spending or workload—ask the project owner first. One agent edits the coupled runner tasks sequentially; reviewer does not edit; coordinator alone integrates and controls external resources.
 
 ## Task 1: Persist exact launch identity before waiting
 
@@ -46,7 +46,7 @@ Green: tests, sidecar persistence, explicit CLI flag, docs. Amber: the conservat
 - [ ] Independent read-only spec and quality review against the two cited requirements, emphasizing `Popen`→identity-write race, cleanup when identity persistence fails, exact manifest validation, no duplicate results, and fail-closed reporting. Resolve Important findings before integration.
 - [ ] Fresh verification: Windows full `unittest discover -s tests -q`, WSL focused POSIX lifecycle plus driver, `git diff --check`, scoped status, and secret/artifact scan. Document exact observed counts, not predicted counts.
 - [ ] Update the three handoff docs and commit `docs(hpc): record safe M3 recovery boundary`. Integrate into `main` only after review and merged-result tests. Preserve the managed worktree until no task depends on it.
-- [ ] Stop at the live-work gate. Refresh Nebius project, credits, quota, resource rate, VM state, and watchdog design; calculate a run-specific cap and obtain Jethro's separate approval before any billable pilot. Unknown Docker-daemon request state still requires exact-VM stop/verification.
+- [ ] Stop at the live-work gate. Refresh Nebius project, credits, quota, resource rate, VM state, and watchdog design; calculate a run-specific cap and obtain the project owner's separate approval before any billable pilot. Unknown Docker-daemon request state still requires exact-VM stop/verification.
 
 ## Self-review
 

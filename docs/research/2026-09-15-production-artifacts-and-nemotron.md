@@ -1,6 +1,6 @@
 # Existing robotics artifacts and Nemotron: decision brief
 
-Date: September 15, 2026. Import/model choices below are proposals, not implementation or spending approval. Apache-2.0 was selected under Jethro's explicit delegation and implemented by Terra, reviewed by the coordinator.
+Date: September 15, 2026. Import/model choices below are proposals, not implementation or spending approval. Apache-2.0 was selected under the project owner's explicit delegation and implemented by Terra, reviewed by the coordinator.
 
 ## 1. Import what people already have
 
@@ -39,7 +39,7 @@ Important compatibility traps:
 
 Target **simulation-based manipulation-policy developers**, not arbitrary deployed fleets, for the hackathon. They are closest to the environment our debugger can actually rerun.
 
-Jethro prioritized the option that makes the product usable and scalable. The resulting direction is: first support our existing evaluation artifacts, then test one external LIBERO/robomimic-style HDF5 episode as the first external adapter **if its simulator state is genuinely restorable**. This is the best chance of delivering the complete import-to-regression journey with one existing format. A format-independent episode/capability interface permits later LeRobot and MCAP readers without promising that they all support simulator replay. The internal interface is a design direction; exact schema and reader implementation need a sample feasibility check.
+The project owner prioritized the option that makes the product usable and scalable. The resulting direction is: first support our existing evaluation artifacts, then test one external LIBERO/robomimic-style HDF5 episode as the first external adapter **if its simulator state is genuinely restorable**. This is the best chance of delivering the complete import-to-regression journey with one existing format. A format-independent episode/capability interface permits later LeRobot and MCAP readers without promising that they all support simulator replay. The internal interface is a design direction; exact schema and reader implementation need a sample feasibility check.
 
 Before choosing the external adapter, inspect a real rights-compatible sample: identify its task, cameras, controller/actions, simulator reset information, model/assets and policy reference; try restoring and rerunning it with the pinned environment. If restoration is unavailable, label it inspection-only and reconsider the adapter before investing in UI.
 

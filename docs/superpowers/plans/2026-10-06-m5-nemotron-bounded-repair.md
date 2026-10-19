@@ -27,7 +27,7 @@ does not certify usefulness or factual grounding; M5B is a separate open gate.
 
 ## Accepted boundary and ownership
 
-Jethro approved this repair and one new US$0.02 attempt on October 6. No GPU
+The project owner approved this repair and one new US$0.02 attempt on October 6. No GPU
 compute, new model, undocumented thinking flag, automatic retry or extra cap.
 Root owns Git integration, credentials, paid call, original evidence and docs.
 One smaller balanced builder owns the tightly coupled six code/test files in

@@ -1,6 +1,6 @@
 # M3 reusable interruption-safe launcher
 
-**Status:** Accepted October 1 by Jethro: reusable workstation scheduled
+**Status:** Accepted October 1 by the project owner: reusable workstation scheduled
 controller plus existing guest pair. This approval covers local implementation,
 not a new paid start. No robot configuration changes are proposed.
 
@@ -32,7 +32,7 @@ loss of network, expired authentication or provider faults. Keep the guest
 shutdown backup; report unconfirmed cleanup as unresolved. A standalone
 controller can execute approved operations but cannot grant itself authority.
 
-Jethro also approved an independent scheduled temporary-resource cleanup task
+The project owner also approved an independent scheduled temporary-resource cleanup task
 and requested the shortest fixed-purpose route to the comparison. Reuse the
 working guest scripts and existing watchdog. The cleanup task uses separate
 progress from the controller, exact approved temporary IDs, confirmed-stop and

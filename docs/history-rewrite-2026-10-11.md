@@ -1,6 +1,6 @@
 # Commit history rewrite, October 11, 2026
 
-Jethro asked for AI co-author trailers to be removed from every commit. The
+The project owner asked for AI co-author trailers to be removed from every commit. The
 88 commits from `71e3188` (October 9) onward were rewritten on October 11 with
 only their messages changed: file trees and author/committer dates are
 identical. Short hashes quoted in docs were updated to the new commits.

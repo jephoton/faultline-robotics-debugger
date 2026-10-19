@@ -24,7 +24,7 @@ research notes for observations, unknowns and exact next checks.
 
 ## Authority and boundaries
 
-Jethro's October 4 "go" accepts the two preceding bounded proposals:
+The project owner's October 4 "go" accepts the two preceding bounded proposals:
 
 - Sample: one 780,145,352-byte file (744.1 MiB), hard 800,000,000-byte ceiling,
   immutable revision `97773100c1474cd0d686ebd173cc0e4fd5442466`, SHA-256
@@ -106,4 +106,4 @@ actual results before an adapter design. No overlapping production edits.
   preflight`, then `docs(m5): record actual external sample feasibility`.
   `git diff --check`; never stage dataset, venv, raw provider logs or secrets.
 - [ ] Explain the findings and required next decisions. Actual adapter/runtime
-  changes and a new live replay cap remain Jethro's checkpoints.
+  changes and a new live replay cap remain the project owner's checkpoints.

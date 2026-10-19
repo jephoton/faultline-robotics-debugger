@@ -23,7 +23,7 @@ The earlier one-start approval is exhausted. This plan proposes **US$6 additiona
 
 ## Task 1 — Readiness and local contract (green)
 
-**Approval:** Jethro approved the proposed US$6 additional total / one H100
+**Approval:** the project owner approved the proposed US$6 additional total / one H100
 start / 45-minute cap and temporary-resource cleanup, requesting autonomous
 execution through the scoped result and routine gates. Approval did not waive
 preflight or original-resource protections; it is now exhausted.

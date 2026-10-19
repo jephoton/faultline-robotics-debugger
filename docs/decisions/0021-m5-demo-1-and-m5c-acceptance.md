@@ -1,6 +1,6 @@
 # ADR 0021: Accept external demo_1 and the v2-06 Nemotron report
 
-**Status:** Accepted by Jethro on October 11, 2026 ("try demo_1, accept v2-06").
+**Status:** Accepted by the project owner on October 11, 2026 ("try demo_1, accept v2-06").
 
 ## Context
 

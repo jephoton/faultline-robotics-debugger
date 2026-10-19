@@ -24,7 +24,7 @@ replay throughput by at least 15% without changing outcomes.
 
 Most informative phases run first so a deadline still leaves a comparison.
 Total worst case US$1.45 ≤ US$1.50. The measurement Job runs only after the
-smoke Job passes and Jethro sees its result.
+smoke Job passes and the project owner sees its result.
 
 ## Components and ownership
 
@@ -152,10 +152,10 @@ Full Windows suite green before each commit
 2. Coordinator rebuilds the image, runs the in-image test subset, pushes and
    verifies tag → digest.
 3. Delete the three leftover buckets from October 10–11 if they are empty.
-4. **Smoke Job** (≤ 18 min). Show Jethro the parity and smoke result.
+4. **Smoke Job** (≤ 18 min). Show the project owner the parity and smoke result.
 5. **Measurement Job** (≤ 32 min) only if smoke passed. Watchdog cancels at the
    deadline plus 3 minutes either way.
-6. Jethro interprets the result against the 15% bar before any claim.
+6. The project owner interprets the result against the 15% bar before any claim.
 
 ## What would change direction
 

@@ -1,6 +1,6 @@
 # Plan: the Replays section becomes a regression test (October 19, 2026)
 
-**Status:** approved by Jethro on October 19, 2026 (option 1: a per-case
+**Status:** approved by the project owner on October 19, 2026 (option 1: a per-case
 reframe; a suite-wide page was considered and left for later).
 
 ## Problem

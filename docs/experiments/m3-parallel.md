@@ -206,7 +206,7 @@ designed import/Nemotron flow, not an automatic extension of M3.
 ### Two-episode pilot
 
 The separately labeled two-episode Nebius pilot ran on September 29 within
-Jethro's US$4/90-minute cap. Both evaluators ran concurrently on one L40S VM
+the project owner's US$4/90-minute cap. Both evaluators ran concurrently on one L40S VM
 against the pinned harness and shared GR00T server. `nominal-01` succeeded
 (138 steps, 41.8 seconds) and `mask-01` failed (280 steps, 53.4 seconds).
 Both were terminal-valid, replayable, and have non-empty JSONL traces and
@@ -219,7 +219,7 @@ null; billable end-to-end cost awaits provider reconciliation.
 The VM was stopped promptly after evidence copy, and the temporary SSH
 ingress rule was removed. Its retained 200 GiB boot disk still incurs storage
 charges; decide retention or teardown within the approved 24-hour window.
-At that point the pilot did not authorize the later comparison; Jethro
+At that point the pilot did not authorize the later comparison; the project owner
 subsequently approved its separate US$5/two-hour cap.
 
 The local runner uses a durable per-case

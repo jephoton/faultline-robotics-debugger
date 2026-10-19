@@ -50,7 +50,7 @@ replayable tests”, paired failing/passing robot frames and a small
 “Find → Confirm → Reduce → Replay” line. Keep text readable at thumbnail size.
 No new logo or brand direction is required.
 
-Jethro reviews the story and chooses narration (own voice recommended for a
+The project owner reviews the story and chooses narration (own voice recommended for a
 personal pitch; any alternative must be approved). Then record/edit the
 existing UI, measure final duration and module-footage time, review the cover,
 and obtain explicit approval before public YouTube upload and submission.

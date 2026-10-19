@@ -20,7 +20,7 @@
 | Independent safety/spec review | reviewer agent | read-only | Challenge late descendants, group reuse, Docker uncertainty, and direct interrupts |
 | Integration, documentation, and Git | coordinator | `docs/experiments/m3-parallel.md`, `docs/codex-handoff/STATE.md`, `RUNBOOK.md`, `docs/decisions/` only if the accepted decision changes | Review, full suite, commit/merge decisions |
 
-Implementation and review are sequential because the review requires the completed patch; documentation may proceed independently after the lifecycle contract settles. The coordinator alone integrates Git or operates Nebius. Green: tests, local code, docs. Amber: exact cleanup timing/observation semantics, reported at the checkpoint. Red: any change to cloud topology, spending cap, failure definition, or M3 workload—stop and ask Jethro. The existing design approval does not authorize a billable run.
+Implementation and review are sequential because the review requires the completed patch; documentation may proceed independently after the lifecycle contract settles. The coordinator alone integrates Git or operates Nebius. Green: tests, local code, docs. Amber: exact cleanup timing/observation semantics, reported at the checkpoint. Red: any change to cloud topology, spending cap, failure definition, or M3 workload—stop and ask the project owner. The existing design approval does not authorize a billable run.
 
 ## Task 1: Freeze the process-lifecycle regression
 
@@ -53,10 +53,10 @@ Implementation and review are sequential because the review requires the complet
 
 **Files:** Modify `docs/experiments/m3-parallel.md`, `docs/codex-handoff/STATE.md`, `docs/codex-handoff/RUNBOOK.md`; update `FEEDBACK.md` only if a new firsthand tool observation exists, not for local-only speculation.
 
-- [ ] **Step 1: Request read-only review after Task 3.** Give reviewer the accepted containment spec, pinned upstream `_exec_docker` link, exact diff, 172-test baseline, new POSIX reproduction, and acceptance criteria: no late child, no broad Docker cleanup, no silent retries, interrupted evidence non-comparable, no cloud call. Reconcile every Important finding before declaring local implementation ready; escalate architecture conflicts to Jethro.
+- [ ] **Step 1: Request read-only review after Task 3.** Give reviewer the accepted containment spec, pinned upstream `_exec_docker` link, exact diff, 172-test baseline, new POSIX reproduction, and acceptance criteria: no late child, no broad Docker cleanup, no silent retries, interrupted evidence non-comparable, no cloud call. Reconcile every Important finding before declaring local implementation ready; escalate architecture conflicts to the project owner.
 - [ ] **Step 2: Re-run independent checks.** Windows: `$env:PYTHONPATH='src'; & C:\Windows\py.exe -3.11 -m unittest discover -s tests -q`. POSIX: `PYTHONPATH=src python3 -m unittest tests.test_m3_posix_lifecycle -v` inside WSL. Run `git diff --check`, inspect `git status --short`, and verify no secret or large artifact is staged. Report actual counts and any skipped platform tests.
 - [ ] **Step 3: Update durable handoff.** Describe what is implemented, the observed containment test, the Docker-daemon residual uncertainty, and the rule to abort/stop VM after any ambiguous timeout. Correct the previous `cleanup_confirmed` interpretation and note that the independent watchdog is still required. Commit docs only as `docs(hpc): record M3 containment limits`.
-- [ ] **Step 4: Present learning checkpoint.** Explain process group versus Docker daemon in plain language; show the test evidence and remaining risks. Do not start Nebius. The next red gate is a fresh Nebius preflight, external exact-VM stop watchdog, live full-resource/storage price and credit verification, calculated run-specific cap, and Jethro's explicit approval before a two-episode pilot.
+- [ ] **Step 4: Present learning checkpoint.** Explain process group versus Docker daemon in plain language; show the test evidence and remaining risks. Do not start Nebius. The next red gate is a fresh Nebius preflight, external exact-VM stop watchdog, live full-resource/storage price and credit verification, calculated run-specific cap, and the project owner's explicit approval before a two-episode pilot.
 
 ## Completion boundary
 

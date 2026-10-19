@@ -1,6 +1,6 @@
 # Main-content back button
 
-**Scope:** Routine green follow-up to the accepted control-panel UI. Jethro
+**Scope:** Routine green follow-up to the accepted control-panel UI. The project owner
 requested a back button at the top left of the main content, excluding the
 sidebar, and restoration of the local server. No provider calls or new design
 system, hosted execution or paid work.

@@ -71,7 +71,7 @@ stays frozen; M6 broader validation remains pending.
   transparency than our evidence-first interface.
 
 These names have not been checked for trademark, domain, package or product
-availability. Jethro selected **Faultline** as the official product name on
+availability. The project owner selected **Faultline** as the official product name on
 October 8 (ADR 0019), superseding its earlier provisional/KIV status. Product
 branding is approved; folder/repository renaming and publication remain separate.
 

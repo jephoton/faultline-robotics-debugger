@@ -1,6 +1,6 @@
 # ADR 0027: M7 product consolidation and access options
 
-**Status:** Direction accepted by Jethro on October 13, 2026. Details (spec
+**Status:** Direction accepted by the project owner on October 13, 2026. Details (spec
 schema, command names, image distribution, publishing) go through the M7
 design checkpoint before implementation.
 
@@ -86,18 +86,18 @@ automatic cases) → breadth pack → UI overhaul → M7b demo and submission.
 **Access options (all three):**
 
 - **A. Public gallery of finished cases:** a read-only published page of the
-  reduced failures already found. Free to browse. Publishing needs Jethro's
+  reduced failures already found. Free to browse. Publishing needs the project owner's
   explicit go at the time.
 - **B. Local GPU backend:** the same image runs on a machine with a large
   NVIDIA GPU (`--backend local`), no cloud account needed.
 - **C. Nebius backend in the user's own project:** framed as "deploy to your
-  Nebius project". Each user's runs bill to their own account; Jethro's account
+  Nebius project". Each user's runs bill to their own account; the project owner's account
   pays only for runs he submits. Requires a way to obtain the image (build
   from the Dockerfile or a public registry such as GHCR; decided at the
   checkpoint).
 
-Rejected: **D. hosted run service on Jethro's account** (needs auth, quotas
-and abuse protection; Jethro would pay for others' runs).
+Rejected: **D. hosted run service on the project owner's account** (needs auth, quotas
+and abuse protection; the project owner would pay for others' runs).
 
 **Deployment (added October 13): try deploying Faultline as a website,
 likely on Vercel.** Vercel cannot run MuJoCo or a GPU policy, so the site is
@@ -106,7 +106,7 @@ finished cases (videos, minimal triggers, evidence, explanation, research)
 generated from the case store. It also serves as the submission's demo URL
 (optional for the Physical AI track, but useful to judges). Video hosting,
 any live Token Factory feature on the site, and the export command are
-decided at the M7 checkpoint; publishing needs Jethro's explicit go at the
+decided at the M7 checkpoint; publishing needs the project owner's explicit go at the
 time. This is the last M7a item, after the UI overhaul.
 
 **Submission track (accepted October 13):** Physical AI. Its text names
@@ -117,12 +117,12 @@ the video still needs at least one minute of the key modules in action.
 Serverless Endpoint serving GR00T, with the simulator running on the
 user's CPU and calling it per action chunk (a variant of option B). It
 matches the Physical AI track's "Endpoints for real-time inference" line,
-which is encouraged, not required. Concerns: it bills Jethro's account while
+which is encouraged, not required. Concerns: it bills the project owner's account while
 active (scale-to-zero unconfirmed; an always-on L40S is about US$1.75/h),
 needs token auth and rate limits, and adds a network round trip per action
-chunk. Only acceptable, if at all, as a short, Jethro-started window with a
+chunk. Only acceptable, if at all, as a short window started by the project owner, with a
 spend cap; it does not replace options A to C. **Update (October 13):** made
-a stretch goal for Jethro to try closer to the judging period (ADR 0029).
+a stretch goal for the project owner to try closer to the judging period (ADR 0029).
 
 **Startup cut (October 13, labelled M3, ADR 0029):** `faultline diagnose`
 (step 4) includes measuring and cutting Job startup (in-region weight

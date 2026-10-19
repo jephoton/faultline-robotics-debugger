@@ -1,6 +1,6 @@
 # M3 Durable Attempt Ownership Design
 
-**Status:** Proposed implementation of Jethro's accepted per-episode state-machine approach; no cloud spending authorized
+**Status:** Proposed implementation of the project owner's accepted per-episode state-machine approach; no cloud spending authorized
 
 **Parent:** [M3 evaluator containment](2026-09-28-m3-evaluator-containment-design.md)
 
@@ -96,4 +96,4 @@ fail the comparison reporter's completeness check.
   Windows and WSL suites pass, followed by independent spec and quality review.
 - Local tests do not prove Docker-daemon or Nebius behavior. A bounded live
   pilot, independent VM-stop watchdog, and calculated run-specific cap require
-  separate preflight and Jethro's approval.
+  separate preflight and the project owner's approval.

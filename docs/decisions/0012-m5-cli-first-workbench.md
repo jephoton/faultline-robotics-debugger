@@ -1,6 +1,6 @@
 # ADR 0012: CLI-first case workbench
 
-**Status:** Accepted by Jethro on October 3, 2026.
+**Status:** Accepted by the project owner on October 3, 2026.
 
 ## Decision
 

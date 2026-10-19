@@ -78,7 +78,7 @@ The first paid reducer session has a proposed maximum of 23 valid episodes:
 If the candidate budget ends during a gate, record the candidate as
 `inconclusive_budget_exhausted`; do not accept it. A wall-clock launch cutoff is
 also mandatory. The plan does not authorize this spend: live price, remaining
-credit, resource state, and a fresh dollar cap must be checked with Jethro
+credit, resource state, and a fresh dollar cap must be checked with the project owner
 before provisioning or resuming compute.
 
 Fresh initial states are deliberately outside this M4 session. M4 minimizes the
@@ -119,7 +119,7 @@ lifecycle/spending authority.
 
 - **DeepSeek Flash:** suitable only for the pure reducer kernel and its unit
   tests. This is bounded, deterministic, and isolated from credentials and
-  external systems. It requires Jethro's explicit execution authorization, a
+  external systems. It requires the project owner's explicit execution authorization, a
   dedicated worktree, and a task handoff document satisfying `AGENTS.md`.
 - **Terra:** owns the integration-heavy rectangular config contract and reducer
   session driver. These tasks require understanding the existing harness and

@@ -1,6 +1,6 @@
 # Home navigation and current-system explanation
 
-**Scope:** Jethro clarified that the top main-content Back button always goes
+**Scope:** the project owner clarified that the top main-content Back button always goes
 home and requested a full-system diagram to understand the current three UI
 choices. This is an accepted navigation correction and documentation of the
 existing implementation, not approval to regroup modes or redesign execution.
@@ -28,7 +28,7 @@ completed by the coordinator rather than pretending the active model changed.
   separate UI and documentation units with Conventional Commits.
 
 No public redeployment, new inference, simulation or cloud provisioning is
-included. Proposed grouping of audit and paraphrase remains for Jethro's review.
+included. Proposed grouping of audit and paraphrase remains for the project owner's review.
 
 **Verification:** the revised navigation regression failed against the old
 history handler, then all 13 Shell tests and all 180 web tests passed with the

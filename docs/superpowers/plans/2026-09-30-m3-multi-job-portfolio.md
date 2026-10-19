@@ -43,7 +43,7 @@ with self.assertRaises(ValueError):
 ```
 - [x] Run `C:\Windows\py.exe -3.11 -m unittest tests.test_portfolio_manifest -v`; it initially failed because the `portfolio_manifest` API did not exist.
 - [x] Implement the immutable manifest and hash in `src/robot_debug/portfolio_manifest.py`; serialize with sorted JSON, reject bool/negative/duplicate task IDs and path-unsafe job IDs, and keep the exact selected task list in every session. Focused tests pass and commit `feat(portfolio): freeze task job identities` (`9704e5a`) contains only source/test/note paths.
-- [x] Presented the supported task catalog and nominal evidence (only task 0 is proven). Jethro approved `(0, 1, 2)` on September 30 as candidates for a bounded nominal compatibility screen; see [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md). Pinned-source inspection provisionally maps IDs 1/2 to cream cheese/salad dressing basket tasks. The actual image and GR00T outcomes remain unchecked, and paid screening still requires a separate numeric cap. No task-specific success claim follows from the candidate choice.
+- [x] Presented the supported task catalog and nominal evidence (only task 0 is proven). The project owner approved `(0, 1, 2)` on September 30 as candidates for a bounded nominal compatibility screen; see [`m3-task-selection-contract.md`](../../experiments/m3-task-selection-contract.md). Pinned-source inspection provisionally maps IDs 1/2 to cream cheese/salad dressing basket tasks. The actual image and GR00T outcomes remain unchecked, and paid screening still requires a separate numeric cap. No task-specific success claim follows from the candidate choice.
 
 ## Task 2 — Add explicit task selection without regressing old runs (green after API proof)
 
@@ -64,7 +64,7 @@ assert "record_video: true" in rendered
 
 ## Task 3 — Pure shared-queue policy (amber; user checkpoint on priority/fairness)
 
-**Accepted rule:** Jethro approved work-conserving round-robin across eligible jobs, at most one ready episode per job per wave, rotating the first job, and no more than four active evaluator processes on the existing one GPU. This is adaptive to *ready work and phase*, not an optimal or learned failure-probability scheduler. Compare it with whole-job-at-a-time execution. The rationale is recorded in [`ADR 0009`](../../decisions/0009-portfolio-first-hpc.md).
+**Accepted rule:** the project owner approved work-conserving round-robin across eligible jobs, at most one ready episode per job per wave, rotating the first job, and no more than four active evaluator processes on the existing one GPU. This is adaptive to *ready work and phase*, not an optimal or learned failure-probability scheduler. Compare it with whole-job-at-a-time execution. The rationale is recorded in [`ADR 0009`](../../decisions/0009-portfolio-first-hpc.md).
 
 - [x] Wrote red-first `tests/test_portfolio_policy.py` cases for stable rotated first choices, no duplicate request, a four-slot maximum, no starvation under fixed or changing readiness, zero work when shared episode/wall/dollar admission fails, and paused/non-ready exclusion. Every wave must retain the full frozen manifest job-key set; malformed input fails closed. Independent spec and quality reviews passed after the changing-readiness fairness fix.
 
@@ -115,7 +115,7 @@ assert sum(report["job_status_counts"].values()) == 3
 
 - [x] With `PYTHONPATH=src`, Windows Python 3.11 full discovery passed 344 tests (four POSIX-only skips); focused WSL POSIX lifecycle/driver passed 66; `git diff --check` passed. A paired fresh fake-CLI test used the same manifest/bounds for both modes, confirmed three separate jobs and physical-attempt ceiling, and found no synthetic speedup claim.
 - [x] Updated `docs/codex-handoff/STATE.md`, `RUNBOOK.md`, and the M3/M5/M6 roadmap text with verified commands and limitations. No provider feedback was invented. Independent report claim-safety review approved; integration follows final branch checks.
-- [ ] Separately propose task-baseline screening and a live sequential-versus-portfolio experiment to Jethro, with exact task IDs, nominal validity gate, current balance/price/quota/capacity, one exact VM, watchdog, disk retention, numeric cap/deadline, and honest comparison metrics. **No VM start or extra GPU is authorized by this plan.** If exact-shape regular capacity still shows zero, defer without changing to preemptible or a different shape silently.
+- [ ] Separately propose task-baseline screening and a live sequential-versus-portfolio experiment to the project owner, with exact task IDs, nominal validity gate, current balance/price/quota/capacity, one exact VM, watchdog, disk retention, numeric cap/deadline, and honest comparison metrics. **No VM start or extra GPU is authorized by this plan.** If exact-shape regular capacity still shows zero, defer without changing to preemptible or a different shape silently.
 
 ## Dependency, agent, and review map
 

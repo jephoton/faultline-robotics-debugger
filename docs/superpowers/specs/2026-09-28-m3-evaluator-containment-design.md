@@ -19,7 +19,7 @@ keep Python alive after its partial-summary deadline.
 
 ## Selected approach and alternatives
 
-Jethro selected strengthening local process containment before the live
+The project owner selected strengthening local process containment before the live
 comparison, with an independent VM-stop watchdog as the final cost boundary.
 The narrower alternative—running only a supervised two-episode pilot with a
 watchdog and abort-on-uncertainty—would reach real hardware sooner but leave

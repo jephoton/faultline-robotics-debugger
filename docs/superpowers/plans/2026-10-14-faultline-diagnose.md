@@ -7,7 +7,7 @@ report, a viewer case and an explanation. `faultline replay CASE` re-runs a
 saved case.
 
 **Design:** ADR 0031 (scope, CLI wrapping, image distribution, startup cut
-skipped), ADR 0027, ADR 0028–0030. No paid run before Jethro approves this
+skipped), ADR 0027, ADR 0028–0030. No paid run before the project owner approves this
 plan; the live check at the end has its own cap.
 
 ## Spec (YAML, validated fail-closed)
@@ -112,7 +112,7 @@ reviews and runs the live check. No AI co-author trailers.
   still reproduces (the regression-test use).
 - `faultline image build [--push REGISTRY]` wraps the Dockerfile build and
   push and prints the digest to put in the spec. GHCR publication is
-  documented but not performed (licence check plus Jethro's go first).
+  documented but not performed (licence check plus the project owner's go first).
 - Generalise the M6 threshold mode's fixed suite/task/start to spec values
   (defaults byte-identical for recorded evidence).
 
@@ -128,7 +128,7 @@ orchestrator`, `feat(cloud): drive Nebius Jobs from the faultline CLI`,
    every exit path including Ctrl-C, secret handling, resume).
 2. Dry-run check: `faultline diagnose --dry-run` on the example specs prints
    the Job plan and worst-case spend without creating anything.
-3. **Live check (needs Jethro's go and a top-up; cap US$1.00):** `faultline
+3. **Live check (needs the project owner's go and a top-up; cap US$1.00):** `faultline
    replay` on the October 13 case (minimal scene and reference, 5 each) —
    one Job, exercises the whole backend path, and is itself the first
    regression-test result.
@@ -137,4 +137,4 @@ orchestrator`, `feat(cloud): drive Nebius Jobs from the faultline CLI`,
 
 - The CLI wrapper proves too brittle across environments: revisit the SDK.
 - Capacity failures dominate: offer a second platform in the spec (a red
-  cost decision for Jethro).
+  cost decision for the project owner).

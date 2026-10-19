@@ -1,6 +1,6 @@
 # ADR 0031: `faultline diagnose` — one command for a whole diagnosis
 
-**Status:** Accepted by Jethro on October 14, 2026 (M7a step 2 checkpoint).
+**Status:** Accepted by the project owner on October 14, 2026 (M7a step 2 checkpoint).
 
 ## Problem
 
@@ -24,7 +24,7 @@ revocation. A user cannot do that. ADR 0027 asks for one command.
    GHCR image.** `faultline image build/push` targets the user's own
    registry. Publishing Faultline's image publicly on GHCR is accepted in
    principle; the actual publication still needs a licence check of the
-   third-party packages in the image and Jethro's explicit go at that time.
+   third-party packages in the image and the project owner's explicit go at that time.
    Model weights are never in the image (downloaded at run time with the
    user's Hugging Face token).
 4. **Startup cut (ADR 0029 A): skipped for now.** Jobs keep downloading the

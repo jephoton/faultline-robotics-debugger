@@ -218,11 +218,11 @@ Tests with fake dependencies, as in `tests/test_explain_case.py`.
 
 ## Live run (coordinator only, after review)
 
-1. `queries` on the target case; show Jethro the exact strings.
+1. `queries` on the target case; show the project owner the exact strings.
 2. `search` once: 3 credits.
 3. `summarize --attempt r-01`; inspect in the viewer. Iterate the prompt with
    `r-02`..`r-05` only if the note is unhelpful, within the US$0.05 cap.
-4. Jethro judges usefulness and accepts or rejects M5D from the viewer.
+4. The project owner judges usefulness and accepts or rejects M5D from the viewer.
    Record the outcome, credits and cost in the experiment note and
    `FEEDBACK.md` (Tavily: onboarding, latency, result relevance).
 

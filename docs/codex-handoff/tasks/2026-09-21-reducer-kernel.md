@@ -121,7 +121,7 @@ change models or providers.
 
 ## 13. Attempt limit
 
-Jethro authorized one fresh handoff after the original worktree-permission
+The project owner authorized one fresh handoff after the original worktree-permission
 failure was diagnosed and repaired. Within this fresh handoff, make no more
 than two implementation attempts for the same code/test failure. A focused
 test/fix cycle counts as one attempt when it addresses the same root failure.

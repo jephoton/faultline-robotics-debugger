@@ -5,7 +5,7 @@ October 15–16, 2026. GR00T N1.7 (suite checkpoints
 L40S per Nebius Serverless Job, image v15, every run driven by
 `faultline diagnose`. Design: ADR 0032; plan:
 `docs/superpowers/plans/2026-10-15-breadth-pack.md`. Spend cap US$6.00
-(raised from US$4.00 by Jethro).
+(raised from US$4.00 by the project owner).
 
 ## Local verification
 
@@ -70,7 +70,7 @@ with real ids in `artifacts/specs-local/`.
 ## Control panel live check (October 17)
 
 The first run started from the control panel (`faultline ui`, ADR 0033), image
-v16, cap US$1.30 approved by Jethro: paraphrase diagnosis on LIBERO-Spatial
+v16, cap US$1.30 approved by the project owner: paraphrase diagnosis on LIBERO-Spatial
 task 0, start 0, four rewordings by Nemotron 3 Super (all kept by the meaning
 check). Control S S; all four rewordings succeeded, so there was nothing to
 reduce. Cost US$0.31 (one screen Job, 393 s of measured container time).

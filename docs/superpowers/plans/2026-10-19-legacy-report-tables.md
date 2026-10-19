@@ -42,7 +42,7 @@ provider or launch a Job. Do not merge the outstanding next-steps repair branch.
 - [x] Explain All evidence's synthetic-aggregate warnings and recommend sidebar/
   documentation scope with rough measured source sizes. Do not repair/remove
   All evidence, regroup navigation, add a language run, rewrite Reference/Guide
-  or publish a gallery without Jethro's decision.
+  or publish a gallery without the project owner's decision.
 
 All implementation above is Green inside the explicitly requested table
 consistency change. Larger information-architecture choices remain proposals.

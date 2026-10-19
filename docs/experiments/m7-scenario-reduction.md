@@ -5,7 +5,7 @@ October 13, 2026. GR00T N1.7 with the LIBERO-10 checkpoint
 Nebius Serverless Job, images v12 (`31738b844cdf`) and v13 (`80326ce…`, raised
 reduction candidate cap). Design: ADR 0028 and ADR 0029; plan:
 `docs/superpowers/plans/2026-10-13-m7-mode1-scenario-reduction.md`. Spend cap
-US$4.00 (Jethro, October 13).
+US$4.00 (the project owner, October 13).
 
 ## Local verification before any paid run
 
@@ -59,7 +59,7 @@ Early-decided gates (ADR 0029) skipped 13 confirmation attempts. Task 0 starts
 
 The reduce Job's own gate saw S F F F S for start 2 (start 7 passed 5 of 5).
 Across both Jobs start 2 failed 8 of 10: a failure in the stochastic band near
-80%, which passes a 4-of-5 gate only about 74% of the time. Jethro chose to
+80%, which passes a 4-of-5 gate only about 74% of the time. The project owner chose to
 screen task 0 deeper rather than loosen the gate.
 
 ## Reduction of task 0, start 14 against start 28
@@ -89,7 +89,7 @@ unknown. It is a narrow, arrangement-specific failure rather than one
 misplaced object. Early-decided
 gates skipped 31 and 33 attempts in the two reduction Jobs.
 
-**Predictions.** Jethro predicted a distractor (three of the five causes are
+**Predictions.** the project owner predicted a distractor (three of the five causes are
 distractors). Nemotron 3 Ultra ranked the alphabet soup first and predicted
 that reverting only the soup restores success (correct: the scene without the
 soup passed S S S S) and that reverting only the tomato sauce does not
@@ -114,7 +114,7 @@ five shifts needed together; no reruns of tested sizes):
 
 Two input fixes mattered as much as the model: a plain sentence per rerun
 (Nano's first answer read "S S" for the soup alone as "reverting the soup did
-not help") and the list of shrink sizes already tested. Jethro chose Ultra
+not help") and the list of shrink sizes already tested. The project owner chose Ultra
 for scenario explanations. The stored Ultra explanation states the
 necessary-but-not-sufficient result, the five-way conjunction and the shrink
 limits, and proposes untested next runs (shrink cream cheese, find the

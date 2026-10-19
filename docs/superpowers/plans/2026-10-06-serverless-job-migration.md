@@ -13,7 +13,7 @@
 The user approved [the topology and storage](../../decisions/0018-serverless-jobs-for-future-runs.md),
 then one US$3 / one-hour single-L40S validation allowance and 24-hour private
 output retention. This is not permission to start before local image checks.
-Actual balance/expiry are unknown; Jethro asserted adequate funds and declined
+Actual balance/expiry are unknown; the project owner asserted adequate funds and declined
 the console check. Record this exception rather than treating them as verified.
 Root owns docs, integration, registry/cloud state and any spending. A balanced
 smaller-model builder owns Tasks 1–3 in a clean attached worktree; Terra is not
@@ -158,7 +158,7 @@ specific to this one-hour single-L40S validation; no earlier cap is reusable.
   duration and storage-retention deadline; wait for approval before provision,
   registry publication or Job submission. Include image pull/model download/startup,
   temporary storage and applicable tax, not just episode wall time.
-  Jethro approved US$3 / one hour / 24-hour output retention on October 6;
+  The project owner approved US$3 / one hour / 24-hour output retention on October 6;
   do not request it again unless a resource/price/scope change exceeds it.
 - [x] Configure secrets locally/SecretStash without asking for token text in chat.
   Create only approved private resources. Prepare one stable configuration and

@@ -1,6 +1,10 @@
 # Bounded Cloud Session Execution Plan
 
-> **September 15 current authorization:** Jethro approved a fresh **US$1.00**
+> **Historical path note:** Guest paths in this plan use `<guest-home>` as a
+> placeholder. Substitute the target guest's home directory before adapting
+> these historical commands; this is not the current runbook.
+
+> **September 15 current authorization:** the project owner approved a fresh **US$1.00**
 > cap and active debugging during the unchanged experiment. Earlier caps below
 > are historical. Verify renewed authentication, balance, quota and live price
 > before start. Use one existing VM, a 26-minute launch cutoff, and a 30-minute
@@ -14,7 +18,7 @@
 
 > **September 14 execution amendment:** The original US$2 authorization ended
 > as infrastructure-only. After the five-minute connectivity probe passed,
-> Jethro approved a separate **US$1.10 cap** for exactly one unchanged
+> the project owner approved a separate **US$1.10 cap** for exactly one unchanged
 > evaluation session. Keep its 26-minute launch cutoff and 30-minute hard stop.
 > Use the current-session TCP/22 `/32` rule and the dedicated WSL key
 > `~/.ssh/nebius_robot_debug_2026`.
@@ -274,7 +278,7 @@ the rest of the session and record only the version, not config contents.
 ```
 
 Expected: a default profile exists and has a parent project. If authentication
-has expired or no profile exists, pause only this dependency and ask Jethro to
+has expired or no profile exists, pause only this dependency and ask the project owner to
 run `nebius profile create` interactively in Ubuntu. Resume after
 `nebius config get parent-id` succeeds; never request a token in chat.
 
@@ -489,9 +493,9 @@ ssh -o IdentitiesOnly=yes -o BatchMode=yes -i "$SSH_KEY" \
   "robot@${NB_VM_HOST}" true
 scp -o IdentitiesOnly=yes -i "$SSH_KEY" \
   "$PROJECT_ROOT/artifacts/first-failure-search.bundle" \
-  "robot@${NB_VM_HOST}:/home/robot/first-failure-search.bundle"
+  "robot@${NB_VM_HOST}:<guest-home>/first-failure-search.bundle"
 ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
-  'git clone /home/robot/first-failure-search.bundle /home/robot/first-failure-search-session && git -C /home/robot/first-failure-search-session switch --detach HEAD'
+  'git clone <guest-home>/first-failure-search.bundle <guest-home>/first-failure-search-session && git -C <guest-home>/first-failure-search-session switch --detach HEAD'
 ```
 
 If the key is not authorized or the workstation `/32` changed, update only the
@@ -503,16 +507,16 @@ Over SSH, run:
 
 ```bash
 set -euo pipefail
-test "$(git -C /home/robot/vla-evaluation-harness rev-parse HEAD)" = "35f1200eb15608aa898f727a3722f7eef889c6cd"
-test -x /home/robot/.venvs/vla-eval/bin/vla-eval
+test "$(git -C <guest-home>/vla-evaluation-harness rev-parse HEAD)" = "35f1200eb15608aa898f727a3722f7eef889c6cd"
+test -x <guest-home>/.venvs/vla-eval/bin/vla-eval
 for model in GR00T-N1.7-3B gr00t17-lerobot-libero_object-640 Cosmos-Reason2-2B; do
-  test -n "$(find /home/robot -maxdepth 7 -type d -name "models--nvidia--${model}" -print -quit 2>/dev/null)"
+  test -n "$(find <guest-home> -maxdepth 7 -type d -name "models--nvidia--${model}" -print -quit 2>/dev/null)"
 done
-git -C /home/robot/nebius-nvidia-hackathon status --short
+git -C <guest-home>/nebius-nvidia-hackathon status --short
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 docker image inspect ghcr.io/allenai/vla-evaluation-harness/libero@sha256:d0c45bc5a3720d569180e6b8dd92510da895f16c3cc509ccc76e4b4ffbb9e0f0 >/dev/null
-df -h /home/robot
-/home/robot/.venvs/vla-eval/bin/hf auth whoami >/dev/null
+df -h <guest-home>
+<guest-home>/.venvs/vla-eval/bin/hf auth whoami >/dev/null
 ```
 
 If any pinned runtime component is absent, stop the VM rather than downloading
@@ -524,15 +528,15 @@ Create a fresh timestamped VM results root and start the server on loopback:
 
 ```bash
 SESSION_STAMP="$(date -u +%Y-%m-%dT%H%M%SZ)"
-REMOTE_RESULTS_ROOT="/home/robot/results/${SESSION_STAMP}"
+REMOTE_RESULTS_ROOT="<guest-home>/results/${SESSION_STAMP}"
 ssh -o IdentitiesOnly=yes -i "$SSH_KEY" "robot@${NB_VM_HOST}" \
   bash -s -- "$REMOTE_RESULTS_ROOT" <<'SH'
 set -euo pipefail
 results_root=$1
 mkdir -p "$results_root/operator-logs"
-cd /home/robot/vla-evaluation-harness
-nohup /home/robot/.venvs/vla-eval/bin/vla-eval serve \
-  --config /home/robot/nebius-nvidia-hackathon/configs/model-server.yaml \
+cd <guest-home>/vla-evaluation-harness
+nohup <guest-home>/.venvs/vla-eval/bin/vla-eval serve \
+  --config <guest-home>/nebius-nvidia-hackathon/configs/model-server.yaml \
   > "$results_root/operator-logs/model-server.log" 2>&1 </dev/null &
 printf '%s\n' "$!" > "$results_root/operator-logs/model-server.pid"
 SH
@@ -571,12 +575,12 @@ set -euo pipefail
 results_root=$1
 remaining_seconds=$2
 mkdir -p "$results_root/operator-logs"
-export PATH="/home/robot/.venvs/vla-eval/bin:$PATH"
-cd /home/robot/vla-evaluation-harness
-/home/robot/.venvs/vla-eval/bin/python \
-  /home/robot/nebius-nvidia-hackathon/scripts/run_failure_search.py \
-  --upstream-root /home/robot/vla-evaluation-harness \
-  --project-root /home/robot/nebius-nvidia-hackathon \
+export PATH="<guest-home>/.venvs/vla-eval/bin:$PATH"
+cd <guest-home>/vla-evaluation-harness
+<guest-home>/.venvs/vla-eval/bin/python \
+  <guest-home>/nebius-nvidia-hackathon/scripts/run_failure_search.py \
+  --upstream-root <guest-home>/vla-evaluation-harness \
+  --project-root <guest-home>/nebius-nvidia-hackathon \
   --results-root "$results_root" \
   --launch-cutoff-seconds "$remaining_seconds" \
   > "$results_root/operator-logs/driver.log" 2>&1
@@ -680,11 +684,11 @@ files unchanged.
 - Modify: `docs/experiments/first-failure-search.md`
 - Modify: `docs/superpowers/plans/2026-09-12-robot-debugging-startup.md`
 
-- [ ] **Step 1: Ask Jethro to predict or interpret the bounded outcome**
+- [ ] **Step 1: Ask the project owner to predict or interpret the bounded outcome**
 
 Present the raw counts, first-failure severity if one exists, replay outcomes,
 wall time, and cost before turning them into a project claim. Ask what result
-Jethro expected and what explanation seems plausible.
+the project owner expected and what explanation seems plausible.
 
 - [ ] **Step 2: Write the bounded interpretation**
 
@@ -717,7 +721,7 @@ git add docs/experiments/first-failure-search.md docs/superpowers/plans/2026-09-
 git commit -m "docs(search): record bounded failure search"
 ```
 
-Do not push or publish the result without Jethro's explicit instruction.
+Do not push or publish the result without the project owner's explicit instruction.
 
 ## Plan acceptance criteria
 

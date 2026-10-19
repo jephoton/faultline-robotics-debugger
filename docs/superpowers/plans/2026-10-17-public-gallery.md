@@ -10,7 +10,7 @@
 
 ## Authorization and boundaries
 
-Jethro's October 17 instruction, "update the handoff docs properly first, then carry on with m7a step 5", authorizes the static gallery publication described in ADRs 0027 and 0033. It does not authorize a paid hosting upgrade, new Nebius/Token Factory/Tavily calls, a public image, repository visibility changes, or a custom domain purchase. Use the authenticated Vercel account if unambiguous; request sign-in if unavailable. Do not work around certificate checks or print credentials.
+The project owner's October 17 instruction, "update the handoff docs properly first, then carry on with m7a step 5", authorizes the static gallery publication described in ADRs 0027 and 0033. It does not authorize a paid hosting upgrade, new Nebius/Token Factory/Tavily calls, a public image, repository visibility changes, or a custom domain purchase. Use the authenticated Vercel account if unambiguous; request sign-in if unavailable. Do not work around certificate checks or print credentials.
 
 ## Ownership and dependency map
 

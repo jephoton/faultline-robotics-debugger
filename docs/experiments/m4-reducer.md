@@ -8,7 +8,7 @@ counterexample, not a causal explanation or a globally minimal mask.
 ## September 27 live result
 
 **Status:** completed for LIBERO Object task 0, episode 0, seed 7, with the
-pinned GR00T N1.7 policy on one Nebius L40S VM. Jethro approved a US$2
+pinned GR00T N1.7 policy on one Nebius L40S VM. The project owner approved a US$2
 incremental session cap. The nominal sentinel succeeded. The parent
 `(x=0.50, y=0, width=0.50, height=0.50)` failed 4/4 times. Two nested
 edge-strip removals retained the failure:

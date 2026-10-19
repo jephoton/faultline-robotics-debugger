@@ -7,7 +7,7 @@ this ADR is not an instruction to resume execution.
 
 ## Context
 
-The fixed-work M3 comparison proved that four concurrent evaluators increased warm episode throughput on one GPU. A single find → confirm → reduce loop contains sequential decision gates, so that throughput result is not evidence of proportional end-to-end diagnosis speedup. Jethro wants HPC to serve multiple robot-task investigations rather than be forced into one dependent loop.
+The fixed-work M3 comparison proved that four concurrent evaluators increased warm episode throughput on one GPU. A single find → confirm → reduce loop contains sequential decision gates, so that throughput result is not evidence of proportional end-to-end diagnosis speedup. The project owner wants HPC to serve multiple robot-task investigations rather than be forced into one dependent loop.
 
 ## Decision
 
@@ -17,7 +17,7 @@ The existing single-job adaptive loop remains available as a per-job component. 
 
 ## Local scheduler rule
 
-Jethro accepted work-conserving round-robin for the first implementation:
+The project owner accepted work-conserving round-robin for the first implementation:
 rotate which eligible task goes first each wave, take at most one ready episode
 per task per wave, and cap the shared queue at four evaluators on the existing
 one-GPU topology. The scheduler may leave slots unused when fewer task jobs

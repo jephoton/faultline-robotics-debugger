@@ -1,6 +1,6 @@
 # ADR 0035: One diagnosis pipeline that routes on the untouched result
 
-**Status:** Direction accepted by Jethro on October 18, 2026. The
+**Status:** Direction accepted by the project owner on October 18, 2026. The
 implementation plan
 (`docs/superpowers/plans/2026-10-18-one-diagnosis-pipeline.md`) is for his
 review before building. Names for the entry point and the kinds of finding are
@@ -46,7 +46,7 @@ or search for, a failure.
   failing control. Lower risk; only layout failures become tests.
 - **Two jobs now, the pipeline after submission.**
 
-Jethro chose the pipeline for the submission, accepting the build and
+The project owner chose the pipeline for the submission, accepting the build and
 validation risk before October 29.
 
 ## Consequences
@@ -67,7 +67,7 @@ validation risk before October 29.
   the plan's contract, then integrated. A `mode: diagnose` spec and
   template:
   - defaults: blur, noise, darken and contrast; no rewordings; research on;
-    a US$2.50 cap and 1.5 hours (Jethro revised the defaults down from
+    a US$2.50 cap and 1.5 hours (the project owner revised the defaults down from
     "everything", which needed a US$6–7, 4-hour cap);
   - other modes still work from the CLI.
 - **Routing.** The check reuses the layout screen Job. Routes are layout,
@@ -88,12 +88,12 @@ validation risk before October 29.
   ids unchanged).
 - **Research.** An optional research step (Tavily sources, a Nemotron 3 Nano
   summary) attaches context to each new case when a Tavily key is present.
-- **Default cap kept at US$2.50** (Jethro, October 19). The runtime reserves
+- **Default cap kept at US$2.50** (the project owner, October 19). The runtime reserves
   each Job's worst case only when it submits it, and charges the measured
   time. A typical check (about US$0.43) therefore leaves room for either
   branch's first Job. Review names the Job that would be refused only if the
   Jobs before it cost their worst case.
-- **Occlusion stays out of the New diagnosis** (Jethro, October 19). The ten
+- **Occlusion stays out of the New diagnosis** (the project owner, October 19). The ten
   probe families each have a single severity. The September occlusion
   rectangle is a 2D shape with its own edge-trimming reducer. Adding it, as a
   scalar family or as its own probe kind, would need image work and a paid

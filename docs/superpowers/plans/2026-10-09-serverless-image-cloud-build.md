@@ -4,8 +4,8 @@
 push it to a private registry and record its immutable digest for the approved
 L40S pilot Job. The workstation disk could not hold the build.
 
-**Approval (October 9, Jethro):** option A, all-in builder cap **US$1.50**,
-separate from the US$3 L40S Job cap. AI Cloud top-up confirmed by Jethro;
+**Approval (October 9, the project owner):** option A, all-in builder cap **US$1.50**,
+separate from the US$3 L40S Job cap. AI Cloud top-up confirmed by the project owner;
 amount not stated. The US$25 promo credit is Token Factory only. Keep the
 stopped `robot-debug-pilot` VM/disk until the pilot succeeds or October 16,
 whichever is first, then delete with explicit approval.

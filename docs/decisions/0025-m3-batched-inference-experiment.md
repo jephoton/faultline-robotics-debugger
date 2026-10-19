@@ -1,6 +1,6 @@
 # ADR 0025: M3 batched-inference experiment
 
-**Status:** Accepted by Jethro on October 12, 2026. **Outcome (October 12):** works at 12
+**Status:** Accepted by the project owner on October 12, 2026. **Outcome (October 12):** works at 12
 workers in two runs (+18.0%, +18.7%); no gain at 8 workers. See
 `docs/experiments/m3-batched-inference.md`. Timebox 3 working days
 (ADR 0023); failure to meet the bar below moves M3 to the portfolio fallback.
@@ -53,7 +53,7 @@ the CPU was. Batching can only help once enough workers queue on that lock.
 
 ## Amendments after independent review (October 12)
 
-Accepted by Jethro before any GPU Job:
+Accepted by the project owner before any GPU Job:
 
 - **Parity is judged before gripper rounding.** The LIBERO decode rounds the
   gripper to open/closed, so tiny bf16 batch differences near the threshold
@@ -70,7 +70,7 @@ Accepted by Jethro before any GPU Job:
 
 The first measurement Job gave +18% at 12 workers with batching but one late
 masked success (11.0 s, `mask-10`) in the batched phase, which the rule above
-labels `outcome_drift`. Jethro chose one rerun of the 12-worker pair, with
+labels `outcome_drift`. The project owner chose one rerun of the 12-worker pair, with
 phase order reversed (batched first) and a 690 s workload deadline to stay
 inside the US$1.50 cap. Verdict rules, fixed before the rerun:
 
@@ -89,7 +89,7 @@ inside the US$1.50 cap. Verdict rules, fixed before the rerun:
 The first rerun used a 690 s workload deadline. The runtime reserves 600 s
 after the model download (`POST_PREFETCH_RESERVE_SECONDS`), so the download
 got only 90 s and failed (`prefetch_failed`, about US$0.22, coordinator's
-planning error). Jethro raised the M3 cap from US$1.50 to **US$1.85** for one
+planning error). The project owner raised the M3 cap from US$1.50 to **US$1.85** for one
 correct rerun with a 1000 s deadline under the same replication rule. Batch
 workloads must use a deadline of at least about 1000 s.
 

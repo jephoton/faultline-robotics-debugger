@@ -12,7 +12,7 @@
 
 ## Scope, ownership, and gates
 
-**Accepted design:** `docs/superpowers/specs/2026-09-29-m3-two-episode-pilot-design.md`. One smaller implementation agent owns `scripts/run_parallel_eval.py`, `tests/test_parallel_eval_driver.py`, and `tests/test_m3_report.py`; a POSIX test may be added to `tests/test_m3_posix_lifecycle.py`. A separate agent may implement the watchdog plan concurrently because it owns different files. The coordinator owns integration and cloud execution; independent spec and quality reviewers are read-only. Green: local refactor/tests/docs. Amber: exact internal helper signature and pilot summary marker—explain at review. Red: different workload/model/failure definition, pilot retries, live cap or VM start—Jethro decides separately.
+**Accepted design:** `docs/superpowers/specs/2026-09-29-m3-two-episode-pilot-design.md`. One smaller implementation agent owns `scripts/run_parallel_eval.py`, `tests/test_parallel_eval_driver.py`, and `tests/test_m3_report.py`; a POSIX test may be added to `tests/test_m3_posix_lifecycle.py`. A separate agent may implement the watchdog plan concurrently because it owns different files. The coordinator owns integration and cloud execution; independent spec and quality reviewers are read-only. Green: local refactor/tests/docs. Amber: exact internal helper signature and pilot summary marker—explain at review. Red: different workload/model/failure definition, pilot retries, live cap or VM start—the project owner decides separately.
 
 No paid run follows from this plan. Stage explicit related paths, use conventional commits, and keep artifacts ignored. Do not write account IDs, tokens, private keys, or user-specific absolute paths into code or docs.
 
@@ -41,8 +41,8 @@ No paid run follows from this plan. Stage explicit related paths, use convention
 - [ ] Add or adapt one real WSL SIGTERM test of the `pilot` CLI while a fake evaluator is active. Verify both the child termination and an explicitly partial `m3-pilot-workers-2/session_summary.json`; no result may be labeled a complete comparison mode. Run `PYTHONPATH=src python3 -m unittest tests.test_m3_posix_lifecycle tests.test_parallel_eval_driver -q` in WSL.
 - [ ] Independent spec review checks exact two cases, no third launch, shared containment/ledger, output isolation, and reporter refusal. Independent quality review checks scheduler refactor regressions and signal/timeout safety. Resolve Important findings with fresh tests.
 - [ ] Coordinator reruns Windows full suite, WSL focused suite, `git diff --check`, and a scoped tracked-file secret/artifact check. Record actual counts. Update the three handoff docs with the local pilot command and limitations; commit `docs(hpc): record M3 pilot readiness`.
-- [ ] Stop at the live gate. The pilot may be run only after the watchdog plan is implemented and dry-run verified, current account/credit/price/quota/capacity/VM state are checked, and Jethro separately approves a numeric cap.
+- [ ] Stop at the live gate. The pilot may be run only after the watchdog plan is implemented and dry-run verified, current account/credit/price/quota/capacity/VM state are checked, and the project owner separately approves a numeric cap.
 
 ## Review checkpoint
 
-Show Jethro the two-case manifest and explain that two workers test session overlap, not guaranteed parallel GPU inference. Ask for an outcome prediction before the paid pilot. A pilot pass is a prerequisite to, not authorization for, the full 1/2/4 comparison.
+Show the project owner the two-case manifest and explain that two workers test session overlap, not guaranteed parallel GPU inference. Ask for an outcome prediction before the paid pilot. A pilot pass is a prerequisite to, not authorization for, the full 1/2/4 comparison.

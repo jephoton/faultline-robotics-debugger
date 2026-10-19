@@ -8,7 +8,7 @@ proposing the order and a hypothesis, and save it as a replayable case.
 **Design:** ADR 0028 (accepted October 13), inside ADR 0027; early-decided
 gates from ADR 0029 (labelled M3). **Spend cap:**
 US$4.00 for this phase (image smoke, screen, reduction smoke, reduction, one
-retry). No GPU Job runs before Jethro approves this plan.
+retry). No GPU Job runs before the project owner approves this plan.
 
 ## Flow
 
@@ -235,17 +235,17 @@ subset before each Job. Commits:
    load and the state length matches, pushes, verifies tag to digest.
 3. **Smoke Job** (deadline about 1080 s, worst case about US$0.55).
 4. **Screen Job** (deadline sized from smoke timings; expected about 25
-   minutes, about US$0.8; worst case capped by watchdog). Show Jethro the
+   minutes, about US$0.8; worst case capped by watchdog). Show the project owner the
    screen table and the candidate failure before planning the reduction.
 5. Local planning step (Nemotron call costs cents on Token Factory).
 6. **Reduce Job** (expected about 20 minutes, about US$0.7).
 7. Watchdogs enforce the remaining US$4.00 cap across all Jobs.
-8. Jethro interprets the minimal cause and the hypothesis verdict before any
+8. The project owner interprets the minimal cause and the hypothesis verdict before any
    claim.
 
 ## What would change direction
 
-- No start fails at least 4 of 5 in the screen: stop and return to Jethro
+- No start fails at least 4 of 5 in the screen: stop and return to the project owner
   (widen the screen, another suite, or an engineered start labelled as such).
 - The reference never passes 5 of 5: report it; do not loosen the gate
   without a decision.

@@ -1,5 +1,9 @@
 # M3 Live Three-Task Portfolio Comparison Execution Plan
 
+> **Historical path note:** Guest paths in this plan use `<guest-home>` as a
+> placeholder. Substitute the target guest's home directory before adapting
+> these historical commands; this is not the current runbook.
+
 **Execution status (October 2): Frozen, optional M3 stretch.** See accepted
 [ADR 0011](../../decisions/0011-freeze-expanded-m3.md). This comparison is not
 a core release gate. Do not execute without explicit resumption, fresh
@@ -21,8 +25,8 @@ One-start authority is exhausted. See [the interruption record](../../experiment
 
 ## Authority and cost boundary
 
-- Jethro requested autonomous execution through the full comparison and media recovery, minimal configuration changes, bug documentation, and Git push. The working code/documents through `b4b43c4` were pushed and remote main was read back at that exact commit.
-- **Approved by Jethro:** US$8 total attributable to this attempt, one H100 start, maximum 90 minutes from start request through stop. Previous US$6 nominal-screen authority is exhausted.
+- The project owner requested autonomous execution through the full comparison and media recovery, minimal configuration changes, bug documentation, and Git push. The working code/documents through `b4b43c4` were pushed and remote main was read back at that exact commit.
+- **Approved by the project owner:** US$8 total attributable to this attempt, one H100 start, maximum 90 minutes from start request through stop. Previous US$6 nominal-screen authority is exhausted.
 - The October 1 console displays US$8.52, active account, no expiry displayed. This is a fresh balance observation, not reconciliation of all prior invoices. Recheck before mutation and account for identifiable pending charges; do not assume delayed posting means free compute.
 - At US$4.50/hour, 90 minutes compute is US$6.75 pre-tax / US$7.3575 with assumed 9% tax. Bounding snapshot, clone disk, and original disk accrual attributable to the attempt to three hours each adds about US$0.191 with that tax assumption: approximately US$7.55 total, leaving about US$0.45 cap headroom. Refresh actual prices and taxes; stop before creation if the conservative bound no longer fits.
 - Copy continuously, stop early when done, and delete only temporary VM/managed disk and snapshot immediately after verified stop and evidence recovery, no later than three hours from snapshot creation. This does not authorize deleting the original VM/disk or extending their existing retention. If evidence copy is blocked, recover compact evidence before the deadline and honor approved cleanup; report any lost media honestly.
@@ -75,9 +79,9 @@ git diff --check
 
 ```bash
 PROJECT="$SESSION/source"
-UPSTREAM=/home/robot/vla-evaluation-harness
-PY=/home/robot/.venvs/vla-eval/bin/python
-export PATH=/home/robot/.venvs/vla-eval/bin:$PATH
+UPSTREAM=<guest-home>/vla-evaluation-harness
+PY=<guest-home>/.venvs/vla-eval/bin/python
+export PATH=<guest-home>/.venvs/vla-eval/bin:$PATH
 export PYTHONPATH="$PROJECT/src"
 "$PY" "$PROJECT/scripts/run_diagnostic_portfolio.py" \
   --manifest "$SESSION/manifest.json" --mode sequential-jobs \
@@ -107,7 +111,7 @@ export PYTHONPATH="$PROJECT/src"
 - [ ] Report no-failure tasks honestly, with null failure/reduction timestamps. Complete no-failure flows can still compare workload elapsed time, but do not call that failure-diagnosis yield. A certified reducer output is bounded, not globally minimal. One pair with fixed mode order is exploratory evidence, not a repeated statistical benchmark.
 - [ ] Smaller-model reviewer independently audits all media/counts and claim gates on local artifacts; root synthesizes results and bug causes. Record unchanged hardware/config plus any narrowly scoped recovery, separating project/operator bugs from provider behavior. Track warm estimates, whole allocation envelope, storage and tax separately; never relabel estimates as posted billing.
 - [ ] Bundle media/trace files in per-mode/job/case directories, excluding private control/server logs. Keep large artifacts ignored. Current viewer task-local filename compatibility and M5 overview are separate work, not grounds to change the experiment.
-- [ ] Run fresh proportionate checks and `git diff --check`, commit explicit related docs (`docs(m3): record live portfolio comparison`) and push under Jethro's publication request. Verify remote SHA and return media links, valid counts, comparison limits, cleanup, and a simple bug explanation.
+- [ ] Run fresh proportionate checks and `git diff --check`, commit explicit related docs (`docs(m3): record live portfolio comparison`) and push under the project owner's publication request. Verify remote SHA and return media links, valid counts, comparison limits, cleanup, and a simple bug explanation.
 
 ## Dependency/concurrency and learning checkpoints
 

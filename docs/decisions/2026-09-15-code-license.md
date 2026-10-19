@@ -1,6 +1,6 @@
 # Code license: Apache-2.0
 
-Status: superseded on October 9, 2026 by Jethro's explicit MIT selection;
+Status: superseded on October 9, 2026 by the project owner's explicit MIT selection;
 see [ADR 0020](0020-mit-code-license.md). The original decision below is historical.
 
 Decision: use the unmodified Apache-2.0 license for original project code.

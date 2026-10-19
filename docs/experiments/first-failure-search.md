@@ -1,5 +1,9 @@
 # First bounded failure search
 
+> **Historical path note:** The guest paths below are placeholders, not a
+> current runbook. Substitute `<guest-home>` with the target guest's home
+> directory before adapting any command.
+
 **Status:** completed on September 15 under the approved US$1.00 cap. The
 nominal gate passed with 20/20 successes. Episode 0 then succeeded at every
 centered-square severity from 6.25% through 25% image area, so the driver found
@@ -158,13 +162,13 @@ non-interactive command exited 0. A post-run serial capture contains cloud-init
 completion and `ssh.socket` listening evidence. Independent cleanup verification
 found the VM `STOPPED` and the temporary rule absent.
 
-Connectivity debugging is complete. Jethro explicitly approved a separate
+Connectivity debugging is complete. The project owner explicitly approved a separate
 US$1.10 cap for this unchanged evaluation session. The session may now start
 only after its live preflight gates pass.
 
 The first evaluation start after that approval also stopped before runtime
 validation: SSH and source-bundle transfer succeeded, but the existing
-`/home/robot/nebius-nvidia-hackathon` directory is not a Git checkout, so the
+`<guest-home>/nebius-nvidia-hackathon` directory is not a Git checkout, so the
 operator's `git fetch` command failed. No model server or episode started. The
 retry clones the verified bundle into a fresh per-session directory rather than
 altering that existing directory. Its hard stop is reduced to 28 minutes,
@@ -174,7 +178,7 @@ short source-layout failure within the approved US$1.10 cap.
 The subsequent runtime preflight passed: the pinned harness and LIBERO image,
 the GR00T, LIBERO checkpoint, and Cosmos caches, the L40S GPU, and the
 authenticated Hugging Face client were all present. The client lives at
-`/home/robot/.venvs/vla-eval/bin/hf`; it is not on the remote login shell's
+`<guest-home>/.venvs/vla-eval/bin/hf`; it is not on the remote login shell's
 global `PATH`. The model server reached loopback readiness in about two and a
 half minutes.
 
@@ -188,7 +192,7 @@ the second error. The managed disk retains the logs, but no aggregate, video,
 or episode output exists to interpret.
 
 Those operator defects were repaired before the completed September 15 run:
-the driver environment exported `/home/robot/.venvs/vla-eval/bin`, every driver
+the driver environment exported `<guest-home>/.venvs/vla-eval/bin`, every driver
 invocation received a new empty results root, and an independent watchdog owned
 the VM stop deadline.
 

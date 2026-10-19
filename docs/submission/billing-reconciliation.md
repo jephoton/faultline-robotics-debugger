@@ -1,9 +1,9 @@
 # Billing reconciliation — partial evidence
 
 Status: **period totals recorded; lifetime/per-run reconciliation incomplete**.
-Jethro supplied AI Cloud and Token Factory consumption screenshots, plus a
+The project owner supplied AI Cloud and Token Factory consumption screenshots, plus a
 date selector showing **September 19–October 19, 2026**, on October 20.
-Jethro confirmed this is the **only AI Cloud account used for Faultline**;
+The project owner confirmed this is the **only AI Cloud account used for Faultline**;
 the earlier planned account split was not actual usage. The crops do not
 show project filters or an ISO currency code. These are console usage views,
 not settled invoices or evidence for dates outside the selected window.
@@ -76,7 +76,7 @@ not an independently exported account grand total or a lifetime project total.
 - It does **not** independently validate a particular diagnosis's estimate,
   the US$3.87 showcase subtotal or a lifetime total. Token Factory's supplied
   aggregate is now recorded, but individual calls remain unmatched.
-- Jethro also reported **$0.82 remaining**, without a service/account/date
+- The project owner also reported **$0.82 remaining**, without a service/account/date
   scope. A remaining balance is not consumption and is not an allowance for
   new paid work. Do not reverse-engineer spend from assumed top-ups.
 
@@ -86,7 +86,7 @@ not an independently exported account grand total or a lifetime project total.
    and after October 19, or confirm there was none. The project began before
    this window; do not assume the selected month covers everything.
 2. Confirm currency/project filters if publishing an account-wide total.
-   No second AI Cloud account is needed; Jethro confirmed only one was used.
+   No second AI Cloud account is needed; the project owner confirmed only one was used.
 3. Where practical, use a redacted usage breakdown/export to map cloud time
    to run dates, including setup/failed/idle development runs, storage and tax.
 

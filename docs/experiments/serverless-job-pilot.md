@@ -11,7 +11,7 @@ No billable resource was created during the following checks.
 
 ## October 6 read-only preflight
 
-- WSL Ubuntu and Nebius CLI 0.12.275 work; local OAuth was renewed by Jethro.
+- WSL Ubuntu and Nebius CLI 0.12.275 work; local OAuth was renewed by the project owner.
 - Existing eu-north1 project is active and original robot VM is STOPPED.
 - Tenant L40S Compute quota limit is32. Exact `gpu-l40s-a`,
   `1gpu-16vcpu-64gb` resource advice returned19on-demand available/MEDIUM at
@@ -23,7 +23,7 @@ No billable resource was created during the following checks.
   pinned public simulator image, restart-policy never,150GiBdisk and1htimeout.
   It explicitly reported validation success and no resource created. This is
   control/configuration validation, not simulator/model Job execution.
-- Actual AI Cloud balance and expiry were not independently read. Jethro
+- Actual AI Cloud balance and expiry were not independently read. The project owner
   declined the console check, stated funds were adequate and asked to proceed.
   Token Factory's separately reported balance is not evidence for this account.
 - [Registry pricing](https://docs.nebius.com/container-registry/resources/pricing)
@@ -113,7 +113,7 @@ code at `759fc8e`) was built locally after workstation disk cleanup. A planned
 Nebius CPU builder VM was refused because the tenant's non-GPU vCPU quota is 0;
 nothing was provisioned. Two local build failures were workstation/network
 issues, not packaging defects: AVG antivirus HTTPS scanning replaced GitHub's
-certificate (diagnosed with `openssl s_client`; Jethro disabled scanning during
+certificate (diagnosed with `openssl s_client`; the project owner disabled scanning during
 the build), then one transient `pypi.org` connect timeout; a plain retry passed.
 
 Local image ID and pushed digest:
@@ -148,7 +148,7 @@ destination inodes; fixed in `b38c81e` (exclusive final paths, content-hash
 verification, no rename). No outcome claim is made from attempt 1.
 
 **Attempt 2 — `faultline-pilot-20261010b` (image `f87ebb5`, digest
-`sha256:decd037a…cbca3c`, COMPLETED).** Separately approved by Jethro within the
+`sha256:decd037a…cbca3c`, COMPLETED).** Separately approved by the project owner within the
 original US$3 cap. Timeline (UTC): submitted 12:29, container start 12:34:14,
 export preflight OK 12:34:15, pinned prefetch done 12:40:24 (369 s), nominal
 12:40:39–12:41:10, masked 12:41:10–12:41:41, export of 21 files done 12:41:43.
@@ -179,12 +179,12 @@ re-run the certified reduced case; it observed one failure for a neighbouring
 repeatability or reduction claim. Use `(0.625, 0, 0.375, 0.375)` for any
 reproduction of the M4 case. Estimated cost: two Jobs of about 12–13
 minutes each at US$1.7468/h ≈ US$0.75 pre-tax plus small disk/bucket charges;
-posted billing still to be reconciled. Jethro reported an AI Cloud balance of
+posted billing still to be reconciled. The project owner reported an AI Cloud balance of
 US$5.99 at retry time.
 
 ### October 11 `search` mode validation
 
-Jethro asked to run the only driver not yet exercised on Serverless. Job
+The project owner asked to run the only driver not yet exercised on Serverless. Job
 `faultline-search-20261011` (image `afb8eaa5d3d9`, benchmark starts, no external
 state) COMPLETED in ~18 minutes; 95 files exported and verified; every video
 decodes.

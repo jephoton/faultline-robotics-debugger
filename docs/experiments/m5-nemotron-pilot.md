@@ -52,7 +52,7 @@ plus4,096-output-token calculation is US$0.01671168 before extras. Preserve
 the previous reservation; use a separately approved fixed pilot directory,
 never delete/refund the old marker or add an arbitrary CLI cap/path override.
 
-Jethro approved the changed limit/timeout and additional cap on October6.
+The project owner approved the changed limit/timeout and additional cap on October6.
 Root committed the [exact repair plan](../superpowers/plans/2026-10-06-m5-nemotron-bounded-repair.md) covering client/store usage bounds,
 backward-compatible old sidecars, safe bounded failure diagnostics (no raw
 text/headers), fresh reservation, tests and independent review. Root alone
@@ -97,7 +97,7 @@ viewport QA remain pending. No more calls are approved by these results.
 
 ## Human review checkpoint — external replay deferred
 
-Jethro explicitly chose to defer external replay and review this report first.
+The project owner explicitly chose to defer external replay and review this report first.
 Root freshly fetched the persisted report and recomputed deterministic facts
 from the registered case. The report passes transport/schema checks, but its
 two generic observations do not summarize the strongest available evidence:
@@ -121,7 +121,7 @@ This is a review recommendation, not an implementation approval.
 
 ## October 10: v2 geometry-aware iteration
 
-Jethro approved continuing with prompt/input improvements under a US$0.10 cap
+The project owner approved continuing with prompt/input improvements under a US$0.10 cap
 (at most five labelled attempts, `v2-01`..`v2-05`, each with its own exclusive
 reservation under ignored `artifacts/m5-nemotron-attempts/`). Plan:
 `docs/superpowers/plans/2026-10-10-m5c-nemotron-v2.md`. Changes: packet v2 with
@@ -146,9 +146,9 @@ strip separating failing x=0.625 masks from succeeding x=0.75 masks.
 Incorrect: observation 1 says all masked groups had zero successes (4 masked
 episodes succeeded) and cites only nominal episodes; hypothesis 3 is muddled.
 Interpretation remains subordinate to the deterministic facts, which are
-always correct. Acceptance is Jethro's decision.
+always correct. Acceptance is the project owner's decision.
 
-### Continued iteration (Jethro: "try improving further")
+### Continued iteration (the project owner: "try improving further")
 
 Added v2-06/v2-07 labels so worst-case reservations stay within the US$0.10 cap;
 rejected responses are now saved with a rule diagnosis in the ignored attempt
@@ -167,7 +167,7 @@ Running total: about US$0.0033 of the US$0.10 cap; v2-07 unused.
 deterministic facts. Remaining blemishes: two observations cite one group they
 do not describe; stiff wording that echoes field names; limitations omit the
 22-episode sample size. Recommended as the M5C demonstration report, labelled
-"human review required" as the viewer already does. Jethro decides acceptance.
+"human review required" as the viewer already does. The project owner decides acceptance.
 
 Lesson: the useful division of labour is Faultline computing every number,
 grouping and spatial description, and the model selecting contrasts and
@@ -175,7 +175,7 @@ proposing next experiments.
 
 ### Final blemish-fixing attempts (October 11) and decision
 
-Jethro asked to fix v2-06's remaining blemishes. Two attempts added wording,
+The project owner asked to fix v2-06's remaining blemishes. Two attempts added wording,
 citation-scope, sample-size, count and inference-rule instructions:
 
 | Attempt | Result | Est. cost |

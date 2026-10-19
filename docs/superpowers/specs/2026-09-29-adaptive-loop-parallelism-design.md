@@ -1,6 +1,6 @@
 # Adaptive diagnostic loop on one GPU — design
 
-**Status:** Accepted by Jethro on 2026-09-29 for local planning and implementation. No paid run authorized.
+**Status:** Accepted by the project owner on 2026-09-29 for local planning and implementation. No paid run authorized.
 
 **Parent roadmap:** `PROJECT_PLAN.md` M2/M4/M3. **Evidence:** `docs/experiments/m3-parallel.md`, especially the fixed 1/2/4-worker comparison. **Existing safety boundary:** `docs/decisions/0006-single-vm-parallel-replay.md`.
 

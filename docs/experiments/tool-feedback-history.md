@@ -68,7 +68,7 @@ submission tasks; this cleanup does not claim to have completed them.
 | NVIDIA GR00T N1.7 and LIBERO checkpoints | The robot policy under test: the four suite checkpoints `libero_{object,10,spatial,goal}`. | 20/20 nominal baseline episodes on LIBERO-Object; repeatable recorded behaviour for the failure, reduction and breadth experiments. | The gated Cosmos-Reason2-2B dependency returned a 403 until the account holder accepted its terms (model onboarding, not a Nebius fault). Weights take about 6 minutes to download on every Job. Unperturbed GR00T passed only 2 of 5 from one LIBERO-Goal start. | Yes, with the task and simulator limits stated. |
 | AllenAI VLA evaluation harness and LIBERO image | Evaluator, simulator, recordings and the LeRobot model-server adapter. | Structured aggregates, traces, SQLite recordings and MP4s made independent validation and the viewer possible. | The pinned image contained a root-only upstream file and needed a root container user; generic schema warnings appeared on successful episodes; the pinned CLI can leave its Docker client child alive after the evaluator exits (an upstream lifecycle risk, not a Nebius or NVIDIA fault). | Yes for the pinned benchmark, with version and cleanup checks. |
 
-## Jethro's first-hand notes
+## The project owner's first-hand notes
 
 - **The daily CLI sign-in got in the way of long runs.** The Nebius CLI's
   interactive sign-in expires after about a day. Twice a run stopped partway
@@ -130,7 +130,7 @@ separately approved exact-shape starts timed out with `NotEnoughResources`
 and returned to `STOPPED` without an episode. This is a concrete capacity/scheduling friction
 point, not an evaluator or model failure. See
 [`docs/experiments/m3-three-task-screen.md`](../experiments/m3-three-task-screen.md).
-Reuse judgment remains provisional until a real three-task run and Jethro's
+Reuse judgment remains provisional until a real three-task run and the project owner's
 feedback.
 
 ## Our setup errors, not provider bugs
@@ -186,7 +186,7 @@ An operator request initially used lowercase enum labels in a JSON file;
 the CLI's protobuf JSON parser required uppercase labels. This failed locally
 before resource creation and is separate from the remote access issue.
 
-- Record Jethro's own zero-to-hello-world experience for each tool actually
+- Record the project owner's own zero-to-hello-world experience for each tool actually
   used: precise command or screen, elapsed time, blocker, and what helped.
 - Reconcile estimated VM costs against posted billing; keep taxes and disk
   accrual separate from running-compute time.
@@ -289,7 +289,7 @@ thinking toggle in our reviewed sources; do not substitute self-hosted options.
 Estimated cost was US$0.00020976 at published rates; actual billing is unknown.
 The conservative US$0.02 reservation remains consumed with no automatic retry.
 We cannot yet recommend reuse based on explanation quality; a useful follow-up
-output and Jethro's first-hand feedback remain needed. See the
+output and the project owner's first-hand feedback remain needed. See the
 [pilot record](../experiments/m5-nemotron-pilot.md). Local parser, test-fixture,
 asset-resolution and viewer defects are logged separately in `docs/dev-log.md`.
 
@@ -325,7 +325,7 @@ configuration validation defects were project bugs caught by review; neither
 is attributed to Nebius or NVIDIA. See the
 [migration record](../experiments/serverless-job-pilot.md) and
 [development log](../dev-log.md). Reuse judgments and posted billing still
-require actual service evidence and Jethro's first-hand submission review.
+require actual service evidence and the project owner's first-hand submission review.
 
 Further local packaging checks resolved model dependencies from pinned public
 sources and passed Dockerfile validation. An actual CPU image build exposed our

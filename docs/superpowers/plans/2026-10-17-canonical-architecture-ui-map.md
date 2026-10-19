@@ -29,7 +29,7 @@ The coordinator owns all file edits and Git operations. The audit/review agent
 is read-only and reports paths and findings, with no overlapping writes. Use a
 smaller capable model for this bounded inventory per project handoff policy.
 All documentation maintenance is Green. Choosing a new UI grouping remains Red:
-explain alternatives, recommend one, and await Jethro before changing UI code.
+explain alternatives, recommend one, and await the project owner before changing UI code.
 
 ## Tasks
 

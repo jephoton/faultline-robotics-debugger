@@ -30,13 +30,13 @@ remains undecided.
 
 **Status:** M2 found a reproducible upper-right occlusion failure after a 20/20 nominal baseline. On September 27, M4 reduced its mask from 25% to 14.0625% of image area within 12 candidate attempts; the final accepted mask failed 4/4 times and five fresh nominal controls succeeded. The 22-episode evidence set is indexed by the local viewer. This is a budget-local reduced counterexample, not a proven minimum or causal diagnosis. M3's fixed-workload runner, durable interruption/recovery, and comparison reporter are implemented and locally reviewed; the live pilot and measured 1/2/4-worker comparison have not run.
 
-**Completed scoped plan (September 16):** Jethro accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
+**Completed scoped plan (September 16):** the project owner accepted a fixed-area position search rather than increasing centered severity or changing perturbation family. Task 6 of [`2026-09-15-position-grid-search.md`](2026-09-15-position-grid-search.md) completed in the corrected `5-series` session. The fourth ordered cell, upper-right `x=0.50, y=0.00`, produced a policy failure that repeated 5/5 times; matched nominal controls succeeded 5/5. The VM was independently verified stopped with no temporary rule. The estimated session cost is US$0.5118 including the 9% GST assumption, inside the cumulative US$2 cap. Sample-format inspection remains independent of this result.
 
-**Proposed product/submission plan:** [Replayable case import, Nemotron, and license](2026-09-15-case-import-nemotron-submission.md) scopes the post-grid product experience and remaining submission requirements. Jethro prioritized a replay-feasible LIBERO/robomimic-style external episode as the first import direction; exact implementation/model designs remain proposed. Apache-2.0 was selected under Jethro's delegation and added locally. [Production-artifact and Nemotron research](../../research/2026-09-15-production-artifacts-and-nemotron.md) explains the format alternatives and capability checks.
+**Proposed product/submission plan:** [Replayable case import, Nemotron, and license](2026-09-15-case-import-nemotron-submission.md) scopes the post-grid product experience and remaining submission requirements. The project owner prioritized a replay-feasible LIBERO/robomimic-style external episode as the first import direction; exact implementation/model designs remain proposed. Apache-2.0 was selected under the project owner's delegation and added locally. [Production-artifact and Nemotron research](../../research/2026-09-15-production-artifacts-and-nemotron.md) explains the format alternatives and capability checks.
 
 **User collaboration preferences (September 12):** Cloud compute is a confirmed main project resource. Ask the user to configure credentials when cloud access is needed. Commit small coherent changes frequently using Conventional Commits. Hand most architecture and design choices to the user with plain-language context, options, and a recommendation before implementing them. Follow `AGENTS.md`; the stack and design below remain proposals, not blanket approvals.
 
-**Budget and account update (September 13):** The total intended Nebius-credit envelope is US$75: use the initial account's US$25 for the first baseline/integration work without deliberately wasting it, then use US$50 on the main account (US$25 initial balance plus US$25 promo) for perturbation, reduction, parallel-evaluation, and demo work. Nebius projects cannot move between tenants or regions, so this is an account/profile handoff using the same Git repository, not a project migration. The initial CLI-authenticated account is active and currently shows suitable `eu-north1` L40S capacity; its billing, live complete-VM price, quota, capacity, and balance/expiry must still be verified immediately before provisioning. Keep US$5--10 of the combined plan in reserve and treat the US$75 total as a hard ceiling unless Jethro explicitly changes it.
+**Budget and account update (September 13):** The total intended Nebius-credit envelope is US$75: use the initial account's US$25 for the first baseline/integration work without deliberately wasting it, then use US$50 on the main account (US$25 initial balance plus US$25 promo) for perturbation, reduction, parallel-evaluation, and demo work. Nebius projects cannot move between tenants or regions, so this is an account/profile handoff using the same Git repository, not a project migration. The initial CLI-authenticated account is active and currently shows suitable `eu-north1` L40S capacity; its billing, live complete-VM price, quota, capacity, and balance/expiry must still be verified immediately before provisioning. Keep US$5--10 of the combined plan in reserve and treat the US$75 total as a hard ceiling unless the project owner explicitly changes it.
 
 ---
 
@@ -254,7 +254,7 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 | M1: reproducible runner | Wrap upstream execution; record configs and outcomes; save failure video | Nominal episode runs and replays; timeout/crash classified distinctly |
 | M2: first failure | Apply one bounded perturbation family; run a fixed sweep | Nominal/perturbed paired attempts and a failure that repeats |
 | M3 base: useful parallelism — complete | Retain the equal-work 1/2/4-worker replay scheduler and measured throughput | 48 valid episodes, no outcome drift, 3.715× warm throughput at four workers; no end-to-end diagnosis/cost claim |
-| M3 expanded: portfolio HPC — optional stretch, frozen | If Jethro resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
+| M3 expanded: portfolio HPC — optional stretch, frozen | If the project owner resumes it, finish/review the launcher and compare multiple task-level diagnosis jobs on one GPU | Fresh execution/spending approval; budget-matched live sequential/adaptive evidence and per-job reports |
 | M3 alternative: batched inference — proposed optional stretch | Reuse the upstream batch dispatcher and assess a GR00T/LeRobot batch adapter instead of building another inference engine | Matched unbatched/batched workload; session isolation, outcome agreement, throughput, latency, memory and cost measurements |
 | M4: failure reducer | Remove factors, then reduce their magnitude under a fixed retry budget | Smaller case retains the same defined failure; nominal restoration checked |
 | M5: diagnostic report and viewer | Show each case's measured violation, original/reduced videos, and replay recipe; portfolio overview belongs only to the optional M3 stretch | Another session reproduces a saved case; the viewer accurately distinguishes completed, unsuccessful, and budget-exhausted cases |
@@ -264,12 +264,12 @@ Each milestone produces working software; avoid opening all subsystems at once. 
 
 ### Roadmap additions — October 8: reuse before rebuilding
 
-Jethro requested these roadmap entries. Their placement is accepted; exact
+The project owner requested these roadmap entries. Their placement is accepted; exact
 implementation designs, new experiments and spending remain separate gates.
 They do not reopen expanded M3 or displace the approved Serverless migration
 and remaining core M5 acceptance work.
 
-Jethro reaffirmed that all additional M3/HPC work is optional stretch and may
+The project owner reaffirmed that all additional M3/HPC work is optional stretch and may
 be better explored in a separate project. Retain the completed replay result;
 neither batching nor expanded portfolio diagnosis is required to finish
 Faultline. The proposed batching experiment combines concurrent simulator
@@ -288,7 +288,7 @@ episode parallelism; compare the same workers with batching disabled/enabled.
 - **M6 LIBERO-Plus reuse:** the current stack is original LIBERO Object, not
   LIBERO-Plus. Inspect and reuse the [existing perturbation implementations](https://github.com/sylvestf/LIBERO-plus)
   before writing camera, lighting, background, layout or other families from
-  scratch. Select one family with Jethro; pin assets/dependencies and verify
+  scratch. Select one family with the project owner; pin assets/dependencies and verify
   nominal compatibility. Distinguish evaluating predefined variants from
   exposing replayable parameters that our reducer can shrink. Broader task
   and suite coverage remains M6, not an automatic model/simulator change.
@@ -326,7 +326,7 @@ We have completed **M1: reproducible runner** and the engineering gate for
 
 ### Immediate decision after the bounded session
 
-Interpret the raw counts, timings, and cost with Jethro before choosing the next
+Interpret the raw counts, timings, and cost with the project owner before choosing the next
 implementation plan. Follow the branch supported by the evidence:
 
 | Bounded-session result | Immediate next work |
@@ -417,7 +417,7 @@ These are target weeks; access delays consume the buffer. If no real policy epis
 ## 9. Submission checklist
 
 - [ ] Record substantive NVIDIA model usage and Nebius execution with exact model and job identifiers, excluding secrets.
-- [ ] Complete the required tool feedback using [FEEDBACK.md](../../../FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether Jethro would build with it again. Do not imply Token Factory was used unless its pilot runs.
+- [ ] Complete the required tool feedback using [FEEDBACK.md](../../../FEEDBACK.md): what each actually used Nebius/NVIDIA tool did, zero-to-hello-world experience, precise strengths/friction, and whether the project owner would build with it again. Do not imply Token Factory was used unless its pilot runs.
 - [ ] Recheck official Physical AI requirements before finalizing the submission.
 - [ ] Prepare a public judge-runnable repository: visible Apache-2.0 license, attribution/third-party rights, pinned setup and sample-artifact access, one verified smoke-test path, and a tracked-file/history secret scan before visibility changes.
 - [x] Select the product name: **Faultline**, accepted October 8; no folder/repository rename implied.
@@ -441,9 +441,9 @@ valid evidence by the equal-work 1/2/4-worker comparison. The accepted
 single-VM/shared-server topology does not authorize spending: first refresh
 Nebius account, credit, quota, capacity, exact price and VM state; arm an
 independent exact-VM stop watchdog; calculate a run-specific cap and obtain
-Jethro's separate approval. Tool feedback is
+the project owner's separate approval. Tool feedback is
 tracked in [FEEDBACK.md](../../../FEEDBACK.md). The video pitch and judge-run
-public repository audit are explicit submission gates after M3, as Jethro
+public repository audit are explicit submission gates after M3, as the project owner
 requested.
 
 The parallel sample check found no external file in this repository. Upstream

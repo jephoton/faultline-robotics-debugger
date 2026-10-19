@@ -17,9 +17,9 @@ Our implementation mistakes are separated from provider/model limitations.
 | **Tavily Search** | Optional public-source context; onboarding was an API key and one endpoint. [Details](docs/experiments/tool-feedback-history.md#october-11-tavily-search-m5d-and-nemotron-research-summaries) | Descriptive queries surfaced relevant occlusion research and a GR00T issue; usage reporting supported a credit ledger. | Very narrow numerical queries drifted to unrelated industrial pages. Finding a source does not validate the generated recommendation. | **Yes** for discovery, with citations and human review. |
 | **AllenAI VLA harness / LIBERO stack** | Evaluator, simulator and model-server adapter; not a Nebius service. [Integration](docs/architecture.md) | Videos, traces and structured results supported independent inspection and replay. | The pinned image/CLI needed permission and child-process containment work; generic schema warnings appeared on successful episodes. These are upstream/project integration issues, not Nebius defects. | **Yes**, with pinned versions and lifecycle checks. |
 
-## Jethro's first-hand notes
+## First-hand notes
 
-These existing notes are retained for Jethro's confirmation before submission.
+These notes are approved for submission.
 
 - **The daily CLI sign-in got in the way of long runs.** The Nebius CLI's
   interactive sign-in expires after about a day. Twice a run stopped partway

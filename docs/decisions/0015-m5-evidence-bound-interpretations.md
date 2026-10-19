@@ -1,6 +1,6 @@
 # ADR 0015: Immutable evidence-bound interpretations
 
-Status: Accepted October 5, 2026, by Jethro's explicit design checkpoint.
+Status: Accepted October 5, 2026, by the project owner's explicit design checkpoint.
 
 Store each explanation as an immutable JSON sidecar bound to a registered case
 and the canonical evidence-packet hash. Revalidate source evidence before

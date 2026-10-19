@@ -289,7 +289,7 @@ git commit -m "docs(viewer): record demo acceptance"
 ## Completion condition
 
 Stop after the acceptance-evidence commit. Report the commits, test count,
-screenshot path, and any limitation. Do not push; Jethro reviews the local
+screenshot path, and any limitation. Do not push; the project owner reviews the local
 commits first.
 
 ## Implementation evidence

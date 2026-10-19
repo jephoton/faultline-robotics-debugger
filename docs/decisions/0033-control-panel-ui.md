@@ -1,6 +1,6 @@
 # ADR 0033: Faultline control panel UI
 
-**Status:** Accepted by Jethro on October 17, 2026 (M7a step 4). Design:
+**Status:** Accepted by the project owner on October 17, 2026 (M7a step 4). Design:
 `docs/superpowers/specs/2026-10-17-faultline-control-panel-design.md`.
 
 ## Context
@@ -42,7 +42,7 @@ gallery for the Vercel deployment.
   only; a spec builder only; run from spec files; compose and follow without
   launching.
 - Stack: plain HTML and JavaScript modules (recommended at the time), or
-  vendored Preact + htm. Jethro chose React + Vite.
+  vendored Preact + htm. The project owner chose React + Vite.
 - Layout: pages with top navigation, or a workspace behind a landing page.
 - Look: a calm generic product UI (rejected as generic), then an incident
   docket, drafting sheet, seismic survey, teach pendant, bench instrument,
@@ -58,7 +58,7 @@ gallery for the Vercel deployment.
 - `faultline stop` is a new CLI command and an orchestrator state
   (`stopped_by_user`).
 - Deploying the export (M7a step 5) and the final live UI run each need
-  Jethro's go at the time.
+  the project owner's go at the time.
 
 ## Implementation notes (October 17, 2026)
 
@@ -91,7 +91,7 @@ gallery for the Vercel deployment.
 
 ## Amendment (October 18, 2026): report-first case page
 
-Jethro chose a report-first case page. A case with a saved report shows, in
+The project owner chose a report-first case page. A case with a saved report shows, in
 order:
 1. the header;
 2. the linked videos;
@@ -111,7 +111,7 @@ regenerated. See `docs/superpowers/plans/2026-10-18-report-first-case-page-and-t
 
 ## Amendment (October 18–19, 2026): colours, readout and Reference
 
-- **Pass and fail colours (Jethro).** Every pass/fail outcome is coloured:
+- **Pass and fail colours (the project owner).** Every pass/fail outcome is coloured:
   green for a pass (including "No failure found"), red for a failure. Amber
   still marks anything needing attention. This replaces the original rule
   that kept passes neutral; an icon and a word always go with the colour.

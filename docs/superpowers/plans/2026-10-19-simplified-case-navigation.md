@@ -1,6 +1,6 @@
 # Simplify case navigation and restore a wording example
 
-Approved scope: Jethro requested one archived wording result, challenged type
+Approved scope: the project owner requested one archived wording result, challenged type
 labels for the unified pipeline, and explicitly requested removing All evidence.
 This is a bounded UI correction, not a redesign of Reference or Run your own.
 
@@ -46,7 +46,7 @@ This is a bounded UI correction, not a redesign of Reference or Run your own.
 
 No new GPU/Token Factory/Tavily calls, public deployment, archive deletion,
 Reference/Guide rewrite, cloud provisioning or pending next-steps repair merge.
-Broader post-Demo-6 integration remains waiting for Jethro's completion signal.
+Broader post-Demo-6 integration remains waiting for the project owner's completion signal.
 The public gallery is unchanged until its separately gated redeployment.
 
 ## Inspection addendum: honest restored report limitations

@@ -1,10 +1,10 @@
 # Faultline control panel UI: implementation plan
 
 Design: `docs/superpowers/specs/2026-10-17-faultline-control-panel-design.md`
-(ADR 0033). Approved by Jethro on October 17, 2026, with an instruction to
+(ADR 0033). Approved by the project owner on October 17, 2026, with an instruction to
 carry on autonomously until the overhaul is finished.
 
-**Gates that still need Jethro:** the one real (billable) run started from
+**Gates that still need the project owner:** the one real (billable) run started from
 the UI, and any publishing (Vercel, public image). Everything else here is
 green or amber and proceeds without asking.
 
@@ -396,7 +396,7 @@ source), with the licence text alongside. Pin exact versions; commit
 4. Regenerate `demo/` so it opens in the new UI; update README, quickstart
    (`faultline ui`), runbook, STATE, ADR 0033 implementation notes,
    `NOTICE.md` (fonts and front-end dependencies).
-5. Live gate: ask Jethro for go and a cap, then one paraphrase run started,
+5. Live gate: ask the project owner for go and a cap, then one paraphrase run started,
    watched, and finished from the UI; record cost in FEEDBACK if material.
 
 ## Review checkpoints
@@ -405,4 +405,4 @@ source), with the licence text alongside. Pin exact versions; commit
   surface (token, origin, host, loopback, one-run lock, stop safety and
   ledger arithmetic, public projection in the export: no ids or paths) and
   the front end against the spec; the coordinator triages findings.
-- Before the live gate: a summary for Jethro with screenshots.
+- Before the live gate: a summary for the project owner with screenshots.

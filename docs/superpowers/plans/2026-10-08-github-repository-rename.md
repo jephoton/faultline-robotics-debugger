@@ -1,6 +1,6 @@
 # Faultline GitHub Repository Rename Implementation Plan
 
-**Goal:** Apply Jethro's approved `faultline-robotics-debugger` repository name,
+**Goal:** Apply the project owner's approved `faultline-robotics-debugger` repository name,
 without moving the local checkout or changing runtime/artifact identities.
 
 **Architecture:** Rename the existing GitHub repository in place. Retain its
@@ -18,7 +18,7 @@ plan. Independent reviewers read only; they must not change external state.
 Concurrency: root rename/config verification || documentation preparation,
 then spec review -> quality review -> root checks/commit/push.
 
-The red naming/publication boundary is settled by Jethro's explicit request
+The red naming/publication boundary is settled by the project owner's explicit request
 to proceed with this exact repository rename. Preserve PRIVATE visibility.
 Do not rename the local folder, worktree paths, Python imports, cloud resources,
 or saved evidence. No package publication, paid work or experiment is included.

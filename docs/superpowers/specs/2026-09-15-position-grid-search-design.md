@@ -1,6 +1,6 @@
 # Fixed-Area Position-Grid Search Design
 
-**Status:** accepted from Jethro's September 15 approval of the recommended
+**Status:** accepted from the project owner's September 15 approval of the recommended
 position search; exact ordering and matched-control gates are bounded amber
 details selected after independent code and experiment-validity review.
 

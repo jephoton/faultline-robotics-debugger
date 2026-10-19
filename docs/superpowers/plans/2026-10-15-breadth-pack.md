@@ -1,7 +1,7 @@
 # M7a step 3: breadth pack
 
 **Design:** ADR 0032 (accepted October 15). **Spend cap:** US$6.00 for live
-runs (raised from US$4.00 by Jethro, October 15), in the order below, cutting from the end. No paid run before Jethro
+runs (raised from US$4.00 by the project owner, October 15), in the order below, cutting from the end. No paid run before the project owner
 approves this plan.
 
 ## Units and ownership
