@@ -201,6 +201,24 @@ tfoot td {
   gap: var(--space-3);
   margin: 0 0 var(--space-4);
 }
+.raise-limits {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.raise-limits legend {
+  font-weight: 600;
+  padding: 0 var(--space-2);
+}
+.raise-limits__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.raise-limits input {
+  width: 9rem;
+}
 .actions--tight {
   margin-top: var(--space-2);
 }

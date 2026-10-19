@@ -166,8 +166,9 @@ export class FaultlineApi {
     return this.post(`/api/runs/${encodeURIComponent(run)}/stop`, {});
   }
 
-  resumeRun(run: string): Promise<{ run: string }> {
-    return this.post(`/api/runs/${encodeURIComponent(run)}/resume`, {});
+  /** Continue a stopped run; a run stopped at its cap or hour limit may be given larger limits (never smaller). */
+  resumeRun(run: string, limits: { max_spend_usd?: number; max_hours?: number } = {}): Promise<{ run: string }> {
+    return this.post(`/api/runs/${encodeURIComponent(run)}/resume`, { ...limits });
   }
 
   startReplay(id: string, request: ReplayRequest): Promise<{ run: string }> {

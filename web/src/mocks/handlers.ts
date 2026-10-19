@@ -318,6 +318,10 @@ export function createMockServer(options: MockOptions = {}) {
         if (activeDemo) return failure(409, 'A run is already active. Wait for it to finish or stop it first.');
         // Like the real server: a resume continues the same run folder.
         const run = decodeURIComponent(resume[1] as string);
+        const base = progressById[run];
+        if (base && typeof body.max_spend_usd === 'number' && body.max_spend_usd < base.cap_usd) {
+          return failure(400, 'The spend cap can be raised on a resume, never lowered.');
+        }
         stopped.delete(run);
         started.set(run, 0);
         return json(202, { run });

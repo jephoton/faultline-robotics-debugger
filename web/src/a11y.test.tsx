@@ -40,6 +40,7 @@ const PAGES: [string, string, () => Promise<unknown>][] = [
   ['new diagnosis, step 1', '/new', async () => screen.findByRole('radio', { name: /a failure from my own scene/i })],
   ['run waiting for a GPU', `/run/${RUN_IDS.waiting}`, async () => screen.findByText(/No GPU is free yet/)],
   ['run, sign-in expired', `/run/${RUN_IDS.authExpired}`, async () => screen.findByRole('button', { name: /resume/i })],
+  ['run stopped at its spend cap', `/run/${RUN_IDS.capStopped}`, async () => screen.findByLabelText('New spend cap (US$)')],
   ['run that routed to probes', `/run/${RUN_IDS.probing}`, async () => screen.findByText('The start passed: probing')],
   ['run that routed to the layout diagnosis', `/run/${RUN_IDS.layoutRoute}`, async () => screen.findByText(/The start failed untouched/)],
   ['run on a flaky start', `/run/${RUN_IDS.flaky}`, async () => screen.findByText(/The start is flaky untouched/)],

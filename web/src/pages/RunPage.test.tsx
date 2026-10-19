@@ -107,6 +107,44 @@ describe('other run states', () => {
     expect(screen.getByRole('button', { name: /^stop$/i })).toBeInTheDocument();
   });
 
+  it('offers new limits next to Resume for a run stopped at its spend cap, and sends only what went up', async () => {
+    const user = userEvent.setup();
+    const view = await openRun(RUN_IDS.capStopped);
+    const group = screen.getByRole('group', { name: 'Raise the limit before you resume' });
+    const cap = within(group).getByLabelText('New spend cap (US$)');
+    expect(cap).toHaveValue(3);
+    expect(within(group).getByLabelText('New hour limit')).toHaveValue(2);
+    await user.clear(cap);
+    await user.type(cap, '4.5');
+    await user.click(screen.getByRole('button', { name: /resume/i }));
+    await waitFor(() => expect(posts(view, `/api/runs/${RUN_IDS.capStopped}/resume`)).toHaveLength(1));
+    const request = posts(view, `/api/runs/${RUN_IDS.capStopped}/resume`)[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toEqual({ max_spend_usd: 4.5 });
+  });
+
+  it('refuses a lower limit before anything is sent', async () => {
+    const user = userEvent.setup();
+    const view = await openRun(RUN_IDS.capStopped);
+    const cap = screen.getByLabelText('New spend cap (US$)');
+    await user.clear(cap);
+    await user.type(cap, '2');
+    expect(screen.getByRole('alert')).toHaveTextContent('The spend cap can be raised, not lowered: enter US$3.00 or more.');
+    expect(screen.getByRole('button', { name: /resume/i })).toBeDisabled();
+    expect(posts(view, `/api/runs/${RUN_IDS.capStopped}/resume`)).toHaveLength(0);
+  });
+
+  it('sends no limits when none was changed, and offers none for other stops', async () => {
+    const user = userEvent.setup();
+    const view = await openRun(RUN_IDS.capStopped);
+    await user.click(screen.getByRole('button', { name: /resume/i }));
+    await waitFor(() => expect(posts(view, `/api/runs/${RUN_IDS.capStopped}/resume`)).toHaveLength(1));
+    const request = posts(view, `/api/runs/${RUN_IDS.capStopped}/resume`)[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toEqual({});
+    view.unmount();
+    await openRun(RUN_IDS.authExpired);
+    expect(screen.queryByRole('group', { name: 'Raise the limit before you resume' })).not.toBeInTheDocument();
+  });
+
   it('offers the case for a run that already finished, without redirecting', async () => {
     await openRun(RUN_IDS.completed);
     const link = screen.getByRole('link', { name: 'Open the case' });

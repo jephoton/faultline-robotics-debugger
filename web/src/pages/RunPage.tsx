@@ -5,6 +5,7 @@ import { useApi, useAppData, useControls } from '../api/context';
 import type { Progress } from '../api/types';
 import { Icon } from '../components/Icon';
 import { ReadoutHeader } from '../components/ReadoutHeader';
+import { RaiseLimits, limitRequest, raisesLimits, type LimitText } from '../components/run/RaiseLimits';
 import { JobPanel, LogTail, Meters, StepList, StopConfirm } from '../components/run/RunParts';
 import { Section } from '../components/Section';
 import { usd } from '../lib/format';
@@ -43,6 +44,8 @@ function Run({ controls }: { controls: boolean }) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autoOpen, setAutoOpen] = useState<number | null>(null);
+  // New limits typed next to Resume (null: untouched, so the run's current limit shows).
+  const [limits, setLimits] = useState<LimitText>({ spend: null, hours: null });
   const previous = useRef<Progress['status'] | null>(null);
   const stopButton = useRef<HTMLButtonElement>(null);
   const openButton = useRef<HTMLAnchorElement>(null);
@@ -126,11 +129,16 @@ function Run({ controls }: { controls: boolean }) {
     }
   }
 
+  const raisable = progress.resumable && raisesLimits(progress.stop_reason);
+  const asked = raisable ? limitRequest(limits, progress.cap_usd, progress.max_hours) : null;
+
   async function resume() {
+    if (asked?.problem) return;
     setBusy(true);
     setActionError(null);
     try {
-      const result = await api.resumeRun(run);
+      const result = await api.resumeRun(run, asked?.request ?? {});
+      setLimits({ spend: null, hours: null });
       refreshRuns();
       resumedAt.current = Date.now();
       if (result.run === run) setEpoch((value) => value + 1);
@@ -232,6 +240,17 @@ function Run({ controls }: { controls: boolean }) {
         </div>
       )}
 
+      {controls && raisable && (
+        <RaiseLimits
+          reason={progress.stop_reason as 'spend_cap' | 'max_hours'}
+          cap={progress.cap_usd}
+          hours={progress.max_hours}
+          spent={progress.spent_usd}
+          text={limits}
+          problem={asked?.problem ?? null}
+          onChange={setLimits}
+        />
+      )}
       {controls && (progress.stoppable || progress.resumable) && (
         <div className="run-actions">
           {progress.stoppable && !confirming && (
@@ -240,7 +259,7 @@ function Run({ controls }: { controls: boolean }) {
             </button>
           )}
           {progress.resumable && (
-            <button type="button" className="btn" onClick={() => void resume()} aria-busy={busy}>
+            <button type="button" className="btn" onClick={() => void resume()} aria-busy={busy} disabled={Boolean(asked?.problem)}>
               <Icon name="replay" /> Resume
             </button>
           )}
