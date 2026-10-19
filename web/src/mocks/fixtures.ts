@@ -255,10 +255,10 @@ details[IDS.soup] = {
       verdict_text:
         'Nemotron ranked the orange juice first. The measured reruns found the robot joints and the soup necessary, and the tomato sauce not needed.',
       entities: [
-        { entity: 'alphabet_soup_1', label: 'Alphabet soup', necessary: true, sufficient: false },
-        { entity: 'robot', label: 'Robot joints', necessary: true, sufficient: false },
-        { entity: 'orange_juice_1', label: 'Orange juice', necessary: null, sufficient: false },
-        { entity: 'tomato_sauce_1', label: 'Tomato sauce', necessary: false, sufficient: false },
+        { entity: 'alphabet_soup_1', label: 'necessary_not_sufficient', necessary: true, sufficient: false },
+        { entity: 'robot', label: 'necessary_not_sufficient', necessary: true, sufficient: false },
+        { entity: 'orange_juice_1', label: 'inconclusive', necessary: null, sufficient: false },
+        { entity: 'tomato_sauce_1', label: 'not_in_final', necessary: false, sufficient: false },
       ],
     },
     reruns: [

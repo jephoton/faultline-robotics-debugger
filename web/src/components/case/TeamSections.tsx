@@ -71,7 +71,7 @@ function GuessVsReruns({ detail }: { detail: Detail }) {
           const words = measuredWords(entry);
           return (
             <li key={entity}>
-              <span className="ranked__name">{entry?.label || entityLabel(entity)}</span>
+              <span className="ranked__name">{entityLabel(entity)}</span>
               <span className="ranked__result">
                 <Icon name={words.icon} /> {words.text}
               </span>

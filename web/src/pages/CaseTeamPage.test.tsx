@@ -90,7 +90,7 @@ describe('the Nemotron box: a scenario case', () => {
     const guesses = Array.from(box.querySelectorAll('.ranked--measured li')).map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
     expect(guesses).toEqual([
       'Orange juice not enough alone',
-      'Robot joints needed but not enough alone',
+      'Robot needed but not enough alone',
       'Alphabet soup needed but not enough alone',
     ]);
   });
