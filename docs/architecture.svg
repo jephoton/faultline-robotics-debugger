@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" font-family="'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Faultline system diagram</title>
+  <desc id="d">The control panel and coordinator on the user's machine submit Serverless Jobs to Nebius AI Cloud. Each Job runs a LIBERO simulator and a GR00T N1.7 policy server on one L40S GPU and exports evidence through Object Storage. Nemotron on Token Factory and Tavily only suggest; a static gallery on Vercel is read-only.</desc>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6d28d9"/></marker>
+    <style>
+      .bg { fill: #fafaf9; stroke: #cbd5e1; stroke-width: 1.5; }
+      .zone-l { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; }
+      .zone-n { fill: #ecfdf5; stroke: #059669; stroke-width: 1.5; }
+      .zone-m { fill: #f5f3ff; stroke: #6d28d9; stroke-width: 1.5; stroke-dasharray: 7 5; }
+      .box { fill: #ffffff; stroke: #475569; stroke-width: 1.3; }
+      .job { fill: #d1fae5; stroke: #047857; stroke-width: 1.5; }
+      .mbox { fill: #ffffff; stroke: #6d28d9; stroke-width: 1.3; stroke-dasharray: 5 4; }
+      .h1 { fill: #0f172a; font-size: 26px; font-weight: 700; }
+      .sub { fill: #334155; font-size: 14px; }
+      .zt { fill: #0f172a; font-size: 14px; font-weight: 700; letter-spacing: 0.4px; }
+      .zn { fill: #065f46; font-size: 13px; font-weight: 600; }
+      .zv { fill: #5b21b6; font-size: 13px; font-weight: 600; }
+      .h { fill: #0f172a; font-size: 15px; font-weight: 700; }
+      .t { fill: #1e293b; font-size: 13px; }
+      .lbl { fill: #334155; font-size: 12px; }
+      .lblv { fill: #5b21b6; font-size: 12px; }
+      .ev { stroke: #334155; stroke-width: 2; fill: none; }
+      .mv { stroke: #6d28d9; stroke-width: 2; fill: none; stroke-dasharray: 6 4; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="1198" height="778" rx="14"/>
+  <text class="h1" x="30" y="40">Faultline: from a failing episode to a replayable test</text>
+  <text class="sub" x="30" y="62">Reruns are the evidence. Models only propose; the simulator verifies.</text>
+
+  <!-- Your machine -->
+  <rect class="zone-l" x="30" y="80" width="280" height="490" rx="12"/>
+  <text class="zt" x="46" y="102">YOUR MACHINE</text>
+  <rect class="box" x="50" y="115" width="240" height="72" rx="8"/>
+  <text class="h" x="64" y="139">Control panel</text>
+  <text class="t" x="64" y="159">React app: form, live run page,</text>
+  <text class="t" x="64" y="175">case pages, regression test</text>
+  <rect class="box" x="50" y="212" width="240" height="72" rx="8"/>
+  <text class="h" x="64" y="236">Local Python server</text>
+  <text class="t" x="64" y="256">127.0.0.1 only; session token</text>
+  <text class="t" x="64" y="272">needed for every action</text>
+  <rect class="box" x="50" y="309" width="240" height="118" rx="8"/>
+  <text class="h" x="64" y="333">Coordinator (CLI)</text>
+  <text class="t" x="64" y="353">faultline diagnose / replay / stop</text>
+  <text class="t" x="64" y="369">phases, routing, spend cap, Resume</text>
+  <text class="t" x="64" y="385">Keeps running if you close</text>
+  <text class="t" x="64" y="401">the browser</text>
+  <rect class="box" x="50" y="452" width="240" height="96" rx="8"/>
+  <text class="h" x="64" y="476">artifacts/ (local evidence)</text>
+  <text class="t" x="64" y="496">reports, cases, videos, ledger,</text>
+  <text class="t" x="64" y="512">replay inputs; the panel reads</text>
+  <text class="t" x="64" y="528">them from disk</text>
+  <path class="ev" d="M170,187 L170,212" marker-end="url(#ar)"/>
+  <path class="ev" d="M170,284 L170,309" marker-end="url(#ar)"/>
+  <path class="ev" d="M170,427 L170,452" marker-end="url(#ar)"/>
+
+  <!-- Nebius AI Cloud -->
+  <rect class="zone-n" x="380" y="80" width="520" height="360" rx="12"/>
+  <text class="zt" x="396" y="102">NEBIUS AI CLOUD</text>
+  <text class="zn" x="620" y="102">EVIDENCE: simulator reruns</text>
+  <rect class="job" x="400" y="115" width="480" height="215" rx="10"/>
+  <text class="h" x="416" y="139">Serverless Job: one L40S GPU, pinned image</text>
+  <text class="t" x="416" y="158">finite, hard deadline; one Job per phase</text>
+  <rect class="box" x="416" y="172" width="210" height="104" rx="8"/>
+  <text class="h" x="430" y="196">Simulator</text>
+  <text class="t" x="430" y="216">LIBERO on MuJoCo</text>
+  <text class="t" x="430" y="232">12 evaluator workers</text>
+  <text class="t" x="430" y="248">episodes, success check,</text>
+  <text class="t" x="430" y="264">4-of-5 gates</text>
+  <rect class="box" x="654" y="172" width="210" height="104" rx="8"/>
+  <text class="h" x="668" y="196">GR00T N1.7 policy server</text>
+  <text class="t" x="668" y="216">one GPU model; batches up</text>
+  <text class="t" x="668" y="232">to 12 requests per call</text>
+  <text class="t" x="668" y="248">checkpoint fetched at start</text>
+  <path class="ev" d="M626,205 L654,205" marker-end="url(#ar)"/>
+  <path class="ev" d="M654,245 L626,245" marker-end="url(#ar)"/>
+  <text class="lbl" x="416" y="298">images + state + instruction go to the policy; action chunks come back</text>
+  <text class="lbl" x="416" y="318">episodes end in success, failure or step limit (220 to 520 steps by suite)</text>
+  <rect class="box" x="400" y="366" width="480" height="58" rx="8"/>
+  <text class="h" x="416" y="390">Object Storage (private bucket)</text>
+  <text class="t" x="416" y="410">secret-scanned evidence export; per-run bucket and access key</text>
+  <path class="ev" d="M640,330 L640,366" marker-end="url(#ar)"/>
+  <text class="lbl" x="650" y="353">export</text>
+
+  <!-- Coordinator to cloud -->
+  <path class="ev" d="M290,332 L335,332 L335,215 L400,215" marker-end="url(#ar)"/>
+  <text class="lbl" x="352" y="326" transform="rotate(-90 352 326)">submit, watch</text>
+  <path class="ev" d="M400,396 L290,396" marker-end="url(#ar)"/>
+  <rect x="318" y="379" width="54" height="14" fill="#fafaf9"/>
+  <text class="lbl" x="345" y="390" text-anchor="middle">download</text>
+
+  <!-- Hugging Face -->
+  <rect class="box" x="940" y="115" width="230" height="110" rx="8"/>
+  <text class="h" x="954" y="139">Hugging Face</text>
+  <text class="t" x="954" y="159">GR00T N1.7 checkpoint per</text>
+  <text class="t" x="954" y="175">LIBERO suite, and the gated</text>
+  <text class="t" x="954" y="191">base model; token comes from</text>
+  <text class="t" x="954" y="207">a Nebius secret</text>
+  <path class="ev" d="M940,170 L880,170" marker-end="url(#ar)"/>
+  <text class="lbl" x="910" y="160" text-anchor="middle">prefetch</text>
+
+  <!-- Models and web (suggest only) -->
+  <rect class="zone-m" x="380" y="480" width="560" height="170" rx="12"/>
+  <text class="zt" x="396" y="502">CALLED FROM YOUR MACHINE (keys stay local)</text>
+  <text class="zv" x="396" y="522">INTERPRETATION: proposes, never decides</text>
+  <rect class="mbox" x="400" y="534" width="290" height="102" rx="8"/>
+  <text class="h" x="414" y="558">Nemotron on Token Factory</text>
+  <text class="t" x="414" y="578">Ultra: order of the search,</text>
+  <text class="t" x="414" y="594">explanation, next steps</text>
+  <text class="t" x="414" y="610">Super: rewordings of the</text>
+  <text class="t" x="414" y="626">task instruction</text>
+  <rect class="mbox" x="710" y="534" width="210" height="102" rx="8"/>
+  <text class="h" x="724" y="558">Tavily</text>
+  <text class="t" x="724" y="578">public sources for the</text>
+  <text class="t" x="724" y="594">next-steps call; context,</text>
+  <text class="t" x="724" y="610">not evidence</text>
+  <path class="mv" d="M290,415 L335,415 L335,560 L400,560" marker-end="url(#av)"/>
+  <path class="mv" d="M710,585 L690,585" marker-end="url(#av)"/>
+
+  <!-- Public gallery -->
+  <rect class="box" x="970" y="520" width="200" height="104" rx="8"/>
+  <text class="h" x="984" y="544">Public gallery (Vercel)</text>
+  <text class="t" x="984" y="564">static, read-only export of</text>
+  <text class="t" x="984" y="580">finished cases; no keys, no</text>
+  <text class="t" x="984" y="596">controls, no cloud access</text>
+  <path class="ev" d="M170,548 L170,700 L1070,700 L1070,624" marker-end="url(#ar)"/>
+  <text class="lbl" x="620" y="692" text-anchor="middle">manual, reviewed export (faultline export)</text>
+
+  <!-- Legend -->
+  <path class="ev" d="M40,742 L90,742" marker-end="url(#ar)"/>
+  <text class="lbl" x="100" y="746">evidence and control path</text>
+  <path class="mv" d="M300,742 L350,742" marker-end="url(#av)"/>
+  <text class="lbl" x="360" y="746">model or web suggestion, labelled for review</text>
+  <text class="lbl" x="1170" y="746" text-anchor="end">Scope today: GR00T N1.7 on LIBERO</text>
+</svg>

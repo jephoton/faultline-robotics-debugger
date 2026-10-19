@@ -1,620 +1,311 @@
 # Faultline architecture
 
-> Generated, source-checked reference for the current system. This is the
-> canonical architecture document, not a proposal to change runtime behaviour.
-> See [current state](codex-handoff/STATE.md) for progress,
-> [the runbook](codex-handoff/RUNBOOK.md) for commands, and
-> [decisions](decisions/) for accepted design rationale.
+How Faultline works, in the order you would walk someone through it. For what
+every report column, severity and stop reason means, see the
+[Reference](reference.md). For click-by-click use, see the
+[UI runbook](ui-runbook.md). For setup, see the [quickstart](setup/diagnose.md).
 
-For **the reduction algorithm, every severity level and every report
-column**, read the [Reference](reference.md).
-For **how to use the UI**, start with the [UI user runbook](ui-runbook.md):
-saved-case walkthrough, goal-based recipes, result interpretation and recovery.
-This document explains the system; it is not the first-use tutorial.
+## 1. What it does
 
-## Read this first
+Faultline helps a team that trains a robot policy. A success rate says how
+often the policy fails, not under which conditions. Faultline finds the
+**smallest condition that makes the policy fail**, **confirms by rerunning
+that the failure repeats**, and keeps it as a **replayable regression test**
+to rerun on every new checkpoint. It works on simulated manipulation policies
+(vision-language-action models).
 
-Faultline has **two product modes, implemented by three execution paths**:
+**Scope today:** NVIDIA GR00T N1.7 on the LIBERO benchmark (four suites, 40
+tasks, one simulated arm). The loop is not tied to LIBERO, but another
+simulator needs an adapter that is not built
+([Where it applies](reference.md#where-it-applies)).
 
-```text
-Mode 1 — Debug a failing start
-  scenario: compare failing/passing scene states and reduce their differences
+Words used below: a **start** is one fixed starting layout of a task (LIBERO
+ships 50 per task). An **episode** is one attempt by the policy from a start. A
+**Job** is one finite GPU container run on Nebius. A **case** is a saved finding
+with its report, videos and replay inputs.
 
-Mode 2 — Audit a policy from a passing start
-  audit: search visual/scene disturbance strengths
-  paraphrase: search instruction rewordings and reduce word edits
+![Faultline system diagram](architecture.svg)
+
+## 2. System diagram
+
+The same picture as editable text. Solid lines carry evidence and control.
+Dotted lines carry suggestions from models and the web, which are labelled for
+review and never decide an outcome.
+
+```mermaid
+flowchart TB
+    subgraph LOCAL["Your machine"]
+        UI["Control panel<br/>React + TypeScript"]
+        SRV["Local Python server<br/>127.0.0.1 only, session token"]
+        CLI["Coordinator: faultline CLI<br/>phases, routing, spend ledger"]
+        ART[("artifacts/<br/>reports, cases, videos")]
+        UI --> SRV --> CLI --> ART
+    end
+    subgraph SVC["Models and web: INTERPRETATION"]
+        TF["Nemotron on Nebius Token Factory<br/>Ultra and Super"]
+        TAV["Tavily<br/>public web search"]
+    end
+    subgraph NEB["Nebius AI Cloud: EVIDENCE"]
+        subgraph JOB["Serverless Job, one L40S, pinned image"]
+            SIM["Simulator<br/>LIBERO on MuJoCo<br/>12 evaluator workers"]
+            POL["GR00T N1.7 policy server<br/>batches up to 12 requests"]
+            SIM -->|"images, state, instruction"| POL
+            POL -->|"action chunks"| SIM
+        end
+        OBJ[("Object Storage<br/>closed evidence export")]
+        JOB -->|"export"| OBJ
+    end
+    HF["Hugging Face<br/>checkpoint per suite"]
+    WEB["Public gallery on Vercel<br/>static, read-only"]
+    CLI -->|"submit, watch, cancel"| JOB
+    OBJ -->|"download, checked"| ART
+    HF -.->|"prefetch at Job start"| JOB
+    CLI -.->|"order, rewordings, readings, next steps"| TF
+    CLI -.->|"queries"| TAV
+    ART -.->|"manual, reviewed export"| WEB
 ```
 
-The New diagnosis UI currently renders those three execution paths as three
-peer cards. Calling each a "mode" without saying which layer is meant creates
-the confusion. In this document, **Mode 1/Mode 2 mean product intentions**;
-`scenario`, `audit` and `paraphrase` mean the actual YAML/CLI execution paths.
-This follows [ADR 0027](decisions/0027-m7-product-consolidation-and-access.md)
-and [ADR 0032](decisions/0032-breadth-pack.md), not a newly chosen architecture.
+Three trust zones:
 
-### Vocabulary
-
-| Term | Meaning here |
-| --- | --- |
-| Policy | The trained model controlling the robot, currently NVIDIA GR00T N1.7. |
-| Suite / task / start | A collection of benchmark tasks / one robot goal and scene / one initial arrangement of that same task. |
-| Episode | One attempt by the policy to complete the task from a specified start. |
-| Perturbation family | A type of input change, such as blur, lighting or wording; not a different task or suite. |
-| Run | One diagnosis or replay invocation, which can contain several cloud Jobs and many episodes. |
-| Job | A finite GPU container executing a workload; not one Job per robot movement. |
-| Case | A saved result/evidence identity. The library can also expose run-only findings; not every item is a reduced failure. |
-| Reduce | Remove or shrink changes while checking the failure still repeats; not retrain/fix the robot policy. |
-| Replay | Run fresh simulator episodes against a saved scenario regression case; not just play its video. |
-
-## Product and evidence boundary
-
-Faultline turns a simulated robot-policy failure into a small, repeatable,
-replayable case within a fixed compute budget. The loop searches, confirms a
-failure (at least four of five reruns while controls pass), reduces its
-trigger, and stores the report, videos, spend ledger and case. Its contribution
-is that integrated diagnostic loop, not a claim of universal coverage, causal
-proof or formal verification. Reports must name the policy, LIBERO suite,
-task, start, seed, perturbation family and tested range. See [ADR 0027](decisions/0027-m7-product-consolidation-and-access.md)
-and the [experiment notes](experiments/).
-
-The official name is Faultline and the canonical repository is
-[`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).
-Keep the `robot_debug` package, schema/case IDs, environment variables,
-historical artifact identities and local checkout folder unchanged. M3/HPC
-scale-out is optional stretch work; preserve its measured replay-throughput
-result without making further HPC work a product gate ([ADR 0019](decisions/0019-faultline-name-and-hpc-scope.md)).
-
-## Mode 1 and Mode 2 in plain language
-
-1. **Debug a failing start (scenario):** screen benchmark starts, select a
-   known failing start, or import a start-state file. Find a nearby passing
-   reference, confirm the failure, and delta-debug the differences down to
-   shifts needed together. Nemotron 3 Ultra proposes an ordering and a
-   hypothesis before reruns; only simulator results establish the observed
-   outcome. The demonstrated case is LIBERO-10 task 0, start 14.
-2. **Audit a passing policy start:** search a specified family for a small
-   disturbance that causes a repeatable failure. Eight image families (blur,
-   noise, darken, contrast, JPEG compression, colour cast, motion blur and
-   dead pixels) and two simulator scene families (viewpoint and lighting)
-   use the threshold search. The language mode uses Nemotron 3 Super to
-   generate instruction paraphrases and reduces a failing wording by word
-   edits. The earlier camera-occlusion work is a historical M4–M6 path, not
-   an audit-family option. See [ADR 0032](decisions/0032-breadth-pack.md).
-
-The New diagnosis page currently exposes **three peer choices**, rather than
-the two product intentions above. This is the implemented UI, not three
-unrelated products:
-
-| Current UI choice | Question it answers | What changes during the test |
+| Zone | What it holds | How far to trust it |
 | --- | --- | --- |
-| Find why a start fails (`scenario`) | Which differences from a passing scene are needed for this start to keep failing? | Object/entity start-state shifts; remove shifts, then try smaller shifts. |
-| Stress-test a passing start (`audit`) | How much of a selected visual or scene disturbance can this policy tolerate? | A numeric severity, such as blur strength or a lighting setting. |
-| Test rewordings (`paraphrase`) | Can different words for the same task break the policy? | The task instruction; generate alternatives, screen them, then remove word edits if a faithful failing wording exists. |
+| **Evidence** (Nebius Jobs) | Simulator reruns of the policy, success checks, exported files, spend ledger | This is the result. Every claim in a case comes from reruns. |
+| **Interpretation** (Nemotron, Tavily) | Search order, rewordings, readings, next steps, public sources | Proposals and context. A bad answer wastes time, never changes a verdict. |
+| **Public** (Vercel gallery) | Selected finished cases | Read-only. No keys, no controls, no way to start a run. |
 
-The first choice has three input paths: a known benchmark start number, a
-range of starts to screen, or an imported start-state JSON file. Import means
-a validated MuJoCo state for a supported LIBERO suite/task, **not an arbitrary
-video, robot log or new robot**. The other two choices start from a nominal
-task/start and look for weaknesses in different inputs. Wording needs discrete
-word-edit search and text generation; visual/scene audit uses numeric severity
-search. That is why they have separate execution paths today.
+## 3. The user flow
 
-### Does rewording belong under stress-testing?
-
-**Yes, as a product category.** A VLA policy consumes images, robot state and
-language. Stress-testing asks whether it can still do the same task when an
-input changes. Blurring a picture probes visual robustness; rephrasing the
-instruction probes language robustness. Neither requires changing the task.
-
-For an illustrative, unmeasured example, "put the soup in the basket" and
-"place the soup inside the basket" ask for the same action. "Put the soup on
-the table" changes the target and is not a valid same-task robustness test.
-The current meaning check only guards some object/target words, so it cannot
-prove that every retained rewording has identical meaning.
-
-**No, not as just another numeric severity checkbox in today's engine.** Blur
-has a strength that can be swept and bisected. Words have no corresponding
-0-to-1 severity scale. Rewordings therefore need generation, a meaning guard,
-screening, and reduction over word edits. They can share the product category,
-budget/lifecycle/evidence infrastructure and repeatability discipline without
-sharing exactly the same search algorithm. Currently visual/scene and wording
-are separate runs; choosing one does not automatically execute the other.
-
-**Proposed, not accepted or implemented:** group the interface by intention:
-"Debug a failing start" versus "Stress-test a policy", with "Images and scene"
-and "Instruction wording" as stress-test subchoices. Keep their separate
-execution paths. Review this with Jethro before changing the form. The
-existing three-card layout exposes implementation details and is a known
-clarity issue, not a requirement that users understand three architectures.
-
-The tested policy is NVIDIA GR00T N1.7, with a pinned checkpoint for each of
-LIBERO Object, 10, Spatial and Goal. The evaluator uses the AllenAI VLA
-evaluation harness, robosuite/MuJoCo and a GR00T model server on one Nebius
-L40S GPU per Serverless Job. A local NVIDIA GPU backend is implemented but
-has not been validated on hardware. A checkpoint override can target a
-different policy, but compatibility remains the operator's responsibility.
-
-## End-to-end user journey
-
-Letters identify discussion points; solid arrows describe existing paths.
-This is the local operator experience. The public gallery is only the final,
-separately exported reading path, not a hosted control plane.
+One **New diagnosis** does everything. The start is first run untouched, then
+the result picks the route.
 
 ```mermaid
 flowchart TD
-    A["A. Home: browse evidence or start a diagnosis"]
-    S["Setup: local tools, credentials and image configuration"]
-    B{"B. New diagnosis: choose a question"}
-    B1["Failing start: known number, screen a range, or import JSON"]
-    B2["Passing start: visual or scene stress test"]
-    B3["Passing start: instruction rewordings"]
-    C["C. Settings: suite, task, inputs, budget and deadlines"]
-    D["D. Review: validate spec, dry run and environment checks"]
-    E["E. Explicit Start: detached local coordinator"]
-    F["F. Live run: phase progress, logs, Job state and GPU-cost estimate"]
-    G["G. Results: report, available videos and verified case if produced"]
-    G0["No reproducible failure in the tested range: valid result"]
-    G1["Control failed, budget exhausted, interruption or infrastructure fault: inspect the reason"]
-    H["H. Scenario case Replay: new bounded run, minimal scene versus passing reference"]
-    P["Reviewed static export: publish selected finished cases to the gallery"]
-    A -->|"existing case"| G
-    A -->|"new local diagnosis"| B
-    A --> S
-    S --> B
-    B --> B1
-    B --> B2
-    B --> B3
-    B1 --> C
+    A["Open the control panel<br/>faultline ui"] --> B["New diagnosis: choose a way in"]
+    B --> B1["Check a start I name<br/>task + start number"]
+    B --> B2["Find a failing start for me<br/>screen a range (layout route only)"]
+    B --> B3["A failure from my own scene<br/>start-state file (layout route only)"]
+    B1 --> C["Review: the dry run lists every Job<br/>with its worst-case cost.<br/>Nothing is created yet"]
     B2 --> C
     B3 --> C
-    C --> D
-    D -->|"confirm; first Job must fit cap"| E
-    E --> F
-    F -->|"case or audit report"| G
-    F --> G0
-    F --> G1
-    G0 -->|"read-only result"| G
-    G1 -->|"available partial evidence"| G
-    G1 -->|"Resume when supported; reattach known Job"| F
-    G -->|"scenario cases only; review and confirm"| H
-    H --> F
-    G -->|"manual export and publication review"| P
+    C -->|"you confirm Start"| D["Live run page<br/>phases, cost, Stop and Resume"]
+    D --> E{"Check: run the start untouched<br/>(4 of 5 attempts must fail)"}
+    E -->|"fails reliably"| L["Layout route<br/>nearest passing start as reference,<br/>reduce the differences, shrink them"]
+    E -->|"passes"| P["Probe route<br/>image and scene disturbances,<br/>Nemotron-written rewordings"]
+    E -->|"fails sometimes"| F["Flaky: stop.<br/>Nothing is blamed on a disturbance"]
+    L --> K["Case: smallest trigger,<br/>videos, report"]
+    P -->|"a family or wording fails"| K
+    P -->|"nothing fails"| N["Valid finding: nothing broke it<br/>in the tested ranges"]
+    K --> R["Optional research and next steps<br/>Tavily + Nemotron 3 Ultra"]
+    R --> G["Case page: result, why it is trustworthy,<br/>Nemotron's reading, next steps"]
+    G --> T["Regression test: replay the case<br/>on the original or a new checkpoint"]
+    T --> V["Still fails / Fixed / Inconclusive"]
+    G --> X["Export to the public gallery<br/>manual and reviewed"]
 ```
 
-At **D**, dry run does not start a GPU or generate text. The form is backed by
-the same YAML spec as the CLI; advanced YAML can override supported settings
-that have no dedicated form field. Admission only requires the first Job to
-fit, not the sum of every possible phase. At **E/F**, the coordinator reserves
-each Job's bounded worst-case cost before submitting it, then settles its
-estimate; insufficient remaining budget stops further Jobs.
+What the user sees at each step:
+- **Choose and review.** Name a start (usually an episode that failed in a LIBERO
+  evaluation), or screen a range, or bring a start file. The form writes the same
+  YAML spec as the CLI. The dry run prints each Job's worst-case cost; Start is an
+  explicit click.
+- **Watch.** The run page polls recorded progress. Stop cancels the current Job.
+  Closing the browser does not stop the detached run.
+- **Read the case.** Result and videos first, then why to trust it (gate counts,
+  each shift alone passing, the control), then Nemotron's reading and next steps,
+  then the full evidence.
+- **Keep it.** The regression test replays the case in a fresh Job. Export
+  publishes finished cases to the static gallery.
 
-At **F**, Stop requests cancellation and waits for the Job's disposition;
-closing the browser or panel server does not stop the detached run. Resume
-uses recorded phase/Job identities to reattach or continue, rather than
-blindly submitting another paid copy. Recovery is not a guarantee that an
-unreachable provider has stopped billing: the recorded reason and provider
-state still matter. The top main-content Back button always returns to **A**;
-the wizard's separate Back buttons select its previous step. Home navigation
-does not cancel a running diagnosis.
+Suggested demo order: open the finished case `FL-S-8E0D` (it works offline from
+`demo/root`), then its trust section and Regression test, the Reference, and the
+public gallery.
 
-At **G**, a run is not synonymous with a failure case. A passing screen can
-finish with a run-only report; an audit may register a summary with no failing
-threshold. Partial evidence is not automatically a confirmed or fully reduced
-counterexample. At **H**, Replay is a new experiment, not video playback: it
-reruns the reduced scene and reference, optionally against another checkpoint,
-and reports still-reproduces, fixed or inconclusive.
+## 4. What happens inside one Job
 
-### What each engine actually does
-
-- **Scenario:** screen starts/find a passing reference, compare the failing
-  state with nearby passing states, optionally ask Nemotron Ultra for a
-  hypothesis and test ordering, then test subsets of entity shifts and smaller
-  shifts. Keep only differences whose simulator reruns retain the required
-  failure evidence. Imported states use the benchmark screen as a passing
-  reference pool, not as proof that the imported state fails. A missing passing
-  reference or failed confirmation blocks the corresponding claim. A stopped
-  size search can still leave a useful verified case; it is not a global minimum.
-- **Visual/scene audit:** check the nominal control, sweep the selected
-  disturbance's severity, confirm an apparent failure, then refine the bracket
-  between a non-reproducible and reproducible failure within configured limits.
-  The lower bracket is not a promise that every rerun passes. Not finding a threshold is a
-  useful outcome. A measured threshold is only for that family, task, state and
-  tested range; severity need not imply globally monotonic policy behaviour.
-- **Rewordings:** Nemotron Super generates alternatives; a conservative
-  object/target-word check flags changed meanings (it is not a semantic proof).
-  The GPU screen tests the original and alternatives. Reduction requires the
-  original control to pass and a retained wording to fail at least four of five
-  reruns; then remove word edits while retaining that evidence. Flagged texts
-  can be screened but cannot become the reduced faithful-wording case.
-
-Confirmation/control counts are engine-specific; do not describe every mode
-as five nominal control episodes. Search, confirmation and reduction execute
-in the Job workloads. The local coordinator chooses phases and continuation
-Jobs; it does not send each robot action or reduction candidate from the browser.
-
-## Full-system deployment and evidence flow
-
-### Technologies and why they are here
-
-| Component | Responsibility and reason for the boundary |
-| --- | --- |
-| React + TypeScript + Vite | Interactive control-panel pages and typed API access. Its built bundle ships inside the Python package, so operators need no Node toolchain just to use it. |
-| Python local server | Serves the UI and existing evidence, validates specs, protects controls and launches the CLI. It does not host the robot GPU on the laptop. |
-| Detached Python CLI coordinator | Owns recoverable phases, per-Job reservations, deadlines, downloads and reports. Detachment prevents closing the UI/server from killing a paid diagnosis. |
-| Nebius CLI/backend | Uses the operator's cloud project to submit finite Jobs and record identities for recovery. This is not an open public run service billing the project author. |
-| Serverless GPU container | Runs the pinned evaluation/model environments with bounded runtime. No VM must be left running between diagnoses. |
-| AllenAI VLA harness + LIBERO + robosuite/MuJoCo | Adapts policy observations/actions, simulates robot physics and provides task success checks. Faultline builds diagnosis around these existing tools, not a new robotics simulator. |
-| GR00T N1.7 | The VLA policy being tested: turns camera images, robot state and language into action chunks. |
-| Private Object Storage | Transfers completed evidence off the ephemeral Job before downloading it locally. Live simulator/SQLite state is not treated as safely writable bucket storage. |
-| Token Factory / Nemotron | Local text requests: Ultra for scenario hypotheses/explanations, Super for wording generation, Nano for research summaries. Model prose is not the simulator's verdict. |
-| Tavily | Optional manual public-research lookup; gives related work, not evidence that a robot failed. |
-| Static export + Vercel | A reviewed, read-only subset of results for visitors/judges, with no cloud-execution credentials or controls. |
-
-The solid execution path below is the validated Serverless route. Dotted links are
-supporting inputs, optional interpretation/research, or manual publication.
-Job-to-simulator and simulator-to-policy arrows run **inside one container**,
-not between multiple rented machines.
+Each phase of a diagnosis is one Job: the check, a layout reduction, each group
+of probes, a rewording screen. The coordinator reserves the Job's worst-case
+cost first, then submits it.
 
 ```mermaid
-flowchart TD
-    subgraph LOCAL["Operator workstation"]
-        UI["React browser UI"]
-        API["Loopback Python server: validation, dry run and protected controls"]
-        CLI["Detached diagnose or replay coordinator: phases, ledger, stop and resume"]
-        BACKEND["Nebius backend: CLI, Job identity, deadlines, cancellation and downloads"]
-        DATA["Local evidence library: reports, cases, videos, traces and run records"]
-        RES["Manual research_case workflow"]
-        UI -->|"local API; token for controls"| API
-        API -->|"explicit Start or Resume"| CLI
-        CLI --> BACKEND
-        DATA --> API
-        CLI -->|"report, case and optional interpretation"| DATA
-        RES -.->|"source-linked research context"| DATA
+sequenceDiagram
+    participant C as Coordinator (your machine)
+    participant N as Nebius Serverless
+    participant J as Job container (one L40S)
+    participant S as Object Storage
+    C->>C: Reserve the worst-case cost
+    C->>N: Submit the Job (workload file, pinned image, bucket, secret ids)
+    N->>J: Pull the image and start it
+    J->>J: Check export works, prefetch the checkpoint from Hugging Face
+    J->>J: Start the batching GR00T server, warm it up
+    loop until every candidate is decided or the deadline
+        J->>J: 12 workers run episodes, gates decide early
     end
-    subgraph CLOUD["Nebius AI Cloud"]
-        JOB["Finite Serverless Job: pinned image, one L40S, hard time bounds"]
-        LOOP["Search, confirmation and reduction workload"]
-        SIM["VLA evaluator and LIBERO simulator: physics, cameras, state and success check"]
-        POLICY["NVIDIA GR00T N1.7 policy server: GPU inference"]
-        STORE["Private Object Storage: closed evidence files and manifest"]
-        JOB --> LOOP
-        LOOP -->|"reset candidate and run episodes"| SIM
-        SIM -->|"camera images, robot state and task instruction"| POLICY
-        POLICY -->|"action chunks"| SIM
-        SIM -->|"outcomes and traces"| LOOP
-        LOOP -->|"export available evidence"| STORE
-    end
-    MODELS["Hugging Face model weights and suite checkpoint; HF secret via MysteryBox"]
-    IMAGE["Private container registry: pinned runtime image"]
-    TF["Nebius Token Factory: Nemotron Ultra / Super / Nano"]
-    TAV["Tavily: public research search"]
-    PUBLIC["Reviewed static export on Vercel: read-only gallery, no execution API"]
-    BACKEND -->|"submit and monitor; one active Job"| JOB
-    STORE -->|"bounded download; validate evidence"| DATA
-    IMAGE -.-> JOB
-    MODELS -.->|"startup prefetch; cached within Job"| POLICY
-    CLI -.->|"local text calls: hypothesis, paraphrases or explanation"| TF
-    TF -.->|"proposals and interpretation, not robot verdicts"| CLI
-    RES -.-> TAV
-    RES -.->|"research summary"| TF
-    DATA -.->|"manual filtered export and publication review"| PUBLIC
+    J->>S: Export the allowlisted evidence with file hashes
+    C->>N: Poll state (watchdog, deadline, resubmit if no GPU)
+    C->>S: Download with per-object retries and size checks
+    C->>C: Settle the ledger at measured time, write the report
 ```
 
-### Responsibilities and trust boundaries
+- **Image.** Pinned by digest, built on the AllenAI vla-evaluation-harness LIBERO
+  image. Weights are fetched at start, not baked in. The Hugging Face token
+  reaches the Job as a Nebius secret, never in the spec.
+- **One GPU, 12 workers.** The policy server batches up to 12 concurrent requests,
+  so 12 simulator processes share one model. Batching gave +18% throughput at 12
+  workers and nothing at 8 ([M3](experiments/m3-batched-inference.md)).
+- **Episodes** end in success, failure, or the suite's step limit (220 Spatial, 280
+  Object, 300 Goal, 520 LIBERO-10). Running out of steps counts as a failure.
+- **Early-decided gates.** A scene reproduces a failure at 4 of 5 attempts and
+  passes at 5 of 5. A gate stops once its answer is fixed and skips the rest
+  ([gate](reference.md#3-the-repeatability-gate)).
+- **Recovery.** With no free GPU the Job is resubmitted (up to six submissions). A
+  failed download keeps the paid Job re-attachable, and Resume downloads again
+  without rerunning it. That recovered two interrupted downloads in the showcase
+  ([record](experiments/m7-final-showcase.md)).
 
-- **GR00T is the robot policy.** It sees task language, scene/wrist images and
-  robot state, and predicts actions. LIBERO supplies the task-success check.
-  **Nemotron is not driving the arm or deciding whether an episode succeeded.**
-- **The workstation is the control plane.** The UI is not required for a run
-  to continue. The local coordinator handles orchestration and GPU-cost
-  reservations; the Job owns the simulator/model processes and their cleanup.
-  Current core diagnoses do not require the old M3 multi-worker benchmark or
-  distributed multi-GPU scheduling. Different phases can use separate Jobs;
-  it is not one new Job per simulator action or candidate.
-- **Keys stay out of the browser and public gallery.** The browser receives a
-  local session token, not provider credentials. Hugging Face model access is
-  supplied to the Job through MysteryBox; Token Factory calls stay local.
-  Model weights are fetched at startup, not baked into the runtime image.
-- **Evidence precedes interpretation.** Available completed files are exported
-  through private storage, downloaded and checked before reporting. Nemotron
-  explanations refer to recorded evidence; failure to generate an explanation
-  does not change an episode's measured outcome. Partial/infrastructure results
-  must stay labelled as such.
-- **Costs have separate scopes.** The diagnosis ledger/UI tracks estimated
-  GPU/Job cost under its reservation model. Token Factory explicitly runs
-  outside that GPU ledger; Tavily and other service/storage charges are not a
-  consolidated all-services bill. Billing reconciliation remains necessary.
-- **Local versus public are different product surfaces.** The local UI can
-  launch an explicitly confirmed paid run; the public gallery cannot. New local
-  evidence is not automatically published. A local NVIDIA backend exists but
-  is not the hardware-validated path depicted here.
+## 5. The diagnosis engines
 
-### Does the current UI cover the journey?
+Each engine is a Job workload the coordinator picks by route. Formulas and
+worked examples are in the [Reference](reference.md).
 
-| Journey boundary | Current support | Limit to make clear during UI review |
-| --- | --- | --- |
-| A/B: choose intent/input | One New diagnosis with three ways in, named by goal: check a start I name, find a failing start for me, and a start file from your own scene | LIBERO only. Arbitrary video/log import is not supported. |
-| C/D: configure and understand cost | Forms, editable YAML, validation, environment checks and dry-run Job estimates | No complete account-provisioning wizard. The displayed cap is not a consolidated Token Factory/Tavily/storage bill. |
-| E/F: execute and recover | Confirmed Start, running page, logs, timeline, cost, Stop/Resume | Browser navigation is not Stop. Resume does not promise every failure is retryable or that provider state is reachable. |
-| G: inspect findings | Mode-specific case/report pages, comparison evidence where available, no-failure outcomes | Not every run yields a confirmed failure case, video or explanation. Current audit/paraphrase cases have no generated explanation. |
-| H: run regression check | The Regression test of any case with replay inputs (layout, disturbance or wording), with a fresh plan, confirmation and an optional new checkpoint | One case at a time (no suite-wide run); compatibility is not guaranteed for an arbitrary checkpoint. |
-| Research/public sharing | An optional research step per new case (Tavily sources, a Nemotron 3 Nano summary) and a separate static gallery | Research needs a Tavily key and is context, not evidence. Export/publication are operator steps. |
+### The check
 
-The UI's "smallest" wording describes the reduction goal, not a proof of a
-global minimum. Show the actual stop reason, tested bracket or local-minimality
-scope when explaining results. These are current implementation boundaries,
-not approval for additional features or publication.
+The start runs untouched under the repeatability gate. The same Job screens a
+pool of nearby starts (by default 0 to 19) that supplies passing references. The
+result picks the route: fails reliably, passes, or fails sometimes (flaky).
 
-### Source anchors for verifying the map
+### Layout reduction (the start fails)
 
-- UI choice labels and input branches:
-  [`StepChoose.tsx`](../web/src/components/new/StepChoose.tsx).
-- Dry-run/admission/confirmation:
-  [`StepReview.tsx`](../web/src/components/new/StepReview.tsx);
-  navigation: [`Shell.tsx`](../web/src/components/Shell.tsx).
-- API protection and detached lifecycle:
-  [`viewer/server.py`](../src/robot_debug/viewer/server.py),
-  [`viewer/routes.py`](../src/robot_debug/viewer/routes.py),
-  [`viewer/launcher.py`](../src/robot_debug/viewer/launcher.py).
-- Phase logic, evidence, controls and outcomes:
-  [`orchestrator.py`](../src/robot_debug/orchestrator.py), especially
-  `_scenario`, `_scenario_import`, `_reduce_loop`, `_audit`, `_paraphrase`,
-  `_explain` and `_replay`.
-- Cloud lifecycle and in-container model/simulator wiring:
-  [`backends/nebius.py`](../src/robot_debug/backends/nebius.py),
-  [`job_entry.py`](../src/robot_debug/job_entry.py).
-- Exact imported-state contract:
-  [`scenario_import.py`](../src/robot_debug/scenario_import.py).
-- Optional research and static publication:
-  [`research_case.py`](../scripts/research_case.py),
-  [`viewer/export.py`](../src/robot_debug/viewer/export.py),
-  [gallery acceptance record](experiments/m7-public-gallery.md).
+Question: which differences from a nearby passing start does the failure need?
 
-## Runtime map
+1. Pick the nearest passing start as the **reference** (5 of 5 pass) and list
+   what differs: object positions and rotations, the arm's joints.
+2. Gates: the failing start reproduces, the reference passes, and the **full
+   hybrid** (every difference applied to the reference) reproduces.
+3. Try each entity alone, then **delta debugging** (`ddmin`): test smaller
+   groups until removing any one entity makes the failure go away.
+4. **Shrink** each surviving part by four bisection steps toward the reference.
+   If a Job hits its candidate budget, up to three continuation Jobs resume
+   from the smallest set that reproduced.
 
-- `faultline diagnose SPEC.yaml` is the local coordinator for both modes.
-  `src/robot_debug/cli.py` and the diagnosis/orchestration modules validate
-  the spec, reserve a bounded worst-case Job cost, drive search and reduction,
-  store reports/cases, and manage stop/resume. The Nebius backend wraps the
-  official CLI, submits finite Jobs, resubmits capacity failures within its
-  bound, watches deadlines, downloads evidence from private Object Storage
-  and cleans up temporary access. Local specs, ledgers, provider keys and
-  optional LLM calls remain on the workstation. See [ADR 0031](decisions/0031-faultline-diagnose.md).
-- `faultline replay` reruns a saved **scenario** case against its minimal
-  scene and passing reference, optionally with another checkpoint. Audit and
-  paraphrase cases do not yet have this replay command. `faultline cases`
-  lists registered cases.
-- `web/` contains the React/Vite control panel. Its committed build lives in
-  `src/robot_debug/viewer/app/` and is served by the Python loopback server
-  through `faultline ui`. It shows runs, cases, Setup, diagnosis form/dry run,
-  live progress and safe Stop/Resume/Replay controls. The browser controls
-  call the same CLI workflow and require a session token and same-origin
-  checks. `faultline export` makes a separate static gallery of finished
-  cases with no provider calls or controls. It is a filtered publication
-  artifact, not a live copy of the local server ([ADR 0033](decisions/0033-control-panel-ui.md)).
-  The [public gallery](https://faultline-robotics-debugger.vercel.app) is live;
-  its [publication record](experiments/m7-public-gallery.md) defines the
-  included evidence, verification and remaining limitations.
-- Nemotron 3 Ultra writes pre-rerun scenario hypotheses and explanations of
-  verified scenario cases. Nemotron 3 Super writes
-  paraphrases; Nemotron 3 Nano summarizes related research. Audit and
-  paraphrase cases have no generated explanations yet. Model text is marked
-  as interpretation and validated against recorded evidence, never used as
-  the success oracle ([ADR 0030](decisions/0030-nemotron-model-per-task.md)).
-- The New diagnosis's optional research step (`pipeline_research.py`)
-  attaches Tavily sources and a Nemotron 3 Nano summary to each new case when
-  a Tavily key is present. Source-linked research is context, not evidence for
-  a robot-policy result. `scripts/research_case.py` is the earlier manual
-  workflow.
+Example `FL-S-8E0D` (LIBERO-10 task 0, start 14, reference start 4): five
+differences, of which **four shifts are needed together** (basket 2.1 cm, milk
+2.2 cm, orange juice 0.8 cm, the arm's joints up to 2.1 degrees). Each alone
+passes. Details: [layout route](reference.md#4-the-layout-route-how-a-scenario-reduction-works).
 
-`configs/specs/` holds portable example specs. `artifacts/` holds ignored
-local run data and private provider details; `demo/root/` holds one safe,
-finished diagnosis viewable without cloud access. `docs/experiments/` records
-evidence and claim limits; `FEEDBACK.md` records actual tool experience.
+### Disturbance probes (the start passes)
 
-## Operating boundaries
+Question: what is the smallest disturbance that breaks it?
 
-Every paid run needs an approved per-run cap, fresh authentication, account,
-balance/expiry, quota/capacity and price checks. Keep Nebius account/project
-boundaries in run records and one owner for cloud lifecycle and spending. The
-original US$75 overall credit envelope remains a planning ceiling until
-Jethro changes it. Cost estimates based on container time and assumed
-Serverless billing are not reconciled posted bills. Cloud architecture,
-new model/simulator or perturbation choices, higher caps, public publication
-and submission claims are Jethro's decisions. Never commit credentials,
-private resource identifiers, secret-bearing logs or model weights. Original
-project code remains under the MIT licence; external assets retain their own
-terms (`NOTICE.md`).
+1. **Control:** the start, undisturbed, must pass 5 of 5 or nothing is judged.
+2. **Sweep** severity 0.2, 0.4, 0.6, 0.8, 1.0, five attempts per level.
+3. **Bisect** four steps between the last passing level and the first failing
+   one. The result is the smallest tested level that reproduces.
 
-## UI reference: what is actually exposed
+Ten families, one at a time: eight image families (blur, noise, darken,
+contrast, JPEG, colour cast, motion blur, dead pixels) and two scene families
+(camera viewpoint, lighting). The defaults are blur, noise, darken and contrast.
+Example `FL-A-D582`: blur breaks LIBERO-Object task 0, start 0 from severity
+0.4625 (a sigma of 3.7 px). Details: [probes](reference.md#5-the-probes-route-disturbances-and-rewordings).
 
-This inventory describes the current source, not an unimplemented ideal UI.
-Most pages show summaries of saved evidence; they do not expose every backend
-parameter, event or internal search decision as a dedicated control.
+### Rewordings (the start passes)
 
-### 1. Home and the shared workspace
+Question: can different words for the same task break the policy?
+Nemotron 3 Super writes alternatives, and a **meaning check** drops any that
+lose an object or target word. The original wording is the control and each
+rewording gets one screening attempt. A failing one is confirmed at 4 of 5, then
+reduced by removing word edits while it still fails.
 
-- **Local Home (`/`):** running diagnoses, current step and spend when recorded;
-  latest library item; New diagnosis; a Find/Confirm/Reduce/Replay explanation.
-- **Sidebar:** runs in progress and saved library items grouped by kind;
-  local links to Setup, Run your own (Guide) and All evidence. The product mark
-  and top main-content Back button return home. The Back button is hidden at
-  home and is separate from the wizard's previous-step buttons.
-- **Shared controls:** light/dark appearance, mobile sidebar drawer, skip link
-  and route focus behaviour. These presentation controls do not start compute.
-- **Public Home:** exported cases grouped by kind and Guide; no New diagnosis,
-  live-run list, Setup or All evidence controls. Shared visual styling does not
-  mean it is connected to the local coordinator.
+### Regression test (replay)
 
-### 2. New diagnosis: choose, configure, review
+A replay reruns a saved case in a fresh Job, five attempts each, with its
+control: the minimal scene and reference (layout), each failing family at its
+threshold (probe), or the failing wording (rewording). The checkpoint is the
+original, or a new one given as a Hugging Face id plus a pinned revision. The
+verdict is **Still fails**, **Fixed** (new checkpoint), **Did not repeat** (same
+checkpoint, so possibly flaky) or **Inconclusive**. `faultline replay CASE
+--expect fixed` turns it into an exit code for CI
+([details](reference.md#the-regression-test)). In the showcase, replays of
+`FL-S-8E0D` and `FL-A-D582` on the same checkpoint both still failed.
 
-**Step 1 — What to diagnose:** three peer cards with the exact names from the
-earlier table. The first card expands the three scenario input choices. The
-interface does **not** currently display a top-level Mode 1/Mode 2 grouping.
+## 6. Where Nemotron and Tavily sit
 
-**Step 2 — Settings:**
+The model proposes, the simulator verifies. A model call can reorder work or add
+labelled text, and a bad answer is rejected or ignored. None decides whether an
+episode succeeded.
 
-| Scope | Dedicated form controls |
+| Call | Model | Input | Output | How it is checked |
+| --- | --- | --- | --- | --- |
+| Hypothesis (layout, before reruns) | Nemotron 3 Ultra, else Super | Task instruction and the difference table only | A ranking of entities and a one-line guess | Strict JSON, unknown entity rejected. Any problem falls back to a fixed order. It sets only the test order. Reruns later label each top entity needed or not, enough alone or not |
+| Explanation (layout cases) | Nemotron 3 Ultra | An evidence packet: differences, the final set, a few reruns with citable ids | Observations, hypotheses, limitations citing evidence ids | Schema and id checks. Shown collapsed as interpretation that needs review |
+| Rewordings | Nemotron 3 Super | The task instruction | 1 to 12 alternative wordings | Length and duplicate checks, the meaning check, then simulator tests |
+| Next steps | Nemotron 3 Ultra | Verified case facts and the Tavily sources found | 2 to 4 suggestions, each citing a source or evidence id | Every cited id must be one offered. No links, no words claiming cause or proof. Invalid output stores nothing |
+| Research | Tavily (not a model) | A few queries built from the suite and family names, never paths or ids | Public sources with snippets | Cached, credit-capped, stored as context |
+
+Each model was chosen by comparing Nano, Super and Ultra on the same input
+([ADR 0030](decisions/0030-nemotron-model-per-task.md)). Next steps use Ultra
+and replaced the earlier Nano research summary. Disturbance and rewording cases
+have no generated explanation yet.
+
+## 7. Spending and safety
+
+**Spending.**
+- Before each Job the ledger reserves its worst case: the provider timeout (the
+  deadline plus ten minutes) plus a four-minute start allowance, at the hourly
+  rate. A Job that would pass the cap is refused. On finish the reservation
+  becomes the measured container time.
+- Defaults: US$2.50 and 1.5 hours. Only the first Job must fit to start. A later
+  Job that does not fit stops the run, which can be resumed after you raise the
+  cap or hours (raise only). Resume re-attaches to a known Job or downloads its
+  results again instead of submitting a duplicate. Unfinished work still costs.
+- Measured: a probe diagnosis cost US$0.90 in 36.5 minutes, a layout diagnosis
+  US$2.25, a replay about US$0.35. These are ledger estimates, not yet reconciled
+  with the Nebius bill. The cap covers Nebius Jobs only, not Token Factory
+  (cents), Tavily or storage.
+
+**Safety.**
+- The local server binds to loopback. Every action that changes anything needs a
+  per-start session token and an exact `Host` and `Origin`. It sends no CORS
+  header, and one paid run runs at a time.
+- Keys stay on the machine. The Hugging Face token reaches a Job only as a Nebius
+  secret. Token Factory and Tavily keys never enter a Job.
+- A Job's export is allowlisted, hashed and scanned for secret values. The public
+  gallery uses a projection with no run folders, Job or bucket ids, keys or
+  absolute paths, and refuses to export if a guard pattern matches. No secret is
+  committed to the repository.
+
+## 8. Code map
+
+Python files are under `src/robot_debug/`.
+
+| Component | Where |
 | --- | --- |
-| Every path | Run name; one of four LIBERO suites; task and its benchmark instruction; US-dollar spend cap; hour limit; editable YAML. |
-| Scenario: known start | Benchmark start number, 0–49. |
-| Scenario: screen starts | Start range, such as `10-49`; screen confirmation count out of five. |
-| Scenario: import | JSON start-state upload tied to the chosen suite/task. Browser checks syntax/size; backend checks the actual state contract. |
-| Any scenario input | Optional checkbox to request Nemotron's hypothesis and explanation. |
-| Visual/scene audit | Benchmark start plus image/scene family checkboxes: eight image families, viewpoint and lighting. |
-| Rewordings | Benchmark start and number of Nemotron rewordings requested, 1–12. No visual-family selector. Token Factory is required. |
+| Control panel (React, TypeScript, Vite) | `web/`, built into `viewer/app/` |
+| Local server, security, launcher, library, static export | `viewer/` |
+| CLI, specs, offline demo | `cli.py`, `spec.py`, `configs/specs/`, `demo/root/` |
+| Coordinator: phases, routing, stop, resume, replay, cases | `orchestrator.py`, `pipeline.py`, `pipeline_cases.py`, `case_register.py` |
+| Spend ledger and limits | `ledger.py`, `run_limits.py` |
+| Nebius backend: Jobs, bucket, download | `backends/nebius.py` |
+| In the Job: entry, workloads, gates, model server, image | `job_entry.py`, `job_workload.py`, `decided_gate.py`, `scripts/model_servers/`, `deploy/serverless/Dockerfile` |
+| Layout reduction | `scenario_experiment.py`, `scenario_reduce.py`, `scenario_state.py`, `scenario_import.py` |
+| Disturbance probes | `m6_experiment.py`, `threshold_search.py`, `image_perturbation.py`, `scene_perturbation.py` |
+| Rewordings | `paraphrase.py`, `language_experiment.py` |
+| Nemotron and Tavily | `token_factory.py`, `scenario_hypothesis.py`, `scenario_packet.py`, `explanation.py`, `next_steps.py`, `pipeline_research.py`, `tavily_search.py` |
 
-YAML edits take precedence over the form until discarded. Backend image/secret
-settings are reused from a local spec template or set through YAML; the form
-does not provision an account or build the image. Advanced parameters such as
-seed, compatible checkpoint overrides, reference selection or search bounds
-have no universal dedicated form controls. Use supported schema fields through
-YAML, not imagined UI toggles. Changing the form after editing YAML does not
-silently update that edited spec.
+## 9. Limits
 
-**Step 3 — Review:** run name/kind/suite/task, full YAML, planned Job deadlines,
-per-Job worst-case cost, total potential worst case, spend cap and hour limit;
-environment-check results and explicit Start. If all potential phases exceed
-the cap but the first Job fits, the page warns rather than blocking the entire
-run; later Jobs are admitted individually by the coordinator. Validation and
-required sign-in/key/first-Job checks can block Start. Docker readiness is
-shown but is not required merely to run a prebuilt image. A timed-out Start
-response does not offer an immediate second Start that might pay twice.
-
-The review does **not** show a full account balance/expiry, current GPU quota or
-capacity, an all-services bill, or a provider-guaranteed final charge. It checks
-key presence, not that every future model request will succeed. The spend-field
-copy is broader than the actual GPU/Job ledger: separate Token Factory charges
-are not included in it.
-
-### 3. Live run (`/run/:run`)
-
-The page polls recorded progress about every five seconds, exposing:
-
-- status, current step, execution kind and estimated spend/cap;
-- current cloud-Job phase, including capacity waits when recorded;
-- spent versus reserved money and elapsed versus allowed time;
-- phase timeline, skipped/completed steps and recent log lines;
-- confirmed Stop when stoppable; Resume when the API marks it resumable;
-- completion/result link, or the stop/error/no-case reason.
-
-This is **phase-level observability**, not a live robot-camera stream, GPU
-profiler, full distributed tracing console or editable mid-run scheduler.
-Available videos are viewed from recorded results. Home/Back/closing the tab
-does not cancel the run. Stop and Resume invoke the coordinator; they are not
-merely changes to a UI status label. Resume can attach to an existing known
-Job or continue pending work, but additional unfinished work may still cost
-money. Copy such as "never pays twice" is not a promise that every retry is free.
-
-### 4. Saved results (`/case/:id`)
-
-**Report-first (October 18).** A case with a saved report shows, in order:
-1. the readout header (fault code, verdict, kind, suite and task,
-   instruction, creation date);
-2. the linked videos when recorded (original, minimal and reference for a
-   scenario; **Keep in step** re-aligns them);
-3. the rendered **report**. It opens with a **Summary** (verdict, failing
-   start or imported file, reference, each kept shift with size and share,
-   and the stop status in plain words) and continues with the full evidence:
-   - the screen, the result, the differences, the hypothesis against the
-     result, and every rerun in **Candidates** with a column legend;
-   - for audits, the per-family tables;
-   - for rewordings, every wording with its meaning check.
-
-   Tables over 12 rows fold behind "Show all *n* rows";
-4. **Nemotron's reading**, collapsed and labelled as interpretation;
-5. the **Regression test** for scenario cases, with a line on what it checks,
-   the replay history (each row names the checkpoint it tested) and its
-   controls in the local panel;
-6. **Run details**, collapsed (timeline, Jobs, cost, time);
-7. files.
-
-A case without a report (an occlusion case from the earlier experiment
-modes) keeps the structured view: rectangles, episodes, lineage and research. Empty states mean evidence
-was absent, not that the policy failed. The algorithm behind a scenario report
-and audit severities
-are in the [Reference](reference.md).
-
-**"Nemotron's reading" is a saved interpretation panel, not a chatbot.** It
-shows model attribution, a Review required marker, hypotheses, observations,
-evidence IDs and limitations if a reading exists. It has no conversational
-prompt box and does not call a model on page load. Scenario's pre-test guess
-versus measurement is part of the report (Hypothesis vs result), separate from
-this post-test explanation.
-Audit/paraphrase explanations are not generated by the current pipeline.
-
-**Research context** displays stored related-work text and source links when
-present. A New diagnosis attaches them when its research step is on; the page
-itself never calls Tavily.
-
-The screens use "cause", "smallest" and "fails from" as short labels. Read
-them with the report's actual tested range, stop reason, completeness and
-minimality scope. In particular, no threshold is not necessarily a completed
-test through severity 1, and a reduced wording/scene is not a globally minimal
-or formally proven cause.
-
-### 5. Replay, Setup, Guide and All evidence
-
-- **Regression test (replay):** scenario cases with replay inputs only. Shows
-  prior replays with the checkpoint each tested; local controls let the
-  operator choose the policy to test (the case's original checkpoint, or a
-  compatible checkpoint ID plus pinned revision), with the cap and time limit
-  under Limits. Estimate cost and confirm precede a new Job testing the
-  minimal scene and passing reference five times each. The expectation is a
-  CLI option only (`--expect`). Audit/paraphrase Replay is not supported. The public gallery may show
-  stored replay history but cannot launch one.
-- **Setup (`/setup`):** read-only checks for Nebius sign-in, Docker, Token
-  Factory key presence and backend settings in a local spec. Shows Ready/Needs
-  attention, repair guidance, Check again and guide links. It is not a full
-  cloud-resource provisioning, billing or Hugging Face-access validation wizard.
-- **Run your own (`/guide`):** static setup/usage instructions in either local
-  or public mode. It describes commands; it does not execute them for a visitor.
-- **All evidence (`/evidence`):** local episode catalog: episode/run, task and
-  instruction, outcome/failure detail, steps/duration/date, optional video;
-  outcome filter, text search and Show more in batches of 100. It is raw
-  evidence, not another diagnosis engine. Perturbation parameters and trace
-  URLs exist in the data contract but are not rendered as dedicated columns or
-  trace-inspection tools on this page.
-
-### UI assessment and proposed clarification
-
-The UI exposes the main operator loop: **configure → review → launch → monitor
-→ inspect → replay a scenario**. It is substantially more than a video viewer,
-but not every engine has the same import, explanation or Replay capabilities.
-
-Three different questions remain distinct:
-
-1. **Is wording an audit?** Yes, by product intent; it probes the language input.
-2. **Should it share the visual-audit algorithm?** No; retain the specialized
-   generation/meaning-check/word-edit path.
-3. **Does the UI convey that hierarchy clearly?** Not yet; it presents the
-   three paths as peers without explaining the two intentions.
-
-Options for that last point: keep three cards and add clearer grouping text
-(least change); use two intent cards with visual/scene versus wording as
-stress-test subchoices (**recommended**, matches the accepted product story);
-or combine all families into one run selector (larger orchestration/cost change,
-not needed just to clarify navigation). No option is implemented by this
-documentation work. Likewise, the known over-broad budget/causality and
-incomplete-audit labels are recorded review points, not silently fixed here.
-
-### UI source anchors
-
-- Routes, local/public rendering and shared navigation:
-  [`App.tsx`](../web/src/App.tsx),
-  [`HomePage.tsx`](../web/src/pages/HomePage.tsx),
-  [`Sidebar.tsx`](../web/src/components/Sidebar.tsx).
-- Wizard and spec generation:
-  [`NewDiagnosisPage.tsx`](../web/src/pages/NewDiagnosisPage.tsx),
-  [`StepSettings.tsx`](../web/src/components/new/StepSettings.tsx),
-  [`specYaml.ts`](../web/src/lib/specYaml.ts),
-  [`Review.tsx`](../web/src/components/new/Review.tsx).
-- Live observations and controls:
-  [`RunPage.tsx`](../web/src/pages/RunPage.tsx),
-  [`RunParts.tsx`](../web/src/components/run/RunParts.tsx).
-- Saved evidence and optional interpretation:
-  [`CasePage.tsx`](../web/src/pages/CasePage.tsx),
-  [`case components`](../web/src/components/case/).
-- Ancillary pages: [`SetupPage.tsx`](../web/src/pages/SetupPage.tsx),
-  [`GuidePage.tsx`](../web/src/pages/GuidePage.tsx),
-  [`EvidencePage.tsx`](../web/src/pages/EvidencePage.tsx).
+- **One simulator family.** GR00T N1.7 on LIBERO. Real robots are out of scope,
+  and another simulator needs an adapter.
+- **One seed per run.** A result covers the tested policy, task, start, family and
+  range, not other tasks or starts.
+- **Local minimum.** The reduced trigger is entity-minimal, not the global
+  smallest. Size shrinking assumes failure grows with the shift, so a kept size
+  can exceed the smallest that fails (the basket in `FL-S-8E0D`). A threshold is
+  the smallest tested level that reproduces. Noise on `FL-A-D582` sat at the edge
+  of the gate.
+- **Approximations.** Image families approximate camera effects. Scene families
+  change only camera pose and lights. One family is tested at a time.
+- **What, not why.** The minimal trigger says what triggers the failure. Nemotron's
+  text is interpretation, and the meaning check is a conservative word rule, not
+  a semantic proof.
+- **One GPU, one Job at a time.** A local NVIDIA GPU backend exists but is not
+  validated on hardware. A regression test covers its saved condition, one case at
+  a time.
