@@ -5,6 +5,16 @@ failure into the **smallest confirmed trigger** and keeps it as a **regression
 test** that reruns on every new checkpoint. It works on simulated manipulation
 policies (vision-language-action models such as NVIDIA GR00T).
 
+**Scope today:** GR00T N1.7 on the LIBERO benchmark (4 suites, 40 tasks, one
+simulated arm). The loop itself is not tied to LIBERO. Another simulator
+needs an adapter, which is not built. The adapter must:
+- reset to an exact state;
+- expose shiftable object and robot positions;
+- rerun the policy;
+- check success.
+
+See [Where it applies](docs/reference.md#where-it-applies).
+
 ## The problem
 
 A team fine-tuning a robot policy works in a loop:

@@ -50,3 +50,15 @@ Tell story **A**:
   team-workflow description is supported by published accounts, but "a
   failure seen once may not repeat" is stated from our own runs, not as an
   industry finding.
+
+## Amendment (October 19, 2026): scope stated up front
+
+Jethro chose to state the scope right under the README's title, and in the
+Reference's "Where it applies":
+- what Faultline covers today: GR00T N1.7 on LIBERO;
+- what an adapter for another simulator would need;
+- that real robots are out of scope.
+
+The general problem story stays. The 50 benchmark starts are LIBERO's, not a
+robotics standard. A start file is a LIBERO state, not a different
+environment. The Devpost text must carry the same scope line.

@@ -154,6 +154,31 @@ and keeps it as a **regression test** that reruns on every new checkpoint.
 The policy runs in simulation (LIBERO on MuJoCo). The evidence is reruns of
 the policy, never a model's opinion.
 
+### Where it applies
+
+**Today:** GR00T N1.7 checkpoints on the LIBERO benchmark. That means four
+suites, 40 tasks and one simulated robot arm (a Franka Panda in MuJoCo).
+
+- **Benchmark starts are LIBERO's own.** Each LIBERO task ships 50 fixed
+  starting layouts, so every team that evaluates on LIBERO tests the same
+  situations. Episode *n* of a task always begins from start *n*. Other
+  benchmarks number their situations differently (seeds, episode configs),
+  and a real robot has no numbered starts.
+- **A start file** is a start state for one of LIBERO's own tasks: the same
+  objects and the same arm, in a layout outside the 50. It is not a way to
+  bring a different robot, scene or simulator.
+- **The method is not tied to LIBERO**: confirm by reruns, shrink the
+  differences, find thresholds, keep a test. Another simulator needs an
+  adapter, and none is built. The adapter must:
+  - reset to an exact saved state;
+  - describe that state as object and robot positions that can be shifted;
+  - rerun the policy from it;
+  - check success;
+  - expose camera images (for the disturbance probes, the most portable
+    part).
+- **Real robots are out of scope.** They cannot be reset to an exact state,
+  and repeated attempts at this scale would be too costly.
+
 ### The regression test
 
 In software, a **regression** is something that used to work and breaks after
