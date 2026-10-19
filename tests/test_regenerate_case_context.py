@@ -184,7 +184,7 @@ class RunFolderTests(unittest.TestCase):
         self.assertIn("| milk_1 | position | 87.5% | 75% |", report)
         self.assertEqual(1, len(fakes.explain_calls))
         self.assertEqual(1, len(fakes.steps_calls))
-        self.assertIn("milk_1", json.dumps(fakes.steps_calls[0]["facts"]["sizes_already_tested"]))
+        self.assertIn("milk position", json.dumps(fakes.steps_calls[0]["facts"]["sizes_already_tested"]))
         self.assertNotIn(KEY, text)
         library = Library(self.artifacts, runs_root=self.artifacts / "runs", diagnoses_root=self.diagnoses)
         detail = library.detail("d-" + case["case_id"])
@@ -286,7 +286,8 @@ class AuditRunTests(unittest.TestCase):
             self.assertEqual(0, status, "\n".join(lines))
             self.assertEqual(([], 1), (fakes.explain_calls, len(fakes.steps_calls)))
             facts = fakes.steps_calls[0]["facts"]
-            self.assertEqual({"severity": 0.4, "failures": 5, "attempts": 5}, facts["families"][0]["at_threshold"])
+            self.assertEqual({"severity": 0.4, "failures": 5, "attempts": 5, "evidence_id": "blur@0.4"},
+                             facts["families"][0]["at_threshold"])
             report = (run / "cases" / "audit" / "report.md").read_text(encoding="utf-8")
             self.assertIn("| 0.4 | 5/5 | fails ← threshold | 3rd (narrowing) |", report)
             self.assertTrue(report.startswith("# Stress test: LIBERO-10 task 0, start 3"))

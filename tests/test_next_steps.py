@@ -197,8 +197,8 @@ class ContextTests(unittest.TestCase):
         case = self.scenario_case()
         context = pr.build_context(case, self.queries())
         facts = context["facts"]
-        self.assertIn("milk_1 position", " ".join(facts["kept_sizes"]))
-        self.assertTrue(any(n.startswith("milk_1") and "87.5% reproduced it" in n for n in facts["sizes_already_tested"]))
+        self.assertIn("milk position", " ".join(facts["kept_sizes"]))
+        self.assertTrue(any(n.startswith("milk ") and "87.5% reproduced it" in n for n in facts["sizes_already_tested"]))
         self.assertIn("enough to make the policy fail", facts["minimal_cause"])
         ids = [row["evidence_id"] for row in context["evidence"]]
         self.assertTrue(ids and all(i.startswith("c") for i in ids))
@@ -227,18 +227,24 @@ class ContextTests(unittest.TestCase):
                 "families": {"blur": {"threshold_severity": 0.5, "stop_reason": "threshold_found"},
                              "noise": {"threshold_severity": None, "stop_reason": "no_reproducible_failure"}}}
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "cases" / "audit"
+            run = Path(directory) / "run"
+            target = run / "cases" / "audit"
             target.mkdir(parents=True)
             (target / "merged-summary.json").write_text(json.dumps(summary), encoding="utf-8")
-            context = pr.build_context(case, self.queries(), Path(directory))
+            context = pr.build_context(case, self.queries(), run)
             without = pr.build_context(case, self.queries(), None)
         families = {f["family"]: f for f in context["facts"]["families"]}
         blur = families["image blur"]
-        self.assertEqual({"severity": 0.5, "failures": 5, "attempts": 5}, blur["at_threshold"])
+        self.assertEqual({"severity": 0.5, "failures": 5, "attempts": 5, "evidence_id": "blur@0.5"}, blur["at_threshold"])
         self.assertEqual(0.4, blur["last_level_below_threshold"]["severity"])
+        self.assertEqual("blur@0.4", blur["last_level_below_threshold"]["evidence_id"])
         self.assertEqual(1.0, families["image sensor noise"]["highest_level_tried"]["severity"])
+        self.assertEqual(["image sensor noise"], context["facts"]["families_that_never_failed"])
         self.assertEqual({"failures": 0, "attempts": 5}, context["facts"]["unperturbed_control"])
-        self.assertNotIn("evidence", context)
+        self.assertEqual(["blur@0.4", "blur@0.5", "noise@1"], sorted(r["evidence_id"] for r in context["evidence"]))
+        self.assertEqual(["blur@0.4", "blur@0.5", "noise@1"], sorted(ns.context_ids(context)[1]))
+        self.assertEqual("not replayed", blur["latest_replay"])
+        self.assertFalse(blur["borderline"])
         self.assertNotIn("at_threshold", without["facts"]["families"][0])      # no run folder: counts unknown
 
     def test_dropping_sources_to_fit_keeps_the_evidence(self):
@@ -260,6 +266,223 @@ class ContextTests(unittest.TestCase):
 
     def test_no_sources_means_no_context(self):
         self.assertIsNone(pr.build_context({"kind": "audit"}, [{"results": []}]))
+
+
+class SettledFactsTests(unittest.TestCase):
+    """October 19 first real answers: an ablation the reruns had already done, raw simulator names in the text."""
+
+    FULL = {"robot": {"joints": 1.0}, "basket_1": {"position": 1.0}, "milk_1": {"position": 1.0},
+            "orange_juice_1": {"position": 1.0}}
+
+    def case(self, skip=(), reproduces=()):
+        from tests import reduction_fixtures as rf
+
+        case = copy.deepcopy(ContinuationShrinkNotesTests().case())
+        kept = list(self.FULL)
+        rows = []
+        index = 20
+        for entity in kept:
+            if ("alone", entity) not in skip:
+                decision = "reproduces" if ("alone", entity) in reproduces else "does_not_reproduce"
+                rows.append(rf.candidate(index, "probe", {entity: dict(self.FULL[entity])}, decision))
+            index += 1
+            if ("without", entity) not in skip:
+                rows.append(rf.candidate(index, "ddmin", {e: dict(self.FULL[e]) for e in kept if e != entity},
+                                         "does_not_reproduce"))
+            index += 1
+        case["reruns"] = case["reruns"] + rows
+        return case
+
+    def facts(self, case=None):
+        details, evidence = ns.case_details(case or self.case())
+        return details, evidence
+
+    def entity(self, details, name):
+        return next(e for e in details["already_measured"]["each_kept_entity"] if e["entity"] == name)
+
+    def test_each_kept_entity_reports_alone_and_removal_with_the_row(self):
+        details, evidence = self.facts()
+        juice = self.entity(details, "orange juice")
+        self.assertEqual("yes", juice["alone_policy_passes"])
+        self.assertEqual("yes", juice["removing_it_policy_passes"])
+        self.assertEqual("0 of 4", juice["removing_it_attempts_failed"])
+        ids = {row["evidence_id"] for row in evidence}
+        self.assertIn(juice["alone_evidence_id"], ids)
+        self.assertIn(juice["removing_it_evidence_id"], ids)
+        for entity in details["already_measured"]["each_kept_entity"]:
+            self.assertIn(entity["removing_it_evidence_id"], ids)
+
+    def test_sizes_kept_largest_passed_and_parts_never_shrunk(self):
+        details, _ = self.facts()
+        milk = self.entity(details, "milk")
+        self.assertEqual("position 87.5% of its difference", milk["kept_size"])
+        self.assertEqual("position 75%", milk["largest_size_that_passed"])
+        self.assertEqual("position 100% of its difference", self.entity(details, "orange juice")["kept_size"])
+        self.assertEqual("none tested", self.entity(details, "orange juice")["largest_size_that_passed"])
+        self.assertEqual(["orange juice position"], details["already_measured"]["parts_never_shrunk"])
+
+    def test_a_missing_row_is_reported_as_not_saved_not_guessed(self):
+        details, _ = self.facts(self.case(skip={("without", "orange_juice_1")}))
+        juice = self.entity(details, "orange juice")
+        self.assertEqual("not in the saved reruns", juice["removing_it_policy_passes"])
+        self.assertNotIn("removing_it_evidence_id", juice)
+        self.assertEqual("yes", juice["alone_policy_passes"])
+
+    def test_a_shift_that_reproduces_alone_is_reported_as_no(self):
+        details, _ = self.facts(self.case(reproduces={("alone", "robot")}))
+        self.assertEqual("no", self.entity(details, "robot")["alone_policy_passes"])
+
+    def test_nothing_the_model_reads_holds_a_raw_simulator_name(self):
+        details, evidence = self.facts()
+        text = json.dumps({"facts": details, "evidence": evidence})
+        for raw in ("orange_juice_1", "milk_1", "basket_1", "_1"):
+            self.assertNotIn(raw, text)
+        self.assertIn("orange juice", text)
+
+    def test_two_entities_that_read_the_same_keep_their_number(self):
+        case = copy.deepcopy(self.case())
+        case["minimal"]["selection"] = {"bowl_1": {"position": 1.0}, "bowl_2": {"position": 0.5}}
+        details, _ = ns.case_details(case)
+        self.assertEqual(["bowl 1", "bowl 2"], [e["entity"] for e in details["already_measured"]["each_kept_entity"]])
+
+    def test_a_single_kept_entity_has_no_alone_or_removal_claim(self):
+        case = copy.deepcopy(self.case())
+        case["minimal"]["selection"] = {"milk_1": {"position": 0.875}}
+        details, _ = ns.case_details(case)
+        record = details["already_measured"]["each_kept_entity"][0]
+        self.assertNotIn("alone_policy_passes", record)
+        self.assertEqual("position 75%", record["largest_size_that_passed"])
+
+    def test_the_rows_behind_the_facts_stay_citable_within_the_bound(self):
+        details, evidence = self.facts()
+        self.assertLessEqual(len(evidence), ns.MAX_EVIDENCE_ROWS)
+        self.assertEqual(len(evidence), len({r["evidence_id"] for r in evidence}))
+        context = {"facts": details, "evidence": evidence, "sources": CONTEXT["sources"]}
+        self.assertEqual([r["evidence_id"] for r in evidence], ns.context_ids(context)[1])
+
+    def test_the_prompt_forbids_settled_tests_unrelated_sources_and_raw_names(self):
+        prompt = ns.NEXT_STEPS_PROMPT
+        for phrase in ("Do not suggest a test whose answer is already in the facts", "borderline",
+                       "plain words", "Put ids only in cites", "directly supports the step",
+                       "cite the case evidence instead", "blur@0.4625"):
+            self.assertIn(phrase, prompt)
+
+
+class AuditSettledFactsTests(unittest.TestCase):
+    def level(self, severity, failures):
+        return {"severity": severity, "outcomes": ["policy_failure"] * failures + ["success"] * (5 - failures),
+                "failures": failures, "complete": True}
+
+    def run_tree(self, replay_text=None, replay_checkpoint=None, case_checkpoint=None):
+        import tempfile
+        from pathlib import Path
+
+        summary = {"families": {"blur": {"levels": [self.level(0.4, 0), self.level(0.4625, 4)]},
+                                "noise": {"levels": [self.level(0.3, 0), self.level(0.6, 5)]},
+                                "darken": {"levels": [self.level(1.0, 0)]}},
+                   "nominal_controls": {"outcomes": {"success": 5}, "planned": 5}}
+        case = {"kind": "audit", "case_id": "a" * 64, "suite": "libero_10", "summary": "cases/audit/s.json",
+                "families": {"blur": {"threshold_severity": 0.4625}, "noise": {"threshold_severity": 0.6},
+                             "darken": {"threshold_severity": None, "stop_reason": "no_reproducible_failure"}}}
+        if case_checkpoint:
+            case["checkpoint"] = case_checkpoint
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        run = root / "audit-20261016T064528Z"
+        (run / "cases" / "audit").mkdir(parents=True)
+        (run / "cases" / "audit" / "s.json").write_text(json.dumps(summary), encoding="utf-8")
+        if replay_text is not None:
+            replay = root / "replay-20261018T010203Z"
+            replay.mkdir()
+            result = {"case_id": "a" * 64, "verdict_text": replay_text}
+            if replay_checkpoint:
+                result["checkpoint"] = replay_checkpoint
+            (replay / "replay-result.json").write_text(json.dumps(result), encoding="utf-8")
+        return case, run
+
+    def families(self, case, run):
+        details, evidence = ns.case_details(case, run)
+        return {f["family"]: f for f in details["families"]}, details, evidence
+
+    def test_a_family_the_latest_replay_did_not_repeat_is_borderline(self):
+        case, run = self.run_tree("still fails at s = 0.60 (noise); no longer fails at s = 0.4625 "
+                                  "(blur; fails only at higher s = 0.50)")
+        families, details, _ = self.families(case, run)
+        blur, noise = families["image blur"], families["image sensor noise"]
+        self.assertEqual(("did not repeat the failure", True, 0.5),
+                         (blur["latest_replay"], blur["borderline"], blur["failed_only_at_higher_severity"]))
+        self.assertEqual(("repeated the failure", False), (noise["latest_replay"], noise["borderline"]))
+        self.assertEqual(["low-light image darkening"], details["families_that_never_failed"])
+
+    def test_without_a_replay_nothing_is_borderline(self):
+        case, run = self.run_tree()
+        blur = self.families(case, run)[0]["image blur"]
+        self.assertEqual(("not replayed", False), (blur["latest_replay"], blur["borderline"]))
+
+    def test_a_replay_of_a_new_checkpoint_says_nothing_about_the_original(self):
+        case, run = self.run_tree("no longer fails at s = 0.4625 (blur)", {"id": "new-ckpt"}, {"id": "orig"})
+        self.assertFalse(self.families(case, run)[0]["image blur"]["borderline"])
+        same, run = self.run_tree("no longer fails at s = 0.4625 (blur)", {"id": "orig"}, {"id": "orig"})
+        self.assertTrue(self.families(same, run)[0]["image blur"]["borderline"])
+
+    def test_every_level_is_a_citable_evidence_id(self):
+        case, run = self.run_tree()
+        _, _, evidence = self.families(case, run)
+        ids = sorted(row["evidence_id"] for row in evidence)
+        self.assertEqual(["blur@0.4", "blur@0.4625", "darken@1", "noise@0.3", "noise@0.6"], ids)
+        row = next(r for r in evidence if r["evidence_id"] == "blur@0.4625")
+        self.assertIn("4 of 5 attempts failed", row["meaning"])
+        self.assertNotIn("_", " ".join(r["meaning"] for r in evidence))
+
+    def test_a_replay_sentence_is_parsed_per_family(self):
+        found = ns.replay_outcome_by_family(
+            "still fails at s = 0.50 (blur); no longer fails at s = 0.60 (noise), s = 0.40 (contrast; "
+            "fails only at higher s = 0.80); not tested: jpeg")
+        self.assertEqual({"blur": {"repeated": True, "higher": None}, "noise": {"repeated": False, "higher": None},
+                          "contrast": {"repeated": False, "higher": 0.8}}, found)
+        self.assertEqual({}, ns.replay_outcome_by_family("inconclusive"))
+
+
+class PlainTextValidationTests(unittest.TestCase):
+    CONTEXT = dict(CONTEXT, evidence=[{"evidence_id": "c3", "meaning": "m"},
+                                      {"evidence_id": "blur@0.4625", "meaning": "Image blur at severity 0.4625"}])
+
+    def rejected(self, text):
+        with self.assertRaises(ns.NextStepsError):
+            ns.validate_next_steps(answer((text, ["S1"]), ("Add a regression test.", ["c3"])), self.CONTEXT)
+
+    def test_a_raw_entity_name_in_the_text_is_rejected(self):
+        self.rejected("Rerun the scene without orange_juice_1 to check it.")
+        self.rejected("Move the basket_1 slightly.")
+        self.rejected("Shift milk_1 by a few centimetres.")
+        self.rejected("Try the alphabet_soup in a new position.")
+        self.rejected("Test motion_blur at lower severity.")
+
+    def test_plain_words_pass(self):
+        ns.validate_next_steps(answer(("Collect demonstrations with the orange juice placed nearer the basket.", ["S1"]),
+                                      ("Add this start to the evaluation suite.", ["c3"])), self.CONTEXT)
+
+    def test_an_id_written_into_the_text_is_rejected_but_a_marker_is_moved_out(self):
+        self.rejected("Row c37 shows the failure, so add a test.")
+        self.rejected("Source S2 studies this, so add a test.")
+        self.rejected("Blur at blur@0.4625 is the edge, so add a test.")
+        items = ns.validate_next_steps(answer(("Add a test near the edge [blur@0.4625].", ["blur@0.4625"]),
+                                              ("Collect more data [c3].", ["c3", "S1"])), self.CONTEXT)
+        self.assertEqual("Add a test near the edge.", items[0]["text"])
+
+    def test_a_stress_test_level_id_is_a_valid_cite_only_when_offered(self):
+        ns.validate_next_steps(answer(("Test blur nearer the edge.", ["blur@0.4625", "S1"]),
+                                      ("Add a test.", ["c3"])), self.CONTEXT)
+        with self.assertRaises(ns.NextStepsError):
+            ns.validate_next_steps(answer(("Test blur nearer the edge.", ["blur@0.9"]), ("Add a test.", ["c3"])),
+                                   self.CONTEXT)
+
+    def test_the_context_accepts_stress_test_ids(self):
+        self.assertEqual((["S1", "S2"], ["c3", "blur@0.4625"]), ns.context_ids(self.CONTEXT))
+        bad = dict(CONTEXT, evidence=[{"evidence_id": "Blur@x", "meaning": "m"}])
+        with self.assertRaises(ns.NextStepsError):
+            ns.context_ids(bad)
 
 
 class LibraryBlockTests(unittest.TestCase):
