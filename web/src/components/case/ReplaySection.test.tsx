@@ -2,7 +2,8 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Environment } from '../../api/types';
 import { IDS } from '../../mocks/fixtures';
-import { renderApp } from '../../test/utils';
+import { vi } from 'vitest';
+import { makeHarness, renderApp } from '../../test/utils';
 
 const READY: Environment = {
   checks: [
@@ -58,7 +59,7 @@ describe('regression test on a case page', () => {
     expect(within(group).getByRole('radio', { name: /The original policy/ })).toBeChecked();
     expect(within(group).getByText('nvidia/gr00t17-lerobot-libero_10-640 at 5ee08ab')).toBeInTheDocument();
     expect(within(group).getByRole('radio', { name: /A new checkpoint/ })).not.toBeChecked();
-    expect(within(panel).queryByLabelText('Checkpoint id')).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText('Hugging Face model id')).not.toBeInTheDocument();
     expect(within(panel).queryByLabelText('What do you expect?')).not.toBeInTheDocument();
   });
 
@@ -102,10 +103,10 @@ describe('regression test on a case page', () => {
     await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
     const estimate = within(panel).getByRole('button', { name: 'Estimate cost' });
     expect(estimate).toBeDisabled();
-    await user.type(within(panel).getByLabelText('Checkpoint id'), 'my-org/retrained');
+    await user.type(within(panel).getByLabelText('Hugging Face model id'), 'my-org/retrained');
     expect(estimate).toBeDisabled();
     expect(within(panel).getByText('Fill in the checkpoint id and revision first.')).toBeInTheDocument();
-    await user.type(within(panel).getByLabelText('Revision'), 'abc1234');
+    await user.type(within(panel).getByLabelText('Revision (commit hash)'), 'abc1234');
     expect(estimate).toBeEnabled();
     await waitFor(() => expect(view.fetchSpy.mock.calls.some((call) => call[0] === '/api/specs/template?mode=replay')).toBe(true));
     await user.click(estimate);
@@ -115,13 +116,41 @@ describe('regression test on a case page', () => {
     expect(bodyOf(view).yaml).toContain('checkpoint: {id: "my-org/retrained", revision: "abc1234"}');
   });
 
+  it('explains the two checkpoint fields and what kind of checkpoint fits', async () => {
+    const user = userEvent.setup();
+    await openCase(IDS.soup);
+    const panel = panelOf();
+    await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
+    expect(
+      within(panel).getByText(/Use a GR00T N1\.7 checkpoint in the same LeRobot format, trained for this LIBERO suite\. A private repository needs read access/),
+    ).toBeInTheDocument();
+    const model = within(panel).getByLabelText('Hugging Face model id');
+    expect(model).toHaveAccessibleDescription('org/name of the policy on Hugging Face, e.g. the one this case used: nvidia/gr00t17-lerobot-libero_10-640');
+    const revision = within(panel).getByLabelText('Revision (commit hash)');
+    expect(revision).toHaveAccessibleDescription(
+      "The 40-character commit hash from the model repository's history on Hugging Face, so the result names exactly which version ran.",
+    );
+  });
+
+  it('leaves out the "this case used" example when the case recorded no checkpoint', async () => {
+    const user = userEvent.setup();
+    const harness = makeHarness({ activeDemo: false, environment: READY });
+    const base = await harness.api.detail(IDS.soup);
+    vi.spyOn(harness.api, 'detail').mockResolvedValue({ ...base, checkpoint: null });
+    renderApp(`/case/${IDS.soup}`, { harness });
+    await screen.findByRole('heading', { level: 1 });
+    const panel = panelOf();
+    await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
+    expect(within(panel).getByLabelText('Hugging Face model id')).toHaveAccessibleDescription('org/name of the policy on Hugging Face');
+  });
+
   it('goes back to the case checkpoint when the original policy is chosen again', async () => {
     const user = userEvent.setup();
     const view = await openCase(IDS.soup);
     const panel = panelOf();
     await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
-    await user.type(within(panel).getByLabelText('Checkpoint id'), 'my-org/retrained');
-    await user.type(within(panel).getByLabelText('Revision'), 'abc1234');
+    await user.type(within(panel).getByLabelText('Hugging Face model id'), 'my-org/retrained');
+    await user.type(within(panel).getByLabelText('Revision (commit hash)'), 'abc1234');
     await user.click(within(panel).getByRole('radio', { name: /The original policy/ }));
     await waitFor(() => expect(view.fetchSpy.mock.calls.some((call) => call[0] === '/api/specs/template?mode=replay')).toBe(true));
     await user.click(within(panel).getByRole('button', { name: 'Estimate cost' }));

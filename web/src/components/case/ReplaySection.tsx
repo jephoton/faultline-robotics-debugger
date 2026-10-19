@@ -84,31 +84,45 @@ function ReplayForm({ detail }: { detail: Detail }) {
           </label>
         </div>
         {policy === 'new' && (
-          <div className="form-grid">
-            <div className="field">
-              <label htmlFor={id('ckpt')}>Checkpoint id</label>
-              <input
-                id={id('ckpt')}
-                type="text"
-                value={form.checkpointId}
-                onChange={(event) => change({ checkpointId: event.target.value })}
-                placeholder="your-org/your-checkpoint"
-                spellCheck={false}
-              />
+          <>
+            <p className="field__hint">
+              Use a GR00T N1.7 checkpoint in the same LeRobot format, trained for this LIBERO suite. A private repository needs read access for the
+              Hugging Face token in your Nebius project.
+            </p>
+            <div className="form-grid">
+              <div className="field">
+                <label htmlFor={id('ckpt')}>Hugging Face model id</label>
+                <input
+                  id={id('ckpt')}
+                  type="text"
+                  value={form.checkpointId}
+                  onChange={(event) => change({ checkpointId: event.target.value })}
+                  placeholder="your-org/your-checkpoint"
+                  spellCheck={false}
+                  aria-describedby={id('ckpt-hint')}
+                />
+                <span className="field__hint" id={id('ckpt-hint')}>
+                  org/name of the policy on Hugging Face{original ? ', e.g. the one this case used: ' : ''}
+                  {detail.checkpoint && <span className="mono">{detail.checkpoint.id}</span>}
+                </span>
+              </div>
+              <div className="field">
+                <label htmlFor={id('rev')}>Revision (commit hash)</label>
+                <input
+                  id={id('rev')}
+                  type="text"
+                  value={form.checkpointRevision}
+                  onChange={(event) => change({ checkpointRevision: event.target.value })}
+                  placeholder="40-character commit hash"
+                  spellCheck={false}
+                  aria-describedby={id('rev-hint')}
+                />
+                <span className="field__hint" id={id('rev-hint')}>
+                  The 40-character commit hash from the model repository's history on Hugging Face, so the result names exactly which version ran.
+                </span>
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor={id('rev')}>Revision</label>
-              <input
-                id={id('rev')}
-                type="text"
-                value={form.checkpointRevision}
-                onChange={(event) => change({ checkpointRevision: event.target.value })}
-                placeholder="commit sha"
-                spellCheck={false}
-              />
-              <span className="field__hint">Both are needed, so the result names exactly which policy ran.</span>
-            </div>
-          </div>
+          </>
         )}
       </fieldset>
       <p className="replay__cost">
