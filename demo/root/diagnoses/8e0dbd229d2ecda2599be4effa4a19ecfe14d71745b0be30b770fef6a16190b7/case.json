@@ -1,5 +1,5 @@
 {
- "case_id": "b3c44e8686f1c8234fdfbbbe24f3b516b74dfacf442f93c2f321bdedcf375193",
+ "case_id": "8e0dbd229d2ecda2599be4effa4a19ecfe14d71745b0be30b770fef6a16190b7",
  "checkpoint": {
   "id": "nvidia/gr00t17-lerobot-libero_10-640",
   "pinned": true,
@@ -11,32 +11,27 @@
    "joints": [
     {
      "name": "robot0_joint1",
-     "offset": -1.469,
+     "offset": -1.418,
      "unit": "deg"
     },
     {
      "name": "robot0_joint2",
-     "offset": 2.129,
+     "offset": 0.968,
      "unit": "deg"
     },
     {
      "name": "robot0_joint4",
-     "offset": 2.641,
+     "offset": 2.237,
      "unit": "deg"
     },
     {
      "name": "robot0_joint5",
-     "offset": 2.527,
-     "unit": "deg"
-    },
-    {
-     "name": "robot0_joint6",
-     "offset": 1.164,
+     "offset": -1.248,
      "unit": "deg"
     },
     {
      "name": "robot0_joint7",
-     "offset": 0.585,
+     "offset": 1.507,
      "unit": "deg"
     }
    ],
@@ -45,27 +40,22 @@
   {
    "entity": "alphabet_soup_1",
    "kind": "object",
-   "position_cm": 2.89
-  },
-  {
-   "entity": "cream_cheese_1",
-   "kind": "object",
-   "position_cm": 1.08
-  },
-  {
-   "entity": "tomato_sauce_1",
-   "kind": "object",
-   "position_cm": 0.7
+   "position_cm": 1.73
   },
   {
    "entity": "orange_juice_1",
    "kind": "object",
-   "position_cm": 3.65
+   "position_cm": 0.82
   },
   {
    "entity": "milk_1",
    "kind": "object",
-   "position_cm": 2.42
+   "position_cm": 2.55
+  },
+  {
+   "entity": "basket_1",
+   "kind": "object",
+   "position_cm": 2.23
   }
  ],
  "evidence": [
@@ -73,6 +63,7 @@
    "decision": "reproduces",
    "index": 0,
    "outcomes": [
+    "success",
     "policy_failure",
     "policy_failure",
     "policy_failure",
@@ -101,13 +92,14 @@
    "index": 2,
    "outcomes": [
     "success",
+    "success",
     "success"
    ],
    "phase": "probe",
    "role": "hybrid",
    "selection": {
-    "alphabet_soup_1": {
-     "position": 1.0
+    "robot": {
+     "joints": 1.0
     }
    }
   },
@@ -121,7 +113,7 @@
    "phase": "probe",
    "role": "hybrid",
    "selection": {
-    "tomato_sauce_1": {
+    "alphabet_soup_1": {
      "position": 1.0
     }
    }
@@ -131,45 +123,20 @@
    "index": 4,
    "outcomes": [
     "success",
+    "success",
     "success"
    ],
    "phase": "probe",
    "role": "hybrid",
    "selection": {
-    "robot": {
-     "joints": 1.0
+    "basket_1": {
+     "position": 1.0
     }
    }
   },
   {
    "decision": "does_not_reproduce",
-   "index": 12,
-   "outcomes": [
-    "success",
-    "success",
-    "success",
-    "success"
-   ],
-   "phase": "ddmin",
-   "role": "hybrid",
-   "selection": {
-    "cream_cheese_1": {
-     "position": 1.0
-    },
-    "milk_1": {
-     "position": 1.0
-    },
-    "orange_juice_1": {
-     "position": 1.0
-    },
-    "robot": {
-     "joints": 1.0
-    }
-   }
-  },
-  {
-   "decision": "does_not_reproduce",
-   "index": 19,
+   "index": 10,
    "outcomes": [
     "success",
     "success",
@@ -178,10 +145,7 @@
    "phase": "ddmin",
    "role": "hybrid",
    "selection": {
-    "alphabet_soup_1": {
-     "position": 1.0
-    },
-    "cream_cheese_1": {
+    "basket_1": {
      "position": 1.0
     },
     "milk_1": {
@@ -189,14 +153,34 @@
     },
     "orange_juice_1": {
      "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 16,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
     }
    }
   },
   {
    "decision": "reproduces",
-   "index": 32,
+   "index": 37,
    "outcomes": [
-    "success",
     "policy_failure",
     "policy_failure",
     "policy_failure",
@@ -205,20 +189,17 @@
    "phase": "shrink",
    "role": "hybrid",
    "selection": {
-    "alphabet_soup_1": {
-     "position": 0.875
-    },
-    "cream_cheese_1": {
-     "position": 1.0
+    "basket_1": {
+     "position": 0.9375
     },
     "milk_1": {
-     "position": 1.0
+     "position": 0.875
     },
     "orange_juice_1": {
      "position": 1.0
     },
     "robot": {
-     "joints": 0.875
+     "joints": 0.9375
     }
    }
   }
@@ -231,19 +212,19 @@
   "measurement": {
    "basis": [
     2,
-    12
+    10
    ],
    "entities": [
     {
      "basis": {
       "necessary": [
-       12
+       10
       ],
       "sufficient": [
        2
       ]
      },
-     "entity": "alphabet_soup_1",
+     "entity": "robot",
      "in_final": true,
      "label": "necessary_not_sufficient",
      "necessary": true,
@@ -254,13 +235,13 @@
     {
      "basis": {
       "necessary": [
-       32
+       37
       ],
       "sufficient": [
        3
       ]
      },
-     "entity": "tomato_sauce_1",
+     "entity": "alphabet_soup_1",
      "in_final": false,
      "label": "not_in_final",
      "necessary": false,
@@ -271,13 +252,13 @@
     {
      "basis": {
       "necessary": [
-       19
+       16
       ],
       "sufficient": [
        4
       ]
      },
-     "entity": "robot",
+     "entity": "basket_1",
      "in_final": true,
      "label": "necessary_not_sufficient",
      "necessary": true,
@@ -292,28 +273,26 @@
    "result_scope": "entity_minimal_sizes_partial",
    "sufficient": false,
    "survivors": [
-    "alphabet_soup_1",
-    "cream_cheese_1",
+    "basket_1",
     "milk_1",
     "orange_juice_1",
     "robot"
    ],
-   "top": "alphabet_soup_1",
+   "top": "robot",
    "top_k": 3,
    "verdict": "necessary_not_sufficient"
   },
   "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
   "ranking": [
-   "alphabet_soup_1",
-   "tomato_sauce_1",
    "robot",
-   "orange_juice_1",
+   "alphabet_soup_1",
+   "basket_1",
    "milk_1",
-   "cream_cheese_1"
+   "orange_juice_1"
   ],
   "result_scope": "entity_minimal_sizes_partial",
   "source": "model",
-  "text": "The alphabet soup moved 2.89 cm, the largest object shift, likely placing it outside the policy's learned grasp envelope or into collision with the basket (also shifted 2.16 cm). The tomato sauce moved 0.7 cm, which may be enough to miss a tight grasp tolerance. I predict that reverting only the alphabet soup to its reference pose will restore success, while reverting only the tomato sauce will not.",
+  "text": "The robot's joint offsets (up to 2.2 deg) likely shift the end-effector several centimeters, misaligning grasps for both target objects. The alphabet soup moved 1.73 cm and tomato sauce 1.05 cm, so the combined pose error may push them outside the grasp tolerance. The basket moved 2.23 cm, which could also cause placement failures. I predict the simulator will show that reverting the robot joints to the reference values restores success even with the object shifts.",
   "verdict": null
  },
  "instruction": "put both the alphabet soup and the tomato sauce in the basket",
@@ -322,63 +301,50 @@
   "attempts_run": 157,
   "attempts_skipped": 33,
   "candidates_tested": 36,
-  "total_seconds": 1566.809
+  "total_seconds": 1702.208
  },
  "minimal": {
   "entity_minimal": true,
   "parts": [
    {
-    "component": "position",
-    "entity": "alphabet_soup_1",
-    "invalid_points": [],
-    "lower": 0.75,
-    "lower_tested": true,
-    "resolution": 0.125,
-    "steps_done": 3,
-    "t": 0.875
-   },
-   {
     "component": "joints",
     "entity": "robot",
     "invalid_points": [],
-    "lower": 0.75,
+    "lower": 0.875,
     "lower_tested": true,
-    "resolution": 0.125,
-    "steps_done": 3,
-    "t": 0.875
+    "resolution": 0.0625,
+    "steps_done": 4,
+    "t": 0.9375
    },
    {
     "component": "position",
-    "entity": "orange_juice_1",
+    "entity": "basket_1",
     "invalid_points": [],
     "lower": 0.875,
     "lower_tested": true,
-    "resolution": 0.125,
-    "steps_done": 3,
-    "t": 1.0
+    "resolution": 0.0625,
+    "steps_done": 4,
+    "t": 0.9375
    }
   ],
   "selection": {
-   "alphabet_soup_1": {
-    "position": 0.875
-   },
-   "cream_cheese_1": {
-    "position": 1.0
+   "basket_1": {
+    "position": 0.9375
    },
    "milk_1": {
-    "position": 1.0
+    "position": 0.875
    },
    "orange_juice_1": {
     "position": 1.0
    },
    "robot": {
-    "joints": 0.875
+    "joints": 0.9375
    }
   },
-  "sentence": "Moving alphabet_soup_1 by 2.5 cm (of the original 2.9 cm), moving cream_cheese_1 by 1.1 cm (of the original 1.1 cm), moving milk_1 by 2.4 cm (of the original 2.4 cm), moving orange_juice_1 by 3.7 cm (of the original 3.7 cm) and moving 6 joints of robot 88% of the way to their failing values are enough to make the policy fail from the passing start 28 (at least 4 of 5 attempts); sizes are resolved to within 1/8 of the original difference; the reduction stopped early, so this is the smallest cause found so far."
+  "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far."
  },
  "reduced": false,
- "reference_start": 28,
+ "reference_start": 4,
  "replay": {
   "candidate": {
    "schema_version": 1,
@@ -387,17 +353,7 @@
      {
       "component": "joints",
       "entity": "robot",
-      "t": 0.875
-     },
-     {
-      "component": "position",
-      "entity": "alphabet_soup_1",
-      "t": 0.875
-     },
-     {
-      "component": "position",
-      "entity": "cream_cheese_1",
-      "t": 1.0
+      "t": 0.9375
      },
      {
       "component": "position",
@@ -407,47 +363,52 @@
      {
       "component": "position",
       "entity": "milk_1",
-      "t": 1.0
+      "t": 0.875
+     },
+     {
+      "component": "position",
+      "entity": "basket_1",
+      "t": 0.9375
      }
     ],
     "failing": 14,
     "kind": "hybrid",
-    "reference": 28
+    "reference": 4
    },
    "state": [
     0.0,
-    -0.013587693863031707,
-    -0.16113429367748977,
-    0.014769420040114124,
-    -2.407903209728261,
-    0.005826817880285232,
-    2.252784691974472,
-    0.8040622903870787,
+    -0.01524596204420178,
+    -0.1575454593144546,
+    0.015921034190421922,
+    -2.404581884573473,
+    0.012701835448830957,
+    2.254823850782229,
+    0.803693749655891,
     0.020833,
     -0.020833,
-    -0.08111085408252952,
-    -0.14886521360148944,
+    -0.08475188676818854,
+    -0.16887752122140928,
     0.45999999999999996,
     0.0,
     0.0,
     0.7071067811865475,
     0.7071067811865476,
-    0.09724114856210223,
-    -0.17830763630244706,
+    0.1033857549121237,
+    -0.21921367898250513,
     0.445,
     0.0,
     0.0,
     0.0,
     1.0,
-    -0.11384196084960645,
-    0.03258649372432074,
+    -0.11705259818785099,
+    0.03893845919667266,
     0.48,
     0.0,
     0.0,
     0.7071067811865475,
     0.7071067811865476,
-    -0.23949800625862805,
-    -0.12725314001149224,
+    -0.23575230802766525,
+    -0.1579996446611055,
     0.48,
     0.5,
     0.5,
@@ -460,22 +421,22 @@
     0.5,
     0.5,
     0.5,
-    0.0491806231711361,
-    -0.0836634344009538,
+    0.05235572199966599,
+    -0.08396222005482537,
     0.48,
     0.5,
     0.5,
     0.5,
     0.5,
-    0.06994768286690028,
-    0.044555171854143344,
+    0.07473812249468798,
+    0.02547406206408036,
     0.44,
     0.0,
     0.0,
     0.0,
     1.0,
-    -0.006288988412145924,
-    0.2660738661531288,
+    0.008435642387159555,
+    0.2522547662864291,
     0.48,
     0.7071067811865475,
     0.0,
@@ -539,7 +500,7 @@
     0.0,
     0.0
    ],
-   "state_sha256": "e73bc47b449c186a6d9a739db92d451775de5414dfb5a57b3c5b572c43ab29dd",
+   "state_sha256": "40afa3b101ed02a51404be2bfb48a3f897a06295215b8572ad5db5f7490d591a",
    "suite": "libero_10",
    "task_id": 0
   },
@@ -561,22 +522,22 @@
  "task_id": 0,
  "videos": {
   "minimal": {
-   "case_id": "hyb-e73bc47b449c186a-a02",
-   "key": "e73bc47b449c186a6d9a739db92d451775de5414dfb5a57b3c5b572c43ab29dd",
+   "case_id": "hyb-40afa3b101ed02a5-a02",
+   "key": "40afa3b101ed02a51404be2bfb48a3f897a06295215b8572ad5db5f7490d591a",
    "outcome": "policy_failure",
-   "video": "runs/hyb-e73bc47b449c186a-a02/episodes/scn-hyb-e73bc47b449c186a-a02/task0000_ep0000_fail.mp4"
+   "video": "runs/hyb-40afa3b101ed02a5-a02/episodes/scn-hyb-40afa3b101ed02a5-a02/task0000_ep0000_fail.mp4"
   },
   "original": {
-   "case_id": "fail-3e0acc5cb5b991a1-a04",
-   "key": "3e0acc5cb5b991a14bf29326f068b47fa444be1e51e65debcf25f80db7aaa3d6",
+   "case_id": "fail-254b5e65d0d336bc-a02",
+   "key": "254b5e65d0d336bc8ec66d5df8a1d9b34aab21d9acc88801622677ec49393ddc",
    "outcome": "policy_failure",
-   "video": "runs/fail-3e0acc5cb5b991a1-a04/episodes/scn-fail-3e0acc5cb5b991a1-a04/task0000_ep0000_fail.mp4"
+   "video": "runs/fail-254b5e65d0d336bc-a02/episodes/scn-fail-254b5e65d0d336bc-a02/task0000_ep0000_fail.mp4"
   },
   "reference": {
-   "case_id": "ref28-d079c26b3e1034e2-a03",
-   "key": "d079c26b3e1034e2fe2273301c6da1c5b0f7f6eb409780591f0ef1729c3d576e",
+   "case_id": "ref04-376f48b75f50d4e1-a01",
+   "key": "376f48b75f50d4e1eff9e3f49f307de0bcfc44d2a081f5cb9c124cf985330c41",
    "outcome": "success",
-   "video": "runs/ref28-d079c26b3e1034e2-a03/episodes/scn-ref28-d079c26b3e1034e2-a03/task0000_ep0000_success.mp4"
+   "video": "runs/ref04-376f48b75f50d4e1-a01/episodes/scn-ref04-376f48b75f50d4e1-a01/task0000_ep0000_success.mp4"
   }
  }
 }

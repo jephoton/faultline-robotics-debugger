@@ -78,3 +78,52 @@ Run 1 and its replay together cost **US$1.25** of the US$4 approved.
 
 The replay result does not name a checkpoint, because stress-test cases do
 not record one. The UI shows "checkpoint not recorded".
+
+## Run 2: layout route (LIBERO-10 task 0, start 14)
+
+Run `l10-start14-20261019T032219Z`, started from the control panel on image
+v17. It used the default US$2.50 cap and 1.5 hours, raised by hand to US$3.20
+and 3 hours with Jethro's approval.
+
+| Step | Cost |
+| --- | --- |
+| Check (screen Job): start 14 failed 4 of 5 | US$0.47 |
+| Reduction Job: 36 candidates, stopped at the candidate budget | US$0.80 |
+| Continuation Job: the remaining shrink steps | US$0.98 |
+| **Total** | **US$2.25** |
+
+**Two interrupted downloads.** The reduction Job finished and exported 1,281
+files. The download then dropped with `EndpointConnectionError`: first after
+578 files, and again on the first resume after 745. The machine's network was
+unstable at the time, with Avast's web shield active and DNS failures. Each
+time, the run marked the paid Job failed.
+
+Recovery: the attempt was set back to re-attachable by hand (backups kept).
+Then 2b19cb5 added per-object download retries and kept complete files, and
+the second resume downloaded everything. The Job was not run or paid for
+again. The polish pass then made both fixes permanent:
+- a failed download keeps the attempt re-attachable (`download_failed`);
+- a resume can raise the cap or hour limit.
+
+**Case `FL-S-8E0D`.**
+- Reference: start 4.
+- The two starts differ in five entities.
+- Entity-minimal set: four shifts needed together.
+  - basket 2.1 cm (93.8% of its difference);
+  - milk 2.2 cm (87.5%);
+  - orange juice 0.8 cm (100%, not shrunk before the budget ended);
+  - the arm's 5 joints, up to 2.1° (93.8%).
+
+The October 18 reduction fix works here. Verified shrinks are kept, unlike
+`FL-S-AFB5`, whose sizes stayed at 100%. Nemotron 3 Ultra ranked the arm
+first and the soup second. The arm is necessary but not sufficient, and the
+soup is not in the final set.
+
+**Limit (rows 30–31).** The basket at 81.25% also failed 4 of 5, but the
+size search kept 93.75%. At 87.5% it had failed only 2 of 4, and bisection
+assumes monotone outcomes. Kept sizes are verified to reproduce, but they are
+not always the smallest that do.
+
+The case replaces `FL-S-AFB5` in the gallery and in `demo/root`. The bundled
+copy leaves out `research.json`, because it holds third-party search
+snippets.

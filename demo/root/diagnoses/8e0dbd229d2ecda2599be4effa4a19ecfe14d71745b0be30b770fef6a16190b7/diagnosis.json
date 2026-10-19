@@ -1,5 +1,5 @@
 {
-  "case_id": "b3c44e8686f1c8234fdfbbbe24f3b516b74dfacf442f93c2f321bdedcf375193",
+  "case_id": "8e0dbd229d2ecda2599be4effa4a19ecfe14d71745b0be30b770fef6a16190b7",
   "case_kind": "scenario_reduction",
   "entity_minimal": true,
   "explanation_status": "validated-structure",
@@ -14,29 +14,31 @@
   "hypothesis_verdict": "necessary_not_sufficient",
   "instruction": "put both the alphabet soup and the tomato sauce in the basket",
   "kind": "diagnosis",
-  "mode": "scenario",
-  "name": "soup-start14-demo",
+  "mode": "diagnose",
+  "name": "l10-start14",
+  "order": 0,
   "reduced": false,
-  "reference_start": 28,
-  "run": "demo-soup-start14",
+  "reference_start": 4,
+  "route": "layout",
+  "run": "l10-start14-20261019T032219Z",
   "schema_version": 1,
-  "sentence": "Moving alphabet_soup_1 by 2.5 cm (of the original 2.9 cm), moving cream_cheese_1 by 1.1 cm (of the original 1.1 cm), moving milk_1 by 2.4 cm (of the original 2.4 cm), moving orange_juice_1 by 3.7 cm (of the original 3.7 cm) and moving 6 joints of robot 88% of the way to their failing values are enough to make the policy fail from the passing start 28 (at least 4 of 5 attempts); sizes are resolved to within 1/8 of the original difference; the reduction stopped early, so this is the smallest cause found so far.",
+  "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far.",
   "stop_reason": "budget_exhausted",
   "suite": "libero_10",
   "task_id": 0,
   "videos": {
     "minimal": {
-      "case_id": "hyb-e73bc47b449c186a-a02",
+      "case_id": "hyb-40afa3b101ed02a5-a02",
       "file": "videos/minimal.mp4",
       "outcome": "policy_failure"
     },
     "original": {
-      "case_id": "fail-3e0acc5cb5b991a1-a04",
+      "case_id": "fail-254b5e65d0d336bc-a02",
       "file": "videos/original.mp4",
       "outcome": "policy_failure"
     },
     "reference": {
-      "case_id": "ref28-d079c26b3e1034e2-a03",
+      "case_id": "ref04-376f48b75f50d4e1-a01",
       "file": "videos/reference.mp4",
       "outcome": "success"
     }

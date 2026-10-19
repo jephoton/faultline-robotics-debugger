@@ -1,0 +1,380 @@
+{
+ "case_id": "8e0dbd229d2ecda2599be4effa4a19ecfe14d71745b0be30b770fef6a16190b7",
+ "disclaimer": "The packet counts reruns only. Necessary and sufficient are relative to the final selection, which is a local minimum; there is no causal proof and the interpretation requires human review.",
+ "error_code": null,
+ "interpretation": {
+  "hypotheses": [
+   {
+    "evidence_ids": [
+     "c37"
+    ],
+    "text": "The failure requires a specific end-effector pose error from robot joints (93.8%) combined with shifted target locations (orange_juice_1 at 100%, milk_1 at 87.5%) and a shifted goal location (basket_1 at 93.8%). Test whether shrinking robot joints to 87.5% while keeping the other three at their c37 fractions restores success."
+   },
+   {
+    "evidence_ids": [
+     "c37"
+    ],
+    "text": "Orange_juice_1 at 100% may be a critical offset for the grasp of the second object. Test shrinking orange_juice_1 to 93.8% (or 87.5%) while keeping robot joints, basket_1, and milk_1 at their c37 fractions to see if failure persists."
+   },
+   {
+    "evidence_ids": [
+     "c37"
+    ],
+    "text": "Milk_1 was never shrunk; its 87.5% fraction in c37 was the first tested size. Test shrinking milk_1 to 81.25% (halfway to 75%) with robot joints, basket_1, and orange_juice_1 at c37 fractions to probe whether milk_1's offset is necessary at the current magnitude."
+   }
+  ],
+  "limitations": [
+   "Result is a local minimum from a limited number of reruns (budget_exhausted) on one task and one start pair; smaller fractions or other combinations may exist.",
+   "Necessary and sufficient are relative to the final selection (c37); an entity marked necessary may become unnecessary if other entities are changed further.",
+   "No causal proof is established; the evidence shows correlation under the tested scenes only. Human review is required before drawing conclusions about the policy's failure mechanism."
+  ],
+  "observations": [
+   {
+    "evidence_ids": [
+     "c2",
+     "c37"
+    ],
+    "text": "The hypothesis ranked robot joints as the top cause, but c2 shows robot joints at 100% alone do not reproduce failure (S S S). The minimal failing set (c37) requires robot joints at 93.8% together with basket_1 (93.8%), milk_1 (87.5%), and orange_juice_1 (100%)."
+   },
+   {
+    "evidence_ids": [
+     "c2",
+     "c37",
+     "c10",
+     "c16"
+    ],
+    "text": "The hypothesis predicted reverting robot joints would restore success even with object shifts. Measured confirms robot is necessary (removing it from c37 stops failure) but not sufficient (c2: robot alone passes). Basket_1 is also necessary_not_sufficient; alphabet_soup_1 is not in the final minimal set."
+   },
+   {
+    "evidence_ids": [
+     "c2",
+     "c3",
+     "c4",
+     "c10",
+     "c16",
+     "c37"
+    ],
+    "text": "No single entity at full difference reproduces failure: c2 (robot), c3 (alphabet_soup_1), c4 (basket_1) all pass. The three-object combination without robot (c10) passes, and the two-objects-plus-robot combination (c16) passes. Only the four-part combination at the specific shrunk fractions (c37) fails."
+   },
+   {
+    "evidence_ids": [
+     "c37"
+    ],
+    "text": "Shrink history shows robot joints and basket_1 were tested down to 87.5% and did not fail; 93.8% is the smallest tested fraction that fails for both. Milk_1 and orange_juice_1 were kept at full difference (100%) and never shrunk before budget exhaustion."
+   }
+  ],
+  "schema_version": 1
+ },
+ "interpretation_status": "validated-structure",
+ "kind": "scenario_explanation",
+ "packet": {
+  "differences": [
+   {
+    "entity": "robot",
+    "joints": [
+     {
+      "name": "robot0_joint1",
+      "offset": -1.418,
+      "unit": "deg"
+     },
+     {
+      "name": "robot0_joint2",
+      "offset": 0.968,
+      "unit": "deg"
+     },
+     {
+      "name": "robot0_joint4",
+      "offset": 2.237,
+      "unit": "deg"
+     },
+     {
+      "name": "robot0_joint5",
+      "offset": -1.248,
+      "unit": "deg"
+     },
+     {
+      "name": "robot0_joint7",
+      "offset": 1.507,
+      "unit": "deg"
+     }
+    ],
+    "kind": "robot"
+   },
+   {
+    "entity": "alphabet_soup_1",
+    "kind": "object",
+    "position_cm": 1.73
+   },
+   {
+    "entity": "orange_juice_1",
+    "kind": "object",
+    "position_cm": 0.82
+   },
+   {
+    "entity": "milk_1",
+    "kind": "object",
+    "position_cm": 2.55
+   },
+   {
+    "entity": "basket_1",
+    "kind": "object",
+    "position_cm": 2.23
+   }
+  ],
+  "evidence": [
+   {
+    "decision": "reproduces",
+    "evidence_id": "c0",
+    "meaning": "The failing start itself: S F F F F (4 of 5 attempts failed), so this scene DOES reproduce the failure.",
+    "outcomes": "S F F F F",
+    "phase": "gate",
+    "role": "failing",
+    "selection": null
+   },
+   {
+    "decision": "passes",
+    "evidence_id": "c1",
+    "meaning": "The passing reference start itself: S S S S S (0 of 5 attempts failed), so this scene passes as a reference should.",
+    "outcomes": "S S S S S",
+    "phase": "gate",
+    "role": "reference",
+    "selection": null
+   },
+   {
+    "decision": "does_not_reproduce",
+    "evidence_id": "c2",
+    "meaning": "The passing reference start with only these differences applied (robot joints 100%); every other entity at the reference: S S S (0 of 3 attempts failed), so this scene does NOT reproduce the failure (the task mostly succeeded).",
+    "outcomes": "S S S",
+    "phase": "probe",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "joints",
+      "entity": "robot",
+      "fraction": 1.0
+     }
+    ]
+   },
+   {
+    "decision": "does_not_reproduce",
+    "evidence_id": "c3",
+    "meaning": "The passing reference start with only these differences applied (alphabet_soup_1 position 100%); every other entity at the reference: S S (0 of 2 attempts failed), so this scene does NOT reproduce the failure (the task mostly succeeded).",
+    "outcomes": "S S",
+    "phase": "probe",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "position",
+      "entity": "alphabet_soup_1",
+      "fraction": 1.0
+     }
+    ]
+   },
+   {
+    "decision": "does_not_reproduce",
+    "evidence_id": "c4",
+    "meaning": "The passing reference start with only these differences applied (basket_1 position 100%); every other entity at the reference: S S S (0 of 3 attempts failed), so this scene does NOT reproduce the failure (the task mostly succeeded).",
+    "outcomes": "S S S",
+    "phase": "probe",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "position",
+      "entity": "basket_1",
+      "fraction": 1.0
+     }
+    ]
+   },
+   {
+    "decision": "does_not_reproduce",
+    "evidence_id": "c10",
+    "meaning": "The passing reference start with only these differences applied (basket_1 position 100%, milk_1 position 100%, orange_juice_1 position 100%); every other entity at the reference: S S S (0 of 3 attempts failed), so this scene does NOT reproduce the failure (the task mostly succeeded).",
+    "outcomes": "S S S",
+    "phase": "ddmin",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "position",
+      "entity": "basket_1",
+      "fraction": 1.0
+     },
+     {
+      "component": "position",
+      "entity": "milk_1",
+      "fraction": 1.0
+     },
+     {
+      "component": "position",
+      "entity": "orange_juice_1",
+      "fraction": 1.0
+     }
+    ]
+   },
+   {
+    "decision": "does_not_reproduce",
+    "evidence_id": "c16",
+    "meaning": "The passing reference start with only these differences applied (milk_1 position 100%, orange_juice_1 position 100%, robot joints 100%); every other entity at the reference: S S (0 of 2 attempts failed), so this scene does NOT reproduce the failure (the task mostly succeeded).",
+    "outcomes": "S S",
+    "phase": "ddmin",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "position",
+      "entity": "milk_1",
+      "fraction": 1.0
+     },
+     {
+      "component": "position",
+      "entity": "orange_juice_1",
+      "fraction": 1.0
+     },
+     {
+      "component": "joints",
+      "entity": "robot",
+      "fraction": 1.0
+     }
+    ]
+   },
+   {
+    "decision": "reproduces",
+    "evidence_id": "c37",
+    "meaning": "The passing reference start with only these differences applied (basket_1 position 93.8%, milk_1 position 87.5%, orange_juice_1 position 100%, robot joints 93.8%); every other entity at the reference: F F F F (4 of 4 attempts failed), so this scene DOES reproduce the failure.",
+    "outcomes": "F F F F",
+    "phase": "shrink",
+    "role": "hybrid",
+    "selection": [
+     {
+      "component": "position",
+      "entity": "basket_1",
+      "fraction": 0.9375
+     },
+     {
+      "component": "position",
+      "entity": "milk_1",
+      "fraction": 0.875
+     },
+     {
+      "component": "position",
+      "entity": "orange_juice_1",
+      "fraction": 1.0
+     },
+     {
+      "component": "joints",
+      "entity": "robot",
+      "fraction": 0.9375
+     }
+    ]
+   }
+  ],
+  "hypothesis": {
+   "ranking": [
+    "robot",
+    "alphabet_soup_1",
+    "basket_1",
+    "milk_1",
+    "orange_juice_1"
+   ],
+   "source": "model",
+   "text": "The robot's joint offsets (up to 2.2 deg) likely shift the end-effector several centimeters, misaligning grasps for both target objects. The alphabet soup moved 1.73 cm and tomato sauce 1.05 cm, so the combined pose error may push them outside the grasp tolerance. The basket moved 2.23 cm, which could also cause placement failures. I predict the simulator will show that reverting the robot joints to the reference values restores success even with the object shifts."
+  },
+  "kind": "scenario_reduction",
+  "measured": {
+   "entities": [
+    {
+     "entity": "robot",
+     "in_final": true,
+     "label": "necessary_not_sufficient",
+     "necessary": true,
+     "necessary_basis": "entity_set",
+     "rank": 1,
+     "sufficient": false
+    },
+    {
+     "entity": "alphabet_soup_1",
+     "in_final": false,
+     "label": "not_in_final",
+     "necessary": false,
+     "necessary_basis": "not_in_final",
+     "rank": 2,
+     "sufficient": false
+    },
+    {
+     "entity": "basket_1",
+     "in_final": true,
+     "label": "necessary_not_sufficient",
+     "necessary": true,
+     "necessary_basis": "entity_set",
+     "rank": 3,
+     "sufficient": false
+    }
+   ],
+   "result_scope": "entity_minimal_sizes_partial",
+   "survivors": [
+    "basket_1",
+    "milk_1",
+    "orange_juice_1",
+    "robot"
+   ],
+   "verdict": "necessary_not_sufficient"
+  },
+  "minimal": {
+   "entity_minimal": true,
+   "reduced": false,
+   "selection": [
+    {
+     "component": "position",
+     "entity": "basket_1",
+     "fraction": 0.9375
+    },
+    {
+     "component": "position",
+     "entity": "milk_1",
+     "fraction": 0.875
+    },
+    {
+     "component": "position",
+     "entity": "orange_juice_1",
+     "fraction": 1.0
+    },
+    {
+     "component": "joints",
+     "entity": "robot",
+     "fraction": 0.9375
+    }
+   ],
+   "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far.",
+   "shrink": [
+    "robot joints: 93.8% of the difference still fails; 87.5% and smaller sizes on the way were already tested and did not reproduce the failure.",
+    "basket_1 position: 93.8% of the difference still fails; 87.5% and smaller sizes on the way were already tested and did not reproduce the failure.",
+    "milk_1: kept at its full difference; its size was not shrunk before the reduction stopped (untested).",
+    "orange_juice_1: kept at its full difference; its size was not shrunk before the reduction stopped (untested)."
+   ],
+   "stop_reason": "budget_exhausted"
+  },
+  "schema_version": 1,
+  "task": {
+   "failing_start": 14,
+   "instruction": "put both the alphabet soup and the tomato sauce in the basket",
+   "reference_start": 4,
+   "suite": "libero_10",
+   "task_id": 0
+  }
+ },
+ "packet_id": "bfb424977fe68ca791238eb7f34134a136a0b1503a42ebf76913181d0b616bf6",
+ "provenance": {
+  "billed_cost_usd": null,
+  "completion_tokens": 871,
+  "created_at": "2026-10-19T06:08:25Z",
+  "endpoint": "https://api.tokenfactory.nebius.com/v1/",
+  "error_code": null,
+  "estimated_cost_usd": null,
+  "latency_seconds": 3.327999999979511,
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "prompt_tokens": 2512,
+  "provider": "nebius-token-factory",
+  "request_status": "completed",
+  "reservation_usd": 0.02,
+  "source": "live"
+ },
+ "schema_version": 1
+}
