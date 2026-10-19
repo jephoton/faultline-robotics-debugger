@@ -66,7 +66,7 @@ describe('step 1: what to check', () => {
     expect(file).toHaveTextContent('(no probes)');
     const start = screen.getByRole('radio', { name: /check a start i name/i }).closest('label') as HTMLElement;
     expect(start).not.toHaveTextContent('no probes');
-    expect(start).toHaveTextContent('episode n of a task always begins from start n');
+    expect(start).toHaveTextContent('episode n (counted from 0) begins from start n');
   });
 
   it('defines a start and keeps the file option under More ways in', async () => {

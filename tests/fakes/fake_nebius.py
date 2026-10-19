@@ -291,6 +291,7 @@ class FakeS3:
         self.objects = dict(objects)
         self.wrong_size = wrong_size
         self.list_failures = list_failures
+        self.download_failures = {}          # key -> how many more downloads of it fail with a connection error
         self.listed_prefixes = []
         self.downloaded = []
 
@@ -311,6 +312,11 @@ class FakeS3:
 
     def download_file(self, Bucket, Key, Filename):
         self.downloaded.append(Key)
+        if self.download_failures.get(Key, 0) > 0:
+            self.download_failures[Key] -= 1
+            with open(Filename, "wb") as handle:     # a half-written file, as a dropped transfer leaves
+                handle.write(b"x")
+            raise OSError("EndpointConnectionError (fake)")
         data = self.objects[Key]
         if self.wrong_size == Key:
             data = data[:-1]

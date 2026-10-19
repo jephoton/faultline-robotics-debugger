@@ -23,7 +23,7 @@ const OPTIONS: Option[] = [
     choice: 'start',
     title: 'Check a start I name',
     text:
-      'The usual choice. To diagnose a failure from your own LIBERO evaluation, give its task and episode number: episode n of a task always begins from start n.',
+      'The usual choice. To diagnose a failure from your own LIBERO evaluation, give its task and start. In the standard LIBERO evaluation, episode n (counted from 0) begins from start n; some tools count from 1 or across tasks.',
     route: 'check it untouched → if it fails, shrink the layout to the trigger; if it passes, probe it',
   },
   {

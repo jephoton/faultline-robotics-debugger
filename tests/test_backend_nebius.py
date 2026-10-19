@@ -782,6 +782,41 @@ class DownloadTests(NebiusCase):
         backend.download(handle, Path(self.temp.name) / "evidence")
         self.assertEqual(len(self.s3.listed_prefixes), 3)
 
+    def test_a_dropped_connection_is_retried_per_object(self):
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())
+        self.s3.objects = self.objects()
+        self.s3.download_failures = {"faultline-runs/soup-a/manifest.json": 2}
+        dest = Path(self.temp.name) / "evidence"
+        backend.download(handle, dest)
+        self.assertEqual((dest / "manifest.json").read_bytes(), b"[]")
+        self.assertFalse(list(dest.rglob("*.part")))
+
+    def test_a_connection_that_keeps_failing_still_raises_and_leaves_no_part_file(self):
+        from robot_debug.backends import nebius as module
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())
+        self.s3.objects = {"faultline-runs/soup-a/a.bin": b"abc"}
+        self.s3.download_failures = {"faultline-runs/soup-a/a.bin": module.DOWNLOAD_ATTEMPTS}
+        dest = Path(self.temp.name) / "evidence"
+        with self.assertRaises(OSError):
+            backend.download(handle, dest)
+        self.assertFalse(list(dest.rglob("*.part")))
+        self.assertFalse((dest / "a.bin").exists())
+
+    def test_a_resumed_download_keeps_files_already_complete(self):
+        backend = self.prepared()
+        handle = backend.submit("soup-a", self.workload())
+        self.s3.objects = self.objects()
+        dest = Path(self.temp.name) / "evidence"
+        (dest / "episodes" / "e0").mkdir(parents=True)
+        (dest / "episodes" / "e0" / "video.mp4").write_bytes(b"12345")   # complete: kept
+        (dest / "manifest.json").write_bytes(b"[")                        # truncated: downloaded again
+        backend.download(handle, dest)
+        self.assertEqual((dest / "manifest.json").read_bytes(), b"[]")
+        self.assertNotIn("faultline-runs/soup-a/episodes/e0/video.mp4", self.s3.downloaded)
+        self.assertIn("faultline-runs/soup-a/manifest.json", self.s3.downloaded)
+
     def test_download_after_finish_explains_itself(self):
         backend = self.prepared()
         handle = backend.submit("soup-a", self.workload())

@@ -36,6 +36,24 @@ No cloud use, and no simulator image change.
    with no override records the checkpoint it used. Re-register `FL-A-D582`;
    its case id must not change.
 
+8. **A lost download must not lose a paid Job.** Run 2's reduction Job
+   finished and exported 1,281 files. The download then stopped after 578
+   with `EndpointConnectionError`, and the attempt was marked failed. A
+   resume would have paid for the Job again. Fix (approved October 19):
+   - retry the evidence download with backoff;
+   - if it still fails, keep the attempt re-attachable (not `failed`), so a
+     resume downloads the evidence again instead of resubmitting;
+   - say so in the stop text.
+9. **Raise the cap or hours on resume.** The Review, Reference and runbook
+   say a run stopped at the cap "can be resumed after raising it". But the
+   ledger refuses a spec whose cap or hours differ ("start a new run").
+   - Allow a resume to **raise** `max_spend_usd` and `max_hours`. Never lower
+     them, and never lower the cap below what is spent.
+   - The run page offers new values next to **Resume** for a run stopped by
+     `spend_cap` or `max_hours`; the panel writes them to the run's spec.
+   - On October 19, run 2 was raised by hand to US$3.20 and 3 hours, as
+     Jethro approved.
+
 **Owner:** the polish agent owns `src/robot_debug/**`, `scripts/**`,
 `web/src/components/**` and `web/src/lib/**`, plus their tests. It does not
 edit `docs/` or `README.md`; it reports every user-visible string it changes.

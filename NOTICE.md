@@ -32,7 +32,7 @@ instead of naming one: check it before you redistribute anything.
 | Service | How Faultline uses it | Terms |
 | --- | --- | --- |
 | [Nebius AI Cloud](https://nebius.com/) (Serverless Jobs, Object Storage, Container Registry, Secret Stash/MysteryBox) | Runs the Jobs; stores evidence and the simulator image. | Governed by your own agreement with Nebius. |
-| [Tavily Search](https://tavily.com/) | Source discovery for research context on the earlier occlusion cases. | See Tavily's terms of service at that URL. Search results are cached in the ignored `artifacts/` folder and summarised with links, not committed. |
+| [Tavily Search](https://tavily.com/) | Source discovery for the optional research context attached to new cases. | See Tavily's terms of service at that URL. Search results are cached in the ignored `artifacts/` folder and summarised with links, not committed. |
 
 ## Python dependencies
 

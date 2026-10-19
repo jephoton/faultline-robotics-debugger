@@ -21,9 +21,18 @@ suites, 40 tasks and one simulated robot arm (a Franka Panda in MuJoCo).
 
 - **Benchmark starts are LIBERO's own.** Each LIBERO task ships 50 fixed
   starting layouts, so every team that evaluates on LIBERO tests the same
-  situations. Episode *n* of a task always begins from start *n*. Other
-  benchmarks number their situations differently (seeds, episode configs),
-  and a real robot has no numbered starts.
+  situations. Other benchmarks number their situations differently (seeds,
+  episode configs), and a real robot has no numbered starts.
+- **From an episode number to a start.** In the standard LIBERO evaluation,
+  episode *n* of a task (counted from 0) begins from start *n*. For example,
+  allenai's vla-evaluation-harness calls `set_init_state(initial_states[episode_idx])`
+  and records `episode_id` per episode. Tools differ, though:
+  - OpenVLA's LIBERO script counts episodes from 1, and its video file names
+    count across tasks;
+  - Isaac-GR00T's own LIBERO evaluation does not use the fixed starts at all.
+
+  Check how your tool numbers episodes. A start reproduces the same scene only
+  with the same simulator versions.
 - **A start file** is a start state for one of LIBERO's own tasks: the same
   objects and the same arm, in a layout outside the 50. It is not a way to
   bring a different robot, scene or simulator.
@@ -161,13 +170,14 @@ skips the research.
 
 ### Fault codes
 
-Each case gets a display code such as `FL-S-AFB5`: `FL`, a letter for the
+Each case gets a display code such as `FL-A-D582`: `FL`, a letter for the
 kind, and the first hex digits of the case id. The full case id is always
 shown as well. The letters are:
 - `S`: a layout (scenario) reduction;
 - `A`: a disturbance probe (audit);
 - `L`: a rewording (language) probe;
-- `M`: the September occlusion case.
+- `M`: an occlusion case, from an earlier experiment mode. These are not made
+  by the New diagnosis.
 
 ## 2. Glossary
 
@@ -220,7 +230,7 @@ next time. Every judgement therefore uses repeated attempts.
 
 | Option | When to use it | What happens first |
 | --- | --- | --- |
-| **Check a start I name** (`diagnose.start`) | The usual choice. Most often a failure from your own LIBERO evaluation: episode *n* of a task always begins from benchmark start *n*, so a failed episode's number is its start. Also any start you want to stress-test | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
+| **Check a start I name** (`diagnose.start`) | The usual choice. Most often a failure from your own LIBERO evaluation: in the standard LIBERO evaluation, episode *n* of a task (counted from 0) begins from benchmark start *n* (see Where it applies). Also any start you want to stress-test | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
 | **Find a failing start for me** (`diagnose.screen`) | You have no failure yet and want Faultline to find one in a range of starts | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |
 | **A failure from my own scene (file)**, under **More ways in** (`diagnose.import`) | Your failure came from a layout that is not one of the 50 benchmark starts: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. Layout route only. |
 
@@ -348,11 +358,6 @@ the meaning check drops any that lose an object or target word; the original
 wording is the control (2 attempts) and each rewording gets one screening
 attempt. A rewording that fails is confirmed with the 4-of-5 gate and then
 reduced by word edits to the smallest change that still fails.
-
-### The September occlusion case
-
-A grey rectangle over part of the agent-view image, described by position and
-size as fractions of the image (not a severity), reduced by trimming edges.
 
 ## 6. Reading a report
 
