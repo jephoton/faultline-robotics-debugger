@@ -617,6 +617,20 @@ a.cite {
   font-size: 0.85rem;
   margin-right: var(--space-1);
 }
+.nemotron details.fold--sources {
+  margin-top: var(--space-3);
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.nemotron details.fold--sources > summary {
+  color: var(--text-2);
+  font-weight: 400;
+  margin-bottom: 0;
+}
+.nemotron details.fold--sources[open] > summary {
+  margin-bottom: var(--space-2);
+}
 .fold--evidence .md {
   border: 0;
   background: none;

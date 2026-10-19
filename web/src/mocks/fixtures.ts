@@ -321,6 +321,7 @@ details[IDS.soup] = {
       { id: 'S1', title: 'Object placement sensitivity in vision-language-action policies', url: 'https://example.org/placement-sensitivity' },
       { id: 'S2', title: 'LIBERO benchmark', url: 'https://example.org/libero' },
       { id: 'S3', title: 'Robustness evaluation of manipulation policies', url: 'https://example.org/robustness-eval' },
+      { id: 'S4', title: 'A retrieved paper no step cites', url: 'https://example.org/not-cited' },
     ],
   },
   history: history(),

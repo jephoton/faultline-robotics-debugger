@@ -83,6 +83,20 @@ function GuessVsReruns({ detail }: { detail: Detail }) {
   );
 }
 
+const isLink = (url: string) => /^https?:\/\//i.test(url);
+
+/** How an evidence id reads: a rerun `c37` is "row 37", a stress-test level `blur@0.4625` is "blur s=0.4625". */
+export function evidenceTag(id: string): { text: string; title: string } | null {
+  const row = /^c([0-9]+)$/.exec(id);
+  if (row) return { text: `row ${row[1]}`, title: `Rerun ${row[1]}: the # column of the Candidates table under Full evidence` };
+  const level = /^([a-z][a-z_]*)@([0-9]+(?:\.[0-9]+)?)$/.exec(id);
+  if (level) {
+    const family = (level[1] as string).replace(/_/g, ' ');
+    return { text: `${family} s=${level[2]}`, title: `The ${family} level at severity ${level[2]}, as counted in the stress test` };
+  }
+  return null;
+}
+
 function Cites({ cites, sources }: { cites: string[]; sources: NextSteps['sources'] }) {
   if (cites.length === 0) return null;
   return (
@@ -90,13 +104,17 @@ function Cites({ cites, sources }: { cites: string[]; sources: NextSteps['source
       {cites.map((cite) => {
         const id = cite.replace(/^\[|\]$/g, '');
         const source = sources.find((item) => item.id === id);
-        return source && /^https?:\/\//i.test(source.url) ? (
-          <a key={cite} className="cite" href={source.url} rel="noopener noreferrer" target="_blank" title={source.title}>
-            [{id}]
-          </a>
-        ) : (
-          <code key={cite} className="cite">
-            {id}
+        if (source && isLink(source.url)) {
+          return (
+            <a key={cite} className="cite" href={source.url} rel="noopener noreferrer" target="_blank" title={source.title}>
+              [{id}]
+            </a>
+          );
+        }
+        const tag = evidenceTag(id);
+        return (
+          <code key={cite} className="cite" title={tag?.title}>
+            {tag ? tag.text : id}
           </code>
         );
       })}
@@ -109,8 +127,37 @@ export function hasNextSteps(detail: Detail): boolean {
   return Boolean(detail.next_steps && detail.next_steps.items.length > 0);
 }
 
+/** The linked sources the items cite, in order of first citation, and the other retrieved ones. */
+export function splitSources(steps: NextSteps): { cited: NextSteps['sources']; others: NextSteps['sources'] } {
+  const linked = steps.sources.filter((source) => isLink(source.url));
+  const order: string[] = [];
+  for (const item of steps.items) {
+    for (const cite of item.cites) {
+      const id = cite.replace(/^\[|\]$/g, '');
+      if (!order.includes(id)) order.push(id);
+    }
+  }
+  const cited = order.flatMap((id) => linked.filter((source) => source.id === id));
+  return { cited, others: linked.filter((source) => !cited.includes(source)) };
+}
+
+function SourceList({ sources }: { sources: NextSteps['sources'] }) {
+  return (
+    <ul className="sources">
+      {sources.map((source) => (
+        <li key={source.id}>
+          <span className="cite">[{source.id}]</span>{' '}
+          <a href={source.url} rel="noopener noreferrer" target="_blank">
+            {source.title}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function NextStepsList({ steps }: { steps: NextSteps }) {
-  const linked = steps.sources.filter((source) => /^https?:\/\//i.test(source.url));
+  const { cited, others } = splitSources(steps);
   return (
     <>
       <h3>Suggested next steps</h3>
@@ -122,20 +169,20 @@ function NextStepsList({ steps }: { steps: NextSteps }) {
           </li>
         ))}
       </ol>
-      {linked.length > 0 && (
+      {cited.length > 0 && (
         <>
           <h4>Sources</h4>
-          <ul className="sources">
-            {linked.map((source) => (
-              <li key={source.id}>
-                <span className="cite">[{source.id}]</span>{' '}
-                <a href={source.url} rel="noopener noreferrer" target="_blank">
-                  {source.title}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <SourceList sources={cited} />
         </>
+      )}
+      {others.length > 0 && (
+        <details className="fold fold--sources">
+          <summary>
+            {others.length} {cited.length > 0 ? 'other ' : ''}
+            {others.length === 1 ? 'source' : 'sources'} retrieved{cited.length > 0 ? '' : ', none cited'}
+          </summary>
+          <SourceList sources={others} />
+        </details>
       )}
     </>
   );
