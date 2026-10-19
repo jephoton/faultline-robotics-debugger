@@ -283,6 +283,36 @@ class ContinuationSizeTableTests(unittest.TestCase):
         self.assertNotIn("lower bound tested", text)
         self.assertIn("Sizes are shares of the full difference", text)
 
+    def test_the_library_returns_every_rerun_with_the_reports_numbering(self):
+        import re
+        import tempfile
+
+        from robot_debug.viewer.library import Library
+        from tests.test_scenario_packet import ContinuationShrinkNotesTests, continuation_reductions
+
+        first, second = continuation_reductions()
+        summary = {"schema_version": 1, "mode": "scenario-reduce", "reduction": second, "videos": {},
+                   "plan": rf.partial_plan(ranking=["robot", "basket_1", "milk_1", "orange_juice_1"]),
+                   "differences": ContinuationShrinkNotesTests.DIFFERENCES, "checkpoint": None}
+        case = se.build_case(summary, [{"reduction": first}, {"reduction": second}])
+        self.assertEqual(len(second["candidates"]), len(case["reruns"]))
+        self.assertLess(len(case["evidence"]), len(case["reruns"]))        # the key rows are fewer
+        with tempfile.TemporaryDirectory() as directory:
+            rows = Library(Path(directory))._scenario_block(case)["reruns"]
+        self.assertEqual([c["index"] for c in second["candidates"]], [r["index"] for r in rows])
+        self.assertEqual({"index", "phase", "role", "selection", "outcomes", "decision"}, set(rows[0]))
+        text = self.script.build_report(summary, None, None, [{"reduction": first}, {"reduction": second}])
+        table = text[text.index("## Candidates"):]
+        numbers = [int(m.group(1)) for m in re.finditer(r"^\| (\d+) \| (?:gate|probe|ddmin|split|shrink) \|", table,
+                                                         re.MULTILINE)]
+        self.assertEqual(numbers, [r["index"] for r in rows])
+        self.assertEqual(second["candidates"][8]["selection"], rows[8]["selection"])
+        # a case saved before the full list was kept still shows its key rows
+        old = {key: value for key, value in case.items() if key != "reruns"}
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual([e["index"] for e in case["evidence"]],
+                             [r["index"] for r in Library(Path(directory))._scenario_block(old)["reruns"]])
+
     def test_without_the_other_jobs_the_last_jobs_candidates_still_cover_milk(self):
         self.assertIn("| milk_1 | position | 87.5% | 75% |", self.report(with_history=False))
 

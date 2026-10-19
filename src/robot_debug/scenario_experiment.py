@@ -1665,6 +1665,27 @@ def _case_evidence(reduction: Mapping[str, Any], measurement: Optional[Mapping[s
     return sorted(chosen, key=lambda row: row["index"])
 
 
+MAX_CASE_RERUNS = 200
+
+
+def all_reruns(reduction: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Every rerun of a reduction Job in the order and numbering of the report's Candidates table (``#``).
+
+    ``evidence`` keeps only the few rows the measurement was read from; the case page's "why it is
+    trustworthy" section needs them all (each kept shift alone, and the kept set without any one of them).
+    The numbers are the Job's own candidate indices, the same ids the explanation cites as ``c<index>``;
+    a continuation Job restarts at 0, so these are the rows of the Job the case was built from."""
+
+    rows = []
+    for candidate in reduction.get("candidates") or []:
+        if isinstance(candidate, Mapping) and isinstance(candidate.get("index"), int):
+            rows.append({
+                "index": candidate["index"], "phase": candidate.get("phase"), "role": candidate.get("role"),
+                "selection": copy.deepcopy(candidate.get("selection")),
+                "outcomes": list(candidate.get("outcomes") or []), "decision": candidate.get("decision")})
+    return sorted(rows, key=lambda row: row["index"])[:MAX_CASE_RERUNS]
+
+
 def _fmt(value: float, digits: int = 1) -> str:
     text = "{:.{}f}".format(value, digits)
     return text[:-2] if text.endswith(".0") and digits == 1 else text
@@ -1854,6 +1875,7 @@ def build_case(summary: Mapping[str, Any], reductions: Optional[Sequence[Mapping
         },
         "differences": compact_differences(summary.get("differences") or []),
         "evidence": _case_evidence(reduction, measurement),
+        "reruns": all_reruns(reduction),
         "explanation": None,
         "measurements": {
             "candidates_tested": reduction.get("candidates_tested"),
@@ -1907,6 +1929,7 @@ __all__ = [
     "ScenarioConfigError",
     "ScenarioPool",
     "SUMMARY_NAME",
+    "all_reruns",
     "build_case",
     "build_reduce_workload",
     "describe_minimal_cause",

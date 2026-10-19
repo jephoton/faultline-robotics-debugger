@@ -595,7 +595,8 @@ class Library:
                               "sufficient": e.get("sufficient") if isinstance(e.get("sufficient"), bool) else None}
                              for e in _list(measurement.get("entities")) if isinstance(e, Mapping)
                              and isinstance(e.get("entity"), str)]}
-        for row in _list(case.get("evidence")):
+        # Every rerun of the reduction (``reruns``); a case saved before they were kept has only the key rows.
+        for row in _list(case.get("reruns")) or _list(case.get("evidence")):
             if not isinstance(row, Mapping) or _int(row.get("index")) is None:
                 continue
             selection = row.get("selection")
