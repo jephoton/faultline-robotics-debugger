@@ -33,7 +33,7 @@ const PAGES: [string, string, () => Promise<unknown>][] = [
   ['stopped case', `/case/${IDS.nominal}`, async () => screen.findByText('No minimal cause was found for this run.')],
   ['audit case', `/case/${IDS.audit}`, async () => screen.findByText('Blur: fails from s = 0.50.')],
   ['pipeline audit case with findings and videos', `/case/${IDS.pipeAudit}`, async () => screen.findByRole('heading', { name: 'Findings of this diagnosis' })],
-  ['pipeline wording case with replay', `/case/${IDS.pipeWording}`, async () => screen.findByRole('heading', { name: 'Replay this case' })],
+  ['pipeline wording case with replay', `/case/${IDS.pipeWording}`, async () => screen.findByRole('heading', { name: 'Test a policy' })],
   ['language case', `/case/${IDS.wording}`, async () => screen.findByText(/Rewordings: 5 screened/)],
   ['language case without failure', `/case/${IDS.quiet}`, async () => screen.findByText(/No wording failed reliably/)],
   ['occlusion case', `/case/${IDS.occlusion}`, async () => screen.findByText(/Trimmed the right edge/)],

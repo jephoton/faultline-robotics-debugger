@@ -295,8 +295,8 @@ details[IDS.soup] = {
   research: null,
   history: history(),
   replays: [
-    { run: 'replay-soup-20261011-153000', verdict: 'reproduces', verdict_text: 'Still reproduces: 4 of 5 attempts failed on the minimal scene, 5 of 5 passed on the reference.', created: '2026-10-11T15:30:00Z', cost_usd: 0.34 },
-    { run: 'replay-soup-20261014-120000', verdict: 'fixed', verdict_text: 'No longer reproduces after the checkpoint change: 5 of 5 attempts passed.', created: '2026-10-14T12:00:00Z', cost_usd: 0.35 },
+    { run: 'replay-soup-20261011-153000', verdict: 'reproduces', verdict_text: 'Still reproduces: 4 of 5 attempts failed on the minimal scene, 5 of 5 passed on the reference.', created: '2026-10-11T15:30:00Z', cost_usd: 0.34, checkpoint: null, original: null },
+    { run: 'replay-soup-20261014-120000', verdict: 'fixed', verdict_text: 'No longer reproduces after the checkpoint change: 5 of 5 attempts passed.', created: '2026-10-14T12:00:00Z', cost_usd: 0.35, checkpoint: { id: 'my-org/retrained-libero_10', revision: '9f2c1d04a7b3e85c61d0f2a4b8c93e17d5a60b42' }, original: false },
   ],
   report_markdown: soupReport,
   files: [

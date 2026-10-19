@@ -60,12 +60,12 @@ describe('case page header', () => {
 describe('report-first scenario case', () => {
   it('orders the page: videos, the report, the folded reading, replays, run details, files', async () => {
     await openCase(IDS.soup);
-    expect(h2Names()).toEqual(['Videos', 'Report', "Nemotron's reading", 'Replays', 'Files']);
+    expect(h2Names()).toEqual(['Videos', 'Report', "Nemotron's reading", 'Regression test', 'Files']);
     const order = [
       screen.getByRole('group', { name: 'Original, minimal and reference videos' }),
       screen.getByRole('heading', { level: 2, name: 'Report' }),
       screen.getByRole('heading', { level: 2, name: "Nemotron's reading" }),
-      screen.getByRole('heading', { level: 2, name: 'Replays' }),
+      screen.getByRole('heading', { level: 2, name: 'Regression test' }),
       screen.getByText('Run details'),
       screen.getByRole('heading', { level: 2, name: 'Files' }),
     ];
@@ -127,11 +127,11 @@ describe('report-first scenario case', () => {
   it('states what a replay is for, above the replay history', async () => {
     await openCase(IDS.soup);
     const purpose = screen.getByText(
-      'Replay re-runs the minimal scene and its reference to check whether the failure still reproduces, for example after you change the policy.',
+      "Reruns this case's minimal scene and its passing reference, five attempts each, to check whether the failure still happens. Run it after you change the policy.",
     );
-    const replays = screen.getByRole('heading', { level: 2, name: 'Replays' }).closest('section') as HTMLElement;
+    const replays = screen.getByRole('heading', { level: 2, name: 'Regression test' }).closest('section') as HTMLElement;
     expect(replays).toContainElement(purpose);
-    expect(screen.getByText('Still reproduces', { selector: '.badge' })).toBeInTheDocument();
+    expect(screen.getByText('Still fails', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.getByText('Fixed', { selector: '.badge' })).toBeInTheDocument();
     expect(purpose.compareDocumentPosition(screen.getByText('Fixed', { selector: '.badge' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -232,7 +232,7 @@ describe('audit case', () => {
     expect(screen.queryByRole('article', { name: 'Blur severity ladder' })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Audit videos' })).toBeInTheDocument();
     // An audit has nothing to replay.
-    expect(screen.queryByRole('heading', { name: 'Replays' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Regression test' })).not.toBeInTheDocument();
     expect(screen.getByText('Run details')).toBeInTheDocument();
   });
 
@@ -334,11 +334,11 @@ describe('static mode', () => {
     expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
     expect(screen.getByText('Show all 26 rows')).toBeInTheDocument();
     // The replay history and its purpose are shown, but nothing can be started from a static page.
-    expect(screen.getByText(/Replay re-runs the minimal scene/)).toBeInTheDocument();
-    expect(screen.getByText('Still reproduces', { selector: '.badge' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Replay this case' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Reruns this case's minimal scene/)).toBeInTheDocument();
+    expect(screen.getByText('Still fails', { selector: '.badge' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Test a policy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^(replay|stop|resume|start)/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /dry run/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /estimate cost/i })).not.toBeInTheDocument();
   });
 });
 

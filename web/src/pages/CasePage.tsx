@@ -62,7 +62,7 @@ function ReportFirstBody({ detail }: { detail: Detail }) {
       <ReportBody detail={detail} />
       <ReadingFold detail={detail} />
       <ResearchSection detail={detail} />
-      {showsReplay(detail) && <ReplaySection detail={detail} purpose />}
+      {showsReplay(detail) && <ReplaySection detail={detail} />}
       <RunDetails detail={detail} />
     </>
   );

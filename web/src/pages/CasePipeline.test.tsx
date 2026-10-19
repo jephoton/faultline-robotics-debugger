@@ -119,7 +119,7 @@ describe('findings of a diagnosis run', () => {
     await openCase(IDS.pipeAudit, { mode: 'static' });
     expect(screen.getByRole('heading', { name: 'Findings of this diagnosis' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'FL-L-6B21' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Replay this case' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Test a policy' })).not.toBeInTheDocument();
   });
 });
 
@@ -130,25 +130,23 @@ describe('replay of an audit case and a wording case', () => {
 
   it('offers replay on an audit case with a purpose line about its disturbance', async () => {
     await openCase(IDS.pipeAudit);
-    expect(screen.getByRole('heading', { level: 2, name: 'Replays' })).toBeInTheDocument();
-    expect(screen.getByText(/Replay reruns this disturbance at its threshold on the start, with its control, to check whether it still breaks the policy/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Replay this case' })).toBeInTheDocument();
-    expect(screen.getByText(/reruns each disturbance that broke the policy at its threshold/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Regression test' })).toBeInTheDocument();
+    expect(screen.getByText(/Reruns each disturbance that broke the policy, at its threshold on the start/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Test a policy' })).toBeInTheDocument();
   });
 
   it('offers replay on a wording case with a purpose line about its wording', async () => {
     await openCase(IDS.pipeWording);
-    expect(screen.getByText(/Replay reruns this wording on the start, with the original instruction as its control, to check whether it still breaks the policy/)).toBeInTheDocument();
-    expect(screen.getByText(/reruns the failing wording on the start five times/)).toBeInTheDocument();
+    expect(screen.getByText(/Reruns the failing wording on the start, five attempts, with the original wording as its control/)).toBeInTheDocument();
   });
 
   it('dry-runs and starts a replay of an audit case against its own library id', async () => {
     const user = userEvent.setup();
     const view = await openCase(IDS.pipeAudit);
-    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
-    await user.click(within(panel).getByRole('button', { name: /dry run the replay/i }));
+    const panel = screen.getByRole('heading', { name: 'Test a policy' }).closest('.panel') as HTMLElement;
+    await user.click(within(panel).getByRole('button', { name: /estimate cost/i }));
     await within(panel).findByText('Total worst case');
-    await user.click(within(panel).getByRole('button', { name: 'Start replay' }));
+    await user.click(within(panel).getByRole('button', { name: 'Run the test' }));
     await waitFor(() => expect(replayPosts(view)).toHaveLength(1));
     expect((replayPosts(view)[0] as [string, RequestInit])[0]).toBe(`/api/library/${encodeURIComponent(IDS.pipeAudit)}/replay`);
   });
@@ -162,8 +160,8 @@ describe('replay of an audit case and a wording case', () => {
   it('plans the replay for the case: every dry run names it, and the review lists the case Jobs', async () => {
     const user = userEvent.setup();
     const view = await openCase(IDS.pipeAudit);
-    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
-    await user.click(within(panel).getByRole('button', { name: /dry run the replay/i }));
+    const panel = screen.getByRole('heading', { name: 'Test a policy' }).closest('.panel') as HTMLElement;
+    await user.click(within(panel).getByRole('button', { name: /estimate cost/i }));
     await within(panel).findByText('Total worst case');
     const posts = dryRunPosts(view);
     expect(posts.length).toBeGreaterThan(0);
@@ -173,7 +171,7 @@ describe('replay of an audit case and a wording case', () => {
 
   it('sets the default spend cap and hour limit from the plan so the first Job fits', async () => {
     await openCase(IDS.pipeAudit);
-    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
+    const panel = screen.getByRole('heading', { name: 'Test a policy' }).closest('.panel') as HTMLElement;
     const spend = within(panel).getByLabelText('Spend cap (US$)') as HTMLInputElement;
     const plan = mockDryRun('mode: replay\n', undefined, IDS.pipeAudit);
     expect(plan.jobs[0]!.worst_case_usd).toBeGreaterThan(1.2);
@@ -186,7 +184,7 @@ describe('replay of an audit case and a wording case', () => {
   it('does not overwrite a cap the person typed', async () => {
     const user = userEvent.setup();
     await openCase(IDS.pipeAudit);
-    const panel = screen.getByRole('heading', { name: 'Replay this case' }).closest('.panel') as HTMLElement;
+    const panel = screen.getByRole('heading', { name: 'Test a policy' }).closest('.panel') as HTMLElement;
     const spend = within(panel).getByLabelText('Spend cap (US$)') as HTMLInputElement;
     await user.clear(spend);
     await user.type(spend, '9');
@@ -194,22 +192,32 @@ describe('replay of an audit case and a wording case', () => {
     expect(spend.value).toBe('9');
   });
 
-  it('shows a replay of a wording case in words and colours: fixed is green, still failing is red', async () => {
+  it('shows a replay of a wording case in words and colours, by the policy it tested', async () => {
+    const original = { id: 'nvidia/gr00t17-lerobot-libero_object-640', revision: '5ee08ab09fac5c5ef2388a14c882ea825ac861db' };
+    const retrained = { id: 'my-org/retrained', revision: 'abc1234def5678' };
     await openChanged(IDS.pipeWording, (detail) => ({
       ...detail,
       replays: [
-        { run: 'replay-a', verdict: 'reproduces', verdict_text: 'the wording still fails', created: '2026-10-17T10:00:00Z', cost_usd: 0.3 },
-        { run: 'replay-b', verdict: 'fixed', verdict_text: 'no longer fails', created: '2026-10-18T10:00:00Z', cost_usd: 0.3 },
+        { run: 'replay-a', verdict: 'reproduces', verdict_text: 'the wording still fails', created: '2026-10-17T10:00:00Z', cost_usd: 0.3, checkpoint: original, original: true },
+        { run: 'replay-b', verdict: 'fixed', verdict_text: 'no longer fails', created: '2026-10-18T10:00:00Z', cost_usd: 0.3, checkpoint: retrained, original: false },
+        { run: 'replay-c', verdict: 'fixed', verdict_text: 'did not fail this time', created: '2026-10-19T10:00:00Z', cost_usd: 0.3, checkpoint: original, original: true },
+        { run: 'replay-d', verdict: 'incomplete', verdict_text: 'stopped early', created: '2026-10-20T10:00:00Z', cost_usd: 0.1, checkpoint: retrained, original: false },
       ],
     }));
-    expect(screen.getByText('Still reproduces', { selector: '.badge' })).toHaveClass('badge--alarm');
+    expect(screen.getByText('Still fails', { selector: '.badge' })).toHaveClass('badge--alarm');
     expect(screen.getByText('Fixed', { selector: '.badge' })).toHaveClass('badge--pass');
+    expect(screen.getByText('Did not repeat', { selector: '.badge' })).toHaveClass('badge--attention');
+    expect(screen.getByText('Inconclusive', { selector: '.badge' })).toHaveClass('badge--attention');
     expect(screen.getByText('the wording still fails')).toBeInTheDocument();
+    const fixed = screen.getByText('no longer fails').closest('li') as HTMLElement;
+    expect(fixed).toHaveTextContent('Policy tested: a new checkpoint, my-org/retrained at abc1234');
+    const kept = screen.getByText('did not fail this time').closest('li') as HTMLElement;
+    expect(kept).toHaveTextContent('Policy tested: the original policy, nvidia/gr00t17-lerobot-libero_object-640 at 5ee08ab');
   });
 
   it('shows no replay section for an audit case without replay inputs or history', async () => {
     await openCase(IDS.audit);
-    expect(screen.queryByRole('heading', { name: 'Replays' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Regression test' })).not.toBeInTheDocument();
   });
 
   it('shows history, but no replay form, when an old audit case was replayed but cannot be again', async () => {
@@ -217,8 +225,8 @@ describe('replay of an audit case and a wording case', () => {
       ...detail,
       replays: [{ run: null, verdict: 'fixed', verdict_text: 'no longer fails', created: null, cost_usd: null }],
     }));
-    expect(screen.getByRole('heading', { name: 'Replays' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Replay this case' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Regression test' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Test a policy' })).not.toBeInTheDocument();
   });
 });
 
@@ -276,7 +284,7 @@ describe('research context on a case', () => {
     expect(within(section).getByRole('link', { name: /Robustness of vision-based policies/ })).toHaveAttribute('href', 'https://example.org/image-corruptions');
     // After the report and before the replays.
     expect(before(screen.getByRole('heading', { level: 2, name: 'Report' }), section)).toBe(true);
-    expect(before(section, screen.getByRole('heading', { level: 2, name: 'Replays' }))).toBe(true);
+    expect(before(section, screen.getByRole('heading', { level: 2, name: 'Regression test' }))).toBe(true);
   });
 
   it('comes after Nemotron\'s reading when the case has one', async () => {

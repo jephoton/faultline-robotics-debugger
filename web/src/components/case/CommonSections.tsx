@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Detail, HistoryStep } from '../../api/types';
+import type { Detail, HistoryStep, ReplayRow } from '../../api/types';
 import { duration, shortDate, usd } from '../../lib/format';
 import { Icon, type IconName } from '../Icon';
 import { LinkedPlayer } from '../LinkedPlayer';
@@ -191,10 +191,37 @@ export function ResearchSection({ detail }: { detail: Detail }) {
   );
 }
 
-export function replayLabel(verdict: string): { icon: IconName; label: string; tone: 'alarm' | 'pass' | 'neutral' } {
-  if (/fixed|no_longer|not_reproduce|does_not/.test(verdict)) return { icon: 'check', label: 'Fixed', tone: 'pass' };
-  if (/reproduces|still/.test(verdict)) return { icon: 'alarm', label: 'Still reproduces', tone: 'alarm' };
-  return { icon: 'dash', label: verdict.replace(/_/g, ' '), tone: 'neutral' };
+type ReplayTone = 'alarm' | 'pass' | 'attention';
+
+/**
+ * A replay verdict in words. On the original policy a failure that did not repeat is not "fixed" (nothing changed,
+ * so the case may be flaky); on a new checkpoint it is. A replay with no recorded checkpoint is the original.
+ */
+export function replayLabel(verdict: string, original?: boolean | null): { icon: IconName; label: string; tone: ReplayTone } {
+  if (/fixed|no_longer|not_reproduce|does_not/.test(verdict)) {
+    return original === false
+      ? { icon: 'check', label: 'Fixed', tone: 'pass' }
+      : { icon: 'attention', label: 'Did not repeat', tone: 'attention' };
+  }
+  if (/reproduces|still/.test(verdict)) return { icon: 'alarm', label: 'Still fails', tone: 'alarm' };
+  return { icon: 'attention', label: 'Inconclusive', tone: 'attention' };
+}
+
+/** The checkpoint a replay tested, as `id at abc1234`. */
+export function checkpointText(checkpoint: { id: string; revision: string | null }): string {
+  return checkpoint.revision ? `${checkpoint.id} at ${checkpoint.revision.slice(0, 7)}` : checkpoint.id;
+}
+
+function ReplayCheckpoint({ replay }: { replay: ReplayRow }) {
+  const { checkpoint, original } = replay;
+  if (!checkpoint) return <span className="muted">Policy tested: the original policy (checkpoint not recorded)</span>;
+  const which = original === true ? 'the original policy, ' : original === false ? 'a new checkpoint, ' : '';
+  return (
+    <span className="muted">
+      Policy tested: {which}
+      <span className="mono">{checkpointText(checkpoint)}</span>
+    </span>
+  );
 }
 
 export function ReplayHistory({ detail, slot }: { detail: Detail; slot?: (run: string | null) => ReactNode }) {
@@ -204,14 +231,15 @@ export function ReplayHistory({ detail, slot }: { detail: Detail; slot?: (run: s
   return (
     <ul className="replays">
       {detail.replays.map((replay, index) => {
-        const view = replayLabel(replay.verdict);
+        const view = replayLabel(replay.verdict, replay.original);
         return (
           <li key={replay.run ?? index} className="replay">
-            <span className={view.tone === 'neutral' ? 'badge' : `badge badge--${view.tone}`}>
+            <span className={`badge badge--${view.tone}`}>
               <Icon name={view.icon} />
               {view.label}
             </span>
             <span>{replay.verdict_text}</span>
+            <ReplayCheckpoint replay={replay} />
             <span className="muted mono">
               {shortDate(replay.created)}
               {replay.cost_usd !== null ? `, ${usd(replay.cost_usd)}` : ''}

@@ -170,6 +170,10 @@ export interface ReplayRow {
   verdict_text: string;
   created: string | null;
   cost_usd: number | null;
+  /** The checkpoint this replay tested; null when it recorded none. Absent in older exports. */
+  checkpoint?: { id: string; revision: string | null } | null;
+  /** True when that is the checkpoint the case was found with; null when unknown. Absent in older exports. */
+  original?: boolean | null;
 }
 
 /** Which way a diagnosis run went after the untouched check (API v1 additions, ADR 0035). */

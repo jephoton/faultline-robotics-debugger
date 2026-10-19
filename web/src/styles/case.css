@@ -118,6 +118,19 @@ details.fold > .panel {
   margin: 0 0 var(--space-3);
   max-width: 70ch;
 }
+.replay__cost {
+  margin: var(--space-3) 0 var(--space-2);
+}
+.replay__script {
+  margin: var(--space-4) 0 0;
+  max-width: 70ch;
+}
+.choices--policy > legend {
+  font-size: 1.1rem;
+}
+.choices--policy .form-grid {
+  margin-top: var(--space-3);
+}
 
 /* Linked video player */
 .player__videos {
