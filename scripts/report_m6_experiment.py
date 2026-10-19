@@ -587,7 +587,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("report rejected: {}".format(error), file=sys.stderr)
         return 2
     if args.output is None:
-        sys.stdout.write(text)
+        try:
+            sys.stdout.write(text)
+        except UnicodeEncodeError:                  # a console code page without the threshold arrow
+            sys.stdout.flush()
+            sys.stdout.buffer.write(text.encode("utf-8"))
     else:
         args.output.write_bytes(text.encode("utf-8"))
     return 0
