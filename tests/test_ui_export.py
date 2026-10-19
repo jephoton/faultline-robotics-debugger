@@ -77,6 +77,8 @@ class ShapeTests(ExportCase):
         self.assertEqual(detail["scenario"], local["scenario"])
         self.assertEqual(detail["history"]["jobs"], 1, "the step history is part of the story and is kept")
         self.assertEqual([r["run"] for r in detail["replays"]], [None])
+        self.assertEqual([(r["checkpoint"], r["original"]) for r in detail["replays"]], [(None, None)],
+                         "the replay rows keep the checkpoint fields (an older replay recorded none)")
 
     def test_videos_and_files_are_copied_and_their_urls_rewritten(self):
         self.export()

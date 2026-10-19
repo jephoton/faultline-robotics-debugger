@@ -544,7 +544,7 @@ class Library:
                 and bool(files.get("case"))
         if run_dir is not None:
             detail["history"] = self._history(run_dir)
-        detail["replays"] = self._replays(case_id)
+        detail["replays"] = self._replays(case_id, detail["checkpoint"])
 
     @staticmethod
     def _checkpoint(case: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
@@ -763,8 +763,12 @@ class Library:
                 "elapsed_seconds": _number(ledger.get("elapsed_seconds")),
                 "max_hours": _number(ledger.get("max_hours"))}
 
-    def _replays(self, case_id: str) -> List[Dict[str, Any]]:
-        """Replay runs whose ``replay-result.json`` names this case, newest first."""
+    def _replays(self, case_id: str, case_checkpoint: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Replay runs whose ``replay-result.json`` names this case, newest first.
+
+        Each row carries the checkpoint the replay recorded (``None`` for a replay that did not record one, like
+        the earliest ones) and ``original``: whether that is the checkpoint the case was found with
+        (``None`` when either side is unknown)."""
 
         found = []
         if self.runs_root is None or not self.runs_root.is_dir():
@@ -778,10 +782,35 @@ class Library:
             verdict = _str(result.get("verdict")) or "inconclusive"
             ledger = _read_json(folder / "ledger.json") or {}
             text = _str(result.get("verdict_text"))          # kind-specific wording written by the replay
+            checkpoint = _replay_checkpoint(result.get("checkpoint"))
             found.append({"run": self._run_name(folder.name), "verdict": verdict,
                           "verdict_text": text or replay_text(verdict),
-                          "created": stamp_to_iso(folder.name), "cost_usd": _number(ledger.get("spent_usd"))})
+                          "created": stamp_to_iso(folder.name), "cost_usd": _number(ledger.get("spent_usd")),
+                          "checkpoint": checkpoint, "original": _is_original(checkpoint, case_checkpoint)})
         return found
+
+
+def _replay_checkpoint(record: Any) -> Optional[Dict[str, Any]]:
+    """``{id, revision}`` from the checkpoint a replay recorded; the revision is ``None`` when the run did not
+    resolve one. ``None`` when the replay recorded no checkpoint."""
+
+    record = _mapping(record)
+    identifier = _str(record.get("id"))
+    if not identifier:
+        return None
+    return {"id": identifier, "revision": _str(record.get("revision")) or None}
+
+
+def _is_original(tested: Optional[Mapping[str, Any]], original: Optional[Mapping[str, Any]]) -> Optional[bool]:
+    """Whether the replay tested the checkpoint the case was found with. ``None`` when either is not recorded;
+    the revision is compared only when both sides have one."""
+
+    if tested is None or original is None:
+        return None
+    if tested["id"] != original.get("id"):
+        return False
+    revision, found_with = tested.get("revision"), _str(original.get("revision"))
+    return revision is None or found_with is None or revision == found_with
 
 
 def _research_block(record: Any) -> Dict[str, Any]:

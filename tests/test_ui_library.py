@@ -270,8 +270,39 @@ class ScenarioDetailTests(LibraryCase):
         replays = self.detail()["replays"]
         self.assertEqual(replays, [{"run": fx.REPLAY_RUN, "verdict": "still_reproduces",
                                     "verdict_text": "The failure still reproduces.",
-                                    "created": "2026-10-16T12:00:00Z", "cost_usd": 0.4}])
+                                    "created": "2026-10-16T12:00:00Z", "cost_usd": 0.4,
+                                    "checkpoint": None, "original": None}])
         self.assertEqual(self.detail("d-" + fx.SCENARIO_ID_TWIN)["replays"], [])
+
+    def add_replay(self, stamp, checkpoint):
+        name = "replay-demo-" + stamp
+        fx.make_run(self.paths["runs"], name, "replay", {"replay": {"status": "done", "state": "COMPLETED"}},
+                    {"status": "completed", "verdict": "no_longer_reproduces", "reproduces": False}, spent=0.4,
+                    spec_name="replay-demo")
+        result = {"case_id": fx.SCENARIO_ID, "reproduces": False, "verdict": "no_longer_reproduces"}
+        if checkpoint is not None:
+            result["checkpoint"] = checkpoint
+        fx.write_json(self.paths["runs"] / name / "replay-result.json", result)
+
+    def test_a_replay_names_the_checkpoint_it_tested_and_whether_that_is_the_cases_own(self):
+        original = {"id": fx.CHECKPOINT["id"], "revision": fx.CHECKPOINT["revision"], "pinned": True}
+        self.add_replay("20261017T120000Z", original)
+        self.add_replay("20261018T120000Z", {"id": "example/retrained", "revision": "f" * 40, "pinned": True})
+        self.add_replay("20261019T120000Z", {"id": fx.CHECKPOINT["id"], "revision": "e" * 40, "pinned": True})
+        self.add_replay("20261020T120000Z", {"id": fx.CHECKPOINT["id"], "revision": None, "pinned": None})
+        replays = self.detail()["replays"]
+        self.assertEqual([(r["checkpoint"], r["original"]) for r in replays], [
+            ({"id": fx.CHECKPOINT["id"], "revision": None}, True),
+            ({"id": fx.CHECKPOINT["id"], "revision": "e" * 40}, False),
+            ({"id": "example/retrained", "revision": "f" * 40}, False),
+            ({"id": fx.CHECKPOINT["id"], "revision": fx.CHECKPOINT["revision"]}, True),
+            (None, None)])
+
+    def test_a_malformed_recorded_checkpoint_is_treated_as_not_recorded(self):
+        self.add_replay("20261017T120000Z", {"revision": "abc"})
+        self.add_replay("20261018T120000Z", "example/not-a-mapping")
+        self.assertEqual([(r["checkpoint"], r["original"]) for r in self.detail()["replays"][:2]],
+                         [(None, None), (None, None)])
 
     def test_without_the_run_folder_history_and_replays_are_empty(self):
         detail = self.make(runs_root=None).detail("d-" + fx.SCENARIO_ID)
