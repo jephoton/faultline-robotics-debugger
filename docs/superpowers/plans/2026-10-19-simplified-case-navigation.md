@@ -48,3 +48,16 @@ No new GPU/Token Factory/Tavily calls, public deployment, archive deletion,
 Reference/Guide rewrite, cloud provisioning or pending next-steps repair merge.
 Broader post-Demo-6 integration remains waiting for Jethro's completion signal.
 The public gallery is unchanged until its separately gated redeployment.
+
+## Inspection addendum: honest restored report limitations
+
+Browser inspection exposed old unconditional wording-report limitations:
+they say the listed wordings caused failures and a minimal wording was found,
+even for a screen with all passing attempts. Correct only those limitations
+in `scripts/report_paraphrase.py`, test both screen-only and verified-reduction
+reports in `tests/test_paraphrase_pipeline.py`, then regenerate the restored
+local report from its saved summary with this pure formatter. Keep the original
+archive report and raw summary unchanged. No new model or robot test.
+Smaller-model worker owns these two files, independent reviewer checks the
+conditional claims, and root handles local regeneration and Git. Separate
+commit: `fix(reports): bound wording claims to recorded evidence`.
