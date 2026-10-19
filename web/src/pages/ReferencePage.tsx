@@ -42,7 +42,7 @@ export function ReferencePage() {
     <article className="reference">
       <h1>Reference</h1>
       <p className="lede">
-        What Faultline does and what everything it shows means: the two modes, the repeatability gate, how a reduction works,
+        What Faultline does and what everything it shows means: the diagnosis and its routes, the repeatability gate, how a reduction works,
         every severity level, every report column and abbreviation, the verdicts and stop reasons, and the spend cap.
       </p>
       <nav aria-label="On this page" className="panel guide-toc">
