@@ -339,6 +339,12 @@ def _sanitise_name(name: str) -> str:
 
 # -- the backend ---------------------------------------------------------------
 
+# A dropped connection mid-download is retried per object; files already downloaded with the right size are
+# kept, so a resume continues an interrupted download instead of starting it over.
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_BACKOFF_SECONDS = 5.0
+
+
 class NebiusBackend:
     """Nebius Serverless Jobs backend. ``runner`` is injectable so tests use a fake CLI."""
 
@@ -676,15 +682,31 @@ class NebiusBackend:
             target = dest.joinpath(*parts)
             if root not in target.resolve().parents:
                 raise BackendError("refusing unsafe object key in the job export")
+            if target.is_file() and target.stat().st_size == size:
+                continue                           # kept from an interrupted download of the same Job's export
             target.parent.mkdir(parents=True, exist_ok=True)
             partial = target.with_name(target.name + ".part")
-            client.download_file(bucket, key, str(partial))
+            self._download_one(client, bucket, key, partial)
             if partial.stat().st_size != size:
                 partial.unlink()
                 raise BackendError("size mismatch downloading %s" % relative)
             partial.replace(target)
         self._clear_pending(handle.job_name)
         return dest
+
+    def _download_one(self, client: Any, bucket: str, key: str, partial: Path) -> None:
+        """One object, retried with backoff: a dropped connection must not lose a paid Job's evidence."""
+
+        for attempt in range(DOWNLOAD_ATTEMPTS):
+            try:
+                client.download_file(bucket, key, str(partial))
+                return
+            except Exception:  # noqa: BLE001 - botocore's connection errors cannot be imported here
+                if partial.exists():
+                    partial.unlink()
+                if attempt + 1 >= DOWNLOAD_ATTEMPTS:
+                    raise
+                self._sleep(DOWNLOAD_BACKOFF_SECONDS * (attempt + 1))
 
     def logs_tail(self, handle: JobHandle, lines: int = 200) -> str:
         job_id = handle.job_id
