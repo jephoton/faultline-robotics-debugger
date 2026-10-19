@@ -107,15 +107,73 @@ describe('the Nemotron box: a scenario case', () => {
     const link = within(first).getByRole('link', { name: '[S1]' });
     expect(link).toHaveAttribute('href', 'https://example.org/placement-sensitivity');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    // An evidence id is a plain tag, not a link.
-    expect(within(first).getByText('c32').tagName).toBe('CODE');
-    expect(within(first).queryByRole('link', { name: /c32/ })).not.toBeInTheDocument();
+    // An evidence id is a plain tag, not a link, and reads as a row number.
+    const row = within(first).getByText('row 32');
+    expect(row.tagName).toBe('CODE');
+    expect(within(first).queryByText('c32')).not.toBeInTheDocument();
+    expect(within(first).queryByRole('link', { name: /32/ })).not.toBeInTheDocument();
+    // "Sources" lists only the cited ones, in the order they were first cited.
     const sources = within(box).getByRole('heading', { level: 4, name: 'Sources' }).nextElementSibling as HTMLElement;
     expect(within(sources).getAllByRole('link').map((anchor) => anchor.getAttribute('href'))).toEqual([
       'https://example.org/placement-sensitivity',
       'https://example.org/libero',
       'https://example.org/robustness-eval',
     ]);
+    // The rest are folded away, closed.
+    const others = within(box).getByText('1 other source retrieved').closest('details') as HTMLDetailsElement;
+    expect(others.open).toBe(false);
+    expect(within(others).getByRole('link', { name: 'A retrieved paper no step cites' })).toHaveAttribute('href', 'https://example.org/not-cited');
+  });
+
+  it('lists the sources in the order of their first citation, and says when none were cited', async () => {
+    await openChanged(IDS.audit, () => ({
+      next_steps: {
+        model: 'm',
+        status: 'ok',
+        items: [
+          { text: 'First.', cites: ['S3', 'S1'] },
+          { text: 'Second.', cites: ['S2', 'S3'] },
+        ],
+        sources: [
+          { id: 'S1', title: 'One', url: 'https://example.org/1' },
+          { id: 'S2', title: 'Two', url: 'https://example.org/2' },
+          { id: 'S3', title: 'Three', url: 'https://example.org/3' },
+          { id: 'S4', title: 'Four', url: 'https://example.org/4' },
+          { id: 'S5', title: 'Five', url: 'https://example.org/5' },
+        ],
+      },
+    }));
+    const box = sectionOf('Nemotron');
+    const cited = within(box).getByRole('heading', { level: 4, name: 'Sources' }).nextElementSibling as HTMLElement;
+    expect(within(cited).getAllByRole('link').map((anchor) => anchor.textContent)).toEqual(['Three', 'One', 'Two']);
+    expect(within(box).getByText('2 other sources retrieved')).toBeInTheDocument();
+    document.body.innerHTML = '';
+    await openChanged(IDS.audit, () => ({
+      next_steps: {
+        model: 'm',
+        status: 'ok',
+        items: [{ text: 'Only evidence.', cites: ['blur@0.4625'] }],
+        sources: [{ id: 'S1', title: 'One', url: 'https://example.org/1' }],
+      },
+    }));
+    const only = sectionOf('Nemotron');
+    expect(within(only).queryByRole('heading', { level: 4, name: 'Sources' })).not.toBeInTheDocument();
+    expect(within(only).getByText('1 source retrieved, none cited')).toBeInTheDocument();
+  });
+
+  it('shows evidence cites as readable tags, not raw ids', async () => {
+    await openChanged(IDS.audit, () => ({
+      next_steps: {
+        model: 'm',
+        status: 'ok',
+        items: [{ text: 'Test blur near the edge.', cites: ['blur@0.4625', 'motion_blur@0.3', 'c37', 'weird-id'] }],
+        sources: [],
+      },
+    }));
+    const box = sectionOf('Nemotron');
+    const tags = Array.from(box.querySelectorAll('code.cite')).map((tag) => tag.textContent);
+    expect(tags).toEqual(['blur s=0.4625', 'motion blur s=0.3', 'row 37', 'weird-id']);
+    expect(box).not.toHaveTextContent('@');
   });
 
   it('shows only the guess when next_steps is missing or null', async () => {
