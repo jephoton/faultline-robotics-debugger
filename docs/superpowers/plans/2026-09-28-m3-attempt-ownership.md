@@ -12,7 +12,7 @@
 
 ## Scope and handoff
 
-**Accepted design:** `docs/superpowers/specs/2026-09-28-m3-attempt-ownership-design.md`. **Existing isolated checkout:** `C:\Users\Jethro\.codex\worktrees\m3-parallel-replay\nebius-nvidia-hackathon`, branch `codex/m3-parallel-replay`. Keep `a360b28` and `8a6e1e5` as history; the worktree also has two uncommitted Task 3 files (`scripts/run_parallel_eval.py`, `tests/test_parallel_eval_driver.py`) with a stale-token fix and test. Preserve and incorporate them; do not reset or overwrite them. Do not change manifest, worker counts, model, process-group containment, reporter, viewer, or cloud topology.
+**Accepted design:** `docs/superpowers/specs/2026-09-28-m3-attempt-ownership-design.md`. **Historical isolated checkout:** branch `codex/m3-parallel-replay` in the managed `m3-parallel-replay` worktree. Keep `a360b28` and `8a6e1e5` as history; at the time, the worktree had two uncommitted Task 3 files (`scripts/run_parallel_eval.py`, `tests/test_parallel_eval_driver.py`) with a stale-token fix and test. These historical instructions were to preserve and incorporate them, without resetting or overwriting them. Do not change manifest, worker counts, model, process-group containment, reporter, viewer, or cloud topology under this completed plan.
 
 | Task | Owner | Paths | Concurrency |
 | --- | --- | --- | --- |

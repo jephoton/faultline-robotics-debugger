@@ -1,8 +1,8 @@
 # Faultline — turn robot failures into replayable tests
 
-Built for the Nebius × NVIDIA hackathon. Faultline turns a robot-policy
-failure into the **smallest confirmed trigger** and keeps it as a **regression
-test** that reruns on every new checkpoint. It works on simulated manipulation
+Built for the Nebius × NVIDIA hackathon. Faultline reduces a robot-policy
+failure to a **smaller confirmed trigger** and keeps it as a **replayable
+regression test** for compatible checkpoints. It works on simulated manipulation
 policies (vision-language-action models such as NVIDIA GR00T).
 
 **Scope today:** GR00T N1.7 on the LIBERO benchmark (4 suites, 40 tasks, one
@@ -49,22 +49,22 @@ loop, with failure analysis done by people replaying videos and logs
 
 - **Confirms** a failure is real: it must fail at least 4 of 5 attempts, and
   a nearby passing layout must pass 5 of 5.
-- **Reduces** it to the minimal trigger: of all the differences between the
-  failing and passing layouts, the smallest set the failure needs, found by
-  reruns (delta debugging, as compilers do with crashing programs). That is
-  the cause in the sense of *what* triggers it. *Why* the network fails under
-  those conditions is still for a person to work out; the minimal trigger is
-  the sharpest clue for it.
+- **Reduces** the differences between failing and passing layouts through
+  reruns (delta debugging, as compilers do with crashing programs). A completed
+  entity-removal check establishes that removing any one retained shift loses
+  the failure gate under those tests. This is not a globally smallest layout
+  or proof of causation; size shrinking may stop at the budget. *Why* the
+  network fails remains a question for investigation.
 - **Keeps** it as a case (videos, report, replay inputs) and **replays** it on
-  any checkpoint.
+  compatible checkpoints when requested.
 - **Nemotron** proposes the order in which differences are tested and writes
   a labelled reading of the verified result. The reruns, not the model, decide.
 
 One **New diagnosis** does it. It runs your start untouched:
-- if it fails, Faultline finds the smallest change of layout that triggers
-  the failure;
+- if it fails, Faultline searches for a smaller set of layout changes that
+  preserves the failure;
 - if it passes, Faultline probes it with image, scene and wording
-  disturbances and finds the smallest one that breaks it.
+  disturbances and searches for a failure threshold within the chosen budget.
 
 Every failing condition becomes a replayable case. "Nothing broke it in
 these ranges" is a valid finding too.
@@ -122,15 +122,15 @@ evidence and starts no new compute; setup instructions are separate.
 
 | The start, run untouched... | Route | What Faultline does | The case it keeps |
 | --- | --- | --- | --- |
-| **fails reliably** (4 of 5) | layout | Finds the nearest benchmark start that passes, then delta-debugs the differences (object positions, the arm's pose) down to the shifts needed together. Nemotron proposes the order; reruns decide. | The minimal layout trigger, with the original, minimal and reference videos |
-| **passes** | probes | Runs the chosen disturbances (by default blur, noise, darken and contrast; JPEG, colour cast, motion blur, dead pixels, camera viewpoint, lighting and Nemotron-written rewordings are one tick away) and finds the smallest severity or word change that breaks it | The failing disturbance at its threshold, or the failing wording, with videos |
+| **fails reliably** (4 of 5) | layout | Finds the nearest benchmark start that passes, then delta-debugs the differences (object positions, the arm's pose) down to a smaller reproducing set. Nemotron proposes the order; reruns decide. | The retained layout trigger and its reduction limits, with original, reduced and reference videos |
+| **passes** | probes | Runs the chosen disturbances (by default blur, noise, darken and contrast; JPEG, colour cast, motion blur, dead pixels, camera viewpoint, lighting and Nemotron-written rewordings are one tick away) and searches for a failing severity or word change within the budget | The retained failing disturbance or wording and its search limits, with videos |
 | **fails sometimes** | flaky | Reports the start as unreliable untouched; no disturbance is blamed | — |
 
 You can also search a range of benchmark starts for one that fails, or import
 your own failing start-state file. Both go straight to the layout route.
 
-`faultline replay` (or **Replay** on any case page) reruns a case on any
-checkpoint, `policy.checkpoint` in the replay spec included, so you can test
+`faultline replay` (or **Replay** on a case with saved failing inputs) reruns a
+case on a compatible checkpoint selected by `policy.checkpoint` in the replay spec, so you can test
 a retrained policy against the failures you found. Optionally, each new case
 also gets suggested next steps: Nemotron 3 Ultra cites public sources found
 with Tavily. They are suggestions, not evidence.
@@ -282,7 +282,7 @@ post-M7 stretch goal.
 PYTHONPATH=src python -B -m unittest discover -s tests
 ```
 
-The suite (about 2800 tests, 60 platform skips on Windows) uses fakes for the
+The suite uses fakes for the
 simulator, model and cloud; it does not start paid work. The control panel's
 front end has its own checks (Node 24):
 

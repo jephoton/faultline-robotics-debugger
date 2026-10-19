@@ -125,8 +125,10 @@ assumes monotone outcomes. Kept sizes are verified to reproduce, but they are
 not always the smallest that do.
 
 The case replaces `FL-S-AFB5` in the gallery and in `demo/root`. The bundled
-copy leaves out `research.json`, because it holds third-party search
-snippets.
+copy originally left out `research.json`, because it held third-party search
+snippets. The October 19 cleanup added a sanitized copy with accepted next
+steps and source titles/URLs only; no search snippets are bundled. See the
+[publication record](m7-public-gallery.md).
 
 ### Replay of `FL-S-8E0D` (same checkpoint)
 

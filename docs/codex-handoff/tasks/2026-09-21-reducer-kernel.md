@@ -1,6 +1,8 @@
 # DeepSeek handoff: M4 pure reducer kernel
 
 > Generated task handoff. Do not add credentials or unrelated user data.
+> Historical completed assignment, not current worker/provider instructions.
+> Use the current STATE and AGENTS files for present-day routing.
 
 ## 1. Objective and user-visible outcome
 
@@ -11,7 +13,7 @@ adaptive repeatability decision.
 
 ## 2. Repository path
 
-Canonical repository: `C:\Users\Jethro\Documents\nebius-nvidia-hackathon`.
+Run commands from the repository root.
 
 ## 3. Starting Git state
 
@@ -22,7 +24,7 @@ publish branches.
 
 ## 4. Exact implementation worktree
 
-`C:\Users\Jethro\.codex\worktrees\m4-reducer-kernel\nebius-nvidia-hackathon`
+The isolated reducer worktree used for the historical assignment.
 
 ## 5. Architecture and current behavior
 
@@ -73,13 +75,13 @@ appear in the implementation commit.
 
 The September 21 retry is authorized after a diagnosed sandbox ACL mismatch.
 The worktree now grants scoped modify permission to `BUILTIN\Users`; do not
-change ACLs or Git configuration further. The sandbox cannot launch Jethro's
+change ACLs or Git configuration further. The sandbox could not launch the account holder's
 Windows Store Python 3.11 package, so use the bundled Python 3.12 interpreter
 for the worker's red/green loop:
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
-& 'C:\Users\Jethro\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest tests.test_reduce -v
+python -m unittest tests.test_reduce -v
 ```
 
 The OpenAI coordinator will independently run the required Python 3.11 check
@@ -103,7 +105,7 @@ persist configuration.
 Read completely before editing:
 
 - repository `AGENTS.md`;
-- `C:\Users\Jethro\.codex\skills\test-driven-development\SKILL.md`;
+- the installed `test-driven-development` skill;
 - the living documents, design, and Task 2 listed in section 5.
 
 Follow test-first red/green/refactor and make one Conventional Commit named
