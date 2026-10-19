@@ -213,7 +213,10 @@ export function suggestedReplayLimits(plan: { jobs: { deadline_seconds: number }
 
 /** A replay spec for `faultline replay`: budget, an optional checkpoint override and the template's backend. */
 export function buildReplayYaml(caseName: string, form: ReplayForm, backend: string | null): string {
-  const slug = `replay-${caseName}`.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+$/, '');
+  const slug = `replay-${caseName}`
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
   const lines = ['faultline: 1', `name: ${slug}`, 'mode: replay'];
   const id = form.checkpointId.trim();
   const revision = form.checkpointRevision.trim();

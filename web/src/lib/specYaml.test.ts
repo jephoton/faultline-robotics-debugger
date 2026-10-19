@@ -128,6 +128,13 @@ describe('buildReplayYaml', () => {
     expect(yaml.trimEnd().endsWith('sha256:0000')).toBe(true);
   });
 
+  it('collapses repeated separators in the run name', () => {
+    expect(buildReplayYaml('object-start0 - stress test', REPLAY_DEFAULTS, null)).toContain(
+      'name: replay-object-start0-stress-test',
+    );
+    expect(buildReplayYaml(' -a--b- ', REPLAY_DEFAULTS, null)).toContain('name: replay-a-b');
+  });
+
   it('adds a checkpoint override only when one is given', () => {
     const yaml = buildReplayYaml('x y', { ...REPLAY_DEFAULTS, checkpointId: 'org/ckpt', checkpointRevision: 'abc123' }, null);
     expect(yaml).toContain('name: replay-x-y');
