@@ -506,7 +506,7 @@ PARAPHRASE_DEFAULT_CANDIDATES = 24
 
 ROUTE_TEXTS = {
     "layout": "the start fails reliably: diagnosing its layout",
-    "probes": "the start does not fail reliably: trying the chosen probes",
+    "probes": "the start passed untouched: probing the chosen families",
     "passes": "the start passes untouched and no probes were chosen",
     "flaky": "the start is flaky: its own control did not pass reliably",
 }

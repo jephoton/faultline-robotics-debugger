@@ -136,6 +136,8 @@ class ProbesRoute(Base):
             "screen", "probe-image-1", "probe-scene-1", "rewording-screen", "rewording-reduce")])
         self.assertAlmostEqual(ledger.spent, 5 * cost())
         self.assertEqual(self.header(runner)["run"]["route"], "probes")
+        self.assertTrue(any("the start passed untouched: probing the chosen families" in line for line in lines))
+        self.assertFalse(any("does not fail reliably" in line for line in lines))
         # The probe Jobs are audit Jobs on the chosen start, split by kind.
         image, scene = backend.workloads[backend.submitted[1]], backend.workloads[backend.submitted[2]]
         self.assertEqual((image["mode"], image["families"], image["init_state_index"], image["task_id"]),
@@ -401,6 +403,8 @@ class RoutingOnTheCheck(Base):
         self.assertEqual(len(backend.submitted), 1, "no probe Job is paid for a flaky start")
         self.assertEqual(tools.generated, [])
         self.assertEqual(self.header(runner)["run"]["route"], "flaky")
+        self.assertTrue(any("the start is flaky: its own control did not pass reliably" in line for line in lines))
+        self.assertFalse(any("probing the chosen families" in line for line in lines))
         self.assertIn("flaky", (runner.run_dir / "report.md").read_text(encoding="utf-8").lower())
         self.assertFalse((runner.run_dir / "cases").exists())
 
