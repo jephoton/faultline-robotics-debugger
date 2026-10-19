@@ -155,15 +155,11 @@ October 30, 10:00 PT.
 1. **Demos.** The runbook is restructured into six demos around the showcase
    cases (October 19). Jethro walks through them next and reports what each
    exposes.
-2. **Gallery refresh** (Jethro's go). Export only the showcase cases:
-   - `FL-S-8E0D`: the layout route;
-   - `FL-A-D582`: the probe route;
-   - `FL-A-F526`: nothing broke it.
-
-   Use `faultline export --case <id>` and inspect the payload before
-   deploying. Update the README's "five recorded cases" at the same time.
-   `FL-S-AFB5`, `FL-A-08D3`, `FL-A-A70E` and the old occlusion case stay in
-   the local library only.
+2. **Gallery refresh: done October 19** (Jethro's go). The live gallery holds
+   the three showcase cases (`docs/experiments/m7-public-gallery.md`). The
+   old cases moved out of the local panel to `artifacts/archive-2026-10-19/`,
+   which can be restored. Redeploy once more after the demo walkthrough's
+   fixes; the policy-failure glossary row is not live yet.
 3. **Remaining things:**
    1. **Done on October 19:**
       - the final showcase runs, recorded in
