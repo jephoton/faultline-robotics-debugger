@@ -14,36 +14,70 @@ and keeps it as a **regression test** that reruns on every new checkpoint.
 The policy runs in simulation (LIBERO on MuJoCo). The evidence is reruns of
 the policy, never a model's opinion.
 
-### Regression tests
+### The regression test
 
 In software, a **regression** is something that used to work and breaks after
 a change. A **regression test** is a small saved check, rerun after every
 change, that catches it.
 
 For a robot policy, every fine-tune or retrain is a change. Each Faultline
-case pins one failing condition, and `faultline replay` (or **Replay** on the
-case page) reruns it on any checkpoint to say whether it still fails.
-`--expect fixed` or `--expect reproduces` turns that into a pass/fail exit
-code for a script or CI job.
+case pins one failing condition. The **Regression test** section of a case
+page (`faultline replay` on the command line) reruns that condition on the
+policy you choose and says whether it still fails:
 
-### What a replay reruns
+- **The original policy** is the checkpoint the case was found with. The test
+  confirms the failure still repeats.
+- **A new checkpoint** is a Hugging Face id plus a revision (both are needed,
+  so the result names exactly which policy ran). The test says whether the
+  failure is gone.
 
-| Case | Replay reruns | Verdict |
+Each result in the history names the checkpoint it tested. A failure that is
+gone on a new checkpoint is **Fixed**. The same result on the original policy
+is **Did not repeat** (amber), not "fixed": nothing changed, so the case may
+be flaky. A fixed failure that comes back in a later checkpoint is what a
+regression test catches.
+
+`--expect fixed` or `--expect reproduces` turns the verdict into a pass/fail
+exit code for a script or CI job. The command has no checkpoint flag: a new
+checkpoint goes under `policy.checkpoint` in the replay spec.
+
+A regression test is not a new diagnosis:
+
+| | Regression test (replay) | New diagnosis |
 | --- | --- | --- |
-| Layout reduction | The minimal scene and its passing reference, 5 attempts each | Still reproduces / no longer reproduces |
+| Question | Is this known failure fixed, and does it stay fixed? | Where does this policy fail now? |
+| What runs | The pinned condition, 5 attempts | A fresh check and search |
+| Repeatable | Yes | No |
+
+### What the regression test reruns
+
+| Case | The test reruns | Verdict |
+| --- | --- | --- |
+| Layout reduction | The minimal scene and its passing reference, 5 attempts each | Still fails / no longer |
 | Disturbance probe | Each failing family at its threshold severity on the start, with the undisturbed control, 5 attempts each | Still fails at s = *x* / no longer fails |
 | Rewording probe | The failing wording, with the original wording as the control | The wording still fails / no longer fails |
 
-A replay whose control does not pass, or whose Job does not finish, is
+The case page shows the verdict in words, by the policy tested:
+
+| Verdict | On a new checkpoint | On the original policy |
+| --- | --- | --- |
+| Still fails | **Still fails** (red) | **Still fails** (red) |
+| No longer | **Fixed** (green) | **Did not repeat** (amber) |
+| Anything else | **Inconclusive** (amber) | **Inconclusive** (amber) |
+
+A replay from before checkpoints were recorded is shown as the original
+policy, marked "checkpoint not recorded".
+
+A test whose control does not pass, or whose Job does not finish, is
 inconclusive, never a pass. A stress-test replay that stops after some of its
 Jobs (a spend cap, a cloud error) keeps the verdicts of the Jobs that ran in
 `replay-result.json` but has no verdict of its own, and `--expect` reports it
 as inconclusive (exit 5).
 
-The replay's dry run is for the case being replayed: a layout case plans one
+The cost estimate is for the case being tested: a layout case plans one
 Job, a stress-test case one Job per probe group that holds a failing family,
-and a wording case one rewording-screen Job. The Replay form's default spend
-cap and hour limit are taken from that plan.
+and a wording case one rewording-screen Job. The test's default spend
+cap and hour limit (under **Limits**) are taken from that plan.
 
 ### One diagnosis, routed on the untouched result
 

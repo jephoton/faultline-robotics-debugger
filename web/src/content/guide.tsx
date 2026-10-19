@@ -212,10 +212,11 @@ faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixe
         </p>
         <p>
           <strong>Replay</strong> re-runs a saved case and says whether its failing condition still fails: the regression test after you
-          change the policy. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at
+          change the policy. On a case page it is the <strong>Regression test</strong> section: choose the original policy or a new
+          checkpoint, estimate the cost, then run it. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at
           its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts
           each. <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a
-          script whether you got it.
+          script whether you got it. A new checkpoint goes under <code>policy.checkpoint</code> in the replay spec.
         </p>
       </>
     ),

@@ -197,7 +197,7 @@ The control panel at <http://127.0.0.1:8765> wraps these commands:
   for the time it ran, and `--resume` continues on a new Job.
 - **Case pages** show each finished diagnosis: the result, the evidence for
   its kind, how it was made, Nemotron's reading, the report and files, and
-  **Replay** for scenario cases.
+  the **Regression test** (replay) for scenario cases.
 
 The panel listens on 127.0.0.1 only and starts one paid run at a time.
 `faultline export --out <folder>` writes the finished cases as a static

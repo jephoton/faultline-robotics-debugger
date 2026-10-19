@@ -522,8 +522,9 @@ money. Copy such as "never pays twice" is not a promise that every retry is free
 
    Tables over 12 rows fold behind "Show all *n* rows";
 4. **Nemotron's reading**, collapsed and labelled as interpretation;
-5. **Replays** for scenario cases, with a line on what a replay is for, and
-   its controls in the local panel;
+5. the **Regression test** for scenario cases, with a line on what it checks,
+   the replay history (each row names the checkpoint it tested) and its
+   controls in the local panel;
 6. **Run details**, collapsed (timeline, Jobs, cost, time);
 7. files.
 
@@ -553,11 +554,13 @@ or formally proven cause.
 
 ### 5. Replay, Setup, Guide and All evidence
 
-- **Replay:** scenario cases with replay inputs only. Shows prior replays;
-  local controls let the operator choose expected result, cap/time limit and
-  optional compatible checkpoint ID plus pinned revision. Dry run and confirm
-  precede a new Job testing the minimal scene and passing reference five times
-  each. Audit/paraphrase Replay is not supported. The public gallery may show
+- **Regression test (replay):** scenario cases with replay inputs only. Shows
+  prior replays with the checkpoint each tested; local controls let the
+  operator choose the policy to test (the case's original checkpoint, or a
+  compatible checkpoint ID plus pinned revision), with the cap and time limit
+  under Limits. Estimate cost and confirm precede a new Job testing the
+  minimal scene and passing reference five times each. The expectation is a
+  CLI option only (`--expect`). Audit/paraphrase Replay is not supported. The public gallery may show
   stored replay history but cannot launch one.
 - **Setup (`/setup`):** read-only checks for Nebius sign-in, Docker, Token
   Factory key presence and backend settings in a local spec. Shows Ready/Needs
