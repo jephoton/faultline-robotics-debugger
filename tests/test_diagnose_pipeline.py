@@ -160,9 +160,13 @@ class ProbesRoute(Base):
         merged = self.read(runner, "cases", "audit", "merged-summary.json")
         self.assertEqual(set(merged["families"]), set(FAMILIES))
         self.assertEqual(audit["summary"], "cases/audit/merged-summary.json")
+        pinned = orch.pinned_checkpoint("libero_10")
+        self.assertEqual(pinned[0], "nvidia/gr00t17-lerobot-libero_10-640")
+        self.assertEqual(audit["checkpoint"], {"id": pinned[0], "revision": pinned[1], "pinned": True})
 
         wording = self.read(runner, "cases", "wording", "case.json")
         self.assertEqual((wording["kind"], wording["reduced"]), ("paraphrase_reduction", True))
+        self.assertEqual(wording["checkpoint"], {"id": pinned[0], "revision": pinned[1], "pinned": True})
         self.assertIn("instruction", wording["replay"]["config"])
         self.assertEqual(self.read(runner, "cases", "wording", "replay-inputs.json"), wording["replay"])
         self.assertTrue((runner.run_dir / "cases" / "wording" / "report.md").is_file())

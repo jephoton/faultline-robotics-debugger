@@ -366,6 +366,30 @@ def _retitle_audit_report(run_dir: Path, folder: Path) -> None:
     os.replace(str(temporary), str(report))
 
 
+def _record_checkpoint(folder: Path) -> None:
+    """Record the suite's pinned checkpoint in an audit or wording case written before cases recorded one.
+
+    Only a case with no usable checkpoint changes (one that names no checkpoint or no revision): a run with a
+    ``policy.checkpoint`` override always recorded its own, and is left as it is. The case id does not depend
+    on the checkpoint."""
+
+    case = _read_json(folder / "case.json")
+    if case is None or case.get("kind") not in ("audit", "paraphrase_reduction"):
+        return
+    try:
+        from robot_debug.orchestrator import with_recorded_checkpoint
+
+        updated = with_recorded_checkpoint(case)
+    except Exception:           # noqa: BLE001 - without the project scripts the case stays as it was
+        return
+    if updated == case:
+        return
+    temporary = folder / "case.json.tmp"
+    temporary.write_text(json.dumps(updated, indent=1, sort_keys=True, allow_nan=False) + chr(10),
+                         encoding="utf-8", newline="")
+    os.replace(str(temporary), str(folder / "case.json"))
+
+
 def reregister_run(run_dir: Any, root: Any = None) -> List[str]:
     """Register a finished run again from its folder, for cases registered before the clips existed.
 
@@ -377,8 +401,9 @@ def reregister_run(run_dir: Any, root: Any = None) -> List[str]:
     """
 
     run_dir = Path(run_dir)
-    for folder in (run_dir, run_dir / "cases" / "audit"):
+    for folder in (run_dir, run_dir / "cases" / "audit", run_dir / "cases" / "wording"):
         _retitle_audit_report(run_dir, folder)
+        _record_checkpoint(folder)
     case_path = run_dir / "case.json"
     case = _read_json(case_path)
     if isinstance(case, dict) and case.get("kind") == "audit" and not case.get("videos"):

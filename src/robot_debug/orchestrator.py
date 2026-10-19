@@ -481,6 +481,34 @@ def case_checkpoint(case: Mapping[str, Any]) -> Optional[Tuple[str, str]]:
     return identifier, revision
 
 
+def pinned_checkpoint(suite: Any) -> Optional[Tuple[str, str]]:
+    """The ``(id, revision)`` a Job serves for ``suite`` when the spec names no checkpoint: the suite's own
+    repository at the commit the prefetch pins. ``None`` for an unknown suite or without the project scripts."""
+
+    identifier = _default_checkpoint_id(suite)
+    if identifier is None:
+        return None
+    try:
+        revision = _load_script("serverless_prefetch").PINNED_REVISIONS.get(identifier)
+    except (OrchestratorError, AttributeError, OSError, ImportError):
+        return None
+    return (identifier, revision) if isinstance(revision, str) else None
+
+
+def with_recorded_checkpoint(case: Mapping[str, Any]) -> Dict[str, Any]:
+    """The case with the checkpoint it was found with filled in when it has no usable one: a record without
+    a revision (the Job's model-resolution file was not kept) or none at all becomes the suite's pinned
+    checkpoint. A record of another repository (a ``policy.checkpoint`` run) is never replaced."""
+
+    recorded = case.get("checkpoint")
+    if isinstance(recorded, Mapping) and isinstance(recorded.get("revision"), str) and recorded.get("id"):
+        return dict(case)
+    pinned = pinned_checkpoint(case.get("suite"))
+    if pinned is None or (isinstance(recorded, Mapping) and recorded.get("id") not in (None, pinned[0])):
+        return dict(case)
+    return dict(case, checkpoint={"id": pinned[0], "revision": pinned[1], "pinned": True})
+
+
 def _too_many_candidates(wanted: int, limit: int) -> str:
     return ("budget.max_candidates {} does not fit in one reduce Job (its deadline would pass the {} s limit "
             "of the runtime); the largest that fits is {}".format(wanted, MAX_JOB_DEADLINE_SECONDS, limit))
@@ -2024,8 +2052,9 @@ class Orchestrator:
             "job_name": outcome.job_name,
             "summary": outcome.summary_path.relative_to(self.run_dir).as_posix(),
         }
-        if self.checkpoint is not None:         # only a run with a checkpoint override records one
-            case["checkpoint"] = {"id": self.checkpoint[0], "revision": self.checkpoint[1], "pinned": True}
+        recorded = self.checkpoint or pinned_checkpoint(self.spec.suite)     # the override, else the suite's pin
+        if recorded is not None:
+            case["checkpoint"] = {"id": recorded[0], "revision": recorded[1], "pinned": True}
         from robot_debug import pipeline_cases
 
         videos = pipeline_cases.audit_videos([(outcome.job_name, outcome.summary)])
@@ -2221,7 +2250,7 @@ class Orchestrator:
         case = pipeline_cases.audit_case(
             merged=merged, suite=spec.suite, task=sc.task, start=sc.start, run=self.run_dir.name,
             requested=requested, groups=groups, summary_path="cases/audit/merged-summary.json",
-            checkpoint=self.checkpoint, videos=videos)
+            checkpoint=self.checkpoint or pinned_checkpoint(spec.suite), videos=videos)
         report = None
         try:
             report = self.tools.audit_report([summary for _s, _j, summary in groups])
@@ -2320,6 +2349,7 @@ class Orchestrator:
             report = self.tools.paraphrase_report(screen, reduction, self.spec.backend.hourly_usd)
         except StopRun as stop:
             self._warn("report", "no wording report written ({})".format(stop.reason))
+        case = with_recorded_checkpoint(case)
         replay = case.get("replay") if isinstance(case.get("replay"), Mapping) else None
         self._write_case_folder("wording", case, report, replay)
 
@@ -2402,6 +2432,21 @@ class Orchestrator:
             self.say("replay", "the case was found with checkpoint {} at {}; replaying against it".format(*recorded))
         return recorded
 
+    @staticmethod
+    def _used_checkpoint(case: Mapping[str, Any], override: Optional[Tuple[str, str]],
+                         summary_record: Any) -> Optional[Dict[str, Any]]:
+        """The ``{id, revision}`` a replay tested, for ``replay-result.json``: the override when there was one,
+        else what the Job's summary recorded, else the suite's pinned checkpoint (a replay with no override
+        runs the pinned one). ``None`` only when none of these is known."""
+
+        if override is not None:
+            return {"id": override[0], "revision": override[1]}
+        if (isinstance(summary_record, Mapping) and isinstance(summary_record.get("id"), str)
+                and isinstance(summary_record.get("revision"), str)):
+            return {"id": summary_record["id"], "revision": summary_record["revision"]}
+        pinned = pinned_checkpoint(case.get("suite"))
+        return None if pinned is None else {"id": pinned[0], "revision": pinned[1]}
+
     def _replay(self, case_dir: Path) -> RunResult:
         case_path = case_dir if case_dir.is_file() else case_dir / "case.json"
         try:
@@ -2432,8 +2477,11 @@ class Orchestrator:
         replay_result = {
             "case_id": case.get("case_id"), "reproduces": verdict, "verdict": key, "job_name": outcome.job_name,
             "summary": outcome.summary_path.relative_to(self.run_dir).as_posix()}
+        used = (outcome.summary or {}).get("checkpoint")
         if checkpoint is not None or case_checkpoint(case) is not None:
-            replay_result["checkpoint"] = (outcome.summary or {}).get("checkpoint")
+            replay_result["checkpoint"] = used
+        else:
+            replay_result["checkpoint"] = self._used_checkpoint(case, None, used)
         _write_json(self.run_dir / "replay-result.json", replay_result)
         self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
                            verdict=key)
@@ -2454,8 +2502,7 @@ class Orchestrator:
             "summary": first.summary_path.relative_to(self.run_dir).as_posix(),
             "jobs": [{"job_name": o.job_name, "summary": o.summary_path.relative_to(self.run_dir).as_posix()}
                      for o in outcomes]}
-        if checkpoint is not None:
-            replay_result["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        replay_result["checkpoint"] = self._used_checkpoint(case, checkpoint, (first.summary or {}).get("checkpoint"))
         _write_json(self.run_dir / "replay-result.json", replay_result)
         self.steps.set_run(status="completed" if verdict is not None else "stopped", reproduces=verdict,
                            verdict=key)
@@ -2485,8 +2532,7 @@ class Orchestrator:
             "summary": outcomes[0].summary_path.relative_to(self.run_dir).as_posix(),
             "jobs": [{"job_name": o.job_name, "summary": o.summary_path.relative_to(self.run_dir).as_posix()}
                      for o in outcomes]}
-        if checkpoint is not None:
-            replay_result["checkpoint"] = {"id": checkpoint[0], "revision": checkpoint[1]}
+        replay_result["checkpoint"] = self._used_checkpoint(case, checkpoint, None)
         _write_json(self.run_dir / "replay-result.json", replay_result)
         result = self._stopped(stop)
         self.steps.set_run(reproduces=None, verdict="incomplete")

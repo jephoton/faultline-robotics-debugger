@@ -154,6 +154,23 @@ class AuditReplay(Base):
                          (CHECKPOINT["id"], CHECKPOINT["revision"]))
         self.assertEqual(saved["checkpoint"]["id"], CHECKPOINT["id"])
 
+    def test_a_replay_with_no_override_records_the_pinned_checkpoint_it_used(self):
+        pinned = orch.pinned_checkpoint("libero_10")
+        script = [m6_step(["blur", "noise"], thresholds={"blur": 0.4})]
+        result, saved, runner, backend, lines = self.replay(audit_case(), script)
+        self.assertEqual(saved["checkpoint"], {"id": pinned[0], "revision": pinned[1]})
+        self.assertNotIn("checkpoint_id", backend.workloads[backend.submitted[0]], "the Job still serves the pin")
+        # A case that records the suite's own checkpoint replays the same way.
+        recorded = dict(id=pinned[0], revision=pinned[1], pinned=True)
+        again, saved2, runner2, backend2, _ = self.replay(audit_case(checkpoint=recorded), script)
+        self.assertEqual(saved2["checkpoint"], {"id": pinned[0], "revision": pinned[1]})
+        self.assertNotIn("checkpoint_id", backend2.workloads[backend2.submitted[0]])
+
+    def test_a_wording_replay_with_no_override_records_the_pinned_checkpoint_too(self):
+        pinned = orch.pinned_checkpoint("libero_10")
+        result, saved, *_ = self.replay(wording_case(), [lang_step(failing=("p01",))])
+        self.assertEqual(saved["checkpoint"], {"id": pinned[0], "revision": pinned[1]})
+
     def test_a_case_without_a_failing_family_has_nothing_to_replay(self):
         case = audit_case()
         case["replay"]["groups"] = []

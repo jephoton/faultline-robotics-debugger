@@ -176,6 +176,40 @@ class LegacyTitle(unittest.TestCase):
         self.assertEqual(self.report.read_text(), self.LEGACY)
 
 
+class RecordedCheckpoint(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.run = make_pipeline_run(self.root)
+
+    def case(self, name):
+        return json.loads((self.run / "cases" / name / "case.json").read_text())
+
+    def test_re_registering_records_the_pinned_checkpoint_and_keeps_the_ids(self):
+        from robot_debug.orchestrator import pinned_checkpoint
+
+        pinned = pinned_checkpoint("libero_object")
+        before = cr.register_cases(self.run)
+        self.assertNotIn("checkpoint", self.case("audit"))
+        ids = cr.reregister_run(self.run)
+        self.assertEqual(ids, before)
+        want = {"id": pinned[0], "revision": pinned[1], "pinned": True}
+        self.assertEqual((self.case("audit")["checkpoint"], self.case("wording")["checkpoint"]), (want, want))
+        self.assertEqual(self.case("audit")["case_id"], AUDIT_ID)
+        registered = self.root / "diagnoses" / AUDIT_ID / "case.json"
+        self.assertEqual(json.loads(registered.read_text())["checkpoint"], want)
+        self.assertEqual(cr.reregister_run(self.run), ids, "running it again changes nothing")
+
+    def test_a_checkpoint_the_case_recorded_is_never_replaced(self):
+        other = {"id": "example/own-checkpoint", "revision": "ab" * 20, "pinned": True}
+        case = self.case("audit")
+        case["checkpoint"] = other
+        write_json(self.run / "cases" / "audit" / "case.json", case)
+        cr.reregister_run(self.run)
+        self.assertEqual(self.case("audit")["checkpoint"], other)
+
+
 class AuditVideos(unittest.TestCase):
     def test_the_threshold_clip_is_the_first_failing_attempt_and_a_robust_family_uses_its_top_level(self):
         videos = pc.audit_videos([("job-1", m6_summary(["blur", "noise"], thresholds={"blur": 0.4125}))])
