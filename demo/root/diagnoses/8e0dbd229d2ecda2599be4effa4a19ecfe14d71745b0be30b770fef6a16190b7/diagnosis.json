@@ -9,7 +9,8 @@
     "case": "case.json",
     "explanation": "explanation.json",
     "replay_inputs": "replay-inputs.json",
-    "report": "report.md"
+    "report": "report.md",
+    "research": "research.json"
   },
   "hypothesis_verdict": "necessary_not_sufficient",
   "instruction": "put both the alphabet soup and the tomato sauce in the basket",
@@ -20,7 +21,6 @@
   "reduced": false,
   "reference_start": 4,
   "route": "layout",
-  "run": "l10-start14-20261019T032219Z",
   "schema_version": 1,
   "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far.",
   "stop_reason": "budget_exhausted",

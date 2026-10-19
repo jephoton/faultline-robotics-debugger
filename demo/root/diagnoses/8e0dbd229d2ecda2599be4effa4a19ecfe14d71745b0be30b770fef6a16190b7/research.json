@@ -1,0 +1,133 @@
+{
+  "case_id": "8e0dbd229d2ecda2599be4effa4a19ecfe14d71745b0be30b770fef6a16190b7",
+  "kind": "diagnosis_research",
+  "next_steps": {
+    "items": [
+      {
+        "cites": [
+          "c37",
+          "c6"
+        ],
+        "text": "Test orange juice position at intermediate sizes (e.g., 25%, 50%, 75%) to find the smallest offset that still fails, since it was kept at 100% without shrinking and its threshold is unknown."
+      },
+      {
+        "cites": [
+          "c37",
+          "c16",
+          "c17"
+        ],
+        "text": "Run a combined ablation removing both basket and milk positions together (keeping orange juice and robot joints at their kept sizes) to check whether the failure persists without them, because each alone is not sufficient but the model predicts both as necessary."
+      },
+      {
+        "cites": [
+          "S6",
+          "S7"
+        ],
+        "text": "Evaluate the policy on a validation set where the basket, milk, and orange juice initial positions are sampled from a wider distribution than the training demonstrations, to measure sensitivity to object-position shifts that the LIBERO-Plus study associates with catastrophic failure."
+      },
+      {
+        "cites": [
+          "S7",
+          "c37"
+        ],
+        "text": "Add a training curriculum that explicitly varies the initial positions of the basket, milk, and orange juice across the range of offsets found here, since the LIBERO-Plus analysis shows models fail when perturbations combine across multiple objects."
+      }
+    ],
+    "provenance": {
+      "completion_tokens": 300,
+      "created_at": "2026-10-19T08:46:26Z",
+      "error_code": null,
+      "estimated_cost_usd": null,
+      "latency_seconds": 2.2810000000172295,
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "prompt_tokens": 4166,
+      "request_status": "completed"
+    },
+    "status": "interpreted"
+  },
+  "queries": [
+    {
+      "results": [
+        {
+          "source_id": "S1",
+          "title": "When would Vision-Proprioception Policies Failin Robotic Manipulation?",
+          "url": "https://arxiv.org/html/2602.12032v1"
+        },
+        {
+          "source_id": "S2",
+          "title": "Cross-Embodiment Policy Learning for Robotic Manipulation",
+          "url": "https://webthesis.biblio.polito.it/38674/1/tesi.pdf"
+        },
+        {
+          "source_id": "S3",
+          "title": "Robot Manipulation Planning Among Obstacles: Grasping, ...",
+          "url": "https://www.diva-portal.org/smash/get/diva2:1387713/FULLTEXT01.pdf"
+        },
+        {
+          "source_id": "S4",
+          "title": "Review of Learning-Based Robotic Manipulation in Cluttered Environments",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9607868"
+        },
+        {
+          "source_id": "S5",
+          "title": "WHEN WOULD VISION-PROPRIOCEPTION POLICIES ...",
+          "url": "https://proceedings.iclr.cc/paper_files/paper/2026/file/2b3bb2c95195130977a51b3bb251c40a-Paper-Conference.pdf"
+        }
+      ]
+    },
+    {
+      "results": [
+        {
+          "source_id": "S6",
+          "title": "LIBERO-PRO: Towards Robust and Fair Evaluation of Vision-Language-Action Models Beyond Memorization",
+          "url": "https://arxiv.org/html/2510.03827v2"
+        },
+        {
+          "source_id": "S7",
+          "title": "LIBERO-Plus: In-depth Robustness Analysis of Vision-Language-Action Models",
+          "url": "https://sylvestf.github.io/LIBERO-plus"
+        },
+        {
+          "source_id": "S8",
+          "title": "LIBERO Benchmark: Vision-Language-Action in Robotics",
+          "url": "https://www.emergentmind.com/topics/libero"
+        },
+        {
+          "source_id": "S9",
+          "title": "LIBERO-Plus: Robustness Tests for VLA Models",
+          "url": "https://www.youtube.com/watch?v=8zQvADmjpyM"
+        },
+        {
+          "source_id": "S10",
+          "title": "Vision Language Action Models (VLA) & Policies for Robots",
+          "url": "https://learnopencv.com/vision-language-action-models-lerobot-policy"
+        }
+      ]
+    },
+    {
+      "results": [
+        {
+          "source_id": "S11",
+          "title": "HDD: Hierarchical Delta Debugging",
+          "url": "https://people.inf.ethz.ch/suz/publications/icse06-hdd.pdf"
+        },
+        {
+          "source_id": "S12",
+          "title": "Reducing Failure-Inducing Inputs - The Debugging Book",
+          "url": "https://www.debuggingbook.org/html/DeltaDebugger.html"
+        },
+        {
+          "source_id": "S13",
+          "title": "Simplifying and Isolating Failure-Inducing Input",
+          "url": "https://www.cs.purdue.edu/homes/xyzhang/fall07/Papers/delta-debugging.pdf"
+        },
+        {
+          "source_id": "S14",
+          "title": "Reducing Failure-Inducing Inputs - The Fuzzing Book",
+          "url": "https://www.fuzzingbook.org/html/Reducer.html"
+        }
+      ]
+    }
+  ],
+  "schema_version": 1
+}

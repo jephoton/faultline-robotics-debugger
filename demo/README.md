@@ -43,6 +43,7 @@ case page does not.
 | `report.md` | The reduction report: differences, every rerun with its outcomes, the minimal cause, Nemotron's hypothesis and the measured check |
 | `case.json` | The case record (suite, task, starts, minimal selection, replay recipe, videos, checkpoint) |
 | `explanation.json` | Nemotron 3 Ultra's explanation of the verified result (model output, reviewed: not evidence) |
+| `research.json` | Accepted next-step suggestions and source titles/links; retrieved third-party snippets and search text are excluded |
 | `minimal-candidate.json`, `replay-inputs.json` | What `faultline replay` needs to re-run the case |
 | `videos/original.mp4` | Start 14, the failing start |
 | `videos/minimal.mp4` | Start 4 with only the four minimal shifts applied: fails |

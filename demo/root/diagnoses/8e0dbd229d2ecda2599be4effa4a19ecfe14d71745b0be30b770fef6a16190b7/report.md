@@ -61,10 +61,14 @@ Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of 
 
 Final selection: basket_1 (position 0.9375); milk_1 (position 0.875); orange_juice_1 (position 1); robot (joints 0.9375). This is a local minimum found by reruns, not proof of the globally smallest cause.
 
-| entity | part | fraction t | lower bound tested | resolution | invalid midpoints |
+| entity | part | kept size | largest size that passed | precision | invalid sizes |
 | --- | --- | --- | --- | --- | --- |
-| robot | joints | 0.9375 | 0.875 | 0.0625 | - |
-| basket_1 | position | 0.9375 | 0.875 | 0.0625 | - |
+| basket_1 | position | 93.8% | 87.5% | 6.25 points (1/16) | - |
+| milk_1 | position | 87.5% | 75% | 12.5 points (1/8) | - |
+| orange_juice_1 | position | 100% | not shrunk | - | - |
+| robot | joints | 93.8% | 87.5% | 6.25 points (1/16) | - |
+
+Sizes are shares of the full difference between the two starts. Kept size: verified to make the policy fail (at least 4 of 5 attempts). Largest size that passed: the largest smaller size tried that did not fail that often, over every reduction Job. Precision: the gap between the two. Invalid sizes were interpenetrating scenes and say nothing about the policy.
 
 ## Differences between the failing start and the reference
 

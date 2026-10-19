@@ -341,7 +341,122 @@
     "joints": 0.9375
    }
   },
-  "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far."
+  "sentence": "Moving basket_1 by 2.1 cm (of the original 2.2 cm), moving milk_1 by 2.2 cm (of the original 2.6 cm), moving orange_juice_1 by 0.8 cm (of the original 0.8 cm) and moving 5 joints of robot 94% of the way to their failing values are enough to make the policy fail from the passing start 4 (at least 4 of 5 attempts); sizes not fully shrunk; the reduction stopped early, so this is the smallest cause found so far.",
+  "shrink_history": [
+   {
+    "component": "position",
+    "entity": "basket_1",
+    "tested": [
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.5
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.25
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.75
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.625
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.875
+     },
+     {
+      "decision": "reproduces",
+      "job": 2,
+      "t": 0.8125
+     },
+     {
+      "decision": "reproduces",
+      "job": 2,
+      "t": 0.9375
+     }
+    ]
+   },
+   {
+    "component": "position",
+    "entity": "milk_1",
+    "tested": [
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.5
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.25
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.75
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.625
+     },
+     {
+      "decision": "reproduces",
+      "job": 2,
+      "t": 0.875
+     }
+    ]
+   },
+   {
+    "component": "joints",
+    "entity": "robot",
+    "tested": [
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.5
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.25
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.75
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.625
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.875
+     },
+     {
+      "decision": "does_not_reproduce",
+      "job": 2,
+      "t": 0.8125
+     },
+     {
+      "decision": "reproduces",
+      "job": 2,
+      "t": 0.9375
+     }
+    ]
+   }
+  ]
  },
  "reduced": false,
  "reference_start": 4,
@@ -516,6 +631,860 @@
    "required_failures": 4
   }
  },
+ "reruns": [
+  {
+   "decision": "reproduces",
+   "index": 0,
+   "outcomes": [
+    "success",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "gate",
+   "role": "failing",
+   "selection": null
+  },
+  {
+   "decision": "passes",
+   "index": 1,
+   "outcomes": [
+    "success",
+    "success",
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "gate",
+   "role": "reference",
+   "selection": null
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 2,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "probe",
+   "role": "hybrid",
+   "selection": {
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 3,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "probe",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 4,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "probe",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 5,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "probe",
+   "role": "hybrid",
+   "selection": {
+    "milk_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 6,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "probe",
+   "role": "hybrid",
+   "selection": {
+    "orange_juice_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 7,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "basket_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 8,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 9,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 10,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 11,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 12,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "basket_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 13,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 14,
+   "outcomes": [
+    "success",
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "alphabet_soup_1": {
+     "position": 1.0
+    },
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    }
+   }
+  },
+  {
+   "decision": "reproduces",
+   "index": 15,
+   "outcomes": [
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 16,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 17,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 18,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "ddmin",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 1.0
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 19,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.5
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 20,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.25
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 21,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.75
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 22,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.625
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 23,
+   "outcomes": [
+    "success",
+    "success",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.875
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 24,
+   "outcomes": [
+    "success",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.8125
+    }
+   }
+  },
+  {
+   "decision": "reproduces",
+   "index": 25,
+   "outcomes": [
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 1.0
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 26,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.5
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 27,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.25
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 28,
+   "outcomes": [
+    "success",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.75
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 29,
+   "outcomes": [
+    "success",
+    "success",
+    "success",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.625
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 30,
+   "outcomes": [
+    "success",
+    "policy_failure",
+    "success",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.875
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "reproduces",
+   "index": 31,
+   "outcomes": [
+    "success",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.8125
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "reproduces",
+   "index": 32,
+   "outcomes": [
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 1.0
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 33,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 0.5
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 34,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 0.25
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 35,
+   "outcomes": [
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 0.75
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "does_not_reproduce",
+   "index": 36,
+   "outcomes": [
+    "success",
+    "success",
+    "success"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 0.625
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  },
+  {
+   "decision": "reproduces",
+   "index": 37,
+   "outcomes": [
+    "policy_failure",
+    "policy_failure",
+    "policy_failure",
+    "policy_failure"
+   ],
+   "phase": "shrink",
+   "role": "hybrid",
+   "selection": {
+    "basket_1": {
+     "position": 0.9375
+    },
+    "milk_1": {
+     "position": 0.875
+    },
+    "orange_juice_1": {
+     "position": 1.0
+    },
+    "robot": {
+     "joints": 0.9375
+    }
+   }
+  }
+ ],
  "schema_version": 1,
  "stop_reason": "budget_exhausted",
  "suite": "libero_10",
