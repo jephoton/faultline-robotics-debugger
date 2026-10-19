@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Detail } from '../api/types';
 import { IDS } from '../mocks/fixtures';
 import { vi } from 'vitest';
 import { makeHarness, renderApp } from '../test/utils';
@@ -339,6 +340,124 @@ describe('static mode', () => {
     expect(screen.queryByRole('heading', { name: 'Test a policy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^(replay|stop|resume|start)/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /estimate cost/i })).not.toBeInTheDocument();
+  });
+});
+
+/** The lead line and the bullets of the result under the case title. */
+function resultLines() {
+  const list = document.querySelector('main article .case-result__list') as HTMLElement | null;
+  const lead = document.querySelector('main article .case-result > .lede') as HTMLElement | null;
+  return {
+    lead: lead?.textContent ?? null,
+    bullets: list ? within(list).getAllByRole('listitem').map((item) => item.textContent ?? '') : [],
+  };
+}
+
+/** Open a case after changing part of its detail. */
+async function openChanged(id: string, change: (base: Detail) => Partial<Detail>) {
+  const harness = makeHarness();
+  const base = await harness.api.detail(id);
+  vi.spyOn(harness.api, 'detail').mockResolvedValue({ ...base, ...change(base) });
+  renderApp(`/case/${id}`, { harness });
+  await screen.findByRole('heading', { level: 1 });
+}
+
+describe('result under the title as bullet points', () => {
+  it("lists a scenario case's minimal cause, one bullet per kept shift", async () => {
+    await openCase(IDS.soup);
+    const { lead, bullets } = resultLines();
+    expect(lead).toBe('5 shifts from passing start 28 are needed together to make the policy fail (at least 4 of 5 attempts):');
+    expect(bullets).toEqual([
+      'Alphabet soup: position 2.5 cm (87.5% of the difference)',
+      'Cream cheese: position 1.1 cm (100% of the difference)',
+      'Milk: position 2.4 cm (100% of the difference)',
+      'Orange juice: position 3.7 cm (100% of the difference)',
+      'Robot: 6 joints, up to 2.3° (87.5% of the difference)',
+    ]);
+    // The long sentence is gone from under the title, and the stop notice still says why it stopped.
+    expect(screen.queryByText(/is enough to make it fail/)).not.toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Stopped at the candidate budget');
+  });
+
+  it('says "from the passing reference" without a reference start, and reads one shift as a single shift', async () => {
+    await openChanged(IDS.imported, (base) => ({
+      scenario: { ...base.scenario!, reference_start: null, minimal_cause: base.scenario!.minimal_cause.slice(0, 1) },
+    }));
+    const { lead, bullets } = resultLines();
+    expect(lead).toBe('1 shift from the passing reference is enough to make the policy fail (at least 4 of 5 attempts):');
+    expect(bullets).toEqual(['Milk: position 2.1 cm (50% of the difference)']);
+  });
+
+  it('adds a short closing line about unshrunk sizes only when there is no stop notice', async () => {
+    await openChanged(IDS.imported, (base) => ({ scenario: { ...base.scenario!, reduced: false } }));
+    expect(screen.getByText('Each shift is needed, but their sizes were not fully shrunk.')).toBeInTheDocument();
+  });
+
+  it("lists an audit case's families: failing ones first by threshold, then the ones with no failure", async () => {
+    await openCase(IDS.audit);
+    const { lead, bullets } = resultLines();
+    expect(lead).toBe('Fails reliably under 2 of 4 disturbance families:');
+    expect(bullets).toEqual([
+      'Blur: fails from s = 0.5',
+      'Contrast: fails from s = 0.75',
+      'Noise: no failure up to s = 1',
+      'Darken: no failure up to s = 1',
+    ]);
+  });
+
+  it('says no family failed when none did, and never calls an unsearched family "no failure"', async () => {
+    await openChanged(IDS.audit, (base) => ({
+      audit: {
+        ...base.audit!,
+        families: [
+          { family: 'viewpoint', label: 'Camera viewpoint', threshold_severity: null, stop_reason: 'nominal_failed', levels: [] },
+          {
+            family: 'lighting', label: 'Scene lighting', threshold_severity: null, stop_reason: 'infrastructure_error',
+            levels: [{ severity: 0.2, failures: 0, attempts: 5 }, { severity: 0.4, failures: 0, attempts: 5 }],
+          },
+        ],
+      },
+    }));
+    const { lead, bullets } = resultLines();
+    expect(lead).toBe('No disturbance family made it fail reliably:');
+    expect(bullets).toEqual([
+      'Scene lighting: incomplete, searched up to s = 0.4 and then stopped',
+      'Camera viewpoint: not tested',
+    ]);
+  });
+
+  it("marks a threshold unconfirmed when the start's own control failed", async () => {
+    await openChanged(IDS.audit, (base) => ({
+      audit: { ...base.audit!, families: base.audit!.families.map((family) => ({ ...family, threshold_unconfirmed: true })) },
+    }));
+    const { lead, bullets } = resultLines();
+    expect(lead).toBe('No failure threshold is confirmed:');
+    expect(bullets.slice(0, 2)).toEqual([
+      "Blur: fails from s = 0.5, unconfirmed (the start's own control failed)",
+      "Contrast: fails from s = 0.75, unconfirmed (the start's own control failed)",
+    ]);
+  });
+
+  it('keeps the sentence for other kinds and for cases without the structured data', async () => {
+    const { unmount } = await openCase(IDS.wording);
+    expect(document.querySelector('.case-result')).toBeNull();
+    expect(screen.getByText(/Of ten rewordings, three made the policy fail/, { selector: 'p.lede' })).toBeInTheDocument();
+    unmount();
+    await openChanged(IDS.audit, () => ({ audit: undefined }));
+    expect(document.querySelector('.case-result')).toBeNull();
+    expect(screen.getByText(/blur breaks the policy from severity 0\.50/, { selector: 'p.lede' })).toBeInTheDocument();
+  });
+
+  it('keeps the verdict text for a scenario case with no minimal cause', async () => {
+    await openCase(IDS.nominal);
+    expect(document.querySelector('.case-result')).toBeNull();
+    expect(document.querySelector('main article > p.lede')).not.toBeNull();
+  });
+
+  it('renders the same bullets in the static gallery', async () => {
+    await openCase(IDS.audit, { mode: 'static' });
+    expect(resultLines().lead).toBe('Fails reliably under 2 of 4 disturbance families:');
+    expect(resultLines().bullets[0]).toBe('Blur: fails from s = 0.5');
   });
 });
 
