@@ -158,6 +158,7 @@ class FakeBackend:
         self.error_after_create = True               # the injected submit error comes after the Job exists
         self.error_at_submit: Optional[int] = None
         self.interrupt_at_download = False
+        self.download_failures = 0                   # the next N downloads fail with a connection error
         self.cancel_error: Optional[Exception] = None
         self.lookup_error: Optional[Exception] = None
         # What a user stop does to the Job: (final state, container seconds or None); None = the hook is ignored.
@@ -221,6 +222,9 @@ class FakeBackend:
         if self.interrupt_at_download:
             self.interrupt_at_download = False
             raise KeyboardInterrupt()
+        if self.download_failures > 0:
+            self.download_failures -= 1
+            raise OSError("EndpointConnectionError (fake)")
         behaviour = self.assigned[handle.job_name]
         tree = Path(dest) / "faultline-runs" / handle.job_name
         if behaviour.get("summary") is not None:
@@ -962,6 +966,54 @@ class InFlight(Base):
         self.assertEqual((backend2.submitted, backend2.waited), ([], [name]))
         self.assertEqual(result.reason, "no_reproducible_failure")
         self.assertAlmostEqual(ledger2.spent, cost(), msg="paid once")
+
+
+class LostDownload(Base):
+    """A download that still fails after the backend's retries must not lose a paid Job."""
+
+    def attempts(self, runner, step="screen"):
+        return json.loads((runner.run_dir / "steps.json").read_text())["steps"][step]["attempts"]
+
+    def test_a_lost_download_keeps_the_job_re_attachable_and_resume_downloads_it_without_resubmitting(self):
+        spec = spec_for()
+        backend1 = FakeBackend([finished(lambda w: screen_summary(failing=False))])
+        backend1.download_failures = 1
+        temp, runner1, backend1, tools1, ledger1, lines1 = make_world(spec, [], backend=backend1)
+        self.addCleanup(temp.cleanup)
+        result = runner1.diagnose()
+        name = backend1.submitted[0]
+        self.assertEqual((result.status, result.reason), ("stopped", "download_failed"))
+        self.assertEqual(self.attempts(runner1)[0]["state"], "download_pending")
+        self.assertEqual(self.attempts(runner1)[0]["error"], "EndpointConnectionError (fake)")
+        self.assertAlmostEqual(ledger1.jobs[name]["cost_usd"], cost(), msg="the measured cost is charged once")
+        self.assertEqual(backend1.cancelled, [], "a finished Job is not cancelled")
+        stop_line = next(line for line in lines1 if "download_failed" in line)
+        self.assertIn("resume to download them again", stop_line)
+        self.assertIn("not run again", stop_line)
+
+        backend2 = FakeBackend([])
+        backend2.created.add(name)
+        backend2.assigned[name] = finished(lambda w: screen_summary(failing=False))
+        _t, runner2, backend2, tools2, ledger2, lines2 = make_world(spec, [], backend=backend2, run_dir=runner1.run_dir)
+        self.addCleanup(_t.cleanup)
+        result = runner2.diagnose()
+        self.assertEqual((backend2.submitted, backend2.waited), ([], [name]), "the Job is not submitted again")
+        self.assertEqual(result.reason, "no_reproducible_failure")
+        self.assertAlmostEqual(ledger2.spent, cost(), msg="paid once")
+        self.assertTrue(any("downloading the results" in line for line in lines2))
+
+    def test_the_run_page_explains_a_lost_download(self):
+        from robot_debug.viewer.stop_reasons import needs_attention, stop_text
+
+        self.assertIn("not run again", stop_text("download_failed"))
+        self.assertTrue(needs_attention("download_failed"))
+
+    def test_a_job_that_failed_with_no_download_problem_is_still_failed(self):
+        script = [{"state": "FAILED", "reason": "ContainerFailed", "container_seconds": 500, "summary": None,
+                   "summary_name": "scenario_summary.json"}]
+        runner, backend, tools, ledger, lines = self.world(script)
+        self.assertEqual(runner.diagnose().reason, "job_failed")
+        self.assertEqual(self.attempts(runner)[0]["state"], "failed")
 
 
 class Mode2AndReplay(Base):

@@ -27,6 +27,8 @@ STOP_TEXTS: Dict[str, str] = {
     "max_hours": "The hour limit was reached.",
     "stopped_by_user": "Stopped from the control panel or `faultline stop`.",
     "backend_error": "The cloud call failed; resume to re-attach.",
+    "download_failed": ("The Job finished and is paid for, but its results could not be downloaded. Resume to "
+                        "download them again; the Job is not run again."),
     "auth_expired": "Your Nebius sign-in expired. Sign in, then resume.",
     "control_not_passing": ("The original wording did not pass both control attempts, so a failing rewording "
                             "cannot be attributed to the wording."),

@@ -1389,9 +1389,10 @@ class Orchestrator:
             if prior is not None and prior["state"] in ("capacity", "cancelled", "failed"):
                 continue
             job_dir = self.run_dir / "jobs" / job_name
-            if prior is not None and prior["state"] in ("submitted", "unconfirmed"):
+            if prior is not None and prior["state"] in ("submitted", "unconfirmed", "download_pending"):
                 handle = self._handle(job_name, prior["job_id"])
-                self.say(step, "re-attaching to {}".format(job_name))
+                self.say(step, "downloading the results of {} again (it is not run again)".format(job_name)
+                         if prior["state"] == "download_pending" else "re-attaching to {}".format(job_name))
                 self._inflight = (handle, job_name)
             elif prior is not None and prior["state"] == "submitting":
                 handle = self._reattach_submitting(step, job_name, prior, deadline)
@@ -1590,9 +1591,11 @@ class Orchestrator:
         self._save_logs(handle, job_dir)
         evidence = job_dir / "evidence"
         returned = None
+        download_error: Optional[Exception] = None
         try:
             returned = self.backend.download(handle, evidence)
         except Exception as error:               # noqa: BLE001 - a missing download is reported below
+            download_error = error
             self.say(step, "download failed ({})".format(type(error).__name__))
         path = find_file(evidence, summary_name, returned) if evidence.exists() or returned else None
         summary = None
@@ -1604,6 +1607,15 @@ class Orchestrator:
         complete = isinstance(summary, dict) and summary.get("complete") is not False
         known_stop = isinstance(summary, dict) and isinstance(summary.get("stop_reason"), str)
         usable = isinstance(summary, dict) and ((state == "COMPLETED") or (not complete and known_stop))
+        if not usable and download_error is not None:
+            # The Job is finished and paid for; only its results did not arrive. Keep the attempt
+            # re-attachable so --resume downloads them again instead of running (and paying for) the Job again.
+            attempt["state"] = "download_pending"
+            attempt["error"] = _safe_error(download_error)
+            self.steps.update(step, status="stopped")
+            raise StopRun("download_failed", "{} ended {} and is paid for (US${:.2f}), but its results could not "
+                          "be downloaded ({}: {}); resume to download them again. The Job is not run again.".format(
+                              job_name, state, cost, type(download_error).__name__, attempt["error"]))
         if not usable:
             attempt["state"] = "failed"
             self.steps.update(step, status="stopped")
