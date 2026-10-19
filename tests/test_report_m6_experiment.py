@@ -58,12 +58,42 @@ class RenderTests(RunTestCase):
         self.assertIn("| Gaussian noise | 0.55 | noise sigma 55.0 of 255 | 0.5375 | 7 | 35 | threshold found |", text)
         self.assertIn("| Gaussian blur | none up to 1 | - | 1 | 5 | 25 | no reproducible failure up to s = 1 |", text)
         self.assertIn("| Contrast reduction | 0.05 | contrast x0.95 | 0.0375 | 5 | 25 | threshold found |", text)
-        self.assertIn("0.2: 0/5; 0.4: 5/5; 0.3: 0/5; 0.35: 5/5; 0.325: 0/5; 0.3375: 0/5", text)
+        darkening = text[text.index("### Darkening"):text.index("### Gaussian noise")]
+        rows = [line for line in darkening.splitlines() if line.startswith("| 0")]
+        self.assertEqual(["0.2", "0.3", "0.325", "0.3375", "0.35", "0.4"], [r.split("|")[1].strip() for r in rows])
+        self.assertIn("| 0.35 | 5/5 | fails ← threshold | 4th (narrowing) |", darkening)
+        self.assertIn("| 0.2 | 0/5 | passes | 1st (sweep) |", darkening)
         self.assertIn("boundary under this rule lies in (0.3375, 0.35]", text)
         self.assertIn("no level up to s = 1 reached 4 of 5 failures, so the policy is robust to this family in the tested range", text)
         self.assertIn("Nominal controls: 5 of 5 succeeded", text)
         self.assertIn("4 of 5", text)
         self.assertIn("not the onset of any failure", text)
+
+    def test_the_level_ladder_reads_ascending_even_when_the_search_order_is_bisection_order(self):
+        def level(severity, failures, phase):
+            return {"severity": severity, "outcomes": ["policy_failure"] * failures + ["success"] * (5 - failures),
+                    "failures": failures, "reproducible": failures >= 4, "complete": True, "phase": phase}
+
+        order = [(0.2, 0, "sweep"), (0.4, 0, "sweep"), (0.6, 5, "sweep"), (0.5, 5, "bisect"), (0.45, 0, "bisect"),
+                 (0.475, 5, "bisect"), (0.4625, 5, "bisect")]
+        families = {"blur": {"threshold_severity": 0.4625, "lower_bound": 0.45, "stop_reason": "threshold_found",
+                             "attempts": 5, "levels": [level(*item) for item in order]}}
+        text = "\n".join(report.level_table(families, ["blur"], required=4))
+        rows = [line for line in text.splitlines() if line.startswith("| 0")]
+        self.assertEqual(["0.2", "0.4", "0.45", "0.4625", "0.475", "0.5", "0.6"], [r.split("|")[1].strip() for r in rows])
+        self.assertIn("| 0.4625 | 5/5 | fails ← threshold | 7th (narrowing) |", text)
+        self.assertIn("| 0.475 | 5/5 | fails | 6th (narrowing) |", text)
+        self.assertIn("| 0.45 | 0/5 | passes | 5th (narrowing) |", text)
+        self.assertEqual(1, text.count("threshold"))
+        self.assertIn("(unconfirmed)", "\n".join(report.level_table(families, ["blur"], required=4, unconfirmed=True)))
+
+    def test_a_failed_control_marks_the_ladder_threshold_unconfirmed(self):
+        summary = self.threshold_summary()
+        text = report.render_report([summary])
+        self.assertNotIn("(unconfirmed)", text)
+        failing = dict(summary, nominal_controls=dict(summary["nominal_controls"], outcomes={"policy_failure": 2,
+                                                                                            "success": 3}))
+        self.assertIn("← threshold (unconfirmed)", report.render_report([failing]))
 
     def test_threshold_rows_follow_the_configured_family_order(self):
         text = report.render_report([self.threshold_summary()])
