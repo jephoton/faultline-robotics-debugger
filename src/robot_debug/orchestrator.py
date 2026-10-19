@@ -943,10 +943,10 @@ class DefaultTools:
 
     # reports and cases
     def scenario_report(self, summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]],
-                        hourly_usd: Optional[float]) -> str:
+                        hourly_usd: Optional[float], reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> str:
         module = _load_script("report_scenario_reduction")
         try:
-            return module.build_report(summary, screen, hourly_usd)
+            return module.build_report(summary, screen, hourly_usd, reductions)
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
@@ -1856,7 +1856,8 @@ class Orchestrator:
         if self.steps.is_done("report"):
             pass
         else:
-            text = self.tools.scenario_report(summary, screen_summary, self.spec.backend.hourly_usd)
+            text = self.tools.scenario_report(summary, screen_summary, self.spec.backend.hourly_usd,
+                                              list(self._reductions) or None)
             (self.run_dir / "report.md").write_text(text, encoding="utf-8", newline="\n")
             self.steps.update("report", status="done")
             self.say("report", "report.md")

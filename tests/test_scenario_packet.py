@@ -314,16 +314,18 @@ def continuation_reductions():
         return rf.candidate(index, "shrink", selection, decision)
 
     candidates = [rf.candidate(0, "gate", None, "reproduces", role="failing"),
-                  shrink(1, "does_not_reproduce", robot=0.5), shrink(2, "reproduces", robot=0.9375),
-                  shrink(3, "reproduces", robot=0.9375, basket_1=0.9375),
-                  shrink(4, "does_not_reproduce", robot=0.9375, basket_1=0.5, milk_1=1.0),
-                  shrink(5, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.5),
-                  shrink(6, "reproduces", robot=0.9375, basket_1=0.9375, milk_1=0.875),
-                  shrink(7, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.75)]
+                  shrink(1, "does_not_reproduce", robot=0.5), shrink(2, "does_not_reproduce", robot=0.875),
+                  shrink(3, "reproduces", robot=0.9375),
+                  shrink(4, "does_not_reproduce", robot=0.9375, basket_1=0.5),
+                  shrink(5, "does_not_reproduce", robot=0.9375, basket_1=0.875),
+                  shrink(6, "reproduces", robot=0.9375, basket_1=0.9375),
+                  shrink(7, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.5),
+                  shrink(8, "reproduces", robot=0.9375, basket_1=0.9375, milk_1=0.875),
+                  shrink(9, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.75)]
     final = full("robot", "basket_1", "milk_1", "orange_juice_1")
     final.update(robot={"joints": 0.9375}, basket_1={"position": 0.9375}, milk_1={"position": 0.875})
     second = {"stop_reason": "budget_exhausted", "reduced": False, "entity_minimal": True, "reference": 4,
-              "final_candidate": 6, "final_selection": final,
+              "final_candidate": 8, "final_selection": final,
               "surviving_entities": ["robot", "basket_1", "milk_1", "orange_juice_1"], "candidates": candidates,
               "parts": [{"entity": "robot", "component": "joints", "t": 0.9375, "lower": 0.875,
                          "lower_tested": True, "invalid_points": [], "steps_done": 4},
@@ -352,7 +354,7 @@ class ContinuationShrinkNotesTests(unittest.TestCase):
         first, second = continuation_reductions()
         history = {(h["entity"], h["component"]): h["tested"] for h in se.shrink_history([{"reduction": first}, {"reduction": second}])}
         self.assertEqual([0.5, 0.75, 0.875], sorted(t["t"] for t in history[("milk_1", "position")]))
-        self.assertEqual([0.5, 0.9375], sorted(t["t"] for t in history[("basket_1", "position")]))
+        self.assertEqual([0.5, 0.875, 0.9375], sorted(t["t"] for t in history[("basket_1", "position")]))
         self.assertEqual({2}, {t["job"] for t in history[("milk_1", "position")]})
         self.assertNotIn(("orange_juice_1", "position"), history)
 
@@ -377,10 +379,10 @@ class ContinuationShrinkNotesTests(unittest.TestCase):
 
     def test_a_candidate_that_moves_two_parts_is_left_out(self):
         first, second = continuation_reductions()
-        second["candidates"].append(rf.candidate(8, "shrink", {"robot": {"joints": 0.5}, "basket_1": {"position": 0.5},
+        second["candidates"].append(rf.candidate(10, "shrink", {"robot": {"joints": 0.5}, "basket_1": {"position": 0.5},
                                                                "milk_1": {"position": 0.875}}, "does_not_reproduce"))
         tested = [t for h in se.shrink_history([{"reduction": first}, {"reduction": second}]) if h["entity"] == "robot" for t in h["tested"]]
-        self.assertEqual([0.5, 0.9375], sorted(t["t"] for t in tested))      # the two-part try added nothing
+        self.assertEqual([0.5, 0.875, 0.9375], sorted(t["t"] for t in tested))      # the two-part try added nothing
 
 
 class ExplainerModelTests(unittest.TestCase):
