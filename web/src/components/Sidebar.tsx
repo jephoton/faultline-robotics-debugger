@@ -1,6 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import type { LibraryItem, RunSummary, Session } from '../api/types';
-import { KIND_GROUP, statusFor } from '../lib/status';
+import { statusFor } from '../lib/status';
 import { usd } from '../lib/format';
 import { Icon, Mark, type IconName } from './Icon';
 import { ThemeToggle } from './ThemeToggle';
@@ -100,29 +100,21 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
           </div>
         )}
         {libraryState === 'error' && <p className="nav-empty">Cases could not be loaded.</p>}
-        {KIND_GROUP.map((group) => {
-          const rows = items.filter((item) => item.kind === group.kind);
-          if (rows.length === 0) return null;
-          const id = `nav-${group.kind}`;
-          return (
-            <div className="nav-section" role="group" aria-labelledby={id} key={group.kind}>
-              <h2 className="nav-label" id={id}>
-                {group.title}
-              </h2>
-              <ul className="nav-list">
-                {rows.map((item) => (
-                  <CaseRow key={item.id} item={item} onNavigate={onNavigate} />
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+        <div className="nav-section" role="group" aria-labelledby="nav-cases">
+          <h2 className="nav-label" id="nav-cases">
+            Cases
+          </h2>
+          <ul className="nav-list">
+            {items.map((item) => (
+              <CaseRow key={item.id} item={item} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </div>
       </nav>
       <div className="sidebar__foot">
         {local && <FootLink to="/setup" icon="setup" label="Setup" onNavigate={onNavigate} />}
         <FootLink to="/reference" icon="info" label="Reference" onNavigate={onNavigate} />
         <FootLink to="/guide" icon="guide" label="Run your own" onNavigate={onNavigate} />
-        {local && <FootLink to="/evidence" icon="evidence" label="All evidence" onNavigate={onNavigate} />}
         <ThemeToggle />
       </div>
     </>

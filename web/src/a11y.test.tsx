@@ -48,7 +48,7 @@ const PAGES: [string, string, () => Promise<unknown>][] = [
   ['run, completed', `/run/${RUN_IDS.completed}`, async () => screen.findByRole('link', { name: 'Open the case' })],
   ['setup', '/setup', async () => screen.findByText(/1 item needs attention/)],
   ['guide', '/guide', async () => screen.findByRole('heading', { name: /Dry run, then run/ })],
-  ['all evidence', '/evidence', async () => screen.findByText('Showing 8 of 8 episodes.')],
+  ['removed evidence route', '/evidence', async () => screen.findByRole('heading', { name: 'Page not found' })],
   ['not found', '/nowhere', async () => screen.findByRole('heading', { name: 'Page not found' })],
 ];
 
@@ -75,7 +75,7 @@ describe('axe-core audit (jsdom)', () => {
   it('the static gallery home has none either', async () => {
     const { container } = renderApp('/', { mode: 'static' });
     await screen.findByRole('heading', { name: 'What Faultline does' });
-    await within(screen.getByRole('main')).findByRole('heading', { name: 'Scenario reductions' });
+    await within(screen.getByRole('main')).findByRole('link', { name: 'soup-start14' });
     expect(await audit(container)).toEqual([]);
   });
 

@@ -24,14 +24,24 @@ describe('home, local', () => {
 });
 
 describe('home, static gallery', () => {
-  it('shows an intro panel of the loop and the cases grouped by kind, with no controls', async () => {
+  it('shows one mixed-kind case list in library order without kind labels or controls', async () => {
     renderApp('/', { mode: 'static' });
     expect(await screen.findByRole('heading', { name: 'What Faultline does' })).toBeInTheDocument();
     for (const step of ['Find.', 'Confirm.', 'Reduce.', 'Replay.']) {
       expect(screen.getByText(step)).toBeInTheDocument();
     }
     const main = screen.getByRole('main');
-    expect(await within(main).findByRole('heading', { name: 'Scenario reductions' })).toBeInTheDocument();
+    const cases = await within(main).findByRole('heading', { name: 'Cases' });
+    const caseSection = cases.closest('section') as HTMLElement;
+    await within(caseSection).findByRole('link', { name: 'soup-start14' });
+    const caseNames = within(caseSection).getAllByRole('link').map((link) => link.textContent);
+    expect(caseNames).toEqual(['soup-start14', 'my-failing-start', 'soup-screen', 'audit-task0', 'paraphrase-task0', 'diagnose-obj0', 'diagnose-obj0 (wording)', 'paraphrase-task4', 'Occlusion case (M4)']);
+    for (const heading of ['Scenario reductions', 'Stress tests', 'Language', 'Earlier']) {
+      expect(within(main).queryByRole('heading', { name: heading })).not.toBeInTheDocument();
+    }
+    for (const label of ['Scenario reduction', 'Stress test', 'Language robustness']) {
+      expect(within(caseSection).queryByText(label, { exact: true })).not.toBeInTheDocument();
+    }
     expect(within(main).getByRole('link', { name: 'soup-start14' })).toHaveAttribute('href', `/case/${encodeURIComponent(IDS.soup)}`);
     expect(within(main).getByText(/not every failure mode/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /new diagnosis/i })).not.toBeInTheDocument();
@@ -41,7 +51,6 @@ describe('home, static gallery', () => {
   it('hides every local-only page', async () => {
     for (const [path, text] of [
       ['/setup', 'Setup'],
-      ['/evidence', 'All evidence'],
       ['/new', 'New diagnosis'],
     ] as const) {
       const view = renderApp(path, { mode: 'static' });
@@ -49,6 +58,12 @@ describe('home, static gallery', () => {
       expect(screen.getByText(/needs the local Faultline server/)).toBeInTheDocument();
       view.unmount();
     }
+  });
+
+  it('routes the removed evidence page to not found without requesting evidence', async () => {
+    const { fetchSpy } = renderApp('/evidence', { mode: 'static' });
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.map((call) => String(call[0]))).not.toContain('/api/evidence');
   });
 });
 
@@ -99,35 +114,6 @@ describe('guide', () => {
     await screen.findByRole('heading', { level: 1, name: 'Run your own' });
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     scroll.mockRestore();
-  });
-});
-
-describe('all evidence', () => {
-  it('lists episodes with outcome words and loads a video only when asked', async () => {
-    const user = userEvent.setup();
-    renderApp('/evidence');
-    expect(await screen.findByRole('heading', { level: 1, name: 'All evidence' })).toBeInTheDocument();
-    expect(await screen.findByText('Showing 8 of 8 episodes.')).toBeInTheDocument();
-    expect(document.querySelectorAll('video').length).toBe(0);
-    await user.click(screen.getByRole('button', { name: 'Show video of ep-000' }));
-    const video = document.querySelector('video') as HTMLVideoElement;
-    expect(video.getAttribute('src')).toBe('/media/placeholder.webm');
-    expect(screen.getAllByText('failed').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('passed').length).toBeGreaterThan(0);
-  });
-
-  it('filters by outcome and by text', async () => {
-    const user = userEvent.setup();
-    renderApp('/evidence');
-    await screen.findByText('Showing 8 of 8 episodes.');
-    await user.selectOptions(screen.getByLabelText('Outcome'), 'failed');
-    expect(screen.getByText(/Showing 3 of 3 episodes/)).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Outcome'), 'all');
-    await user.type(screen.getByLabelText('Search'), 'baseline');
-    expect(screen.getByText(/Showing 2 of 2 episodes/)).toBeInTheDocument();
-    await user.clear(screen.getByLabelText('Search'));
-    await user.type(screen.getByLabelText('Search'), 'zzzz');
-    expect(screen.getByText('No episodes match.')).toBeInTheDocument();
   });
 });
 

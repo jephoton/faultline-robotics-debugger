@@ -4,7 +4,6 @@ import type { LibraryItem } from '../api/types';
 import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { suiteLabel, usd } from '../lib/format';
-import { KIND_GROUP, KIND_LABEL } from '../lib/status';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const LOOP = [
@@ -48,8 +47,7 @@ function CaseCard({ item }: { item: LibraryItem }) {
       </p>
       <p className="muted">{item.verdict_text}</p>
       <p className="card__meta muted">
-        {KIND_LABEL[item.kind]}
-        {item.suite ? `, ${suiteLabel(item.suite)} task ${item.task_id ?? '?'}` : ''}
+        {item.suite ? `${suiteLabel(item.suite)} task ${item.task_id ?? '?'}` : ''}
       </p>
     </li>
   );
@@ -70,20 +68,14 @@ export function HomePage() {
         <Intro />
         {libraryState === 'loading' && <p role="status">Loading the cases.</p>}
         {libraryState === 'error' && <p className="empty">The cases could not be loaded.</p>}
-        {KIND_GROUP.map((group) => {
-          const rows = items.filter((item) => item.kind === group.kind);
-          if (rows.length === 0) return null;
-          return (
-            <section className="section" key={group.kind} aria-labelledby={`home-${group.kind}`}>
-              <h2 id={`home-${group.kind}`}>{group.title}</h2>
-              <ul className="cards">
-                {rows.map((item) => (
-                  <CaseCard key={item.id} item={item} />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+        <section className="section" aria-labelledby="home-cases">
+          <h2 id="home-cases">Cases</h2>
+          <ul className="cards">
+            {items.map((item) => (
+              <CaseCard key={item.id} item={item} />
+            ))}
+          </ul>
+        </section>
       </section>
     );
   }

@@ -101,18 +101,23 @@ describe('Shell in local mode', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
   });
 
-  it('shows New diagnosis, Running and the case groups with fault codes', () => {
+  it('shows New diagnosis, Running and one mixed-kind case list in input order', () => {
     renderShell(local);
     const nav = screen.getByRole('navigation', { name: 'Runs and cases' });
     expect(screen.getByRole('link', { name: /new diagnosis/i })).toHaveAttribute('href', '/new');
-    for (const heading of ['Running', 'Scenario reductions', 'Stress tests', 'Language', 'Earlier']) {
+    for (const heading of ['Running', 'Cases']) {
       expect(within(nav).getByRole('heading', { name: heading })).toBeInTheDocument();
     }
+    for (const heading of ['Scenario reductions', 'Stress tests', 'Language', 'Earlier']) {
+      expect(within(nav).queryByRole('heading', { name: heading })).not.toBeInTheDocument();
+    }
+    const caseNames = within(nav).getAllByRole('link').filter((link) => link.getAttribute('href')?.startsWith('/case/')).map((link) => link.querySelector('.nav-item__name')?.textContent);
+    expect(caseNames).toEqual(['Soup start 14', 'Object audit', 'Wording', 'Occlusion M4']);
     expect(within(nav).getByText('FL-S-AFB5')).toBeInTheDocument();
     expect(within(nav).getByText('paraphrase-task0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /setup/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /run your own/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /all evidence/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /all evidence/i })).not.toBeInTheDocument();
   });
 
   it('marks status with a word and an icon, and only abnormal rows get a colour bar', () => {
@@ -167,13 +172,14 @@ describe('Shell in static mode', () => {
     expect(screen.getByRole('heading', { name: 'Home page' })).toBeInTheDocument();
   });
 
-  it('hides New diagnosis, Running, Setup and All evidence but keeps the cases', () => {
+  it('hides local controls and keeps the unified case list', () => {
     renderShell(staticMode);
     expect(screen.queryByRole('link', { name: /new diagnosis/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Running' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^setup/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /all evidence/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Scenario reductions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cases' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Scenario reductions' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Object audit/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /run your own/i })).toBeInTheDocument();
   });
 });

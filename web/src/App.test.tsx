@@ -40,4 +40,10 @@ describe('App bootstrap', () => {
     renderApp('/nowhere');
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
   });
+
+  it('sends the removed evidence address to not found without requesting evidence', async () => {
+    const { fetchSpy } = renderApp('/evidence');
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.map((call) => String(call[0]))).not.toContain('/api/evidence');
+  });
 });
