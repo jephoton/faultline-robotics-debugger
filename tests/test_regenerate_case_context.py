@@ -251,6 +251,74 @@ class RunFolderTests(unittest.TestCase):
 
 
 class AuditRunTests(unittest.TestCase):
+    def test_a_legacy_audit_step_without_groups_gets_the_per_family_report(self):
+        script = load_script()
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "runs" / "legacy-audit"
+
+            def level(severity, failures, phase):
+                return {"severity": severity, "outcomes": ["policy_failure"] * failures + ["success"] * (5 - failures),
+                        "failures": failures, "reproducible": failures >= 4, "complete": True, "phase": phase}
+
+            summary = {"mode": "m6-threshold", "config": {"sweep": [0.2, 0.6], "required_failures": 4, "attempts": 5,
+                                                              "bisection_steps": 1, "families": ["blur", "darken"],
+                                                              "suite": "libero_10", "task_id": 0, "init_state_index": 3},
+                       "nominal_controls": {"outcomes": {"success": 5}, "planned": 5},
+                       "families": {"blur": {"threshold_severity": 0.4, "lower_bound": 0.2, "stop_reason":
+                                              "threshold_found", "attempts": 5, "levels": [
+                                                  level(0.2, 0, "sweep"), level(0.6, 5, "sweep"),
+                                                  level(0.4, 5, "bisect")]},
+                                    "darken": {"threshold_severity": 0.6, "lower_bound": 0.2, "stop_reason":
+                                               "threshold_found", "attempts": 5, "levels": [
+                                                   level(0.2, 0, "sweep"), level(0.6, 5, "sweep")]}}}
+            write(run / "jobs" / "legacy" / "evidence" / "m6_summary.json", summary)
+            write(run / "steps.json", {"steps": {"audit": {"summary": "jobs/legacy/evidence/m6_summary.json"}}})
+            case = {"schema_version": 1, "kind": "audit", "case_id": "cd" * 32, "suite": "libero_10", "task_id": 0,
+                    "start_index": 3, "families": {"blur": {"threshold_severity": 0.4},
+                                                     "darken": {"threshold_severity": 0.6}},
+                    "summary": "jobs/legacy/evidence/m6_summary.json", "stop_reason": None, "complete": True}
+            write(run / "cases" / "audit" / "case.json", case)
+            write(run / "cases" / "audit" / "report.md", "# old\n")
+            fakes = Fakes()
+            lines = []
+            status = script.regenerate(run, deps=fakes.deps(script), diagnoses_root=Path(directory) / "diagnoses",
+                                       out=lines.append)
+            self.assertEqual(0, status, "\n".join(lines))
+            self.assertEqual(([], 0), (fakes.explain_calls, len(fakes.steps_calls)))
+            report = (run / "cases" / "audit" / "report.md").read_text(encoding="utf-8")
+            self.assertIn("## Threshold search per family", report)
+            self.assertIn("### Gaussian blur", report)
+            self.assertIn("### Darkening", report)
+            self.assertIn("| 0.4 | 5/5 | fails ← threshold | 3rd (narrowing) |", report)
+            self.assertIn("| 0.2 | 0/5 | passes | 1st (sweep) |", report)
+            self.assertEqual("cd" * 32, json.loads((run / "cases" / "audit" / "case.json").read_text(
+                encoding="utf-8"))["case_id"])
+
+    def test_an_explicit_group_with_a_missing_summary_keeps_the_existing_report(self):
+        script = load_script()
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "runs" / "grouped-audit"
+            summary = {"mode": "m6-threshold", "config": {"sweep": [0.2], "required_failures": 4, "attempts": 5,
+                                                              "families": ["blur"], "suite": "libero_10",
+                                                              "task_id": 0, "init_state_index": 3},
+                       "nominal_controls": {"outcomes": {"success": 5}, "planned": 5},
+                       "families": {"blur": {"threshold_severity": 0.2, "stop_reason": "threshold_found",
+                                              "attempts": 5, "levels": []}}}
+            write(run / "jobs" / "g1" / "evidence" / "m6_summary.json", summary)
+            write(run / "steps.json", {"steps": {"audit": {"summary": "jobs/g1/evidence/m6_summary.json"},
+                                         "audit-1": {"summary": "missing.json"}}})
+            case = {"schema_version": 1, "kind": "audit", "case_id": "ef" * 32, "suite": "libero_10", "task_id": 0,
+                    "start_index": 3, "groups": [{"step": "audit-1", "families": ["blur"]}]}
+            write(run / "cases" / "audit" / "case.json", case)
+            write(run / "cases" / "audit" / "report.md", "# preserve this\n")
+            fakes = Fakes()
+            lines = []
+            status = script.regenerate(run, deps=fakes.deps(script), diagnoses_root=Path(directory) / "diagnoses",
+                                       out=lines.append)
+            self.assertEqual(0, status, "\n".join(lines))
+            self.assertEqual("# preserve this\n", (run / "cases" / "audit" / "report.md").read_text(encoding="utf-8"))
+            self.assertTrue(any("a group's saved summary is missing" in line for line in lines))
+
     def test_a_stress_test_case_gets_next_steps_and_a_sorted_report(self):
         script = load_script()
         with tempfile.TemporaryDirectory() as directory:

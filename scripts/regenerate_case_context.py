@@ -294,10 +294,16 @@ def rebuild_report(plan: CasePlan, run_dir: Path, steps: Mapping[str, Any], out:
         module = orch._load_script("report_scenario_reduction")
         text = module.build_report(best, step_summary(run_dir, steps, "screen"), hourly, reductions)
     elif case.get("kind") == "audit":
-        summaries = [step_summary(run_dir, steps, g.get("step")) for g in case.get("groups") or ()
-                     if isinstance(g, Mapping) and isinstance(g.get("step"), str)]
+        groups = case.get("groups")
+        if groups:
+            summaries = [step_summary(run_dir, steps, g.get("step")) for g in groups
+                         if isinstance(g, Mapping) and isinstance(g.get("step"), str)]
+            missing = "a group's saved summary is missing"
+        else:
+            summaries = [step_summary(run_dir, steps, "audit")]
+            missing = "the legacy audit step's saved summary is missing"
         if not summaries or any(s is None for s in summaries):
-            out("    report.md: kept (a group's saved summary is missing)")
+            out("    report.md: kept ({})".format(missing))
             return
         module = orch._load_script("report_m6_experiment")
         text = module.render_report(summaries, title=module.stress_test_title(summaries))
