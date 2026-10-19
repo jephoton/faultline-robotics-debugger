@@ -444,7 +444,7 @@ class Library:
             raise KeyError(item_id)
         detail = dict(item)
         detail.update({"sentence": None, "stop_reason": None, "stop_text": None, "checkpoint": None, "videos": [],
-                       "explanation": None, "research": None, "history": None, "replays": [],
+                       "explanation": None, "research": None, "next_steps": None, "history": None, "replays": [],
                        "report_markdown": None, "files": [], "replayable": False, "route": None, "findings": []})
         if item_id.startswith("d-"):
             self._diagnosis_detail(detail, item["case_id"])
@@ -520,7 +520,9 @@ class Library:
                                              else len(VIDEO_ORDER), v["role"]))
         detail["_run"] = entry.get("run")
         if _mapping(entry.get("files")).get("research"):
-            detail["research"] = self._diagnosis_research(case_id)
+            record = _read_json(self.diagnoses_root / case_id / "research.json")
+            detail["research"] = None if record is None else _research_block(record)
+            detail["next_steps"] = _next_steps_block(record)
         route = entry.get("route")
         detail["route"] = route if route in _ROUTES else None
         explanation = entry.get("explanation")
@@ -732,12 +734,6 @@ class Library:
             return None
         return _research_block(records[-1])
 
-    def _diagnosis_research(self, case_id: str) -> Optional[Dict[str, Any]]:
-        """The web context a pipeline run stored beside a case (``research.json``), as the page shows it."""
-
-        record = _read_json(self.diagnoses_root / case_id / "research.json")
-        return None if record is None else _research_block(record)
-
     # -- history and replays -------------------------------------------------------------------------
 
     def _history(self, run_dir: Path) -> Optional[Dict[str, Any]]:
@@ -839,6 +835,37 @@ def _research_block(record: Any) -> Dict[str, Any]:
                 parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
         related = "\n\n".join(parts) or None
     return {"related": related, "sources": sources}
+
+
+def _next_steps_block(record: Any) -> Optional[Dict[str, Any]]:
+    """``{model, status, items: [{text, cites}], sources: [{id, title, url}]}`` from a research record, or ``None``.
+
+    Suggestions from Nemotron that cite the retrieved sources (``S1``) or the case's own reruns (``c12``): not
+    evidence. A rejected or failed answer has ``status`` ``rejected`` or ``provider_error`` and no items. Sources
+    carry titles and https links only, never snippets. A record without ``next_steps`` (an earlier case, whose
+    note is still in ``research``) gives ``None``."""
+
+    record = _mapping(record)
+    block = record.get("next_steps")
+    if not isinstance(block, Mapping) or _str(block.get("status")) is None:
+        return None
+    items = []
+    if block.get("status") == "interpreted":
+        for item in _list(block.get("items")):
+            text = _str(_mapping(item).get("text"))
+            cites = [c for c in _list(_mapping(item).get("cites")) if isinstance(c, str)]
+            if text and cites:
+                items.append({"text": text, "cites": cites})
+    sources, seen = [], set()
+    for query in _list(record.get("queries")):
+        for result in _list(_mapping(query).get("results")):
+            result = _mapping(result)
+            url, source_id = _str(result.get("url")), _str(result.get("source_id"))
+            if source_id and url and url.startswith("https://") and source_id not in seen:
+                seen.add(source_id)
+                sources.append({"id": source_id, "title": _str(result.get("title")) or url, "url": url})
+    return {"model": _str(_mapping(block.get("provenance")).get("model")), "status": block["status"],
+            "items": items, "sources": sources}
 
 
 def _default_inspect(workspace: Path, case_id: str) -> Mapping[str, Any]:
