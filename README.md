@@ -206,17 +206,17 @@ family, not a general claim.
 - **NVIDIA Nemotron on Nebius Token Factory**, each model chosen by a measured
   comparison ([ADR 0030](docs/decisions/0030-nemotron-model-per-task.md)):
   Nemotron 3 Ultra ranks a scenario failure's differences and states a
-  hypothesis before any rerun, and explains each verified scenario and
-  occlusion case; Nemotron 3 Super writes instruction paraphrases; Nemotron 3
-  Nano summarises research. Audit and paraphrase cases have no Nemotron
+  hypothesis before any rerun, and explains each verified scenario case;
+  Nemotron 3 Super writes instruction paraphrases; Nemotron 3 Nano summarises
+  research. Audit and paraphrase cases have no Nemotron
   explanation yet. Model output is kept separate from measured evidence: "the
   model proposes, the simulator verifies".
 - **Nebius AI Cloud Serverless Jobs** run every diagnosis, replay and audit
   (one L40S each), with evidence exported to private Object Storage.
-- **Tavily** finds source-linked public research. It is run by hand with
-  `scripts/research_case.py` and has been used on the earlier occlusion cases
-  only, not on scenario, audit or paraphrase cases
-  ([M5D](docs/experiments/m5d-tavily-research.md)).
+- **Tavily** finds source-linked public research for each new case, in the
+  New diagnosis's optional research step (Nemotron 3 Nano summarises it). It
+  is context, not evidence ([M5D](docs/experiments/m5d-tavily-research.md)
+  records the first experiment).
 
 ## How it runs
 

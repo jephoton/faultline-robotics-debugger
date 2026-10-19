@@ -161,13 +161,14 @@ skips the research.
 
 ### Fault codes
 
-Each case gets a display code such as `FL-S-AFB5`: `FL`, a letter for the
+Each case gets a display code such as `FL-A-D582`: `FL`, a letter for the
 kind, and the first hex digits of the case id. The full case id is always
 shown as well. The letters are:
 - `S`: a layout (scenario) reduction;
 - `A`: a disturbance probe (audit);
 - `L`: a rewording (language) probe;
-- `M`: the September occlusion case.
+- `M`: an occlusion case, from an earlier experiment mode. These are not made
+  by the New diagnosis.
 
 ## 2. Glossary
 
@@ -348,11 +349,6 @@ the meaning check drops any that lose an object or target word; the original
 wording is the control (2 attempts) and each rewording gets one screening
 attempt. A rewording that fails is confirmed with the 4-of-5 gate and then
 reduced by word edits to the smallest change that still fails.
-
-### The September occlusion case
-
-A grey rectangle over part of the agent-view image, described by position and
-size as fractions of the image (not a severity), reduced by trimming edges.
 
 ## 6. Reading a report
 
