@@ -188,7 +188,7 @@ faultline diagnose my-spec.yaml --env-file .env`}</Code>
           Before each Job Faultline reserves a worst case: the provider timeout (deadline plus ten minutes) plus a four-minute start
           allowance, at the hourly rate in the spec. The reservation is settled at the measured container time, and the run refuses a
           Job that could exceed the cap. Treat the cap as a safety limit rather than a guarantee: the cost model has not been reconciled
-          against a Nebius bill yet. When no GPU is free, the Job is resubmitted automatically.
+          against a Nebius bill yet.
         </p>
         <p>
           Results land in <code>artifacts/runs/&lt;name&gt;-&lt;timestamp&gt;/</code>: a report, a case, a spend ledger, the downloaded
@@ -216,9 +216,7 @@ faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixe
         <p>
           <strong>Replay</strong> re-runs a saved case and says whether its failing condition still fails: the regression test after you
           change the policy. On a case page it is the <strong>Regression test</strong> section: choose the original policy or a new
-          checkpoint, estimate the cost, then run it. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at
-          its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts
-          each. <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a
+          checkpoint, estimate the cost, then run it. <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a
           script whether you got it. A new checkpoint goes under <code>policy.checkpoint</code> in the replay spec.
         </p>
       </>
@@ -246,7 +244,7 @@ faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixe
       <ul>
         <li>
           <strong>Costs.</strong> A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model
-          download. Figures are estimates from measured container time, pending billing reconciliation.
+          download.
         </li>
         <li>
           <strong>Bucket quota.</strong> Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a

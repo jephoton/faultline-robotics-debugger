@@ -20,10 +20,7 @@ export function GuidePage() {
   return (
     <article>
       <h1>Run your own</h1>
-      <p className="lede">
-        How to run a diagnosis on your own Nebius account: set up once, then dry-run, start, watch, stop, resume and replay from the
-        control panel or from a terminal.
-      </p>
+      <p className="lede">Run a diagnosis on your own Nebius account, from the control panel or a terminal.</p>
       <nav aria-label="On this page" className="panel guide-toc">
         <p className="section-label">On this page</p>
         <ol>

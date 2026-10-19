@@ -93,7 +93,7 @@ function Evidence() {
   return (
     <section>
       <h1>All evidence</h1>
-      <p className="lede">Every recorded episode under the artifact folder, with its outcome and video. This is raw evidence, not a diagnosis.</p>
+      <p className="lede">Raw recorded episodes, not a diagnosis.</p>
       {evidence.loading && (
         <p role="status" aria-busy="true">
           Reading the episode catalog. A large artifact folder can take a little while the first time.
