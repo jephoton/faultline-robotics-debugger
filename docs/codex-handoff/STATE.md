@@ -142,9 +142,10 @@ with every finding a replayable case. Built, reviewed and fixed on October
 - research never blocks Start;
 - the form defaults to LIBERO-Object task 0, start 0.
 
-Not yet validated by a paid pipeline run. Open with Jethro: the default cap
-(keep US$2.50, raise it, or show the note only when a typical run would hit
-it) and the validation run's go and cap. Names come after the build. The
+Default cap kept at US$2.50 (Jethro, October 19). Validation approved the
+same day with US$4 in total: a diagnosis of LIBERO-Object task 0, start 0 with
+the four default families, then one replay of any case it makes. See
+`docs/experiments/` once it finishes. Names come after the build. The
 Reference no longer uses "Mode 1 / Mode 2".
 
 **Agreed order (Jethro, October 18):** demos → stale public gallery → remaining

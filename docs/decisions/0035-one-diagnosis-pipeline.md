@@ -88,4 +88,8 @@ validation risk before October 29.
   ids unchanged).
 - **Research.** An optional research step (Tavily sources, a Nemotron 3 Nano
   summary) attaches context to each new case when a Tavily key is present.
-
+- **Default cap kept at US$2.50** (Jethro, October 19). The runtime reserves
+  each Job's worst case only when it submits it, and charges the measured
+  time. A typical check (about US$0.43) therefore leaves room for either
+  branch's first Job. Review names the Job that would be refused only if the
+  Jobs before it cost their worst case.
