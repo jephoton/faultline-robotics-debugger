@@ -155,10 +155,7 @@ export function ExplanationSection({ detail }: { detail: Detail }) {
 export function ReadingFold({ detail }: { detail: Detail }) {
   if (!detail.explanation) return null;
   return (
-    <Section
-      title="Nemotron's reading"
-      hint="An interpretation written by a language model from the results above. It is not evidence and needs human review."
-    >
+    <Section title="Nemotron's reading">
       <details className="fold">
         <summary>Show the reading (interpretation, not evidence)</summary>
         <ExplanationBody detail={detail} />
@@ -191,8 +188,7 @@ export function ResearchBody({ detail }: { detail: Detail }) {
   );
 }
 
-export const RESEARCH_HINT =
-  'Context, not evidence: public sources found with Tavily and summarised by Nemotron 3 Nano. It does not show that anything above is true.';
+export const RESEARCH_HINT = 'Context, not evidence.';
 
 export function ResearchSection({ detail }: { detail: Detail }) {
   if (!detail.research) return null;
@@ -294,15 +290,8 @@ export function CaseVideos({ detail }: { detail: Detail }) {
   const scenario = detail.kind === 'scenario';
   // The control first, so every other clip is read against the unchanged start; the rest keep the server's order.
   const ordered = [...detail.videos.filter((video) => video.role === 'control'), ...detail.videos.filter((video) => video.role !== 'control')];
-  const hint = scenario
-    ? 'Original failing start, the reference with the minimal cause applied, and the passing reference.'
-    : detail.kind === 'audit' && ordered.some((video) => video.role === 'control')
-      ? 'The control (the start untouched) first, then each disturbance that broke the policy, at its threshold.'
-      : detail.kind === 'paraphrase' && ordered.some((video) => video.role === 'control')
-        ? 'The control (the original wording) first, then the failing wording.'
-        : undefined;
   return (
-    <Section title="Videos" hint={hint}>
+    <Section title="Videos">
       <LinkedPlayer
         title={scenario ? 'Original, minimal and reference videos' : detail.kind === 'audit' ? 'Audit videos' : detail.kind === 'paraphrase' ? 'Wording videos' : 'Case videos'}
         videos={ordered.map((video) => ({ key: video.role, label: video.label, url: video.url, outcome: video.outcome }))}

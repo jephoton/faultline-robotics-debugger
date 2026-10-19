@@ -12,12 +12,10 @@ import { checkpointText, ReplayHistory } from './CommonSections';
 
 /** What the test checks, per kind of case (the Jobs are the same replay Job; the inputs differ). */
 const REGRESSION_PURPOSE: Partial<Record<Detail['kind'], string>> = {
-  scenario:
-    "Reruns this case's minimal scene and its passing reference, five attempts each, to check whether the failure still happens. Run it after you change the policy.",
+  scenario: 'Reruns the minimal scene and its passing reference, five attempts each, to check the failure still happens.',
   audit:
-    'Reruns each disturbance that broke the policy, at its threshold on the start, five attempts each, with the unchanged start as its control, to check whether each still fails. Run it after you change the policy.',
-  paraphrase:
-    'Reruns the failing wording on the start, five attempts, with the original wording as its control, to check whether it still fails. Run it after you change the policy.',
+    'Reruns each disturbance that broke the policy at its threshold, five attempts each, with the unchanged start as control.',
+  paraphrase: 'Reruns the failing wording, five attempts, with the original wording as control.',
 };
 
 type Policy = 'original' | 'new';
@@ -66,7 +64,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
     <div className="panel">
       <h3>Test a policy</h3>
       <fieldset className="choices choices--policy">
-        <legend>Which policy do you want to test?</legend>
+        <legend className="sr-only">Which policy do you want to test?</legend>
         <div className="choices__grid">
           <label className={policy === 'original' ? 'choice choice--selected' : 'choice'}>
             <input type="radio" name={id('policy')} checked={policy === 'original'} onChange={() => choose('original')} />
@@ -80,14 +78,14 @@ function ReplayForm({ detail }: { detail: Detail }) {
           <label className={policy === 'new' ? 'choice choice--selected' : 'choice'}>
             <input type="radio" name={id('policy')} checked={policy === 'new'} onChange={() => choose('new')} />
             <span className="choice__title">A new checkpoint</span>
-            <span className="choice__text">Tests another policy, for example a retrained one. Your Hugging Face account needs access to it.</span>
+            <span className="choice__text">For example a retrained policy.</span>
           </label>
         </div>
         {policy === 'new' && (
           <>
             <p className="field__hint">
-              Use a GR00T N1.7 checkpoint in the same LeRobot format, trained for this LIBERO suite. A private repository needs read access for the
-              Hugging Face token in your Nebius project.
+              A GR00T N1.7 checkpoint in LeRobot format, trained for this LIBERO suite. A private repository needs read access for the Hugging
+              Face token in your Nebius project.
             </p>
             <div className="form-grid">
               <div className="field">
@@ -99,12 +97,13 @@ function ReplayForm({ detail }: { detail: Detail }) {
                   onChange={(event) => change({ checkpointId: event.target.value })}
                   placeholder="your-org/your-checkpoint"
                   spellCheck={false}
-                  aria-describedby={id('ckpt-hint')}
+                  aria-describedby={detail.checkpoint ? id('ckpt-hint') : undefined}
                 />
-                <span className="field__hint" id={id('ckpt-hint')}>
-                  org/name of the policy on Hugging Face{original ? ', e.g. the one this case used: ' : ''}
-                  {detail.checkpoint && <span className="mono">{detail.checkpoint.id}</span>}
-                </span>
+                {detail.checkpoint && (
+                  <span className="field__hint" id={id('ckpt-hint')}>
+                    e.g. the one this case used: <span className="mono">{detail.checkpoint.id}</span>
+                  </span>
+                )}
               </div>
               <div className="field">
                 <label htmlFor={id('rev')}>Revision (commit hash)</label>
@@ -118,7 +117,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
                   aria-describedby={id('rev-hint')}
                 />
                 <span className="field__hint" id={id('rev-hint')}>
-                  The 40-character commit hash from the model repository's history on Hugging Face, so the result names exactly which version ran.
+                  From the model repository's history on Hugging Face; it pins exactly which version ran.
                 </span>
               </div>
             </div>
@@ -131,7 +130,7 @@ function ReplayForm({ detail }: { detail: Detail }) {
             Costs up to <strong>{usd(suggestion.data.worst_case_total_usd)}</strong> on your Nebius account if you run it.
           </>
         ) : (
-          'The worst-case cost appears here once the test is planned.'
+          'Planning the test.'
         )}
       </p>
       <details className="reruns">
@@ -169,11 +168,6 @@ function ReplayForm({ detail }: { detail: Detail }) {
           />
         </div>
       )}
-      <p className="muted replay__script">
-        In a script: <code>faultline replay &lt;case folder&gt; --spec replay.yaml --expect fixed</code> exits 0 when the verdict is the one you
-        expect (<code>--expect reproduces</code> for the original policy). A new checkpoint goes under <code>policy.checkpoint</code> in the spec;
-        the command has no checkpoint flag.
-      </p>
     </div>
   );
 }

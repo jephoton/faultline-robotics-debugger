@@ -82,7 +82,7 @@ export function AuditSection({ detail }: { detail: Detail }) {
     <>
       <Section
         title="Severity by family"
-        hint="Each family is searched from severity 0 (no change) to 1 (the strongest). A row shows how many attempts failed at that level."
+        hint="Severity runs from 0 (no change) to 1 (the strongest)."
       >
         <dl className="facts">
           <dt>Start</dt>

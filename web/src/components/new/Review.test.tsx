@@ -27,21 +27,31 @@ describe('the branched dry run', () => {
   it('labels every typical figure as an estimate, with its time, and totals the check plus each branch', () => {
     render(<DryRunTable plan={plan()} />);
     const probes = screen.getByRole('region', { name: 'If it passes: probe' });
-    const typical = within(probes).getByText('Typical').nextElementSibling as HTMLElement;
+    const typical = within(probes).getByText('Typical (estimate)').nextElementSibling as HTMLElement;
     expect(typical).toHaveTextContent('about US$0.75 and 20 minutes');
-    expect(typical).toHaveTextContent('(typical, an estimate; GPU waits can add more)');
     expect(screen.getByText('Total worst case').nextElementSibling).toHaveTextContent('US$3.00');
     // The check (0.50, 15 min) plus the layout (1.00, 25 min) or the probes (0.75, 20 min).
-    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about US$1.50 and 40 minutes');
-    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.25 and 35 minutes');
+    expect(screen.getByText('Typical total if it fails (estimate)').nextElementSibling).toHaveTextContent('about US$1.50 and 40 minutes');
+    expect(screen.getByText('Typical total if it passes (estimate)').nextElementSibling).toHaveTextContent('about US$1.25 and 35 minutes');
   });
 
-  it('describes the probe branch as it behaves: a flaky check ends the run, a failed probe control skips the rest', () => {
+  it('leaves the stop conditions to the Reference and keeps the other branch text short', () => {
     render(<DryRunTable plan={plan()} />);
     const probes = screen.getByRole('region', { name: 'If it passes: probe' });
-    expect(probes).toHaveTextContent('A check that finds the start flaky ends the run.');
-    expect(probes).toHaveTextContent('A probe control that fails skips the probes still to come.');
-    expect(probes).not.toHaveTextContent('rewordings are skipped');
+    expect(probes).not.toHaveTextContent('flaky');
+    expect(probes).not.toHaveTextContent('skips the probes still to come');
+    expect(screen.getByRole('region', { name: 'First: check the start untouched' })).toHaveTextContent('With confirmation attempts if it fails.');
+    expect(screen.getByRole('region', { name: 'If it fails: find the smallest layout change' })).toHaveTextContent(
+      'Takes the nearest passing start as a reference and shrinks the differences to the shifts that cause the failure.',
+    );
+  });
+
+  it('keeps the Planned Jobs caption on a branch table for screen readers only', () => {
+    render(<DryRunTable plan={plan()} />);
+    const probes = screen.getByRole('region', { name: 'If it passes: probe' });
+    const caption = probes.querySelector('caption') as HTMLElement;
+    expect(caption).toHaveClass('sr-only');
+    expect(caption).toHaveTextContent('Planned Jobs. If it passes: probe');
   });
 
   it('says which typical figure is not known yet instead of inventing one', () => {
@@ -54,11 +64,11 @@ describe('the branched dry run', () => {
     });
     render(<DryRunTable plan={unknown} />);
     const layout = screen.getByRole('region', { name: 'If it fails: find the smallest layout change' });
-    expect(within(layout).getByText('Typical').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
+    expect(within(layout).getByText('Typical (estimate)').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
     const probes = screen.getByRole('region', { name: 'If it passes: probe' });
-    expect(within(probes).getByText('Typical').nextElementSibling).toHaveTextContent('about US$0.75, time not known yet');
-    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
-    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.25, time not known yet');
+    expect(within(probes).getByText('Typical (estimate)').nextElementSibling).toHaveTextContent('about US$0.75, time not known yet');
+    expect(screen.getByText('Typical total if it fails (estimate)').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
+    expect(screen.getByText('Typical total if it passes (estimate)').nextElementSibling).toHaveTextContent('about US$1.25, time not known yet');
   });
 
   it('says "not known yet" when the server has no estimate at all', () => {
@@ -70,7 +80,7 @@ describe('the branched dry run', () => {
       ],
     });
     render(<DryRunTable plan={none} />);
-    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('not known yet');
+    expect(screen.getByText('Typical total if it passes (estimate)').nextElementSibling).toHaveTextContent('not known yet');
   });
 
   it('keeps a plan with no branches as the flat table of Jobs', () => {
@@ -108,7 +118,7 @@ describe('the branched dry run', () => {
         { name: 'reduce', deadline_seconds: 3000, worst_case_usd: 2, branch: 'layout' as const },
       ];
       render(<DryRunTable plan={plan({ jobs, cap_usd: 2.5, worst_case_total_usd: 3 })} />);
-      expect(capText()).toContain('only if the Jobs before it cost their worst case');
+      expect(capText()).toContain('If earlier Jobs cost their worst case, the run stops at reduce');
     });
 
     it('names the layout Job and leaves out the optional continuations, which run only if needed', () => {

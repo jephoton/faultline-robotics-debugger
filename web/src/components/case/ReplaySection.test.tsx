@@ -36,7 +36,7 @@ describe('regression test on a case page', () => {
   it('is titled Regression test and opens with what it checks', async () => {
     await openCase(IDS.soup);
     const section = screen.getByRole('heading', { level: 2, name: 'Regression test' }).closest('section') as HTMLElement;
-    expect(within(section).getByText(/to check whether the failure still happens/)).toBeInTheDocument();
+    expect(within(section).getByText(/to check the failure still happens/)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Replays' })).not.toBeInTheDocument();
   });
 
@@ -63,7 +63,7 @@ describe('regression test on a case page', () => {
     expect(within(panel).queryByLabelText('What do you expect?')).not.toBeInTheDocument();
   });
 
-  it('states the worst-case cost, folds the limits away and gives the script form', async () => {
+  it('states the worst-case cost and folds the limits away, with no script line', async () => {
     await openCase(IDS.soup);
     const panel = panelOf();
     expect(await within(panel).findByText(/Costs up to/)).toHaveTextContent('Costs up to US$0.70 on your Nebius account if you run it.');
@@ -71,8 +71,7 @@ describe('regression test on a case page', () => {
     expect(limits.open).toBe(false);
     expect(within(limits).getByLabelText('Spend cap (US$)')).toBeInTheDocument();
     expect(within(limits).getByLabelText('Hour limit')).toBeInTheDocument();
-    expect(panel).toHaveTextContent('faultline replay <case folder> --spec replay.yaml --expect fixed');
-    expect(panel).toHaveTextContent('policy.checkpoint');
+    expect(panel).not.toHaveTextContent('faultline replay <case folder>');
   });
 
   it('estimates the cost for the original policy and starts the test without naming a checkpoint', async () => {
@@ -122,13 +121,13 @@ describe('regression test on a case page', () => {
     const panel = panelOf();
     await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
     expect(
-      within(panel).getByText(/Use a GR00T N1\.7 checkpoint in the same LeRobot format, trained for this LIBERO suite\. A private repository needs read access/),
+      within(panel).getByText(/A GR00T N1\.7 checkpoint in LeRobot format, trained for this LIBERO suite\. A private repository needs read access/),
     ).toBeInTheDocument();
     const model = within(panel).getByLabelText('Hugging Face model id');
-    expect(model).toHaveAccessibleDescription('org/name of the policy on Hugging Face, e.g. the one this case used: nvidia/gr00t17-lerobot-libero_10-640');
+    expect(model).toHaveAccessibleDescription('e.g. the one this case used: nvidia/gr00t17-lerobot-libero_10-640');
     const revision = within(panel).getByLabelText('Revision (commit hash)');
     expect(revision).toHaveAccessibleDescription(
-      "The 40-character commit hash from the model repository's history on Hugging Face, so the result names exactly which version ran.",
+      "From the model repository's history on Hugging Face; it pins exactly which version ran.",
     );
   });
 
@@ -141,7 +140,7 @@ describe('regression test on a case page', () => {
     await screen.findByRole('heading', { level: 1 });
     const panel = panelOf();
     await user.click(within(panel).getByRole('radio', { name: /A new checkpoint/ }));
-    expect(within(panel).getByLabelText('Hugging Face model id')).toHaveAccessibleDescription('org/name of the policy on Hugging Face');
+    expect(within(panel).getByLabelText('Hugging Face model id')).toHaveAccessibleDescription('');
   });
 
   it('goes back to the case checkpoint when the original policy is chosen again', async () => {

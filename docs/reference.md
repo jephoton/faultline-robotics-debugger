@@ -334,6 +334,9 @@ that does.
 A level such as **1/5** means one of five attempts failed: not reproducible,
 but worth noting. One family is tested at a time; combinations are not.
 
+A check that finds the start flaky ends the run. A probe control that fails
+skips the probes still to come.
+
 ### Image families
 
 These alter the **pictures the policy receives** from both cameras (agent view

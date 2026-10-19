@@ -81,9 +81,9 @@ export function routeView(route: Route): RouteView {
         tone: 'attention',
         icon: 'attention',
         title: 'The start is flaky untouched',
-        detail: 'It does not pass reliably on its own, so no disturbance or wording is blamed for a failure, and the probes still to come are skipped.',
+        detail: 'No disturbance or wording is blamed, and the remaining probes are skipped.',
       };
     case 'passes':
-      return { tone: 'pass', icon: 'check', title: 'Passes untouched', detail: 'The start did not fail, so there was no failure to reduce.' };
+      return { tone: 'pass', icon: 'check', title: 'Passes untouched' };
   }
 }

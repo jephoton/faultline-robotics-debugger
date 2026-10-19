@@ -56,7 +56,7 @@ export function OcclusionSection({ detail }: { detail: Detail }) {
           />
         )}
       </Section>
-      <Section title="How the rectangle was reduced" hint="Each step trims one edge and keeps the failure if it still repeats.">
+      <Section title="How the rectangle was reduced">
         {o.lineage.length === 0 ? (
           <Empty>No reduction steps were recorded.</Empty>
         ) : (

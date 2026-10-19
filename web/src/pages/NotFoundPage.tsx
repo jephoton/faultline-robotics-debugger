@@ -6,7 +6,6 @@ export function NotFoundPage() {
   return (
     <section>
       <h1>Page not found</h1>
-      <p className="lede">There is nothing at this address.</p>
       <Link to="/" className="btn btn--secondary">
         Back to the start
       </Link>

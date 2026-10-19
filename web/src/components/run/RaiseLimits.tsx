@@ -63,7 +63,7 @@ export function RaiseLimits({ reason, cap, hours, spent, text, problem, onChange
         {reason === 'spend_cap'
           ? `The run stopped because the next Job could pass the US$${cap.toFixed(2)} cap (US$${spent.toFixed(2)} spent). `
           : `The run stopped at its ${hours} hour limit. `}
-        A limit can be raised on a resume, never lowered.
+        Limits can be raised, never lowered.
       </p>
       <div className="raise-limits__fields">
         <div className="field">

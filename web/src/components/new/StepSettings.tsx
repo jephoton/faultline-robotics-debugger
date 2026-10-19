@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import type { FieldError, ImportFile } from '../../api/types';
-import { AUDIT_FAMILIES, SUITES, SUITE_LABEL, TASKS, taskInstruction } from '../../data/tasks';
+import { AUDIT_FAMILIES, SUITES, SUITE_LABEL, TASKS } from '../../data/tasks';
 import { errorsByField, sortFamilies, type DiagnosisChoice, type FieldKey, type FormState } from '../../lib/specYaml';
 import { Icon } from '../Icon';
 
@@ -75,8 +75,6 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
   const { byField, other } = errorsByField(allErrors);
   const fieldErrors = (key: FieldKey): string[] | undefined => byField[key];
   const suite = (SUITES as readonly string[]).includes(form.suite) ? form.suite : 'libero_10';
-  const taskNumber = Number(form.task);
-  const instruction = taskInstruction(form.suite, taskNumber);
   const id = (name: string) => `${uid}-${name}`;
 
   async function pickFile(file: File | undefined) {
@@ -112,14 +110,14 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
       )}
 
       <div className="form-grid">
-        <Field id={id('name')} label="Name" hint="Used for the run folder and the case." errors={fieldErrors('name')}>
+        <Field id={id('name')} label="Name" errors={fieldErrors('name')}>
           <input
             id={id('name')}
             type="text"
             value={form.name}
             onChange={(event) => onChange({ name: event.target.value })}
             aria-invalid={fieldErrors('name') ? true : undefined}
-            aria-describedby={describedBy(id('name'), true, fieldErrors('name'))}
+            aria-describedby={describedBy(id('name'), false, fieldErrors('name'))}
             autoComplete="off"
             spellCheck={false}
           />
@@ -138,14 +136,13 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
         <Field
           id={id('task')}
           label="Task"
-          hint={instruction ? <>Instruction: &ldquo;{instruction}&rdquo;</> : 'The benchmark task number.'}
           errors={fieldErrors('task')}
         >
           <select
             id={id('task')}
             value={form.task}
             onChange={(event) => onChange({ task: event.target.value })}
-            aria-describedby={describedBy(id('task'), true, fieldErrors('task'))}
+            aria-describedby={describedBy(id('task'), false, fieldErrors('task'))}
           >
             {(TASKS[suite as keyof typeof TASKS] ?? []).map((text, index) => (
               <option key={index} value={String(index)}>
@@ -156,7 +153,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
         </Field>
 
         {choice === 'start' && (
-          <Field id={id('start')} label="Start" hint="The benchmark start, 0 to 49." errors={fieldErrors('start')}>
+          <Field id={id('start')} label="Start" hint="0 to 49." errors={fieldErrors('start')}>
             <input
               id={id('start')}
               type="text"
@@ -181,7 +178,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
                 aria-describedby={describedBy(id('range'), true, fieldErrors('range'))}
               />
             </Field>
-            <Field id={id('confirm')} label="Confirmation attempts" hint="Extra attempts (4 to 8) for a start that fails its first try. It counts as failing reliably at 4 failures; the default 4 gives the usual 4 of 5." errors={undefined}>
+            <Field id={id('confirm')} label="Confirmation attempts" hint="Extra attempts after a first failure, 4 to 8. The default 4 means a start must fail 4 of 5." errors={undefined}>
               <input
                 id={id('confirm')}
                 type="text"
@@ -198,7 +195,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           <Field
             id={id('file')}
             label="Start file"
-            hint="A JSON start-state file for the suite and task above. Faultline checks that it fails 4 of 5 times first."
+            hint="A JSON start-state file for the suite and task above."
             errors={fileErrors}
           >
             <input
@@ -228,14 +225,13 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
             Probe with disturbances and rewordings
           </label>
           <span className="field__hint">
-            Turn this off to only check the start and diagnose the layout if it fails. If the start passes, nothing more runs.
+            Off: if the start passes, nothing more runs.
           </span>
 
           <fieldset disabled={!form.probes} aria-describedby={fieldErrors('families') ? id('families-error') : undefined}>
             <legend>Disturbance families</legend>
             <p className="muted">
-              Each family is searched from severity 0 (no change) to 1 (the strongest) for the smallest severity that breaks the policy. More
-              families cost more time.
+              Each family is searched from severity 0 (no change) to 1 (the strongest) for the smallest severity that breaks the policy.
             </p>
             {(['image', 'scene'] as const).map((group) => (
               <div key={group}>
@@ -273,7 +269,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           <Field
             id={id('rewordings')}
             label="Rewordings to ask for"
-            hint="0 skips this probe; 1 to 12 asks Nemotron for that many rewordings, and the smallest word change that breaks the policy is kept."
+            hint="0 skips rewordings; 1 to 12 are written by Nemotron."
             errors={fieldErrors('rewordings')}
           >
             <input
@@ -291,7 +287,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
       )}
 
       <div className="form-grid">
-        <Field id={id('spend')} label="Spend cap (US$)" hint="The most this run may cost. It stops before a Job could go over." errors={fieldErrors('spend')}>
+        <Field id={id('spend')} label="Spend cap (US$)" hint="The run stops before a Job could take it over." errors={fieldErrors('spend')}>
           <input
             id={id('spend')}
             type="text"
@@ -302,7 +298,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
             aria-describedby={describedBy(id('spend'), true, fieldErrors('spend'))}
           />
         </Field>
-        <Field id={id('hours')} label="Hour limit" hint="The most wall-clock time before the run stops." errors={fieldErrors('hours')}>
+        <Field id={id('hours')} label="Hour limit" errors={fieldErrors('hours')}>
           <input
             id={id('hours')}
             type="text"
@@ -310,7 +306,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
             value={form.hours}
             onChange={(event) => onChange({ hours: event.target.value })}
             aria-invalid={fieldErrors('hours') ? true : undefined}
-            aria-describedby={describedBy(id('hours'), true, fieldErrors('hours'))}
+            aria-describedby={describedBy(id('hours'), false, fieldErrors('hours'))}
           />
         </Field>
       </div>
@@ -321,8 +317,8 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           Ask Nemotron for a hypothesis and an explanation if the layout diagnosis runs
         </label>
         <span className="field__hint">
-          Needs a Token Factory key in your .env file. Nemotron only proposes an order and a reading; the reruns decide the result.
-          {choice === 'start' && ' Rewordings are written by Nemotron too, whatever you choose here.'}
+          Nemotron only proposes an order and a reading; the reruns decide the result.
+          {choice === 'start' && ' It also writes any rewordings, whatever you choose here.'}
         </span>
         {fieldErrors('nemotron')?.map((message) => (
           <span className="field__error" key={message}>
@@ -337,7 +333,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
           Find related research
         </label>
         <span className="field__hint">
-          Searches public sources with Tavily and summarises them with Nemotron 3 Nano. Context, not evidence. Needs a Tavily key in .env.
+          Public sources found with Tavily; Nemotron cites them in suggested next steps. Context, not evidence.
         </span>
         {fieldErrors('research')?.map((message) => (
           <span className="field__error" key={message}>
@@ -349,8 +345,7 @@ export function StepSettings({ choice, form, onChange, yaml, yamlEdited, onYamlC
       <details className="yaml-panel" open={yamlEdited || other.length > 0 ? true : undefined}>
         <summary>Edit YAML</summary>
         <p className="muted">
-          This is the spec that will run, the same file you could pass to <code>faultline diagnose</code>. Any spec key works here. Once you
-          edit it, the YAML is the source of truth.
+          This is the spec that will run, the same file you could pass to <code>faultline diagnose</code>. Any spec key works here.
         </p>
         {yamlEdited && (
           <div className="notice notice--attention" role="note">

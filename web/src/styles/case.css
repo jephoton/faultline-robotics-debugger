@@ -138,10 +138,6 @@ details.fold > .panel {
 .replay__cost {
   margin: var(--space-3) 0 var(--space-2);
 }
-.replay__script {
-  margin: var(--space-4) 0 0;
-  max-width: 70ch;
-}
 .choices--policy > legend {
   font-size: 1.1rem;
 }

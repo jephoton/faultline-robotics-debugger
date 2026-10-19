@@ -9,7 +9,6 @@ import { useAsync } from '../../lib/useAsync';
 import { asksForResearch, asksForRewordings, usesNemotron, yamlValue } from '../../lib/specYaml';
 import { Icon } from '../Icon';
 import { DryRunTable, EnvironmentList, type DiagnosisSource } from './Review';
-import { PIPELINE_PROMISE } from './StepChoose';
 
 interface Props {
   yaml: string;
@@ -40,7 +39,7 @@ export function StepReview({
   importFile,
   launch,
   startLabel = 'Start diagnosis',
-  consequence = 'Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above. You can stop a run at any time.',
+  consequence = 'Starting creates cloud Jobs on your Nebius account and spends real credit, up to the worst case above.',
   headingLevel = 2,
   caseId,
 }: Props) {
@@ -123,7 +122,6 @@ export function StepReview({
     <div className="review">
       <section aria-labelledby="review-what">
         <Heading id="review-what">What will run</Heading>
-        {checking && <p>{PIPELINE_PROMISE}</p>}
         <dl className="facts">
           <dt>Name</dt>
           <dd className="mono">{yamlValue(yaml, 'name') ?? 'not set'}</dd>
@@ -183,13 +181,14 @@ export function StepReview({
         {env.data && <EnvironmentList environment={env.data} />}
         {researchSkipped && (
           <p className="muted" role="note">
-            Related research will be skipped: no Tavily key. Add TAVILY_API_KEY to your .env file to use it (see Setup); the
-            diagnosis itself is not affected.
+            Related research will be skipped (no Tavily key). The diagnosis is not affected.
           </p>
         )}
-        <p className="muted">
-          <Link to="/setup">Open Setup</Link> for how to fix anything above.
-        </p>
+        {env.data?.checks.some((check) => !check.ok) && (
+          <p className="muted">
+            <Link to="/setup">Open Setup</Link> for how to fix anything above.
+          </p>
+        )}
       </section>
 
       {problems.length > 0 && (
@@ -210,7 +209,7 @@ export function StepReview({
         {consequence}
       </p>
       {uncertain ? (
-        <p className="muted">Start is off on this page for safety. Open Running in the sidebar to follow the run.</p>
+        <p className="muted">Start is off on this page for safety.</p>
       ) : (
         <button type="button" className="btn" onClick={() => void start()} aria-busy={starting} data-testid="start-diagnosis">
           <Icon name="play" /> {startLabel}

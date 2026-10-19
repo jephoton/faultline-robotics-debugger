@@ -10,7 +10,7 @@ export function ParaphraseSection({ detail }: { detail: Detail }) {
     <>
       <Section
         title="Wordings tried"
-        hint="Every wording is run from the same start. A rewording that changes the task's meaning is discarded, not counted as a policy failure."
+        hint="A rewording that changes the task's meaning is discarded, not counted as a policy failure."
       >
         {p.paraphrases.length === 0 ? (
           <Empty>No rewordings were run.</Empty>
