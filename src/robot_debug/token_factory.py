@@ -24,7 +24,7 @@ from .explanation import interpretation_context, validate_explanation
 ENDPOINT = "https://api.tokenfactory.nebius.com/v1/"
 # Research summaries (M5D) stay on Nano, which is priced below.
 MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-# Jethro, October 13/14: scenario-reduction explanations and occlusion case explanations use
+# Approved October 13/14: scenario-reduction explanations and occlusion case explanations use
 # Nemotron 3 Ultra, chosen by measured comparisons (docs/experiments/m7-scenario-reduction.md).
 # Its price is not pinned here, so its cost estimate is left empty and reconciled with billing.
 SCENARIO_EXPLAIN_MODEL = "nvidia/Nemotron-3-Ultra-550b-a55b"
@@ -917,7 +917,7 @@ def request_scenario_hypothesis(instruction: str, differences: list, api_key: st
 
 _MAX_REQUEST_BYTES_SCENARIO_EXPLAIN = 12_000
 _MAX_TOKENS_SCENARIO_EXPLAIN = 1500
-# SCENARIO_EXPLAIN_MODEL is defined at the top of this module (Jethro, October 13): on the same
+# SCENARIO_EXPLAIN_MODEL is defined at the top of this module (approved October 13): on the same
 # packet Nano kept calling "only this entity applied" "this entity reverted", Super inverted a
 # correct prediction and failed the format check, and Ultra stated every checked fact correctly.
 _scenario_explain_provenance = _explain_provenance
