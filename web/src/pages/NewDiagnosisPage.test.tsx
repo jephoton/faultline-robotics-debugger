@@ -69,12 +69,13 @@ describe('step 1: what to check', () => {
     expect(start).toHaveTextContent('episode n (counted from 0) begins from start n');
   });
 
-  it('defines a start and keeps the file option under More ways in', async () => {
+  it('defines a start and shows the three ways in side by side', async () => {
     await openNew();
     expect(screen.getByText(/A start is one of the benchmark’s 50 fixed starting layouts/)).toBeInTheDocument();
-    const file = screen.getByRole('radio', { name: /a failure from my own scene/i });
-    expect(file.closest('details')).toHaveTextContent('More ways in');
-    expect(screen.getByRole('radio', { name: /check a start i name/i }).closest('details')).toBeNull();
+    for (const name of [/check a start i name/i, /find a failing start for me/i, /a failure from my own scene/i]) {
+      expect(screen.getByRole('radio', { name }).closest('details')).toBeNull();
+    }
+    expect(screen.queryByText('More ways in')).not.toBeInTheDocument();
   });
 });
 

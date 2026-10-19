@@ -117,8 +117,8 @@ passes, and removing any one makes the failure go away. Nemotron guessed the
 soup mattered; it does not. That is the minimal trigger, and the case reruns
 it on any future checkpoint."
 
-**Variant: a failure from your own scene.** On the New diagnosis page, open
-**More ways in** and choose **A failure from my own scene (file)**. Upload a
+**Variant: a failure from your own scene.** On the New diagnosis page, choose
+**A failure from my own scene (file)**. Upload a
 start-state JSON file, for example any case's `minimal-candidate.json`, with
 its suite and task. The file must fail 4 of 5 first, or the run stops ("The
 imported start did not fail reliably"). A file from another scene stops with
@@ -219,8 +219,8 @@ and what it costs, before anything is created.
      tasks.
    - **Find a failing start for me**: tries a range of starts and shrinks one
      that fails reliably. No probes.
-   - Under **More ways in**, **A failure from my own scene (file)** (Demo 1's
-     variant).
+   - **A failure from my own scene (file)**: a saved start state outside the
+     50 benchmark starts (Demo 1's variant). No probes.
 
    Each option shows its route in one line. Choose **Next: settings**.
 3. **Settings**, for a named start:

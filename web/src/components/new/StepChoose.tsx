@@ -32,9 +32,6 @@ const OPTIONS: Option[] = [
     text: 'You have no failure yet. Faultline tries a range of starts and takes one that fails reliably.',
     route: 'run each start in the range once → confirm one that fails → shrink the layout (no probes)',
   },
-];
-
-const MORE: Option[] = [
   {
     choice: 'import',
     title: 'A failure from my own scene (file)',
@@ -42,6 +39,8 @@ const MORE: Option[] = [
     route: 'confirm it fails 4 of 5 → shrink the layout (no probes)',
   },
 ];
+
+
 
 function Choice({ option, choice, onChoose }: { option: Option; choice: DiagnosisChoice; onChoose: (choice: DiagnosisChoice) => void }) {
   return (
@@ -61,7 +60,6 @@ function Choice({ option, choice, onChoose }: { option: Option; choice: Diagnosi
 }
 
 export function StepChoose({ choice, onChoose }: { choice: DiagnosisChoice; onChoose: (choice: DiagnosisChoice) => void }) {
-  const moreChosen = MORE.some((option) => option.choice === choice);
   return (
     <>
       <p className="lede">{PIPELINE_PROMISE}</p>
@@ -73,14 +71,6 @@ export function StepChoose({ choice, onChoose }: { choice: DiagnosisChoice; onCh
             <Choice key={option.choice} option={option} choice={choice} onChoose={onChoose} />
           ))}
         </div>
-        <details className="choices__more" open={moreChosen || undefined}>
-          <summary>More ways in</summary>
-          <div className="choices__grid">
-            {MORE.map((option) => (
-              <Choice key={option.choice} option={option} choice={choice} onChoose={onChoose} />
-            ))}
-          </div>
-        </details>
       </fieldset>
     </>
   );

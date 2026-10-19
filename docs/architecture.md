@@ -333,7 +333,7 @@ flowchart TD
 
 | Journey boundary | Current support | Limit to make clear during UI review |
 | --- | --- | --- |
-| A/B: choose intent/input | One New diagnosis with three ways in, named by goal: check a start I name, find a failing start for me, and (under More ways in) a start file from your own scene | LIBERO only. Arbitrary video/log import is not supported. |
+| A/B: choose intent/input | One New diagnosis with three ways in, named by goal: check a start I name, find a failing start for me, and a start file from your own scene | LIBERO only. Arbitrary video/log import is not supported. |
 | C/D: configure and understand cost | Forms, editable YAML, validation, environment checks and dry-run Job estimates | No complete account-provisioning wizard. The displayed cap is not a consolidated Token Factory/Tavily/storage bill. |
 | E/F: execute and recover | Confirmed Start, running page, logs, timeline, cost, Stop/Resume | Browser navigation is not Stop. Resume does not promise every failure is retryable or that provider state is reachable. |
 | G: inspect findings | Mode-specific case/report pages, comparison evidence where available, no-failure outcomes | Not every run yields a confirmed failure case, video or explanation. Current audit/paraphrase cases have no generated explanation. |

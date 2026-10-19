@@ -24,7 +24,7 @@ article > h1 {
 }
 .section__hint {
   margin-top: calc(var(--space-2) * -1);
-  max-width: 70ch;
+  max-width: none;
 }
 .tag {
   display: inline-block;
