@@ -148,6 +148,110 @@ the four default families, then one replay of any case it makes. See
 `docs/experiments/` once it finishes. Names come after the build. The
 Reference no longer uses "Mode 1 / Mode 2".
 
+## Handoff: October 19, evening (read this first)
+
+### In flight: two agent branches, not merged yet
+
+1. **`worktree-agent-a3b9101bc186fa838`: UI copy changes.** It applies every
+   item in `docs/superpowers/specs/2026-10-19-ui-copy-review.md` (Jethro
+   approved all of them), except items 51, 52 and 54. Those are in
+   `web/src/components/case/TeamSections.tsx`.
+   - Merge the branch.
+   - Then apply 51, 52 and 54 by hand.
+2. **`worktree-agent-aff20f6737887e095`: one repair retry for next steps.**
+   - When the check rejects an answer, the model gets the reason and rewrites
+     it once.
+   - It adds a prompt rule: no combined-removal suggestions when single
+     removals already settle it.
+
+   This is needed because `FL-A-D582`'s next steps were rejected 3 times for
+   cause or proof wording.
+
+If either branch is missing or unfinished, redo it from its brief: the spec
+file for (1), the description above for (2).
+
+### Integration after both merges
+
+1. **Built bundle conflicts.** If `src/robot_debug/viewer/app/` conflicts,
+   resolve it by rebuilding:
+   - `rm -rf src/robot_debug/viewer/app/assets`;
+   - `cd web && npm run build`;
+   - `git add -A src/robot_debug/viewer/app`.
+2. **Tests:**
+   - `cd web && npm run typecheck && npm test -- --run`;
+   - `PYTHONPATH=src python -m pytest -q -p no:cacheprovider` (never `uv run`).
+3. **Regenerate the next steps.** Token Factory only, about US$0.01–0.02 per
+   case:
+   - `PYTHONPATH=src python -B scripts/regenerate_case_context.py artifacts/runs/object-start0-20261019T021756Z --env-file .env`;
+   - run `--dry-run` first;
+   - optionally the same for `artifacts/runs/l10-start14-20261019T032219Z`.
+
+   A rejected answer keeps the old one.
+4. **Check in the browser.** Restart the panel (it caches the library), then
+   check:
+   - Home, New diagnosis and the Review step;
+   - `FL-S-8E0D`, `FL-A-D582` and `FL-A-F526`: why it's trustworthy, the
+     Nemotron box and the regression test.
+5. **Update `docs/ui-runbook.md`** for the changed copy:
+   - the "Typical (estimate)" label;
+   - removed hints;
+   - the Regression test fields;
+   - the Nemotron box;
+   - why it's trustworthy;
+   - the default name `object-t0-start0`.
+6. **Refresh `demo/root`.** Copy `artifacts/diagnoses/8e0dbd…/` again, since
+   its report, case and explanation changed.
+   - Keep `research.json` out (it has third-party snippets), or ship a copy
+     with snippets stripped so the offline demo shows its next steps.
+   - Drop `research` from `diagnosis.json` `files` if it is left out.
+7. **Gallery redeploy (needs Jethro's go):**
+   - `faultline export --out artifacts/public-gallery-<date>`, with a
+     `--case` flag for each of `d-8e0dbd…`, `d-d5825d…` and `d-f52646…`;
+   - copy `.vercel/project.json` from `artifacts/public-gallery-20261019/`;
+   - scan for ids, keys and paths;
+   - `vercel deploy --prod --yes --cwd artifacts/public-gallery-<date>`;
+   - record it in `docs/experiments/m7-public-gallery.md`.
+
+### Known small items
+
+- `FL-A-F526`'s report was not rebuilt: one probe group's saved summary is
+  missing, so it keeps the old order-tried table. Optional.
+- The old cases are archived locally in `artifacts/archive-2026-10-19/` (see
+  its README). The WSL `.venv` was mostly deleted by `uv run`; recreate it
+  only if needed.
+- This machine's network is flaky: Avast WebShield blocked agents, and there
+  were DNS and EndpointConnectionError drops. Downloads now retry and resume.
+
+### Remaining to submission
+
+Target October 29; deadline October 30, 10:00 PT.
+1. **Finish the demo walkthrough.** Jethro is at Demo 6. Demos 7–8 are paid
+   (a replay, and start/stop/resume), so they need a go and a cap, or can be
+   skipped.
+2. **Integrate, check and redeploy** (above).
+3. **Billing reconciliation.** Jethro reads the Nebius billing page. Ledger
+   estimates:
+   - showcase runs US$3.87;
+   - earlier live runs about US$8.21;
+   - Token Factory about US$0.15 on October 19 (Ultra's price is not pinned).
+
+   Correct `FEEDBACK.md` and the README costs to match.
+4. **`FEEDBACK.md` final pass,** with Jethro's first-hand notes. Add the
+   October 19 observations:
+   - the per-object download retries and the resume download fix;
+   - Ultra's structured output and its rejection rate;
+   - Vercel redeploys.
+5. **Fresh-machine test** of the README and quickstart from a clean checkout.
+6. **Rules re-check:** Devpost rules and updates.
+7. **Devpost text:**
+   - the story from ADR 0034;
+   - the LIBERO scope line;
+   - the episode-14 evidence (`docs/experiments/m7-workflow-evidence.md`);
+   - the three showcase cases.
+8. **Video** under 3 minutes, using the runbook's 90-second route and
+   `docs/architecture.md`, **plus a cover image.**
+9. **Submit:** freeze versions and tag the release.
+
 **Agreed order (Jethro, October 18):** demos → stale public gallery → remaining
 things → video and cover → submission. Roadmap target October 29; deadline
 October 30, 10:00 PT.
