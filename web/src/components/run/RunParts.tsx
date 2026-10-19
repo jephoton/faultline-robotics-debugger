@@ -60,7 +60,7 @@ export function JobPanel({ progress }: { progress: Progress }) {
       {waiting && (
         <p>
           No GPU is free yet. Faultline resubmits the Job automatically, up to six times
-          {waits > 0 ? `; ${waits} ${waits === 1 ? 'wait' : 'waits'} so far in this run` : ''}. The worst case stays reserved until the Job is settled at its measured time.
+          {waits > 0 ? `; ${waits} ${waits === 1 ? 'wait' : 'waits'} so far in this run` : ''}.
         </p>
       )}
     </div>
@@ -99,7 +99,7 @@ export function Meters({ progress }: { progress: Progress }) {
           <span className="meter__spent" style={{ width: `${spentPct}%` }} />
           <span className="meter__reserved" style={{ width: `${reservedPct}%` }} />
         </div>
-        <p className="muted meter__legend">Solid is spent. Hatched is the worst case held back for a Job that is still running.</p>
+        <p className="muted meter__legend">Hatched: worst case held for the running Job.</p>
       </div>
       <div>
         <p className="meter__label">
@@ -132,7 +132,7 @@ export function LogTail({ lines }: { lines: string[] }) {
   }, [lines]);
   return (
     <details className="log" open>
-      <summary>Run log (last {lines.length} lines)</summary>
+      <summary>Last {lines.length} lines</summary>
       {lines.length === 0 ? (
         <p className="empty">Nothing has been logged yet.</p>
       ) : (

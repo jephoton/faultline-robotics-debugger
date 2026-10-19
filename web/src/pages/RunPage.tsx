@@ -154,7 +154,7 @@ function Run({ controls }: { controls: boolean }) {
     <article>
       <ReadoutHeader
         code={code}
-        tag={caseItem ? 'Fault code' : 'Fault code (assigned when the case is saved)'}
+        tag={caseItem ? 'Fault code' : 'Fault code (pending)'}
         fields={[
           { label: 'Status', value: view.word, tone: view.tone, icon: view.icon },
           { label: 'Step', value: step ?? 'none' },
@@ -197,7 +197,7 @@ function Run({ controls }: { controls: boolean }) {
           <Icon name="attention" />
           <div className="notice__body">
             <p className="notice__title">The run was interrupted</p>
-            <p>Its process is no longer running. Resume continues from the last finished step.</p>
+            <p>Resume continues from the last finished step.</p>
           </div>
         </div>
       )}
@@ -206,7 +206,7 @@ function Run({ controls }: { controls: boolean }) {
           <Icon name="stop" />
           <div className="notice__body">
             <p className="notice__title">Stopping</p>
-            <p>The current Job is being cancelled. Faultline waits for the provider to confirm, then settles the cost.</p>
+            <p>Waiting for the provider to confirm the cancel; the cost is settled then.</p>
           </div>
         </div>
       )}
@@ -218,10 +218,9 @@ function Run({ controls }: { controls: boolean }) {
             <p className="notice__title">The run finished</p>
             {progress.library_id ? (
               <>
-                <p>
-                  The case is saved.
-                  {autoOpen !== null && autoOpen > 0 && ` Opening it in ${autoOpen} ${autoOpen === 1 ? 'second' : 'seconds'}.`}
-                </p>
+                {autoOpen !== null && autoOpen > 0 && (
+                  <p>{`Opening the case in ${autoOpen} ${autoOpen === 1 ? 'second' : 'seconds'}.`}</p>
+                )}
                 <div className="actions actions--tight">
                   <Link className="btn" to={`/case/${encodeURIComponent(progress.library_id)}`} ref={openButton}>
                     Open the case
@@ -234,7 +233,7 @@ function Run({ controls }: { controls: boolean }) {
                 </div>
               </>
             ) : (
-              <p>No case was saved because nothing reproduced, or the run did not produce one. The log below says why.</p>
+              <p>No case was saved; the log below says why.</p>
             )}
           </div>
         </div>

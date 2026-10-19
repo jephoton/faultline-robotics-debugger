@@ -78,7 +78,7 @@ describe('other run states', () => {
     await openRun(RUN_IDS.stopping);
     expect(screen.getAllByText('Stopping').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /^stop$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/being cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for the provider to confirm the cancel/)).toBeInTheDocument();
   });
 
   it('explains an expired sign-in in plain words with a way to resume', async () => {
@@ -149,7 +149,7 @@ describe('other run states', () => {
     await openRun(RUN_IDS.completed);
     const link = screen.getByRole('link', { name: 'Open the case' });
     expect(link).toHaveAttribute('href', `/case/${encodeURIComponent(IDS.wording)}`);
-    expect(screen.queryByText(/Opening it in/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Opening the case in/)).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Readout' })).getByText('Completed')).toBeInTheDocument();
   });
 
@@ -214,13 +214,13 @@ describe('watching a run', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
-    expect(screen.getByText(/Opening it in 3 seconds/)).toBeInTheDocument();
+    expect(screen.getByText(/Opening the case in 3 seconds/)).toBeInTheDocument();
     const callsAtEnd = progressCalls();
     // Finished runs stop polling.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
-    expect(screen.getByText(/Opening it in 2 seconds/)).toBeInTheDocument();
+    expect(screen.getByText(/Opening the case in 2 seconds/)).toBeInTheDocument();
     expect(progressCalls()).toBe(callsAtEnd);
     for (let i = 0; i < 3; i += 1) {
       // One tick per render: React flushes the countdown state when each act scope ends.
@@ -254,7 +254,7 @@ describe('watching a run', () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(screen.getByRole('link', { name: 'Open the case' })).toBeInTheDocument();
-    expect(screen.queryByText(/Opening it in/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Opening the case in/)).not.toBeInTheDocument();
   });
 });
 
