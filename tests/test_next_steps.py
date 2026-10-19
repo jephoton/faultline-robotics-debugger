@@ -282,6 +282,10 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(1, result["provenance"]["attempts"])
         self.assertIsNone(result["response_json"])
 
+    def test_the_prompt_rules_out_combinations_when_one_removal_already_passes(self):
+        self.assertIn("If removing any single kept entity already makes the policy pass, do not suggest removing "
+                      "combinations of them either: the answer is already known.", ns.NEXT_STEPS_PROMPT)
+
     def test_the_size_bound_applies_before_any_call(self):
         big = dict(CONTEXT, sources=[dict(CONTEXT["sources"][0], snippet="x" * 30000)])
         with self.assertRaises(tf.TokenFactoryError):
