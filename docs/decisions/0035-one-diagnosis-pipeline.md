@@ -93,3 +93,10 @@ validation risk before October 29.
   time. A typical check (about US$0.43) therefore leaves room for either
   branch's first Job. Review names the Job that would be refused only if the
   Jobs before it cost their worst case.
+- **Occlusion stays out of the New diagnosis** (Jethro, October 19). The ten
+  probe families each have a single severity. The September occlusion
+  rectangle is a 2D shape with its own edge-trimming reducer. Adding it, as a
+  scalar family or as its own probe kind, would need image work and a paid
+  validation run before the deadline. Its results (the 14% rectangle, and
+  the camera-roles hypothesis) stay in the README as earlier results, with no
+  gallery case.

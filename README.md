@@ -143,9 +143,8 @@ What everything means (routes, the gate, every severity, report columns,
 verdicts) is in the [Reference](docs/reference.md), which is also a page in
 the control panel.
 
-Occlusion (a grey rectangle over a camera) is not a probe family. It ran
-through the earlier experiment modes (M4 to M6); its results are listed
-below.
+Occlusion (a black rectangle over a camera) is not a probe family. It ran
+in the earlier experiment modes (M4 to M6); its results are listed below.
 
 ## What it has found so far
 
@@ -153,50 +152,73 @@ All results are for GR00T N1.7 on LIBERO, one seed per run, on single Nebius
 L40S GPUs. Each is budget-local evidence for the tested task, start and
 family, not a general claim.
 
-- **A natural failure reduced to its cause (layout route):** on LIBERO-10 task 0
-  ("put both the alphabet soup and the tomato sauce in the basket"), start 14
-  fails reliably while the nearby start 28 passes. No single difference
-  causes it: the failure needs **five small shifts together** (the soup,
-  three distractor objects and a tiny arm offset). The size search reached
-  three of the five: the soup and the arm offset each needed at least 87.5%
-  of their shift and the orange juice all of it; the milk and cream cheese
-  were not shrunk because the candidate budget ran out. Nemotron 3 Ultra
-  predicted the soup; the reruns showed it is necessary but not sufficient.
-  Replaying the case two days later with `faultline replay` still reproduced
-  it ([scenario reduction](docs/experiments/m7-scenario-reduction.md)).
+### The showcase cases
 
-- **Minimal occlusion (LIBERO-Object task 0, start 0):** a black rectangle over the upper-right 14% of the
-  third-person camera reproducibly breaks the task (reduced from 25%). The
-  robot still grasps the soup but times out carrying it
-  ([M4](docs/experiments/m4-reducer.md)). The same reduction was reproduced
-  from an imported external demonstration
-  ([M5B](docs/experiments/m5b-external-replay.md)).
-- **Camera roles (hypothesis, same task):** blacking out the wrist camera as well stops
-  the grasp entirely, while the same rectangle on the wrist camera alone is
-  harmless. The wrist view appears to drive grasping and the third-person
-  view the carry ([M6](docs/experiments/m6-camera-and-scalar-families.md)).
-- **Thresholds (same LIBERO-Object task 0):** the policy fails reliably from a blur of sigma 3.9 px and
-  from Gaussian noise of sigma 95 (of 255), but never under darkening down to
-  5% brightness or contrast down to 10% (M6).
-- **Robust within the tested ranges (breadth pack, one task and start per
-  family):** GR00T N1.7 kept succeeding in every case below; the breadth
-  pack is a robustness check, not a failure find
-  ([breadth pack](docs/experiments/m7-breadth-pack.md)).
-  - *Image catalog* on LIBERO-Spatial task 0, start 0: JPEG compression down
-    to quality 5, a strong colour cast and 20% dead pixels never failed;
-    motion blur failed once in five attempts, only at its strongest setting.
-  - *Lighting and viewpoint* on LIBERO-Object task 0, start 0: lights at 10%
-    never failed; the viewpoint failed once in five at 80% and at 100% of its
-    range. The same audit on LIBERO-Goal task 0 stopped before testing
-    anything, because unperturbed GR00T passed only 2 of 5 from that start.
-  - *Paraphrases*: 10 Nemotron-written rewordings each on LIBERO-Object
-    task 0, start 0 and LIBERO-10 task 0, start 7; all 20 succeeded.
+These are October 19 runs of the single New diagnosis, each kept as a
+regression test ([write-up](docs/experiments/m7-final-showcase.md)).
 
-  Separately, all four LIBERO suites (Object, 10, Spatial, Goal) now run end
-  to end through `faultline diagnose`.
-- **Cheaper runs:** batching concurrent inference requests on one GR00T server
-  gave +18% throughput at 12 parallel workers in two runs, and no gain at 8,
-  where the GPU was not yet the bottleneck
+- **Layout route, `FL-S-8E0D`.** On LIBERO-10 task 0 ("put both the alphabet
+  soup and the tomato sauce in the basket"), start 14 fails 4 of 5, while the
+  nearby start 4 passes.
+  - The two starts differ in five things. **Four shifts are needed together:**
+    - the basket, 2.1 cm (93.8% of its difference);
+    - the milk, 2.2 cm (87.5%);
+    - the orange juice, 0.8 cm (100%);
+    - the arm's five joints, up to 2.1° (93.8%).
+  - Each shift alone passes, and removing any one makes the failure go away.
+  - Nemotron 3 Ultra ranked the arm first and the soup second. The reruns
+    show the arm is needed but not enough on its own, and the soup is not
+    needed at all.
+  - The regression test on the same checkpoint: **still fails**.
+  - A public evaluation of GR00T N1.6 (allenai's vla-evaluation-harness)
+    also records episode 14 of this task failing. That is how a team would
+    arrive here ([evidence](docs/experiments/m7-workflow-evidence.md)).
+- **Probe route, `FL-A-D582`.** LIBERO-Object task 0, start 0 passes
+  untouched.
+  - **Blur breaks it from severity 0.4625** (a sigma of 3.7 px): 5 of 5
+    failures there, and 1 of 5 at 0.45.
+  - Noise breaks it only at full strength, and only borderline: 3 of 5 on
+    the replay.
+  - Darkening and contrast never break it.
+  - The regression test on the same checkpoint: blur **still fails**.
+  - The M6 experiment had found blur failing on this start from 3.9 px six
+    days earlier, an independent and consistent threshold.
+- **Nothing broke it, `FL-A-F526`.** LIBERO-Spatial task 0, start 0 kept
+  succeeding under these, at full strength:
+  - JPEG compression down to quality 5;
+  - a strong colour cast;
+  - 20% dead pixels;
+  - motion blur, which failed once in five attempts at its strongest
+    setting, short of the 4-of-5 gate.
+
+### Earlier results
+
+- **Minimal occlusion (LIBERO-Object task 0, start 0).** A black rectangle
+  over the upper-right 14% of the third-person camera reproducibly breaks the
+  task; it was reduced from 25%. The robot still grasps the soup but times
+  out carrying it ([M4](docs/experiments/m4-reducer.md)). The same reduction
+  was reproduced from an imported external demonstration
+  ([M5B](docs/experiments/m5b-external-replay.md)). Occlusion ran in the
+  earlier experiment modes; it is not a family in the New diagnosis.
+- **Camera roles (hypothesis, same task).** Blacking out the wrist camera as
+  well stops the grasp entirely, while the same rectangle on the wrist camera
+  alone is harmless. The wrist view appears to drive grasping and the
+  third-person view the carry
+  ([M6](docs/experiments/m6-camera-and-scalar-families.md)).
+- **Robust within the tested ranges**
+  ([breadth pack](docs/experiments/m7-breadth-pack.md)):
+  - lights at 10% never failed on LIBERO-Object task 0, start 0;
+  - the camera viewpoint failed once in five at 80% and at 100% of its range,
+    short of the gate;
+  - 20 Nemotron-written rewordings, on LIBERO-Object and LIBERO-10, all
+    succeeded;
+  - on LIBERO-Goal task 0, start 0, the untouched policy itself passed only
+    2 of 5, so no disturbance was blamed.
+- **All four LIBERO suites** (Object, 10, Spatial, Goal) run end to end
+  through `faultline diagnose`.
+- **Cheaper runs.** Batching concurrent inference requests on one GR00T
+  server gave +18% throughput at 12 parallel workers in two runs. It gave no
+  gain at 8 workers, where the GPU was not yet the bottleneck
   ([M3 batching](docs/experiments/m3-batched-inference.md)).
 
 ## How NVIDIA and Nebius are used
