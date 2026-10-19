@@ -131,9 +131,20 @@ These are recorded project defects, not inferred provider or robot failures.
 
 **Pipeline decision (October 18, ADR 0035):** one New diagnosis that routes on
 the untouched result (fails: layout reduction; passes: the chosen probes),
-with every finding a replayable case. The plan
-(`docs/superpowers/plans/2026-10-18-one-diagnosis-pipeline.md`) awaits
-Jethro's review and answers to Q1–Q3. Names come after the build. The
+with every finding a replayable case. Built, reviewed and fixed on October
+19 (plan `docs/superpowers/plans/2026-10-18-one-diagnosis-pipeline.md`):
+- a stop after a probe group keeps that group's case;
+- a start that fails some attempts is routed **flaky** and ends after the
+  check;
+- an undecided check stops with `check_incomplete`;
+- a failing audit control marks thresholds unconfirmed;
+- replay is planned per case;
+- research never blocks Start;
+- the form defaults to LIBERO-Object task 0, start 0.
+
+Not yet validated by a paid pipeline run. Open with Jethro: the default cap
+(keep US$2.50, raise it, or show the note only when a typical run would hit
+it) and the validation run's go and cap. Names come after the build. The
 Reference no longer uses "Mode 1 / Mode 2".
 
 **Agreed order (Jethro, October 18):** demos → stale public gallery → remaining
