@@ -152,53 +152,40 @@ Reference no longer uses "Mode 1 / Mode 2".
 things → video and cover → submission. Roadmap target October 29; deadline
 October 30, 10:00 PT.
 
-1. **Demos.** Jethro is working through `docs/ui-runbook.md` demo by demo (at
-   Demo 4 on October 18). Fix what each demo exposes as it comes.
-2. **Stale public gallery.** It predates the report-first page, the Reference
-   page, the readout colours and the Keep in step fix. Re-export and
-   redeploy only with Jethro's go, after inspecting the payload.
-3. **Remaining things:**
-   1. **Final showcase runs** (scope chosen by Jethro, October 19; each paid
-      start still needs his go and cap):
-      - the probe validation run (LIBERO-Object task 0, start 0, four image
-        families) and a replay of its case;
-      - image v17 with the October 18 reduction fix, then LIBERO-10 task 0,
-        start 14 through the pipeline (layout route) and a replay. This
-        replaces `FL-S-AFB5` in the gallery;
-      - keep `FL-A-F526` as the "nothing broke it" finding.
+1. **Demos.** The runbook is restructured into six demos around the showcase
+   cases (October 19). Jethro walks through them next and reports what each
+   exposes.
+2. **Gallery refresh** (Jethro's go). Export only the showcase cases:
+   - `FL-S-8E0D`: the layout route;
+   - `FL-A-D582`: the probe route;
+   - `FL-A-F526`: nothing broke it.
 
-      The regression loop is shown by replaying on the same checkpoint with
-      `--expect reproduces`. `nvidia/GR00T-N1.7-LIBERO` is the only other
-      same-suite N1.7 checkpoint, but it uses Isaac-GR00T's format with
-      per-suite subfolders, which the override does not load. It is not
-      pursued for the submission. A second-task layout case and a flaky-route
-      run were offered and not chosen.
-   2. **UI polish found in the showcase runs** (green):
-      - the audit case report keeps the legacy title "M6 results: camera
-        reliance…";
-      - the research summary repeats its citation ("[S1] [S1]");
-      - the run log describes a passing start as "does not fail reliably:
-        trying the chosen probes";
-      - replay run names come out as `replay-<name>---stress-test`;
-      - the form's Name does not follow a suite or start change;
-      - the Review's probe-branch text still says a flaky start skips
-        rewordings;
-      - audit cases record no checkpoint, so their replays say "checkpoint
-        not recorded".
-   3. **Gallery refresh** with the new cases (Jethro's go). Export only the
-      chosen cases (`faultline export --case <id>`). Drop the September
-      occlusion case `FL-M-52D8`, `FL-S-AFB5` (replaced), `FL-A-08D3` and
-      `FL-A-A70E`; they stay in the local library.
-   3. **Results refresh:** README "What it has found", experiment notes, and
-      possibly the `demo/` case.
-   4. **Billing reconciliation:** Jethro reads the Nebius billing page; compare
+   Use `faultline export --case <id>` and inspect the payload before
+   deploying. Update the README's "five recorded cases" at the same time.
+   `FL-S-AFB5`, `FL-A-08D3`, `FL-A-A70E` and the old occlusion case stay in
+   the local library only.
+3. **Remaining things:**
+   1. **Done on October 19:**
+      - the final showcase runs, recorded in
+        `docs/experiments/m7-final-showcase.md` (US$3.87 by ledger);
+      - the nine-item polish pass;
+      - the removal of the departing cases from product documents and code;
+      - the `demo/root` swap to `FL-S-8E0D`;
+      - the workflow evidence note.
+
+      The regression loop is shown on the same checkpoint;
+      `nvidia/GR00T-N1.7-LIBERO` is in a format the override does not load.
+   2. **Results refresh:** README "What it has found", built around the
+      showcase cases.
+   3. **Billing reconciliation:** Jethro reads the Nebius billing page; compare
       it with the run ledgers; correct FEEDBACK and README costs.
-   5. **FEEDBACK.md** final pass, with Jethro's first-hand notes.
-   6. **Fresh-machine test** of the README and quickstart from a clean checkout
+   4. **FEEDBACK.md** final pass, with Jethro's first-hand notes.
+   5. **Fresh-machine test** of the README and quickstart from a clean checkout
       (judge usability).
-   7. **Rules re-check:** Devpost rules and updates, including any "what changed
+   6. **Rules re-check:** Devpost rules and updates, including any "what changed
       during the submission period" requirement.
-   8. **Devpost description** from ADR 0034's story.
+   7. **Devpost description** from ADR 0034's story, with the LIBERO scope
+      line and the episode-14 evidence (`docs/experiments/m7-workflow-evidence.md`).
 4. **Video and cover:** under 3 minutes, at least 1 minute of the product
    working (story: ADR 0034; the runbook's 90-second route), plus a cover
    image.
