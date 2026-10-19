@@ -960,11 +960,12 @@ class DefaultTools:
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
-    def build_case(self, summary: Mapping[str, Any]) -> Dict[str, Any]:
+    def build_case(self, summary: Mapping[str, Any],
+                   reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> Dict[str, Any]:
         from robot_debug import scenario_experiment as se
 
         try:
-            return se.build_case(summary)
+            return se.build_case(summary, reductions)
         except (ValueError, KeyError, TypeError):
             raise StopRun("case_failed", "the summary cannot be turned into a case") from None
 
@@ -1216,6 +1217,7 @@ class Orchestrator:
         # YYMMDDHHMMSS: to the second, so two runs of one spec in the same minute cannot share Job names.
         self.tag = (match.group(1)[2:] + match.group(2)) if match else "000000" + "000000"
         self.notes: List[str] = []
+        self._reductions: List[Dict[str, Any]] = []      # the layout route's reduction summaries, in Job order
 
     def _checkpoint_args(self) -> Dict[str, Any]:
         """Keyword arguments for the workload builders: the override, or nothing at all."""
@@ -1805,6 +1807,7 @@ class Orchestrator:
         last: Optional[Dict[str, Any]] = None
         reason: Optional[str] = None
         previous_selection = None
+        self._reductions = []              # every reduction Job's summary, for the case's shrink history
         for index in range(1 + MAX_CONTINUATIONS):
             step = "reduce" if index == 0 else "reduce{}".format(index + 1)
             path = self.run_dir / "plans" / ("plan.json" if index == 0 else "plan-{}.json".format(step))
@@ -1821,6 +1824,7 @@ class Orchestrator:
                     raise                   # a user stop leaves the report and case to the resumed run
                 return best, last, stop.reason
             last = outcome.summary
+            self._reductions.append(last)
             reduction = last.get("reduction") or {}
             if verified_selection(reduction):
                 best = last
@@ -1869,7 +1873,7 @@ class Orchestrator:
     def _case_and_after(self, summary: Mapping[str, Any]) -> Optional[str]:
         case_path = self.run_dir / "case.json"
         if not self.steps.is_done("case"):
-            case = self.tools.build_case(summary)
+            case = self.tools.build_case(summary, list(self._reductions) or [summary])
             _write_json(case_path, case)
             candidate = (case.get("replay") or {}).get("candidate")
             if candidate:
