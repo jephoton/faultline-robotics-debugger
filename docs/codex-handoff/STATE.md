@@ -173,7 +173,19 @@ October 30, 10:00 PT.
       per-suite subfolders, which the override does not load. It is not
       pursued for the submission. A second-task layout case and a flaky-route
       run were offered and not chosen.
-   2. **Gallery refresh** with the new cases (Jethro's go). Export only the
+   2. **UI polish found in the showcase runs** (green):
+      - the audit case report keeps the legacy title "M6 results: camera
+        reliance…";
+      - the research summary repeats its citation ("[S1] [S1]");
+      - the run log describes a passing start as "does not fail reliably:
+        trying the chosen probes";
+      - replay run names come out as `replay-<name>---stress-test`;
+      - the form's Name does not follow a suite or start change;
+      - the Review's probe-branch text still says a flaky start skips
+        rewordings;
+      - audit cases record no checkpoint, so their replays say "checkpoint
+        not recorded".
+   3. **Gallery refresh** with the new cases (Jethro's go). Export only the
       chosen cases (`faultline export --case <id>`). Drop the September
       occlusion case `FL-M-52D8`, `FL-S-AFB5` (replaced), `FL-A-08D3` and
       `FL-A-A70E`; they stay in the local library.
