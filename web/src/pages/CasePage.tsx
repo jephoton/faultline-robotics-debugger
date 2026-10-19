@@ -68,7 +68,7 @@ function ReportFirstBody({ detail }: { detail: Detail }) {
   );
 }
 
-/** A case with no stored report (the September occlusion case): the structured view. */
+/** A case with no stored report (an occlusion case from the earlier experiment modes): the structured view. */
 function StructuredBody({ detail }: { detail: Detail }) {
   return (
     <>

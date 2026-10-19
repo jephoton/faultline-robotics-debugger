@@ -1,7 +1,7 @@
 """Optional web context for the cases of a diagnosis run (ADR 0035).
 
 For one new case this plans a few fixed-template queries, retrieves public sources with Tavily and asks
-Nemotron 3 Nano for a short, source-cited note. It reuses the primitives of the September occlusion research path
+Nemotron 3 Nano for a short, source-cited note. It reuses the primitives of the earlier occlusion-case research path
 (``scripts/research_case.py``): :mod:`robot_debug.tavily_search` (cache, credit ledger), the source numbering of
 :func:`robot_debug.research_store.assign_sources`, the Token Factory request of
 :func:`robot_debug.token_factory.request_research_summary` and the output checks of

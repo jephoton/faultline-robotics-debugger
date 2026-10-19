@@ -11,7 +11,7 @@ export interface ReadoutField {
 }
 
 interface Props {
-  /** Fault code such as FL-S-AFB5, or a run label. */
+  /** Fault code such as FL-A-D582, or a run label. */
   code: string;
   /** Small caption above or beside the code, for example "Fault code". */
   tag?: string;

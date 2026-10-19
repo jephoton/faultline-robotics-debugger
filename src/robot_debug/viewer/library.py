@@ -2,7 +2,7 @@
 
 A *library item* is one finished piece of work the sidebar lists: a registered diagnosis
 (``d-<case id>``), a finished run that left no case (``r-<run folder>``, for example a paraphrase run that
-found no failure) or the September occlusion case (``m-<case id>``). :class:`Library` builds the list
+found no failure) or an occlusion case (``m-<case id>``). :class:`Library` builds the list
 (:meth:`Library.list`) and one item's full page (:meth:`Library.detail`) from the files the CLI already
 keeps: ``diagnoses/<id>/``, ``runs/<run>/`` and the case store.
 
@@ -132,7 +132,7 @@ def stamp_to_iso(run_name: Any) -> Optional[str]:
 
 
 def fault_code(kind: str, key: str, digits: int = 4) -> str:
-    """The display-only fault code, ``FL-S-AFB5``: kind letter plus the first hex digits of the case id (or of
+    """The display-only fault code, ``FL-A-D582``: kind letter plus the first hex digits of the case id (or of
     the sha256 of the run folder name for an item with no case). It never replaces the id."""
 
     if not re.fullmatch(r"[0-9a-fA-F]+", key or "") or len(key) < digits:
@@ -422,7 +422,7 @@ class Library:
             if case is None or case.get("case_id") != directory.name:
                 warnings.append("an occlusion case entry is unavailable or invalid")
                 continue
-            item = self._base_item("m-" + directory.name, "occlusion", "September occlusion case")
+            item = self._base_item("m-" + directory.name, "occlusion", "Occlusion case")
             rectangle = _mapping(_mapping(case.get("perturbation")).get("rectangle"))
             area = (_number(rectangle.get("width")) or 0) * (_number(rectangle.get("height")) or 0)
             task = _mapping(case.get("task"))
@@ -666,7 +666,7 @@ class Library:
             detail["audit"] = {"start_index": None, "nominal": None, "families": []}
         detail["history"] = self._history(run_dir)
 
-    # -- the September occlusion case ------------------------------------------------------------
+    # -- occlusion cases (earlier experiment modes) ------------------------------------------------------------
 
     def _occlusion_detail(self, detail: Dict[str, Any], case_id: str) -> None:
         inspect = self._inspect or _default_inspect
