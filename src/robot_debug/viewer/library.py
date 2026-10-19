@@ -238,7 +238,7 @@ def _scenario_summary(case: Mapping[str, Any]) -> Tuple[str, str, bool]:
         text = "Fully reduced: {} of {} differences from the passing start cause the failure.".format(kept, total)
     elif minimal.get("entity_minimal"):
         text = ("Entity-minimal: {} of {} differences from the passing start are enough; their sizes were not "
-                "shrunk.".format(kept, total))
+                "fully shrunk.".format(kept, total))
     else:
         text = "Reduced to {} of {} differences from the passing start; the reduction was cut short.".format(kept, total)
     reason = _str(case.get("stop_reason"))

@@ -93,7 +93,7 @@ class ListTests(LibraryCase):
         self.assertEqual((item["suite"], item["task_id"], item["instruction"]), ("libero_10", 0, fx.INSTRUCTION))
         self.assertEqual((item["created"], item["case_id"], item["run"]), ("2026-10-16T06:45:28Z", fx.SCENARIO_ID, fx.SCENARIO_RUN))
         self.assertEqual(item["verdict_text"], "Entity-minimal: 3 of 4 differences from the passing start are enough; "
-                                               "their sizes were not shrunk.")
+                                               "their sizes were not fully shrunk.")
         self.assertTrue(item["attention"], "stopped at the candidate budget")
 
     def test_a_fully_reduced_scenario_needs_no_attention(self):
