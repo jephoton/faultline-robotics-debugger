@@ -43,5 +43,38 @@ the defaults (US$2.50 cap, 1.5 hours) on v16.
 | Step | Wall clock | Container | Cost |
 | --- | --- | --- | --- |
 | Check (screen Job) | 16 min (5.3 min to start, 8.1 running, about 2.4 to read the results) | 8.1 min | US$0.35 |
+| Probe Job (blur, noise, darken, contrast) | 30 min | 6.5 min of timed testing (135 episodes, 20.9/min), 5.6 min model prefetch | US$0.54 |
+| **Total** | **36.5 min** | | **US$0.90** |
 
-The start passed untouched, so the run took the probe route.
+The start passed untouched (0 of 5 failed), so the run took the probe route.
+That was faster than the Review's typical estimate of about 45 minutes.
+
+**Case `FL-A-D582`:**
+
+| Family | Result | Levels in the order tried (failures/attempts) |
+| --- | --- | --- |
+| Gaussian blur | fails from s = 0.4625 (sigma 3.70 px) | 0.2: 0/5, 0.4: 1/5, 0.6: 4/5, 0.5: 4/5, 0.45: 1/5, 0.475: 4/5, 0.4625: 5/5 |
+| Gaussian noise | fails from s = 1.0 (sigma 100 of 255) | 0.2–0.6: 0/5, 0.8: 1/5, 1: 4/5, then 0.9–0.9875: 3/5 each |
+| Darkening | no failure up to s = 1 | all 0/5 |
+| Contrast reduction | no failure up to s = 1 | all 0/5 |
+
+The research step attached 13 public sources (Tavily, summarised by Nemotron
+3 Nano) as context.
+
+### Replay of `FL-A-D582` (same checkpoint)
+
+The replay was run from the case's Regression test section on image v17. It
+was v17's first cloud use, and it worked: 8.0 container minutes, US$0.35.
+Verdict: **still fails**.
+- Control: 0 of 5 failed.
+- Blur at s = 0.4625: 4 of 5 failed (the gate is met).
+- Noise at s = 1.0: 3 of 5 failed (the gate is not met).
+
+Noise sat at the edge of the gate in the original search: 4 of 5 at s = 1,
+and 3 of 5 at every bisection level. Its threshold should be read as
+borderline. Blur is the robust finding.
+
+Run 1 and its replay together cost **US$1.25** of the US$4 approved.
+
+The replay result does not name a checkpoint, because stress-test cases do
+not record one. The UI shows "checkpoint not recorded".

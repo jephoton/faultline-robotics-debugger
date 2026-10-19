@@ -365,7 +365,9 @@ its failing condition and see whether it still fails.
 **Recorded:**
 - `FL-S-AFB5`, October 15: **Still fails** on the original policy (checkpoint
   not recorded), US$0.41.
-- `FL-A-D582`, October 19: *(result pending)*.
+- `FL-A-D582`, October 19: **Still fails** on the original policy, US$0.35.
+  Blur at s = 0.4625 failed 4 of 5. Noise at s = 1.0 failed 3 of 5 (it
+  failed 4 of 5 when found), so its threshold is borderline.
 - The layout case from run 2: *(pending)*.
 
 **From a script:** the section shows the command
