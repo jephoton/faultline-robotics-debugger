@@ -6,9 +6,9 @@
 
 ## Start here
 
-- [Architecture](../architecture.md): plain-language terms, two product modes
-  versus three execution paths, full-system and user-journey diagrams, model
-  roles, UI fields/actions/evidence and known capability/clarity limits.
+- [Architecture](../architecture.md): the system and user-flow diagrams, the
+  inside of a cloud Job, the diagnosis engines, model roles, spending and
+  safety, and a code map.
 - [Current state](STATE.md): verified project position, active proposals,
   next actions and gates. Old run caps in the historical archive are not
   current authority.

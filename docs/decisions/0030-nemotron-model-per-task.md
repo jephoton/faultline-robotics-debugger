@@ -42,3 +42,20 @@ plain sentence per rerun and the list of shrink sizes already tested.
   example a 600-character limit) and a fresh comparison.
 - Instruction paraphrases use Super (comparison above; one call per model at
   temperature 0.7 on the LIBERO-Object task 0 instruction).
+
+## Amendment (October 19, 2026): next steps replace the research summary
+
+Jethro found the research section was only a list of sources that nothing
+used. Nano's summary was also rejected as invalid for `FL-S-8E0D`. Under
+the plan `docs/superpowers/plans/2026-10-19-team-first-report-and-next-steps.md`,
+the research step now asks **Nemotron 3 Ultra** for two to four suggested
+next steps.
+- **Input:** the case's measured facts and the Tavily sources.
+- **Citations:** each step cites a source or a rerun, checked against the
+  list.
+- **Failure:** invalid output fails closed.
+
+Ultra was chosen because it gave valid structured output where Nano's summary
+did not; one call costs about a cent. Stored Nano summaries of older cases
+stay readable.
+

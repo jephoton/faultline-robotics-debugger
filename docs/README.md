@@ -11,8 +11,9 @@ suite, task, start and perturbation family; none is a general claim.
   cases, videos and reports, without installation or a cloud account.
 - [Quickstart: run a diagnosis](setup/diagnose.md): setup, specs, dry run,
   resume, replay.
-- [Architecture and full UI map](architecture.md): Mode 1 versus Mode 2,
-  execution paths, local/cloud diagrams, user flow and current UI capabilities.
+- [Architecture](architecture.md): the system and user-flow diagrams, what
+  happens inside a cloud Job, the diagnosis engines, where Nemotron and Tavily
+  sit, spending and safety, and a code map.
 - [Reference](reference.md): the modes, the repeatability gate, how a
   reduction works, every severity level, every report column and
   abbreviation, verdicts, stop reasons and the spend cap (also a page in the

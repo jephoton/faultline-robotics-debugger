@@ -34,7 +34,7 @@ budget:
   max_hours: 1.5
   max_candidates: 36
 nemotron: {hypothesis: true, explain: true}
-# Web context for each new case (Tavily source discovery, summarised by Nemotron 3 Nano). Shown as context,
+# Suggested next steps for each new case (Tavily sources, cited by Nemotron 3 Ultra). Shown as suggestions,
 # never as evidence. Skipped silently without a TAVILY_API_KEY in the env file.
 research: true
 backend:

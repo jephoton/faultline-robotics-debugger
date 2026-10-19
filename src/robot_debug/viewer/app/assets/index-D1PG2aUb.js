@@ -302,14 +302,18 @@ Defaults:
 - The other six families and rewordings are one tick away. More families mean
   more probe Jobs, about half an hour each.
 
-### Related research (optional)
+### Related research and next steps (optional)
 
 With **Find related research** ticked and a Tavily key in \`.env\`, each new
-case gets a **Research context** section:
+case gets **Suggested next steps** in its Nemotron box:
 - Tavily finds public sources about similar failures;
-- Nemotron 3 Nano summarises them.
+- Nemotron 3 Ultra receives the case's measured facts and those sources, and
+  writes two to four steps a team could try. Each step cites a source or a
+  rerun; citations are checked against the list, and invalid output is
+  dropped.
 
-It is context, not evidence: it cannot say why this policy failed.
+They are suggestions, not evidence: they cannot say why this policy failed.
+Only the cited sources are listed under them.
 
 The tickbox starts ticked only when the machine has a Tavily key. Ticking it
 without a key never stops a diagnosis: the Review shows a note and the run

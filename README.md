@@ -132,8 +132,8 @@ your own failing start-state file. Both go straight to the layout route.
 `faultline replay` (or **Replay** on any case page) reruns a case on any
 checkpoint, `policy.checkpoint` in the replay spec included, so you can test
 a retrained policy against the failures you found. Optionally, each new case
-also gets related public research (Tavily sources, summarised by Nemotron 3
-Nano), shown as context, not evidence.
+also gets suggested next steps: Nemotron 3 Ultra cites public sources found
+with Tavily. They are suggestions, not evidence.
 
 Typical cost and time with the defaults (one L40S, measured runs):
 - about US$1.25 and 45 minutes when the start passes;
@@ -229,15 +229,15 @@ regression test ([write-up](docs/experiments/m7-final-showcase.md)).
   comparison ([ADR 0030](docs/decisions/0030-nemotron-model-per-task.md)):
   Nemotron 3 Ultra ranks a scenario failure's differences and states a
   hypothesis before any rerun, and explains each verified scenario case;
-  Nemotron 3 Super writes instruction paraphrases; Nemotron 3 Nano summarises
-  research. Audit and paraphrase cases have no Nemotron
-  explanation yet. Model output is kept separate from measured evidence: "the
+  it also writes each new case's suggested next steps, citing Tavily sources.
+  Nemotron 3 Super writes instruction paraphrases. Audit and paraphrase cases
+  have no Nemotron explanation yet. Model output is kept separate from measured evidence: "the
   model proposes, the simulator verifies".
 - **Nebius AI Cloud Serverless Jobs** run every diagnosis, replay and audit
   (one L40S each), with evidence exported to private Object Storage.
-- **Tavily** finds source-linked public research for each new case, in the
-  New diagnosis's optional research step (Nemotron 3 Nano summarises it). It
-  is context, not evidence ([M5D](docs/experiments/m5d-tavily-research.md)
+- **Tavily** finds public sources for each new case, in the New diagnosis's
+  optional research step. Nemotron 3 Ultra cites them in the suggested next
+  steps, which are suggestions, not evidence ([M5D](docs/experiments/m5d-tavily-research.md)
   records the first experiment).
 
 ## How it runs
