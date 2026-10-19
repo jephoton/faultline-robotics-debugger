@@ -2,7 +2,9 @@
 
 Status: **incomplete**. Jethro supplied an AI Cloud consumption screenshot on
 October 20. The crop does not show its date range, account/project filter,
-currency code or whether other billing accounts are included. It is a console
+currency code. Jethro subsequently confirmed this is the **only AI Cloud
+account used for Faultline**; the earlier planned account split was not the
+actual usage scope. It is a console
 usage view, not evidence of a settled invoice or total project spend. Do not
 commit the original screenshot or private billing/account details here.
 
@@ -44,10 +46,11 @@ sum or infer a billing error without underlying usage/export precision.
 
 ## Inputs still needed
 
-1. Confirm the screenshot's date range, currency and which service/account
-   scope it covers, without posting account identifiers.
-2. Provide other AI Cloud periods/accounts used by this project, if any, or
-   confirm this is the complete project view.
+1. Confirm the screenshot's date range, currency and project filters, without
+   posting account identifiers.
+2. Provide other periods for this same AI Cloud account if the screenshot
+   does not cover the whole project. No second AI Cloud account is needed;
+   Jethro confirmed only one was used.
 3. Provide Token Factory usage charges and date range separately. Its credit
    balance/top-ups do not establish inference usage.
 4. Where practical, use a redacted usage breakdown/export to map cloud time

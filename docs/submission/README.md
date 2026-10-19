@@ -16,7 +16,7 @@ Working package for human review, not an already submitted entry.
 
 | Item | Needed input | Current position |
 | --- | --- | --- |
-| Billing | Usage totals, currency and billing periods; redact personal/payment details | One screenshot: $42.04 including VAT, scope/date range missing. Reported $0.82 remaining is not usage or a spending allowance |
+| Billing | Usage totals, currency and billing periods; redact personal/payment details | One screenshot: $42.04 including VAT. Jethro confirms only this AI Cloud account was used; date range/project filters remain pending. Reported $0.82 remaining is not usage or a spending allowance |
 | Feedback | Confirm or amend [first-hand notes](../../FEEDBACK.md#jethros-first-hand-notes); add onboarding/reuse opinions if desired | Existing notes concern sign-in expiry and capacity waits; not newly confirmed |
 | Video | Approve/edit script and select narration approach | Timed draft only, no finished video or public YouTube link |
 | Cover | Approve a cover derived from the app after the final story is settled | Not produced; no image-generation spend approved |
@@ -33,7 +33,8 @@ Working package for human review, not an already submitted entry.
 
 Use posted charges, not credit purchases or remaining balances. Separate AI
 Cloud GPU, storage, egress/tax and Token Factory inference where billing makes
-that possible; keep initial-account and main-account boundaries. Report any
+that possible. The earlier intended two-account split was not actual usage:
+Jethro confirmed only one AI Cloud account was used. Report any
 unmatched total transparently rather than forcing it to agree with estimates.
 No credentials, account IDs or invoice/payment details belong in this file.
 

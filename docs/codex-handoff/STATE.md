@@ -59,6 +59,11 @@ These are drafts, not a Devpost/YouTube submission or another gallery release.
   in the app side panel; confirmation remains pending. A subsequently supplied
   consumption crop shows **$42.04 including $3.47 VAT**; date/account scope and
   currency code are absent. See [partial billing reconciliation](../submission/billing-reconciliation.md).
+- Jethro subsequently confirmed this is the **only AI Cloud account used for
+  Faultline**. Do not request a second account's bill based on the earlier
+  intended account split. Await date range/currency/project filters and the
+  separate Token Factory usage screenshot; the $42.04 is still scoped evidence,
+  not a reconciled lifetime total.
 - Jethro requested a shorter FEEDBACK. The root summary is now about 870
   words instead of 4,596, retaining the table and both first-hand notes.
   Original dated detail is preserved in

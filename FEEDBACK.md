@@ -38,7 +38,8 @@ These existing notes are retained for Jethro's confirmation before submission.
 
 Run-level figures in the linked notes are estimates, not finalized bills.
 The latest supplied billing screenshot shows a **$42.04 total including VAT**
-for an unidentified date/account filter; it is not yet a reconciled project
+for a date/project filter not yet confirmed; Jethro confirmed only this AI
+Cloud account was used. It is not yet a reconciled project
 total. See the [billing worksheet](docs/submission/billing-reconciliation.md).
 Do not add overlapping session totals or treat a reservation as a charge.
 

@@ -107,8 +107,9 @@ seek organizer clarification if they require unrestricted paid execution.
 
 ## Remaining gates
 
-1. Confirm date/currency/account scope for the supplied $42.04 AI Cloud view,
-   other account/period usage if relevant, and Token Factory charges; see
+1. Confirm date/currency/project filters for the supplied $42.04 AI Cloud view,
+   other periods if relevant, and Token Factory charges. Jethro confirmed only
+   this AI Cloud account was used for Faultline; see
    [the partial reconciliation](billing-reconciliation.md). Do not add
    overlapping session estimates.
 2. Jethro confirms first-hand feedback and entrant/right-to-use declarations.
