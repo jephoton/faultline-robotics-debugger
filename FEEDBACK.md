@@ -9,6 +9,14 @@ addresses or payment details here.
 
 ## October 17 publication-only checkpoint
 
+**October 20 refresh:** the same three showcase cases were redeployed after
+cleanup using the existing Vercel account/project. An exact dry-run file list
+and checksum verification of all 40 served files worked, and an unauthenticated
+browser saw the updated read-only experience. No new Nebius, NVIDIA or Tavily
+interaction or inference spend occurred in this publication. Hosting usage is
+subject to the existing account plan; no upgrade was made. This adds no new
+provider/model-quality conclusion. See [the publication record](docs/experiments/m7-public-gallery.md).
+
 The [public gallery](https://faultline-robotics-debugger.vercel.app) now exposes
 reviewed recordings and reports from the completed Nebius/GR00T experiments.
 Publication ran no additional Nebius Job, Token Factory generation or Tavily

@@ -31,3 +31,12 @@ This is execution of the accepted gallery design, not a new product step.
 
 No billing reconciliation, rules audit, submission writing/video or final
 submission is performed just because this publication is approved.
+
+## Acceptance
+
+Completed October 20 on the existing stable public URL. Source `5f23cae`;
+41 upload files / 12,731,095 bytes, 40 served files verified by SHA-256,
+three approved cases and 13 videos. Visitor browser checks and the 34-test
+export/demo suite passed (36 subtests). The publication record and current
+handoff contain the detailed scope and remaining submission work. Only
+documentation changed in Git; no application rebuild or new experiment.

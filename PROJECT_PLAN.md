@@ -2,7 +2,7 @@
 
 # Faultline Project Roadmap
 
-## Current status — October 17, 2026
+## Current status — October 20, 2026
 
 Faultline finds a robot-policy failure, confirms that it repeats, reduces it to
 a minimal trigger and saves it as a replayable regression case. The
@@ -18,18 +18,18 @@ a minimal trigger and saves it as a replayable regression case. The
 | M4 failure reducer | Complete: 25% occlusion reduced to 14.06% |
 | M5 report, viewer, external replay, Nemotron, Tavily (M5–M5D) | Complete (October 3–12) |
 | M6 camera roles and scalar families | Complete: wrist camera drives the grasp (hypothesis); blur from sigma 3.9 px and noise from sigma 95 break GR00T ([ADR 0026](docs/decisions/0026-m6-camera-reliance-and-scalar-families.md)) |
-| **M7a product consolidation** | **Complete (October 17): steps 1–5 done.** Scenario reduction/import, `diagnose`/`replay`, four-suite breadth pack, control panel and the [public gallery](https://faultline-robotics-debugger.vercel.app). [Publication acceptance and limitations](docs/experiments/m7-public-gallery.md); [product decisions](docs/decisions/0027-m7-product-consolidation-and-access.md) |
-| M7b submission | Due October 30, 10:00 PT (target October 29). Order agreed October 18: demos → stale gallery → remaining things (final runs on image v17 incl. a second-checkpoint replay, gallery refresh, results refresh, billing reconciliation, FEEDBACK, fresh-machine test, rules re-check, Devpost text) → video and cover → submission. Story: [ADR 0034](docs/decisions/0034-narrative-regression-tests.md). Details: `docs/codex-handoff/STATE.md`. |
+| **M7a product consolidation** | **Complete.** Post-walkthrough cleanup is integrated and the three-case [public gallery](https://faultline-robotics-debugger.vercel.app) was refreshed and verified October 20. Scenario reduction/import, `diagnose`/`replay`, breadth evidence and control panel remain in place. [Publication acceptance and limitations](docs/experiments/m7-public-gallery.md); [product decisions](docs/decisions/0027-m7-product-consolidation-and-access.md) |
+| M7b submission | Walkthroughs, cleanup and gallery refresh done. Remaining: billing reconciliation, first-hand FEEDBACK review, clean-checkout/public-repo audit, current rules re-check, Devpost story, video/cover and submission. Story: [ADR 0034](docs/decisions/0034-narrative-regression-tests.md). Details: `docs/codex-handoff/STATE.md`. |
 
 Spend so far is tracked per experiment note; every figure there is an estimate
 pending billing reconciliation, and the current Nebius balance is in the
 billing console (see billing, not this file). Roadmap order and
 timeboxes: [ADR 0023](docs/decisions/0023-post-m5-roadmap-order.md).
 
-**Immediate next milestone:** M7b submission preparation. M7a step 5 was
-authorized and completed October 17 after the handoff refresh: the reviewed
-static gallery is public and visitor/media checks passed. No new GPU/API spend
-or public container image was authorized. See the
+**Immediate next milestone:** M7b submission readiness, not another core feature
+or GPU run. The October 20 gallery refresh passed visitor/media integrity checks;
+the six UI walkthroughs are finished. No new GPU/API run or public container
+image was needed or authorized by this redeployment. See the
 [execution record](docs/experiments/m7-public-gallery.md).
 
 **Everything below is the original September 12 startup plan, kept for

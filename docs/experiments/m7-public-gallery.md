@@ -1,14 +1,55 @@
 # M7a step 5: public gallery
 
-## October 19 cleanup export — prepared, not deployed
+## October 20 production refresh — verified
+
+Jethro authorized carrying on with the reviewed redeployment without another
+product decision. Published to the existing
+[Faultline gallery](https://faultline-robotics-debugger.vercel.app), with no
+new project, domain, hosting upgrade, GPU Job, Nemotron call or Tavily search.
+
+The source application/evidence checkpoint is `5f23cae`; the publication plan
+is [the October 20 redeployment](../superpowers/plans/2026-10-20-gallery-redeploy.md).
+The existing ignored `artifacts/public-gallery-20261019-cleanup-final/` payload
+matched the committed bundle and passed the privacy guard. Vercel's dry run
+enumerated exactly **41 files, 12,731,095 bytes**; `.vercel` and `.vercelignore`
+were excluded. The only project association copied was the existing
+`.vercel/project.json`, never authentication or environment files.
+
+The site still contains only **FL-S-8E0D, FL-A-D582 and FL-A-F526**, with
+**13 videos**. It now includes unified Cases navigation, rewritten Reference
+and Run your own, the refreshed D582 suggestions, F526's four per-family level
+tables, and accurate partly-shrunk layout wording. The local-only wording
+example was not added to the public gallery.
+
+Visitor acceptance (fresh unauthenticated browser context):
+
+- All **40 served files**, including all videos, matched local SHA-256 hashes.
+  `vercel.json` is deployment configuration, not one of the served files.
+- Static session: controls false, token null, exactly three cases, no warnings.
+- Three case deep links and reloads worked. Representative videos for each
+  case loaded duration and 256×256 dimensions (26.05 s, 7.1 s and 3.85 s).
+- Updated D582 text and F526's four `tried as` tables rendered. Reference,
+  the guide's `#image` anchor and the removed `/evidence` route behaved as
+  expected. Desktop and narrow-screen home rendered without horizontal overflow.
+- No browser page errors, failed responses, mutating requests or third-party
+  network requests. No public diagnosis/replay controls were present.
+- Fresh exporter/offline-demo tests: **34 passed, 36 subtests passed**.
+
+Local acceptance receipt: `artifacts/gallery-redeploy-20261020/` (ignored).
+The checksum inventory fingerprint is
+`e65f9eaac4ea42700a3c5016b0b99e91570698a7cccdba986ad18b0f34e9d93e`.
+Checks establish publication integrity and rendered behavior, not new robot
+experiments, validation of suggested remedies or a full submission audit.
+
+## October 19 cleanup export — preparation history (deployed October 20 above)
 
 The post-walkthrough cleanup prepared the ignored local export
 `artifacts/public-gallery-20261019-cleanup-final/`: the same three approved showcase
 cases, 13 videos, refreshed D582 suggestions and F526 per-family tables, unified
 Cases navigation and rewritten Reference/Run your own. Exporter privacy guards
 passed; a local browser preview had no controls, page errors or failed requests.
-Production publication still needs Jethro's go. This is not another deployment
-or permission to publish the restored wording example/private run artifacts.
+At preparation time publication still needed Jethro's go; that gate was cleared
+on October 20 above. The wording example/private run artifacts remain excluded.
 
 ## Result — October 17, 2026
 

@@ -4,15 +4,41 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Post-walkthrough cleanup — October 19** for the latest work.
+> Read **Gallery production refresh — October 20** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
-## Current position — October 19, 2026
+## Current position — October 20, 2026
 
 Jethro finished the six demo walkthroughs and explicitly authorized the complete
 cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
-finished; see the checkpoint below for publication and submission gates.
+finished and the reviewed gallery has now been redeployed. See the checkpoint
+below for the remaining submission tasks, not another publication gate.
+
+## Gallery production refresh — October 20
+
+Jethro authorized carrying on with the existing three-case gallery, without
+new product choices. The stable
+[public gallery](https://faultline-robotics-debugger.vercel.app) now serves the
+cleanup from source checkpoint `5f23cae`: unified Cases navigation, rewritten
+docs, refreshed D582 suggestions and F526 level tables. No additional cases,
+cloud/model runs, hosting upgrades or repository visibility changes.
+
+Publication preflight enumerated 41 files (12,731,095 bytes), with credential
+and project metadata excluded from upload. All 40 served files matched their
+SHA-256 hashes remotely, including 13 videos. Fresh unauthenticated browser
+checks passed for all three case deep links/reloads, docs/guide anchor, F526
+tables, D582 text, read-only controls and desktop/mobile home. Representative
+video metadata loaded for each case; no page errors, failed responses,
+mutating or external network requests. Focused export/demo suite: 34 tests
+and 36 subtests passed. Local wording example remains local only.
+
+See [the publication record](../experiments/m7-public-gallery.md) and
+[execution plan](../superpowers/plans/2026-10-20-gallery-redeploy.md). The
+deployment boundary is complete; next tasks are billing reconciliation,
+first-hand feedback, judge-facing clean-checkout/public-repo audit, current
+rules re-check, Devpost story, video/cover and submission. No further paid
+robot experiment is approved or needed merely for publication.
 
 ## Post-walkthrough cleanup — October 19
 
@@ -61,7 +87,8 @@ finished; see the checkpoint below for publication and submission gates.
   was verified as `jephoton`, and the cleanup was pushed. CI for the final
   checkpoint must be checked independently of earlier recorded counts.
 
-**Next:** reviewed gallery redeploy needs Jethro's go. Then do billing
+**Publication gate cleared October 20:** the reviewed gallery was redeployed
+and verified above. Next do billing
 reconciliation, first-hand FEEDBACK review, clean-checkout/public-repo audit,
 current Devpost rules check, write-up, pitch video/cover and final submission.
 These have not been claimed complete. No new GPU tests are needed for cleanup;

@@ -33,6 +33,14 @@ titles/URLs and accepted suggestions, not third-party search snippets.
 
 ## Public gallery publication — October 17
 
+October 20 refresh reused the existing project association and inspected the
+41-file CLI dry-run manifest before publishing. The CLI's optional version-check
+worker initially reported a local cache-lock permission error; the documented
+`NO_UPDATE_NOTIFIER` environment switch found in the installed CLI disabled
+that check for these processes only. No cache/auth files were deleted and no
+TLS verification was disabled. The deployment and remote/browser acceptance
+succeeded. This is workstation/CLI friction, not a Nebius/NVIDIA incident.
+
 The installed Vercel CLI could not validate its initial HTTPS connection with
 Node's default CA configuration. Setting `NODE_USE_SYSTEM_CA=1` for the CLI
 process enabled the trusted workstation system store; authentication and
