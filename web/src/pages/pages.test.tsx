@@ -90,6 +90,18 @@ describe('setup', () => {
 });
 
 describe('guide', () => {
+  it('separates offline inspection from paid operation and links detailed setup', async () => {
+    renderApp('/guide');
+    await screen.findByRole('heading', { level: 1, name: 'Run your own' });
+    const main = screen.getByRole('main');
+    await within(main).findByRole('heading', { name: /Preview without cloud access/ });
+    expect(within(main).getByRole('link', { name: 'Detailed setup and CLI quickstart' })).toHaveAttribute(
+      'href', 'https://github.com/jephoton/faultline-robotics-debugger/blob/main/docs/setup/diagnose.md',
+    );
+    expect(within(main).getByRole('link', { name: 'UI walkthrough and demo scenarios' })).toBeInTheDocument();
+    expect(within(main).getByText(/Token Factory and storage are outside the Job cap/)).toBeInTheDocument();
+    expect(within(main).queryByText(/never paying twice/)).not.toBeInTheDocument();
+  });
   it('is a page of the quickstart with a table of contents, in both modes', async () => {
     renderApp('/guide', { mode: 'static' });
     expect(await screen.findByRole('heading', { level: 1, name: 'Run your own' })).toBeInTheDocument();
@@ -132,6 +144,19 @@ describe('reference page', () => {
 });
 
 describe('reference page in the app', () => {
+  it('focuses on interpreting measured evidence rather than setup or marketing promises', async () => {
+    renderApp('/reference');
+    await screen.findByRole('heading', { level: 1, name: 'Reference' });
+    const main = screen.getByRole('main');
+    await within(main).findByRole('heading', { name: /What Faultline is for/ });
+    expect(within(main).getByRole('heading', { name: /Repeatability and controls/ })).toBeInTheDocument();
+    expect(within(main).getByRole('heading', { name: /Disturbance severity/ })).toBeInTheDocument();
+    expect(within(main).getByRole('heading', { name: /Replay verdicts/ })).toBeInTheDocument();
+    expect(main.textContent).not.toContain('pip install');
+    expect(main.textContent).not.toContain('never runs twice');
+    expect(main.textContent).toContain('81.25%');
+    expect(main.textContent).toContain('0.0125');
+  });
   it('is reachable from the sidebar and shows the documented sections', async () => {
     renderApp('/reference');
     expect(await screen.findByRole('heading', { level: 1, name: 'Reference' })).toBeInTheDocument();

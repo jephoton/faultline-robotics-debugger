@@ -141,7 +141,7 @@ describe('report-first scenario case', () => {
     await openCase(IDS.soup);
     const fold = await openEvidence(user);
     expect(within(fold).getByRole('heading', { level: 3, name: "Nemotron's full reading" })).toBeInTheDocument();
-    expect(within(fold).getByText(/It is not evidence and needs human review/)).toBeInTheDocument();
+    expect(within(fold).queryByText(/It is not evidence and needs human review/)).not.toBeInTheDocument();
     expect(within(fold).getByText('Review required')).toBeInTheDocument();
     expect(within(fold).getByText('nvidia/nemotron-3-super-120b-a12b')).toBeInTheDocument();
     expect(within(fold).getByText('c12')).toBeInTheDocument();

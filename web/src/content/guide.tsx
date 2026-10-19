@@ -1,14 +1,10 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
-// The quickstart (docs/setup/diagnose.md) as a page. Placeholders in angle brackets are for you to fill in;
-// nothing here is a real id.
+const DOCS = 'https://github.com/jephoton/faultline-robotics-debugger/blob/main/docs/';
 
 function Code({ children }: { children: string }) {
-  return (
-    <pre>
-      <code>{children}</code>
-    </pre>
-  );
+  return <pre><code>{children}</code></pre>;
 }
 
 export interface GuideSection {
@@ -19,242 +15,72 @@ export interface GuideSection {
 
 export const GUIDE: GuideSection[] = [
   {
-    id: 'prerequisites',
-    title: '1. What you need',
-    body: (
-      <>
-        <ul>
-          <li>
-            <strong>Python 3.10 or 3.11</strong> and this repository, installed with <code>pip install -e ".[cli,cloud]"</code>. The
-            package pins NumPy 1.24, which has no wheels for Python 3.12 or later.
-          </li>
-          <li>
-            <strong>Docker</strong>, to build the simulator image once. On Windows, run Docker and the <code>nebius</code> CLI from the
-            same environment (Git Bash, or WSL).
-          </li>
-          <li>
-            The <strong>Nebius CLI</strong>, signed in to a project (<code>nebius iam whoami</code> works). The interactive sign-in
-            expires after about a day; if a run stops with &ldquo;sign-in has expired&rdquo;, sign in again and press Resume on the run.
-          </li>
-          <li>
-            <strong>L40S Serverless quota</strong> in that project: one <code>gpu-l40s-a</code> GPU with the{' '}
-            <code>1gpu-16vcpu-64gb</code> preset per Job. If GPUs are scarce, a Job waits and is resubmitted automatically, up to six times.
-          </li>
-          <li>
-            <strong>Hugging Face access</strong> (next section).
-          </li>
-          <li>
-            For Nemotron hypotheses, explanations and rewordings, a <strong>Token Factory key</strong> as <code>NEBIUS_API_KEY=...</code>{' '}
-            in a local <code>.env</code> file. Never commit it; it stays on your machine and never enters a Job.
-          </li>
-        </ul>
-      </>
-    ),
+    id: 'view', title: '1. Preview without cloud access',
+    body: <>
+      <p>To inspect the bundled case, install with Python 3.10 or 3.11 and run:</p>
+      <Code>{`python -m pip install -e ".[cli,cloud]"
+faultline ui --artifacts demo/root --open`}</Code>
+      <p>No cloud credentials are needed to read saved evidence. The published gallery is read-only; paid controls require your local server.</p>
+      <p><a href={`${DOCS}ui-runbook.md`}>UI walkthrough and demo scenarios</a> gives exact clicks and outcomes. <Link to="/reference">Reference</Link> explains counts, severity and verdicts.</p>
+    </>,
   },
   {
-    id: 'huggingface',
-    title: '2. Hugging Face: accept the model terms and store a token',
-    body: (
-      <>
-        <p>
-          GR00T loads NVIDIA&rsquo;s gated Cosmos-Reason2-2B model at run time, so every Job needs a Hugging Face token whose account has
-          accepted its terms. Without that the first observation fails with an HTTP 403.
-        </p>
-        <ol>
-          <li>Sign in to Hugging Face with the account you will make the token on, open the model page and accept the terms.</li>
-          <li>Create a read token for that account.</li>
-          <li>
-            Store it as a MysteryBox secret in your Nebius project. The secret&rsquo;s name is what a spec calls{' '}
-            <code>hf_token_secret</code>. Create it in the Nebius console, or from a bash shell without the token touching your history:
-          </li>
-        </ol>
-        <Code>{`read -rs HF_TOKEN_VALUE   # paste the token, press Enter (nothing is shown)
-nebius mysterybox secret create --parent-id <your-project-id> --name faultline-hf-token \\
-  --secret-version-payload "[{\\"key\\":\\"HF_TOKEN\\",\\"string_value\\":\\"$HF_TOKEN_VALUE\\"}]"
-unset HF_TOKEN_VALUE`}</Code>
-        <p>Never put the token in a spec or a chat. Faultline looks the secret up by name and gives the Job only its id.</p>
-      </>
-    ),
+    id: 'prerequisites', title: '2. Prepare your account',
+    body: <>
+      <p>Paid diagnoses need the Nebius CLI, an active AI Cloud project and balance, L40S Serverless quota, a private simulator image and model access. Docker is needed to build the image, not to browse results.</p>
+      <p>Sign in from a terminal with <code>nebius iam whoami</code>. Check project/region, balance/expiry, quota, resource prices and your intended cap before Start. Setup checks local readiness, not the full cloud allowance.</p>
+      <p>Use Python 3.10/3.11 for the pinned NumPy version. On Windows, the CLI can use WSL; sign in in the environment Faultline uses.</p>
+      <p><a href={`${DOCS}setup/diagnose.md`}>Detailed setup and CLI quickstart</a> has infrastructure commands. Optional keys belong in ignored <code>.env</code>: <code>NEBIUS_API_KEY</code> for Nemotron and <code>TAVILY_API_KEY</code> for research. Never put keys in YAML or Git.</p>
+    </>,
   },
   {
-    id: 'image',
-    title: '3. Registry and simulator image',
-    body: (
-      <>
-        <p>
-          Create a private Nebius container registry once, sign Docker in to it, then build and push the image from the repository
-          root. It is about 20 GB, so the first push takes a while. Model weights are never in the image.
-        </p>
-        <Code>{`nebius registry create --parent-id <your-project-id> --name faultline
-nebius iam get-access-token | docker login cr.<region>.nebius.cloud --username iam --password-stdin
-faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code>
-        <p>
-          The build prints the pushed <code>repository@sha256:...</code> reference to put in your spec. Repeat the{' '}
-          <code>docker login</code> line if a push is refused as unauthorised: that token is short-lived.
-        </p>
-      </>
-    ),
+    id: 'huggingface', title: '3. Hugging Face model access',
+    body: <>
+      <p>Use the same account to accept required model terms and create a read token. GR00T loads gated <a href="https://huggingface.co/nvidia/Cosmos-Reason2-2B">Cosmos-Reason2-2B</a> at runtime; missing access can fail the first observation.</p>
+      <p>Store the token in a MysteryBox secret using your Nebius console. Put only its <strong>name</strong> in <code>backend.hf_token_secret</code>. The secret is injected into the Job, not copied into YAML. See <a href={`${DOCS}setup/model-access.md`}>model access instructions</a>.</p>
+    </>,
   },
   {
-    id: 'spec',
-    title: '4. The spec',
-    body: (
-      <>
-        <p>
-          The New diagnosis page writes a spec for you and shows it under &ldquo;Edit YAML&rdquo;. It reuses the backend block (project,
-          image, secret name) from a local spec file, so keep one with your real values in a copy of an example from{' '}
-          <code>configs/specs/</code>, outside version control.
-        </p>
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">Example</th>
-                <th scope="col">What it does</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="mono">diagnose.yaml</td>
-                <td>
-                  The usual one (what New diagnosis writes): runs a start untouched; if it fails, reduces the layout to the smallest
-                  trigger; if it passes, probes the chosen disturbances and rewordings. Every failing condition becomes a replayable case.
-                </td>
-              </tr>
-              <tr>
-                <td className="mono">scenario-start.yaml</td>
-                <td>Layout reduction only, for a known failing benchmark start.</td>
-              </tr>
-              <tr>
-                <td className="mono">scenario-screen.yaml</td>
-                <td>Layout reduction that first searches a range of starts for one that fails reliably.</td>
-              </tr>
-              <tr>
-                <td className="mono">scenario-import.yaml</td>
-                <td>Layout reduction of a failing start of your own, from a start-state file.</td>
-              </tr>
-              <tr>
-                <td className="mono">audit.yaml</td>
-                <td>Disturbance probes only: the smallest image or scene disturbance that breaks a passing start.</td>
-              </tr>
-              <tr>
-                <td className="mono">paraphrase.yaml</td>
-                <td>Rewording probes only: a rewording that breaks the policy, reduced to the minimal word change.</td>
-              </tr>
-              <tr>
-                <td className="mono">replay.yaml</td>
-                <td>Settings for replaying a saved case.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          Every spec needs <code>budget.max_spend_usd</code> and <code>budget.max_hours</code>. Two options are worth knowing:
-        </p>
-        <h3>Bring your own failing start</h3>
-        <p>
-          A diagnosis takes exactly one of <code>start</code> (a benchmark start index), <code>screen</code> (a range to search) or{' '}
-          <code>import</code> (a file of your own); the last two go straight to the layout reduction:
-        </p>
-        <Code>{`diagnose:
-  task: 0
-  import: my-failing-start.json`}</Code>
-        <p>
-          The file is a JSON start-state candidate for one LIBERO suite and task. Faultline rejects anything malformed, oversized or from
-          a different scene, confirms your start fails at least 4 of 5 attempts, finds the nearest benchmark start that passes, and
-          reduces the differences between them.
-        </p>
-        <h3>Test a different checkpoint</h3>
-        <p>By default a Job serves the pinned GR00T N1.7 checkpoint for the spec&rsquo;s suite. To test a retrained policy, name it:</p>
-        <Code>{`policy:
-  suite: libero_10
-  checkpoint: {id: your-org/your-checkpoint, revision: <commit sha>}`}</Code>
-        <p>The checkpoint is downloaded with your Hugging Face token, so that account needs access. Faultline does not check that it fits the suite.</p>
-      </>
-    ),
+    id: 'image', title: '4. Registry and simulator image',
+    body: <>
+      <p>Build and push once to a private Nebius registry, from the repository root. The first upload is large. Model weights are downloaded at runtime, not bundled.</p>
+      <Code>{`faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}</Code>
+      <p>Follow the quickstart for registry creation and Docker sign-in. Put the printed pinned image reference in your local spec. Renew stale registry login if needed; do not disable TLS verification.</p>
+    </>,
   },
   {
-    id: 'run',
-    title: '5. Dry run, then run',
-    body: (
-      <>
-        <p>
-          The dry run lists every planned Job with its deadline and worst-case cost and creates nothing. The control panel always does a
-          dry run before it lets you start. From a terminal:
-        </p>
-        <Code>{`faultline diagnose my-spec.yaml --dry-run
+    id: 'spec', title: '5. Configure one diagnosis',
+    body: <>
+      <p>Copy <code>configs/specs/diagnose.yaml</code> into <code>artifacts/specs-local/</code>. Fill project, pinned image and Hugging Face secret name. Keep account-specific specs ignored. New diagnosis reuses that backend block and saves YAML under <code>artifacts/specs-ui/</code>.</p>
+      <ol>
+        <li>Choose suite, task and benchmark start. Verify your evaluator&apos;s episode-to-start mapping.</li>
+        <li>Select disturbances and optional rewordings for a passing start. A reliable untouched failure instead takes layout reduction; a flaky start stops.</li>
+        <li>Set the spend cap and hour limit, then Review. Inspect YAML for exact inputs.</li>
+      </ol>
+      <p>Range search and imported start-state files seek a layout failure only. Imports must match an existing LIBERO task, not arbitrary video. Rewordings require Nemotron; optional research needs Tavily. Missing research never blocks diagnosis.</p>
+    </>,
+  },
+  {
+    id: 'run', title: '6. Dry run, then run',
+    body: <>
+      <Code>{`faultline diagnose my-spec.yaml --dry-run
 faultline diagnose my-spec.yaml --env-file .env`}</Code>
-        <p>
-          Before each Job Faultline reserves a worst case: the provider timeout (deadline plus ten minutes) plus a four-minute start
-          allowance, at the hourly rate in the spec. The reservation is settled at the measured container time, and the run refuses a
-          Job that could exceed the cap. Treat the cap as a safety limit rather than a guarantee: the cost model has not been reconciled
-          against a Nebius bill yet.
-        </p>
-        <p>
-          Results land in <code>artifacts/runs/&lt;name&gt;-&lt;timestamp&gt;/</code>: a report, a case, a spend ledger, the downloaded
-          evidence and, when Nemotron is on, an explanation.
-        </p>
-      </>
-    ),
+      <p>Review lists Jobs, deadlines and estimates without starting compute. Inspect both possible branches; only one runs after the check. Start requires the first Job to fit. A later Job may stop at the cap.</p>
+      <p><strong>Start spends money.</strong> Token Factory and storage are outside the Job cap, as is optional Tavily research. Reservations guard estimated Job cost, not the account bill; reconcile with billing.</p>
+      <p>Follow progress in Running. Evidence stays in <code>artifacts/runs/&lt;run-folder&gt;/</code>; finished findings appear in Cases. No failure found is a valid result, not a reason to Resume.</p>
+    </>,
   },
   {
-    id: 'resume',
-    title: '6. Resume, stop and replay',
-    body: (
-      <>
-        <Code>{`faultline diagnose --resume artifacts/runs/<run-folder>
-faultline stop artifacts/runs/<run-folder>
+    id: 'resume', title: '7. Stop, recover and test a case again',
+    body: <>
+      <Code>{`faultline stop artifacts/runs/<run-folder>
+faultline diagnose --resume artifacts/runs/<run-folder>
 faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}</Code>
-        <p>
-          <strong>Resume</strong> continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying
-          twice) and replaces a worst-case charge with the measured one once it can read the Job. A run stopped at its spend cap or hour
-          limit can be resumed with a larger one (raise only, never lower): in the panel, next to Resume; from the command line, by raising
-          <code>budget</code> in the run folder's <code>spec.yaml</code>. A Job whose results could not be downloaded is downloaded again on
-          resume, not run again. <strong>Stop</strong> cancels the current
-          Job, waits for the provider to confirm, settles the cost and leaves the run resumable.
-        </p>
-        <p>
-          <strong>Replay</strong> re-runs a saved case and says whether its failing condition still fails: the regression test after you
-          change the policy. On a case page it is the <strong>Regression test</strong> section: choose the original policy or a new
-          checkpoint, estimate the cost, then run it. <code>--expect fixed</code> or <code>--expect reproduces</code> states which verdict you hope for, so the exit code tells a
-          script whether you got it. A new checkpoint goes under <code>policy.checkpoint</code> in the replay spec.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'view',
-    title: '7. This control panel',
-    body: (
-      <>
-        <p>Start it from the repository, then open the address it prints:</p>
-        <Code>{`faultline ui --artifacts artifacts`}</Code>
-        <p>
-          It listens on this machine only. Starting, stopping, resuming and replaying are controls of this local server; a published
-          gallery of the same pages has none. Each spec the panel runs is saved under <code>artifacts/specs-ui/</code>, so any run can be
-          repeated from a terminal.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'notes',
-    title: 'Notes',
-    body: (
-      <ul>
-        <li>
-          <strong>Costs.</strong> A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model
-          download.
-        </li>
-        <li>
-          <strong>Bucket quota.</strong> Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a
-          bucket access-policy quota, so delete emptied buckets from time to time.
-        </li>
-        <li>
-          <strong>Local backend.</strong> <code>backend: {'{kind: local}'}</code> needs Docker with the NVIDIA runtime and a large GPU; it is
-          implemented but untested on a real GPU.
-        </li>
-      </ul>
-    ),
+      <p>Stop requests cancellation and keeps resumable progress. Closing the browser/restarting the panel does not stop the detached diagnosis. Resume reattaches to a recorded Job; a failed download retries downloading rather than the experiment. It may submit later Jobs, so is not always free.</p>
+      <p>Renew expired sign-in in a terminal first. For a cap/time stop, inspect saved progress before raising limits for more paid work. Do not launch a second diagnosis as a recovery shortcut.</p>
+      <p>For a saved failure, choose Regression test and the original policy or a compatible checkpoint&apos;s Hugging Face ID and exact revision; Review, then confirm the paid test. The original policy needs no replacement ID. New checkpoints need supported GR00T N1.7 LeRobot format; compatibility is not established automatically.</p>
+      <p>CLI overrides go under <code>policy.checkpoint</code>. <code>--expect fixed</code> or <code>--expect reproduces</code> checks a verdict in CI. <Link to="/reference#md-8-replay-verdicts">Replay verdicts</Link> explains the outcomes.</p>
+      <p>The <a href={`${DOCS}codex-handoff/RUNBOOK.md`}>operator runbook</a> covers recovery. Local GPU execution remains unvalidated on real hardware. Storage object expiry does not remove buckets; clean up only resources you own after preserving evidence.</p>
+    </>,
   },
 ];

@@ -46,14 +46,9 @@ that the Job's first observation fails with an HTTP 403.
 3. Store the token as a **MysteryBox secret** in your Nebius project. The
    secret's name is what the spec calls `hf_token_secret` (for example
    `faultline-hf-token`), and its value is the token. Create it in the Nebius
-   console (MysteryBox, Secrets), or from a bash shell without the token
-   touching your history:
-
-   ```bash
-   read -rs HF_TOKEN_VALUE   # paste the token, press Enter (nothing is shown)
-   nebius mysterybox secret create --parent-id <your-project-id> --name faultline-hf-token      --secret-version-payload "[{\"key\":\"HF_TOKEN\",\"string_value\":\"$HF_TOKEN_VALUE\"}]"
-   unset HF_TOKEN_VALUE
-   ```
+   console (MysteryBox, Secrets). Add the key `HF_TOKEN` with the token as
+   its secret value. This avoids putting the token in terminal history or
+   process arguments.
 
    Never put the token in a spec or a chat. Faultline looks the secret up by
    name and hands the Job only its id, injected as the `HF_TOKEN` environment
@@ -91,21 +86,23 @@ Copy one of the examples in `configs/specs/` and fill in your own values
 
 | Example | What it does |
 | --- | --- |
-| `scenario-start.yaml` | Mode 1 for a known failing benchmark start: screen a reference pool, reduce the failure to the shifts that cause it |
-| `scenario-screen.yaml` | Mode 1 that first searches a range of starts for one that fails reliably |
-| `audit.yaml` | Mode 2: the smallest image or scene disturbance that breaks a passing start |
-| `paraphrase.yaml` | Mode 2 for language: find a rewording that breaks the policy and reduce it to the minimal word change |
+| `diagnose.yaml` | Recommended: check untouched, reduce a reliable layout failure or probe a passing start |
+| `scenario-start.yaml` | Layout-only diagnosis of a known failing benchmark start |
+| `scenario-screen.yaml` | Search a range of starts for a reliable layout failure |
+| `scenario-import.yaml` | Diagnose a failing start-state file for an existing task |
+| `audit.yaml` | Disturbance probes only, with controls and severity search |
+| `paraphrase.yaml` | Rewording probes only, confirming and reducing any faithful failing wording |
 | `replay.yaml` | Settings for `faultline replay` |
 
 Every spec needs `budget.max_spend_usd` and `budget.max_hours`. Keep specs
 with real ids out of version control. Two spec options are worth knowing:
 
-**Bring your own failing start (`scenario.import`).** Mode 1 takes exactly one
+**Bring your own failing start (`diagnose.import`).** A diagnosis takes exactly one
 of `start` (a benchmark start index), `screen` (a range to search) or `import`
 (a file of your own):
 
 ```yaml
-scenario:
+diagnose:
   task: 0
   import: my-failing-start.json
 ```
@@ -150,10 +147,10 @@ GPU is free, the Job is resubmitted automatically (up to six times).
 
 Results land in `artifacts/runs/<name>-<timestamp>/`: `report.md`,
 `case.json`, `ledger.json`, the downloaded evidence per Job, and an
-explanation when Nemotron is enabled (scenario cases only; audit and
-paraphrase cases have none yet). Paraphrases are checked for meaning drift
-before they are run, so a rewording that changes the task is discarded
-instead of counted as a policy failure.
+explanation when enabled. Optional Tavily research and Nemotron next steps
+are interpretations, not robot evidence. The wording check detects missing
+object/target words, not arbitrary meaning drift: generated wording still
+needs review. It is not a semantic-equivalence proof.
 
 ## 6. Resume, replay and list
 
@@ -165,13 +162,14 @@ faultline cases
 ```
 
 `--resume` continues an interrupted run with the same spec: it re-attaches to
-Jobs it already submitted (never paying twice) and replaces a worst-case
-charge with the measured one once it can read the Job.
+Jobs it already submitted and replaces a worst-case charge with measured time
+once it can read the Job. It may submit later planned Jobs; Resume is not
+always free. A failed download retries downloading, not the experiment.
 
-`replay` re-runs a saved **scenario** case (its minimal scene and its passing
-reference, five times each) and reports `still reproduces` or `no longer
-reproduces`: the regression test after you change the policy. Audit and
-paraphrase cases are not replayed yet. Add `policy.checkpoint` to the replay
+`replay` tests a saved failing case: the retained layout/reference, failing
+disturbance thresholds/controls, or failing wording/original control. It
+reports whether the failure still repeats; incomplete results or failing
+controls are inconclusive. Add `policy.checkpoint` to the replay
 spec to run the case against a different checkpoint. `--expect reproduces`
 or `--expect fixed` states which verdict you are hoping for, so the exit code
 tells a script whether you got it (use `fixed` after a change meant to cure
@@ -197,7 +195,7 @@ The control panel at <http://127.0.0.1:8765> wraps these commands:
   for the time it ran, and `--resume` continues on a new Job.
 - **Case pages** show each finished diagnosis: the result, the evidence for
   its kind, how it was made, Nemotron's reading, the report and files, and
-  the **Regression test** (replay) for scenario cases.
+  the **Regression test** for supported saved failing cases.
 
 The panel listens on 127.0.0.1 only and starts one paid run at a time.
 `faultline export --out <folder>` writes the finished cases as a static

@@ -17,8 +17,8 @@ export function TrustSection({ detail }: { detail: Detail }) {
   return (
     <Section title="Why it's trustworthy" hint={
         detail.kind === 'scenario'
-          ? 'Each line is a count from the saved reruns. The row numbers are the # column of the Candidates table under Full evidence.'
-          : 'Each line is a count from the saved attempts.'
+          ? 'Counts from the saved reruns; row numbers match the # column of the Candidates table under Full evidence.'
+          : undefined
       }>
       <ul className="trust">
         {claims.map((claim) => (
@@ -64,7 +64,7 @@ function GuessVsReruns({ detail }: { detail: Detail }) {
   return (
     <>
       <h3>Its guess vs the reruns</h3>
-      <p className="muted">The entities Nemotron ranked as most likely to matter, before any rerun, and what the reruns then showed.</p>
+      <p className="muted">Ranked by Nemotron before any rerun.</p>
       <ol className="ranked ranked--measured">
         {hypothesis.ranked.slice(0, TOP_GUESSES).map((entity) => {
           const entry = hypothesis.entities.find((item) => item.entity === entity);
@@ -219,7 +219,6 @@ export function FullEvidence({ detail, parts }: { detail: Detail; parts: ReportP
         {reading && (
           <>
             <h3>Nemotron's full reading</h3>
-            <p className="muted">An interpretation written by a language model from the results. It is not evidence and needs human review.</p>
             <ExplanationBody detail={detail} level={4} />
           </>
         )}
