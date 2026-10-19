@@ -140,6 +140,12 @@ def create_run_dir(root: Path, spec: Spec, spec_text: Optional[str], moment: dt.
     return run_dir
 
 
+THRESHOLDS_UNCONFIRMED_NOTE = (
+    "\n\n## Thresholds unconfirmed\n\nThe unperturbed control did not pass reliably, so the start is "
+    "flaky. Any threshold above is unconfirmed: it is not evidence that a disturbance breaks the "
+    "policy, and the case has no replay.\n")
+
+
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
@@ -2275,10 +2281,7 @@ class Orchestrator:
         except StopRun as stop:
             self._warn("report", "no stress-test report written ({})".format(stop.reason))
         if report is not None and case.get("thresholds_unconfirmed"):
-            report = report.rstrip("\n") + (
-                "\n\n## Thresholds unconfirmed\n\nThe unperturbed control did not pass reliably, so the start is "
-                "flaky. Any threshold above is unconfirmed: it is not evidence that a disturbance breaks the "
-                "policy, and the case has no replay.\n")
+            report = report.rstrip("\n") + THRESHOLDS_UNCONFIRMED_NOTE
         self._write_case_folder("audit", case, report, case.get("replay"))
 
     def _wording_original(self, screen_summary: Mapping[str, Any]) -> str:
