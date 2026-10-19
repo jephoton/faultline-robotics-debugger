@@ -32,7 +32,7 @@ describe('the route of a diagnosis run', () => {
   it('says a flaky start skipped the rewordings, in amber', async () => {
     await openRun(RUN_IDS.flaky);
     const note = screen.getByTestId('run-route');
-    expect(note).toHaveTextContent('The start is flaky untouched: rewordings skipped');
+    expect(note).toHaveTextContent('The start is flaky untouched');
     expect(note).toHaveClass('notice--attention');
     expect(within(screen.getByRole('list', { name: 'Steps of this run' })).getByText('Screen rewordings')).toBeInTheDocument();
   });

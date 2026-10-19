@@ -428,8 +428,12 @@ US$0.68. These are estimates. GPU waits, longer tasks and finding a failure
 
 A default cap of US$2.50 can sit below the worst case (US$3.09) and still
 cover the typical runs. The review then shows "The first Job fits, but not
-all of them". Raise the cap if you want layout continuations to run
-uninterrupted.
+all of them" and names the first Job of each branch that would be refused if
+the Jobs before it cost their worst case. With the defaults on LIBERO-Object,
+those are `reduce` and `probe-image-1`. A typical check (about US$0.43)
+leaves room for either, so in practice the cap is reached only by a slow
+check, a layout continuation or extra probe Jobs. Raise the cap if you want
+those to run uninterrupted.
 
 ## 9. What results do and do not show
 

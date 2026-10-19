@@ -94,6 +94,15 @@ describe('the branched dry run', () => {
       expect(capText()).not.toMatch(/a reduction/i);
     });
 
+    it('says a later Job is refused only when the Jobs before it cost their worst case', () => {
+      const jobs = [
+        { name: 'check', deadline_seconds: 1800, worst_case_usd: 1, branch: 'check' as const },
+        { name: 'reduce', deadline_seconds: 3000, worst_case_usd: 2, branch: 'layout' as const },
+      ];
+      render(<DryRunTable plan={plan({ jobs, cap_usd: 2.5, worst_case_total_usd: 3 })} />);
+      expect(capText()).toContain('only if the Jobs before it cost their worst case');
+    });
+
     it('names the layout Job and leaves out the optional continuations, which run only if needed', () => {
       const jobs = [
         { name: 'check', deadline_seconds: 1800, worst_case_usd: 1, branch: 'check' as const },

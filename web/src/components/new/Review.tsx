@@ -94,11 +94,13 @@ function CapFacts({ plan }: { plan: DryRun }) {
           </strong>
         ) : over ? (
           <strong className="warn-text">
-            <Icon name="attention" /> The first Job fits, but not all of them. Next to be refused:{' '}
+            <Icon name="attention" /> The first Job fits, but not all of them. Each Job is charged what it
+            measured, so this matters only if the Jobs before it cost their worst case. Then the first to be
+            refused is{' '}
             {refusedJobs(plan)
               .map((job) => (job.branch ? `${job.name} (${REFUSED_BRANCH[job.branch]})` : job.name))
               .join('; ')}
-            . The run would stop there; you can raise the cap and resume.
+            , and the run stops there; you can raise the cap and resume.
           </strong>
         ) : (
           <span className="muted">(the worst case is {usd(plan.cap_usd - plan.worst_case_total_usd)} under it)</span>
