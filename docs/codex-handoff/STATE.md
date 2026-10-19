@@ -158,13 +158,25 @@ October 30, 10:00 PT.
    page, the readout colours and the Keep in step fix. Re-export and
    redeploy only with Jethro's go, after inspecting the payload.
 3. **Remaining things:**
-   1. **Final runs** (paid; Jethro approves scope and cap first):
-      - build and push image v17 with the October 18 reduction fix and the
-        honest-sizes sentence;
-      - one or two fresh reduced cases, ideally on another task;
-      - one replay of a case against a second GR00T checkpoint, to show the
-        regression loop (ADR 0034). Which checkpoint is still to be decided.
-   2. **Gallery refresh** with the new cases (Jethro's go).
+   1. **Final showcase runs** (scope chosen by Jethro, October 19; each paid
+      start still needs his go and cap):
+      - the probe validation run (LIBERO-Object task 0, start 0, four image
+        families) and a replay of its case;
+      - image v17 with the October 18 reduction fix, then LIBERO-10 task 0,
+        start 14 through the pipeline (layout route) and a replay. This
+        replaces `FL-S-AFB5` in the gallery;
+      - keep `FL-A-F526` as the "nothing broke it" finding.
+
+      The regression loop is shown by replaying on the same checkpoint with
+      `--expect reproduces`. `nvidia/GR00T-N1.7-LIBERO` is the only other
+      same-suite N1.7 checkpoint, but it uses Isaac-GR00T's format with
+      per-suite subfolders, which the override does not load. It is not
+      pursued for the submission. A second-task layout case and a flaky-route
+      run were offered and not chosen.
+   2. **Gallery refresh** with the new cases (Jethro's go). Export only the
+      chosen cases (`faultline export --case <id>`). Drop the September
+      occlusion case `FL-M-52D8`, `FL-S-AFB5` (replaced), `FL-A-08D3` and
+      `FL-A-A70E`; they stay in the local library.
    3. **Results refresh:** README "What it has found", experiment notes, and
       possibly the `demo/` case.
    4. **Billing reconciliation:** Jethro reads the Nebius billing page; compare
