@@ -36,6 +36,14 @@ describe('the branched dry run', () => {
     expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.25 and 35 minutes');
   });
 
+  it('describes the probe branch as it behaves: a flaky check ends the run, a failed probe control skips the rest', () => {
+    render(<DryRunTable plan={plan()} />);
+    const probes = screen.getByRole('region', { name: 'If it passes: probe' });
+    expect(probes).toHaveTextContent('A check that finds the start flaky ends the run.');
+    expect(probes).toHaveTextContent('A probe control that fails skips the probes still to come.');
+    expect(probes).not.toHaveTextContent('rewordings are skipped');
+  });
+
   it('says which typical figure is not known yet instead of inventing one', () => {
     const unknown = plan({
       branches: [

@@ -149,7 +149,7 @@ const BRANCH_TEXT: Record<Branch, string> = {
   layout:
     'Finds the nearest passing start as a reference, then shrinks the differences until only the shifts that cause the failure remain. This becomes a replayable case.',
   probes:
-    'Searches each chosen disturbance family for the smallest severity that breaks the policy, and asks Nemotron for rewordings, reducing a failing one to the smallest word change. A start that is flaky untouched is reported as that, and rewordings are skipped.',
+    'Searches each chosen disturbance family for the smallest severity that breaks the policy, and asks Nemotron for rewordings, reducing a failing one to the smallest word change. A check that finds the start flaky ends the run. A probe control that fails skips the probes still to come.',
 };
 
 interface Typical {
