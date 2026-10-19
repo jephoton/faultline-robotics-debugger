@@ -30,13 +30,7 @@ export function showsFindings(detail: Detail): boolean {
 /** Every case one diagnosis run registered, in route order, with this one marked. */
 export function FindingsList({ detail }: { detail: Detail }) {
   if (!showsFindings(detail)) return null;
-  const route = routeOf(detail);
-  const hint =
-    route === 'passes'
-      ? 'The start passed untouched, so there was no failure to reduce.'
-      : route === 'flaky'
-        ? 'The start is flaky untouched, so no failure can be blamed on a disturbance or a wording.'
-        : 'One diagnosis run can end in several findings. Each one is its own case with its own report and replay.';
+  const hint = 'Each finding is its own case with its own report and replay.';
   return (
     <Section title="Findings of this diagnosis" hint={hint}>
       <ul className="findings">

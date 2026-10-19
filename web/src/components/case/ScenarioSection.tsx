@@ -63,8 +63,7 @@ export function ScenarioSection({ detail }: { detail: Detail }) {
         ) : (
           <>
             <p className="muted">
-              Applying these shifts to the passing reference is enough to make the policy fail. Share is how far each
-              moves toward its failing value.
+              Share is how far each shift moves toward its failing value.
             </p>
             <div className="table-wrap">
               <table className="data">
@@ -94,7 +93,7 @@ export function ScenarioSection({ detail }: { detail: Detail }) {
         )}
       </Section>
 
-      <Section title="Videos" hint="Original failing start, the reference with the minimal cause applied, and the passing reference.">
+      <Section title="Videos">
         {detail.videos.length === 0 ? (
           <Empty>No videos were saved for this case.</Empty>
         ) : (
@@ -112,7 +111,7 @@ export function ScenarioSection({ detail }: { detail: Detail }) {
           <div className="compare">
             <div className="compare__col">
               <h3>The guess</h3>
-              <p className="muted">Nemotron's ranking of which entities matter most, before any rerun.</p>
+              <p className="muted">Ranked before any rerun.</p>
               <ol className="ranked">
                 {hypothesis.ranked.map((entity) => (
                   <li key={entity} className="mono">

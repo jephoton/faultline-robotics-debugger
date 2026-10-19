@@ -152,7 +152,7 @@ describe('report-first scenario case', () => {
   it('states what a replay is for, above the replay history', async () => {
     await openCase(IDS.soup);
     const purpose = screen.getByText(
-      "Reruns this case's minimal scene and its passing reference, five attempts each, to check whether the failure still happens. Run it after you change the policy.",
+      'Reruns the minimal scene and its passing reference, five attempts each, to check the failure still happens.',
     );
     const replays = screen.getByRole('heading', { level: 2, name: 'Regression test' }).closest('section') as HTMLElement;
     expect(replays).toContainElement(purpose);
@@ -359,7 +359,7 @@ describe('static mode', () => {
     expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
     expect(screen.getByText('Show all 26 rows')).toBeInTheDocument();
     // The replay history and its purpose are shown, but nothing can be started from a static page.
-    expect(screen.getByText(/Reruns this case's minimal scene/)).toBeInTheDocument();
+    expect(screen.getByText(/Reruns the minimal scene/)).toBeInTheDocument();
     expect(screen.getByText('Still fails', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Test a policy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^(replay|stop|resume|start)/i })).not.toBeInTheDocument();

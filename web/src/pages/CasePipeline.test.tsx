@@ -85,7 +85,7 @@ describe('findings of a diagnosis run', () => {
       findings: [{ id: detail.id, fault_code: detail.fault_code, kind: detail.kind, verdict: 'no_failure', verdict_text: detail.verdict_text }],
     }));
     const section = screen.getByRole('heading', { name: 'Findings of this diagnosis' }).closest('section') as HTMLElement;
-    expect(within(section).getByText(/The start passed untouched/)).toBeInTheDocument();
+    expect(within(section).getByText('Each finding is its own case with its own report and replay.')).toBeInTheDocument();
     const badge = within(section).getByText('No failure found', { selector: '.badge' });
     expect(badge).toHaveAttribute('data-tone', 'pass');
   });
@@ -97,7 +97,7 @@ describe('findings of a diagnosis run', () => {
       findings: [{ id: detail.id, fault_code: detail.fault_code, kind: detail.kind, verdict: 'stopped', verdict_text: detail.verdict_text }],
     }));
     const section = screen.getByRole('heading', { name: 'Findings of this diagnosis' }).closest('section') as HTMLElement;
-    expect(within(section).getByText(/flaky untouched/)).toBeInTheDocument();
+    expect(within(section).getByText('Each finding is its own case with its own report and replay.')).toBeInTheDocument();
     expect(within(section).getByText('Stopped', { selector: '.badge' })).toHaveAttribute('data-tone', 'attention');
   });
 
@@ -131,13 +131,13 @@ describe('replay of an audit case and a wording case', () => {
   it('offers replay on an audit case with a purpose line about its disturbance', async () => {
     await openCase(IDS.pipeAudit);
     expect(screen.getByRole('heading', { level: 2, name: 'Regression test' })).toBeInTheDocument();
-    expect(screen.getByText(/Reruns each disturbance that broke the policy, at its threshold on the start/)).toBeInTheDocument();
+    expect(screen.getByText(/Reruns each disturbance that broke the policy at its threshold/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Test a policy' })).toBeInTheDocument();
   });
 
   it('offers replay on a wording case with a purpose line about its wording', async () => {
     await openCase(IDS.pipeWording);
-    expect(screen.getByText(/Reruns the failing wording on the start, five attempts, with the original wording as its control/)).toBeInTheDocument();
+    expect(screen.getByText(/Reruns the failing wording, five attempts, with the original wording as control/)).toBeInTheDocument();
   });
 
   it('dry-runs and starts a replay of an audit case against its own library id', async () => {
@@ -240,7 +240,7 @@ describe('videos on audit and wording cases', () => {
     const pass = within(player).getByText('passed', { selector: '.player__outcome' });
     expect(pass).toHaveClass('player__outcome--pass');
     for (const word of within(player).getAllByText('failed', { selector: '.player__outcome' })) expect(word).toHaveClass('player__outcome--fail');
-    expect(screen.getByText(/The control \(the start untouched\) first/)).toBeInTheDocument();
+    expect(screen.queryByText(/The control \(the start untouched\) first/)).not.toBeInTheDocument();
   });
 
   it('shows the control and the failing wording on a wording case', async () => {
