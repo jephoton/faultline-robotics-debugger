@@ -214,8 +214,9 @@ and what it costs, before anything is created.
 2. Under **What do you want to do?** (with "A start is one of the
    benchmark's 50 fixed starting layouts for a task"), choose one:
    - **Check a start I name** (the usual). This is how you bring a failure
-     from your own evaluation: episode *n* of a task always begins from start
-     *n*, so a failed episode's number is its start.
+     from your own evaluation. In the standard LIBERO evaluation, episode *n*
+     (counted from 0) begins from start *n*. Some tools count from 1 or across
+     tasks.
    - **Find a failing start for me**: tries a range of starts and shrinks one
      that fails reliably. No probes.
    - Under **More ways in**, **A failure from my own scene (file)** (Demo 1's
