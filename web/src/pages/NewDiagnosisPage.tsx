@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { StepChoose } from '../components/new/StepChoose';
 import { StepReview } from '../components/new/StepReview';
 import { StepSettings, type ValidationState } from '../components/new/StepSettings';
-import { buildYaml, defaultsFor, extractBackend, usesNemotron, type DiagnosisChoice, type FormState } from '../lib/specYaml';
+import { applyPatch, buildYaml, defaultsFor, extractBackend, usesNemotron, type DiagnosisChoice, type FormState } from '../lib/specYaml';
 import { useAsync } from '../lib/useAsync';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { LocalOnlyPage } from './NotFoundPage';
@@ -35,6 +35,8 @@ function NewDiagnosis() {
   const environment = useAsync(() => api.environment(), [api]);
   const researchDefault = environment.data?.checks.find((entry) => entry.key === 'tavily_key')?.ok !== false;
   const researchTouched = useRef(false);
+  // Whether the person has typed their own Name; until then it follows Suite, Task and Start.
+  const nameTyped = useRef(false);
   useEffect(() => {
     if (!researchTouched.current) setForm((previous) => ({ ...previous, research: researchDefault }));
   }, [researchDefault]);
@@ -75,6 +77,7 @@ function NewDiagnosis() {
     setChoice(next);
     setForm(defaultsFor(next, researchDefault));
     researchTouched.current = false;
+    nameTyped.current = false;
     setOverride(null);
     setValidation({ status: 'idle' });
     setBlocked(null);
@@ -137,7 +140,9 @@ function NewDiagnosis() {
             form={form}
             onChange={(patch) => {
               if (patch.research !== undefined) researchTouched.current = true;
-              setForm((previous) => ({ ...previous, ...patch }));
+              if (patch.name !== undefined) nameTyped.current = patch.name.trim() !== '';
+              const typed = nameTyped.current;
+              setForm((previous) => applyPatch(previous, patch, choice, typed));
             }}
             yaml={yaml}
             yamlEdited={override !== null}

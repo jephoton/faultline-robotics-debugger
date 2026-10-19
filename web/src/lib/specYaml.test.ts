@@ -3,6 +3,8 @@ import {
   asksForRewordings,
   buildReplayYaml,
   buildYaml,
+  applyPatch,
+  defaultName,
   defaultsFor,
   errorsByField,
   extractBackend,
@@ -142,6 +144,30 @@ describe('buildReplayYaml', () => {
   });
 });
 
+describe('the default Name', () => {
+  it('is built from the suite, task and start', () => {
+    expect(defaultName({ suite: 'libero_10', task: '0', start: '14' })).toBe('l10-t0-start14');
+    expect(defaultName({ suite: 'libero_goal', task: '3', start: '' })).toBe('goal-t3-start0');
+    expect(defaultsFor('start').name).toBe('object-t0-start0');
+  });
+
+  it('follows Suite, Task and Start until a Name is typed', () => {
+    let form = defaultsFor('start');
+    form = applyPatch(form, { suite: 'libero_10', task: '0' }, 'start', false);
+    form = applyPatch(form, { start: '14' }, 'start', false);
+    expect(form.name).toBe('l10-t0-start14');
+    form = applyPatch(form, { task: '2' }, 'start', false);
+    expect(form.name).toBe('l10-t2-start14');
+  });
+
+  it('keeps a typed Name, and leaves the other kinds of start alone', () => {
+    const form = applyPatch(defaultsFor('start'), { name: 'mine' }, 'start', true);
+    expect(applyPatch(form, { start: '5' }, 'start', true).name).toBe('mine');
+    const screen = defaultsFor('screen');
+    expect(applyPatch(screen, { suite: 'libero_10', task: '0' }, 'screen', false).name).toBe(screen.name);
+  });
+});
+
 describe('helpers', () => {
   it('extracts the backend block from a template', () => {
     expect(extractBackend(`faultline: 1\n${BACKEND}\n`)).toBe(BACKEND);
@@ -151,7 +177,7 @@ describe('helpers', () => {
   it('reads values from the spec text', () => {
     const yaml = buildYaml('start', defaultsFor('start'), null);
     expect(yamlValue(yaml, 'mode')).toBe('diagnose');
-    expect(yamlValue(yaml, 'name')).toBe('object-start0');
+    expect(yamlValue(yaml, 'name')).toBe('object-t0-start0');
     expect(yamlValue(yaml, 'nothing')).toBeNull();
   });
 

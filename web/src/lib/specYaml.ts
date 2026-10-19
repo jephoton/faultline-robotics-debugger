@@ -43,6 +43,36 @@ export function sortFamilies(families: string[]): string[] {
   return [...families].sort((a, b) => rank(a) - rank(b));
 }
 
+const SUITE_SHORT: Record<string, string> = {
+  libero_object: 'object',
+  libero_spatial: 'spatial',
+  libero_goal: 'goal',
+  libero_10: 'l10',
+};
+
+/** The default Name for one start, from the Suite, Task and Start: `l10-t0-start14`. */
+export function defaultName(form: Pick<FormState, 'suite' | 'task' | 'start'>): string {
+  const number = (text: string, fallback: string) => (/^\d{1,4}$/.test(text.trim()) ? String(Number(text.trim())) : fallback);
+  const suite = SUITE_SHORT[form.suite] ?? 'start';
+  return `${suite}-t${number(form.task, '0')}-start${number(form.start, '0')}`;
+}
+
+/**
+ * The form after a change. Until the person types their own Name, a change to Suite, Task or Start (one
+ * benchmark start only) renames the run to match; a typed Name is never overwritten.
+ */
+export function applyPatch(
+  form: FormState,
+  patch: Partial<FormState>,
+  choice: DiagnosisChoice,
+  nameTyped: boolean,
+): FormState {
+  const next = { ...form, ...patch };
+  const moved = patch.suite !== undefined || patch.task !== undefined || patch.start !== undefined;
+  if (choice === 'start' && !nameTyped && patch.name === undefined && moved) next.name = defaultName(next);
+  return next;
+}
+
 /**
  * The form's starting values for a kind of start. `research` follows the machine: related research needs a
  * Tavily key, so it starts ticked only when the key is there (or not known to be missing).
@@ -70,7 +100,7 @@ export function defaultsFor(choice: DiagnosisChoice, research = true): FormState
   };
   switch (choice) {
     case 'start':
-      return { ...base, name: 'object-start0' };
+      return { ...base, name: defaultName(base) };
     case 'screen':
       return { ...base, name: 'soup-screen', spend: '4', hours: '3' };
     case 'import':

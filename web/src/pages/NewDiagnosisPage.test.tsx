@@ -91,6 +91,23 @@ describe('step 2: settings', () => {
     expect(screen.getByText(/turn on the stove/, { selector: '.field__hint' })).toBeInTheDocument();
   });
 
+  it('names the run after the suite, task and start until the person types a name', async () => {
+    const user = userEvent.setup();
+    await openNew();
+    await toSettings(user);
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveValue('object-t0-start0');
+    await user.selectOptions(screen.getByLabelText('Suite'), 'libero_10');
+    await user.clear(screen.getByLabelText('Start'));
+    await user.type(screen.getByLabelText('Start'), '14');
+    expect(name).toHaveValue('l10-t0-start14');
+    expect(yamlBox().value).toContain('name: l10-t0-start14');
+    await user.clear(name);
+    await user.type(name, 'my-run');
+    await user.selectOptions(screen.getByLabelText('Task'), '2');
+    expect(name).toHaveValue('my-run');
+  });
+
   it('generates the diagnose YAML with probes on, four families, no rewordings, a small cap and the template backend', async () => {
     const user = userEvent.setup();
     await openNew();
