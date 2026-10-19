@@ -1,4 +1,4 @@
-"""Optional web context for the cases of a diagnosis run: fakes only, no Tavily and no Token Factory calls."""
+"""Optional web context and next steps for the cases of a diagnosis run: fakes only, no Tavily and no Token Factory calls."""
 
 from __future__ import annotations
 
@@ -48,17 +48,19 @@ class FakeResearch:
     def load_nebius_key(self, env_file=None):
         return NEBIUS_KEY
 
-    def summarize(self, context, key, *, system_prompt=None):
+    def next_steps(self, context, key):
         assert key == NEBIUS_KEY
-        self.requests.append({"context": context, "prompt": system_prompt})
-        note = {"related_work": [{"text": "Paper 1.0 studies robustness of robot policies [S1]; a follow-up could "
-                                          "repeat the finding at a nearby severity.", "source_ids": ["S1"]}],
-                "limitations": ["Public sources are context, not evidence about this case."]}
+        self.requests.append({"context": context})
+        ids = [source["source_id"] for source in context["sources"]]
+        note = {"next_steps": [
+            {"text": "Collect more starts near the failing one and rerun them, since a source studies robustness of "
+                     "robot policies to perturbation.", "cites": [ids[0]]},
+            {"text": "Add this case to the evaluation suite as a regression test.", "cites": [ids[-1]]}]}
         return {"response_json": json.dumps(note),
-                "provenance": {"request_status": "ok", "model": "fake/nano", "estimated_cost_usd": 0.0001}}
+                "provenance": {"request_status": "completed", "model": "fake/ultra", "estimated_cost_usd": None}}
 
     def deps(self):
-        return pr.ResearchDeps(self.load_tavily_key, self.search, self.load_nebius_key, self.summarize,
+        return pr.ResearchDeps(self.load_tavily_key, self.search, self.load_nebius_key, self.next_steps,
                                Path("ledger-unused"), Path("cache-unused"))
 
 
@@ -108,19 +110,21 @@ class RepeatedCitations(unittest.TestCase):
         self.assertEqual("A [S1] and [S2] [S1].", collapse_citations("A [S1] and [S2] [S1]."))
         self.assertEqual("no markers", collapse_citations("no markers"))
 
-    def test_the_stored_note_never_repeats_a_marker(self):
-        class Repeating(FakeResearch):
-            def summarize(self, context, key, *, system_prompt=None):
-                note = {"related_work": [{"text": "Paper 1.0 studies robot policies [S1] [S1]",
-                                          "source_ids": ["S1"]}],
-                        "limitations": ["Public sources are context, not evidence about this case."]}
-                return {"response_json": json.dumps(note),
-                        "provenance": {"request_status": "ok", "model": "fake/nano", "estimated_cost_usd": 0.0001}}
+    def test_the_stored_step_never_carries_an_inline_marker(self):
+        class Marking(FakeResearch):
+            def next_steps(self, context, key):
+                note = {"next_steps": [
+                    {"text": "Rerun nearby starts [S1] [S1] to see whether the failure repeats.", "cites": ["S1"]},
+                    {"text": "Add the case as a regression test.", "cites": ["S2"]}]}
+                return {"response_json": json.dumps(note), "provenance": {"request_status": "completed",
+                                                                         "model": "fake/ultra"}}
 
         case = {"case_id": "ab" * 32, "kind": "audit", "suite": "libero_object", "task_id": 0,
                 "families": {"blur": {"threshold_severity": 0.4, "stop_reason": "threshold_found"}}}
-        record = pr.run(case, None, deps=Repeating().deps())
-        self.assertEqual("Paper 1.0 studies robot policies [S1]", record["summary"]["related_work"][0]["text"])
+        record = pr.run(case, None, deps=Marking().deps())
+        self.assertEqual("Rerun nearby starts to see whether the failure repeats.",
+                         record["next_steps"]["items"][0]["text"])
+        self.assertNotIn("summary", record)
 
     def test_the_library_cites_each_source_once(self):
         from robot_debug.viewer.library import _research_block
@@ -154,12 +158,12 @@ class SystemPrompt(unittest.TestCase):
         from robot_debug.research_summary import RESEARCH_SYSTEM_PROMPT
 
         self.assertEqual(self.sent_prompt(), RESEARCH_SYSTEM_PROMPT)
-        self.assertEqual(self.sent_prompt(system_prompt=pr.RESEARCH_PROMPT), pr.RESEARCH_PROMPT)
+        self.assertEqual(self.sent_prompt(system_prompt="my prompt"), "my prompt")
 
     def test_the_size_check_takes_the_prompt_too(self):
         from robot_debug import token_factory as tf
 
-        tf.check_research_request(self.CONTEXT, pr.RESEARCH_PROMPT)
+        tf.check_research_request(self.CONTEXT, "a short prompt")
         with self.assertRaises(tf.TokenFactoryError):
             tf.check_research_request(self.CONTEXT, "x" * 30000)
 
@@ -181,16 +185,18 @@ class PipelineResearch(Base):
         self.assertEqual(result.status, "completed")
         for name in ("audit", "wording"):
             record = self.read(runner, "cases", name, "research.json")
-            self.assertEqual((record["kind"], record["summary"]["status"]), ("diagnosis_research", "interpreted"))
-            self.assertEqual(record["summary"]["provenance"]["model"], "fake/nano")
+            self.assertEqual((record["kind"], record["next_steps"]["status"]), ("diagnosis_research", "interpreted"))
+            self.assertEqual(record["next_steps"]["provenance"]["model"], "fake/ultra")
+            self.assertNotIn("summary", record)
+            self.assertEqual(len(record["next_steps"]["items"]), 2)
             self.assertEqual(len(record["queries"]), 2 if name == "audit" else 3)
             case = self.read(runner, "cases", name, "case.json")
             self.assertEqual(record["case_id"], case["case_id"])
         steps = self.header(runner)["steps"]
         self.assertEqual((steps["research-audit"]["status"], steps["research-audit"]["sources"]), ("done", 6))
+        self.assertEqual(steps["research-audit"]["next_steps"], "interpreted")
         self.assertEqual(steps["research-wording"]["status"], "done")
         self.assertEqual(len(research.requests), 2)
-        self.assertEqual(research.requests[0]["prompt"], pr.RESEARCH_PROMPT)
         # The model sees the facts and the public sources, never ids or the run's files.
         sent = json.dumps(research.requests[0]["context"])
         self.assertIn("image blur", sent)
@@ -199,9 +205,13 @@ class PipelineResearch(Base):
         library = Library(runner.run_dir.parent.parent, runs_root=runner.run_dir.parent)
         audit = next(i for i in library.list()["items"] if i["kind"] == "audit")
         detail = library.detail(audit["id"])
-        self.assertIn("[S1]", detail["research"]["related"])
         self.assertEqual(len(detail["research"]["sources"]), 6)
         self.assertTrue(detail["research"]["sources"][0]["url"].startswith("https://"))
+        steps = detail["next_steps"]
+        self.assertEqual((steps["status"], steps["model"], len(steps["items"])), ("interpreted", "fake/ultra", 2))
+        self.assertEqual(steps["items"][0]["cites"], ["S1"])
+        self.assertEqual([s["id"] for s in steps["sources"]], ["S{}".format(i) for i in range(1, 7)])
+        self.assertTrue(all(set(s) == {"id", "title", "url"} for s in steps["sources"]))
 
     def test_the_keys_never_reach_the_run_folder_the_log_or_the_library(self):
         research = FakeResearch()

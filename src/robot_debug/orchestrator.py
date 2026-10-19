@@ -991,10 +991,11 @@ class DefaultTools:
 
         return pipeline_research.key_available(env_file, self.research_deps)
 
-    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path]) -> Optional[Dict[str, Any]]:
+    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path],
+                      run_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
         from robot_debug import pipeline_research
 
-        return pipeline_research.run(case, env_file, self.research_deps, now=self.now)
+        return pipeline_research.run(case, env_file, self.research_deps, now=self.now, run_dir=run_dir)
 
     def register_cases(self, run_dir: Path) -> List[str]:
         """Register every case of a pipeline run (``cases/<name>/`` folders), in route order."""
@@ -2418,7 +2419,7 @@ class Orchestrator:
                 continue
             try:
                 case = _read_json(folder / "case.json")
-                record = self.tools.research_case(case, self.env_file)
+                record = self.tools.research_case(case, self.env_file, self.run_dir)
             except Exception as error:          # noqa: BLE001 - web context is optional; only the type is logged
                 self.steps.update(step, status="failed", error=type(error).__name__)
                 self._warn(step, "no web context for the {} case ({})".format(name, type(error).__name__))
@@ -2428,7 +2429,7 @@ class Orchestrator:
                 continue
             _write_json(folder / "research.json", record)
             sources = sum(len(entry.get("results") or ()) for entry in record.get("queries") or ())
-            self.steps.update(step, status="done", sources=sources, summary=(record.get("summary") or {}).get("status"))
+            self.steps.update(step, status="done", sources=sources, next_steps=(record.get("next_steps") or {}).get("status"))
             self.say(step, "web context for the {} case ({} sources)".format(name, sources))
             wrote = True
         self.steps.update("research", status="done", reason=None)
