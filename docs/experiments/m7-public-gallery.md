@@ -123,3 +123,24 @@ and [Vercel deployment commands](https://vercel.com/docs/cli/deploy).
 M7a is complete. Next is M7b: submission story, video, judge-facing setup/repo
 audit, required feedback and billing reconciliation. New paid experiments or
 public image publication remain separate decisions.
+
+## October 19 redeploy: the showcase cases
+
+Jethro gave the go on October 19. The export `artifacts/public-gallery-20261019`
+(ignored) holds **three cases and 13 videos** (13 MB):
+- `FL-S-8E0D`: the layout route;
+- `FL-A-D582`: the probe route;
+- `FL-A-F526`: nothing broke it.
+
+It was made with `faultline export --case <id>` for each case.
+- **Payload checks:**
+  - static session (`controls: false`, no token);
+  - no provider ids, keys or local paths in any JSON, Markdown, HTML or text
+    file;
+  - research shown only as our summary plus source titles and links.
+- **Production deploy** to the existing project. The live site shows only
+  these three cases, with the bullet results, videos and **Still fails**
+  regression results naming the checkpoint tested, and no console errors.
+- **Removed from the public gallery:** `FL-S-AFB5`, `FL-A-A70E`, `FL-A-08D3`
+  and the September occlusion case. In the local control panel they moved to
+  `artifacts/archive-2026-10-19/`, which is not deleted and can be restored.

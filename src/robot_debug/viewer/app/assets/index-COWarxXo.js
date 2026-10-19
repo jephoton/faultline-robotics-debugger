@@ -327,6 +327,7 @@ shown as well. The letters are:
 | **Suite, task** | LIBERO's four suites (Object, Spatial, Goal, 10), ten tasks each, each with an instruction such as "put both the alphabet soup and the tomato sauce in the basket". |
 | **Benchmark start** | One of the 50 fixed starting layouts LIBERO provides per task (where each object and the arm begin). |
 | **Episode / attempt** | One run of the policy from a start until success or the step limit. |
+| **Policy failure** | The task was not completed within the suite's step limit (LIBERO's standard limits: 220 steps for Spatial, 280 for Object, 300 for Goal, 520 for LIBERO-10; at 20 steps a second, 14 s for Object). It includes a policy that is too slow, not only one that does the wrong thing: under full-strength noise on \`FL-A-D582\`, the arm still grasps the can but runs out of time. |
 | **Failing start** | A start that fails untouched (layout route): a benchmark start or an imported state file. |
 | **Reference** | On the layout route, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
 | **Control** | On the probes route, the start run with no disturbance; it must pass for any disturbance to be judged. |
