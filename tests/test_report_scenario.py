@@ -129,7 +129,7 @@ class ReportTests(RunTestCase):
         self.assertIn("fixed order", text)
         self.assertIn("local minimum", text)
         self.assertIn("| alphabet_soup_1 | 50.0 | - |", text)
-        self.assertIn("| alphabet_soup_1 | position | 0.125 | 0.0625 | 0.0625 | - |", text)
+        self.assertIn("| alphabet_soup_1 | position | 12.5% | 6.3% | 6.25 points (1/16) | - |", text)
         # Four failures fix the decision; a fifth, already running attempt may or may not be
         # recorded in time, so the exact outcome string depends on thread timing.
         self.assertRegex(text, r"\| 0 \| gate \| failing \| - \| (F ){3}F( F)? \| reproduces \| True \|")
@@ -253,6 +253,80 @@ class ReportTests(RunTestCase):
 
     def test_pipes_in_text_do_not_break_tables(self):
         self.assertEqual("a/b", self.script._cell("a|b"))
+
+
+class ContinuationSizeTableTests(unittest.TestCase):
+    """Regression (October 19, run l10-start14): the table listed only the parts whose size search had
+    finished in the last Job and left out milk_1, which the continuation Job shrank to 87.5%."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = load_script()
+
+    def report(self, with_history=True):
+        from tests.test_scenario_packet import ContinuationShrinkNotesTests, continuation_reductions
+
+        first, second = continuation_reductions()
+        summary = {"schema_version": 1, "mode": "scenario-reduce", "reduction": second, "videos": {},
+                   "plan": rf.partial_plan(ranking=["robot", "basket_1", "milk_1", "orange_juice_1"]),
+                   "differences": ContinuationShrinkNotesTests.DIFFERENCES, "checkpoint": None}
+        reductions = [{"reduction": first}, {"reduction": second}] if with_history else None
+        return self.script.build_report(summary, None, None, reductions)
+
+    def test_every_kept_part_has_a_row_in_plain_words_with_percentages(self):
+        text = self.report()
+        self.assertIn("| entity | part | kept size | largest size that passed | precision | invalid sizes |", text)
+        self.assertIn("| basket_1 | position | 93.8% | 87.5% | 6.25 points (1/16) | - |", text)
+        self.assertIn("| robot | joints | 93.8% | 87.5% | 6.25 points (1/16) | - |", text)
+        self.assertIn("| milk_1 | position | 87.5% | 75% | 12.5 points (1/8) | - |", text)
+        self.assertIn("| orange_juice_1 | position | 100% | not shrunk | - | - |", text)
+        self.assertNotIn("lower bound tested", text)
+        self.assertIn("Sizes are shares of the full difference", text)
+
+    def test_the_library_returns_every_rerun_with_the_reports_numbering(self):
+        import re
+        import tempfile
+
+        from robot_debug.viewer.library import Library
+        from tests.test_scenario_packet import ContinuationShrinkNotesTests, continuation_reductions
+
+        first, second = continuation_reductions()
+        summary = {"schema_version": 1, "mode": "scenario-reduce", "reduction": second, "videos": {},
+                   "plan": rf.partial_plan(ranking=["robot", "basket_1", "milk_1", "orange_juice_1"]),
+                   "differences": ContinuationShrinkNotesTests.DIFFERENCES, "checkpoint": None}
+        case = se.build_case(summary, [{"reduction": first}, {"reduction": second}])
+        self.assertEqual(len(second["candidates"]), len(case["reruns"]))
+        self.assertLess(len(case["evidence"]), len(case["reruns"]))        # the key rows are fewer
+        with tempfile.TemporaryDirectory() as directory:
+            rows = Library(Path(directory))._scenario_block(case)["reruns"]
+        self.assertEqual([c["index"] for c in second["candidates"]], [r["index"] for r in rows])
+        self.assertEqual({"index", "phase", "role", "selection", "outcomes", "decision"}, set(rows[0]))
+        text = self.script.build_report(summary, None, None, [{"reduction": first}, {"reduction": second}])
+        table = text[text.index("## Candidates"):]
+        numbers = [int(m.group(1)) for m in re.finditer(r"^\| (\d+) \| (?:gate|probe|ddmin|split|shrink) \|", table,
+                                                         re.MULTILINE)]
+        self.assertEqual(numbers, [r["index"] for r in rows])
+        self.assertEqual(second["candidates"][8]["selection"], rows[8]["selection"])
+        # a case saved before the full list was kept still shows its key rows
+        old = {key: value for key, value in case.items() if key != "reruns"}
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual([e["index"] for e in case["evidence"]],
+                             [r["index"] for r in Library(Path(directory))._scenario_block(old)["reruns"]])
+
+    def test_without_the_other_jobs_the_last_jobs_candidates_still_cover_milk(self):
+        self.assertIn("| milk_1 | position | 87.5% | 75% |", self.report(with_history=False))
+
+    def test_invalid_sizes_are_listed_as_percentages(self):
+        from tests.test_scenario_packet import continuation_reductions
+
+        first, second = continuation_reductions()
+        second["candidates"].append(rf.candidate(
+            10, "shrink", {"robot": {"joints": 0.9375}, "basket_1": {"position": 0.9375}, "milk_1": {"position": 0.8125},
+                           "orange_juice_1": {"position": 1.0}}, "invalid_scene"))
+        summary = {"mode": "scenario-reduce", "reduction": second}
+        rows = self.script.size_rows(summary, [{"reduction": first}, {"reduction": second}])
+        self.assertEqual(["milk_1", "position", "87.5%", "75%", "12.5 points (1/8)", "81.3%"],
+                         next(r for r in rows if r[0] == "milk_1"))
 
 
 class SummaryTests(unittest.TestCase):

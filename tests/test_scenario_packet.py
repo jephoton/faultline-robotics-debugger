@@ -293,6 +293,98 @@ class ShrinkNotesTests(unittest.TestCase):
         self.assertIn("milk_1: kept at its full difference", notes[1])
 
 
+def continuation_reductions():
+    """The shape of run ``l10-start14`` (October 19): the first reduce Job ends inside ddmin with every kept
+    part at full size, and the continuation shrinks robot and basket to the end of their size search and then
+    milk down to 87.5% before its budget ends, so ``parts`` never gets a milk row."""
+
+    full = lambda *names: {n: ({"joints": 1.0} if n == "robot" else {"position": 1.0}) for n in names}  # noqa: E731
+    first = {"stop_reason": "budget_exhausted", "reduced": False, "entity_minimal": False, "reference": 4,
+             "final_candidate": 1, "final_selection": full("robot", "basket_1", "milk_1", "orange_juice_1"),
+             "surviving_entities": ["robot", "basket_1", "milk_1", "orange_juice_1"],
+             "candidates": [rf.candidate(0, "gate", None, "reproduces", role="failing"),
+                            rf.candidate(1, "ddmin", full("robot", "basket_1", "milk_1", "orange_juice_1"),
+                                         "reproduces")],
+             "parts": []}
+
+    def shrink(index, decision, **sizes):
+        selection = full("robot", "basket_1", "milk_1", "orange_juice_1")
+        for name, size in sizes.items():
+            selection[name] = {"joints" if name == "robot" else "position": size}
+        return rf.candidate(index, "shrink", selection, decision)
+
+    candidates = [rf.candidate(0, "gate", None, "reproduces", role="failing"),
+                  shrink(1, "does_not_reproduce", robot=0.5), shrink(2, "does_not_reproduce", robot=0.875),
+                  shrink(3, "reproduces", robot=0.9375),
+                  shrink(4, "does_not_reproduce", robot=0.9375, basket_1=0.5),
+                  shrink(5, "does_not_reproduce", robot=0.9375, basket_1=0.875),
+                  shrink(6, "reproduces", robot=0.9375, basket_1=0.9375),
+                  shrink(7, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.5),
+                  shrink(8, "reproduces", robot=0.9375, basket_1=0.9375, milk_1=0.875),
+                  shrink(9, "does_not_reproduce", robot=0.9375, basket_1=0.9375, milk_1=0.75)]
+    final = full("robot", "basket_1", "milk_1", "orange_juice_1")
+    final.update(robot={"joints": 0.9375}, basket_1={"position": 0.9375}, milk_1={"position": 0.875})
+    second = {"stop_reason": "budget_exhausted", "reduced": False, "entity_minimal": True, "reference": 4,
+              "final_candidate": 8, "final_selection": final,
+              "surviving_entities": ["robot", "basket_1", "milk_1", "orange_juice_1"], "candidates": candidates,
+              "parts": [{"entity": "robot", "component": "joints", "t": 0.9375, "lower": 0.875,
+                         "lower_tested": True, "invalid_points": [], "steps_done": 4},
+                        {"entity": "basket_1", "component": "position", "t": 0.9375, "lower": 0.875,
+                         "lower_tested": True, "invalid_points": [], "steps_done": 4}]}
+    return first, second
+
+
+class ContinuationShrinkNotesTests(unittest.TestCase):
+    """Regression (October 19, run l10-start14): the packet said milk was "kept at its full difference,
+    untested" although the continuation Job had shrunk it to 87.5%."""
+
+    DIFFERENCES = [{"entity": name, "kind": "robot" if name == "robot" else "object",
+                    **({"joints": [{"name": "robot0_joint1", "offset": 1.0, "unit": "deg"}]} if name == "robot"
+                       else {"position": {"distance_m": 0.02}}), "rotation": None}
+                   for name in ("robot", "basket_1", "milk_1", "orange_juice_1")]
+
+    def case(self, with_history=True):
+        first, second = continuation_reductions()
+        summary = {"mode": "scenario-reduce", "plan": rf.partial_plan(ranking=["robot", "basket_1", "milk_1",
+                                                                               "orange_juice_1"]),
+                   "reduction": second, "differences": self.DIFFERENCES, "videos": {}}
+        return se.build_case(summary, [{"reduction": first}, {"reduction": second}] if with_history else None)
+
+    def test_the_history_reads_the_continuation_jobs_candidates(self):
+        first, second = continuation_reductions()
+        history = {(h["entity"], h["component"]): h["tested"] for h in se.shrink_history([{"reduction": first}, {"reduction": second}])}
+        self.assertEqual([0.5, 0.75, 0.875], sorted(t["t"] for t in history[("milk_1", "position")]))
+        self.assertEqual([0.5, 0.875, 0.9375], sorted(t["t"] for t in history[("basket_1", "position")]))
+        self.assertEqual({2}, {t["job"] for t in history[("milk_1", "position")]})
+        self.assertNotIn(("orange_juice_1", "position"), history)
+
+    def test_the_case_keeps_the_history_and_the_packet_states_milk_was_shrunk(self):
+        case = self.case()
+        self.assertTrue(case["minimal"]["shrink_history"])
+        notes = sp.make_scenario_packet(case)["minimal"]["shrink"]
+        milk = next(n for n in notes if n.startswith("milk_1"))
+        self.assertIn("50%, 75% did not reproduce", milk)
+        self.assertIn("87.5% reproduced it", milk)
+        self.assertIn("87.5% is the size kept", milk)
+        self.assertNotIn("untested", milk)
+        juice = next(n for n in notes if n.startswith("orange_juice_1"))
+        self.assertIn("kept at its full difference", juice)          # true: it was never shrunk
+        self.assertEqual(1, sum(1 for n in notes if n.startswith("milk_1")))
+
+    def test_without_the_candidate_log_a_shrunk_part_is_not_called_untested(self):
+        notes = sp.shrink_notes({"selection": {"milk_1": {"position": 0.875}, "orange_juice_1": {"position": 1.0}},
+                                 "parts": []})
+        self.assertIn("reduced to 87.5% of the difference", next(n for n in notes if n.startswith("milk_1")))
+        self.assertIn("untested", next(n for n in notes if n.startswith("orange_juice_1")))
+
+    def test_a_candidate_that_moves_two_parts_is_left_out(self):
+        first, second = continuation_reductions()
+        second["candidates"].append(rf.candidate(10, "shrink", {"robot": {"joints": 0.5}, "basket_1": {"position": 0.5},
+                                                               "milk_1": {"position": 0.875}}, "does_not_reproduce"))
+        tested = [t for h in se.shrink_history([{"reduction": first}, {"reduction": second}]) if h["entity"] == "robot" for t in h["tested"]]
+        self.assertEqual([0.5, 0.875, 0.9375], sorted(t["t"] for t in tested))      # the two-part try added nothing
+
+
 class ExplainerModelTests(unittest.TestCase):
     def test_scenario_explanations_use_the_measured_choice_and_leave_cost_unpriced(self):
         record = tf._scenario_explain_provenance("completed", None, 1.0, 100, 50)

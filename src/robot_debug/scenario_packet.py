@@ -271,18 +271,71 @@ def evidence_meaning(phase: str, role: str, parts: Optional[List[Dict[str, Any]]
     return "{}: {} ({}), {}.".format(scene, outcomes, counts, verdict)
 
 
+def _percent(fraction: Any) -> str:
+    return "{:g}%".format(round(float(fraction) * 100, 2))
+
+
+def _sizes(values: Sequence[float]) -> str:
+    """Sizes as percentages, ascending, without repeats; at most the eight largest (a note is bounded)."""
+
+    unique = sorted(set(round(float(v), 4) for v in values))[-8:]
+    return ", ".join(_percent(v) for v in unique)
+
+
+def _history_note(entity: str, component: str, tested: Sequence[Mapping[str, Any]],
+                  kept: Optional[float]) -> Optional[str]:
+    failed = [t["t"] for t in tested if t.get("decision") == "reproduces"]
+    passed = [t["t"] for t in tested if t.get("decision") == "does_not_reproduce"]
+    invalid = [t["t"] for t in tested if t.get("decision") == "invalid_scene"]
+    pieces = []
+    if passed:
+        pieces.append("{} did not reproduce the failure".format(_sizes(passed)))
+    if failed:
+        pieces.append("{} reproduced it".format(_sizes(failed)))
+    if invalid:
+        pieces.append("{} was an invalid scene and says nothing about the policy".format(_sizes(invalid)))
+    if not pieces:
+        return None
+    note = "{} {}: sizes already tested: {}".format(entity, component, "; ".join(pieces))
+    if kept is not None:
+        note += "; {} is the size kept".format(_percent(kept))
+    return note + "."
+
+
 def shrink_notes(minimal: Mapping[str, Any]) -> List[str]:
     """Plain sentences on which sizes were already tested, so nobody proposes re-running them.
 
     Added after all three Nemotron models (October 13) suggested shrink sizes the reduction
     had already tried; the packet listed only the key reruns, not the shrink history.
+
+    The sizes come from ``minimal["shrink_history"]`` (every shrink try of every reduction Job,
+    continuations included; :func:`robot_debug.scenario_experiment.shrink_history`). October 19: the notes
+    were read only from ``parts``, the sizes searches that had finished, so a part still being shrunk
+    when the budget ended (``l10-start14`` milk, 87.5%) was reported as "kept at its full difference,
+    untested". A case without a history falls back to ``parts`` and to the selection itself.
     """
 
-    notes = []
-    shrunk = set()
+    notes: List[str] = []
+    selection = minimal.get("selection") or {}
+
+    def kept_size(entity: str, component: str) -> Optional[float]:
+        value = (selection.get(entity) or {}).get(component) if isinstance(selection.get(entity), Mapping) else None
+        return float(value) if isinstance(value, (int, float)) else None
+
+    covered = set()
+    for item in minimal.get("shrink_history") or []:
+        if not isinstance(item, Mapping):
+            continue
+        note = _history_note(item.get("entity"), item.get("component"), item.get("tested") or [],
+                             kept_size(item.get("entity"), item.get("component")))
+        if note is not None:
+            covered.add((item["entity"], item["component"]))
+            notes.append(note)
     for part in minimal.get("parts") or []:
         entity, component = part["entity"], part["component"]
-        shrunk.add(entity)
+        if (entity, component) in covered:
+            continue
+        covered.add((entity, component))
         kept = round(float(part["t"]) * 100, 1)
         lower = part.get("lower")
         if lower is not None and part.get("lower_tested"):
@@ -291,10 +344,19 @@ def shrink_notes(minimal: Mapping[str, Any]) -> List[str]:
                              entity, component, kept, round(float(lower) * 100, 1)))
         else:
             notes.append("{} {}: {:g}% kept; no smaller size was tested.".format(entity, component, kept))
-    for entity in sorted(minimal.get("selection") or {}):
-        if entity not in shrunk:
-            notes.append("{}: kept at its full difference; its size was not shrunk before the "
-                         "reduction stopped (untested).".format(entity))
+    for entity in sorted(selection):
+        components = selection[entity] if isinstance(selection[entity], Mapping) else {}
+        for component in sorted(components):
+            if (entity, component) in covered or any(e == entity for e, _c in covered):
+                continue
+            size = kept_size(entity, component)
+            if size is not None and size < 1.0 - 1e-9:
+                notes.append("{} {}: reduced to {} of the difference before the reduction stopped; the "
+                             "sizes tried on the way were not recorded.".format(entity, component, _percent(size)))
+            else:
+                notes.append("{}: kept at its full difference; its size was not shrunk before the "
+                             "reduction stopped (untested).".format(entity))
+                break
     return notes[:MAX_PARTS]
 
 

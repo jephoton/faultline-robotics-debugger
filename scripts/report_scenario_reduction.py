@@ -361,7 +361,50 @@ def summary_section(summary: Mapping[str, Any]) -> List[str]:
     return lines
 
 
-def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) -> List[str]:
+def _points(fraction: float) -> str:
+    """A gap between two shares in percentage points, with its 1/N form when it is one: ``6.25 points (1/16)``."""
+
+    points = "{:g} point{}".format(round(fraction * 100.0, 2), "" if abs(fraction * 100.0 - 1.0) < 1e-9 else "s")
+    count = round(1.0 / fraction) if fraction > 0 else 0
+    return "{} (1/{})".format(points, count) if count >= 2 and abs(count * fraction - 1.0) < 1e-6 else points
+
+
+def size_rows(summary: Mapping[str, Any], reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> List[List[str]]:
+    """One row per kept part of the final selection, from the sizes tried in every reduction Job.
+
+    ``reductions`` are all the run's reduction summaries (the first reduce and its continuations); the
+    last Job's ``parts`` lists only the size searches that finished, so a part cut off by the budget (the
+    ``l10-start14`` milk, shrunk to 87.5% in the continuation) would be missing. A kept part nothing was
+    tried below is shown as "not shrunk"."""
+
+    reduction = summary.get("reduction") or {}
+    selection = reduction.get("final_selection") or {}
+    history = {(h["entity"], h["component"]): h["tested"]
+               for h in se.shrink_history(reductions if reductions else [summary])}
+    parts = {(p.get("entity"), p.get("component")): p for p in reduction.get("parts") or [] if isinstance(p, Mapping)}
+    rows: List[List[str]] = []
+    for entity in sorted(selection):
+        for component in sorted(selection[entity]):
+            kept = float(selection[entity][component])
+            tested, part = history.get((entity, component), []), parts.get((entity, component))
+            passed = [t["t"] for t in tested if t["decision"] == "does_not_reproduce" and t["t"] < kept]
+            if not passed and part is not None and part.get("lower_tested") and part.get("lower") is not None:
+                passed = [float(part["lower"])]
+            invalid = sorted({t["t"] for t in tested if t["decision"] == "invalid_scene"}
+                             | {float(v) for v in (part or {}).get("invalid_points") or []})
+            invalid_text = ", ".join(_share_text(v) for v in invalid) or "-"
+            if not tested and part is None:
+                rows.append([entity, component, _share_text(kept), "not shrunk", "-", "-"])
+            elif passed:
+                rows.append([entity, component, _share_text(kept), _share_text(max(passed)),
+                             _points(kept - max(passed)), invalid_text])
+            else:
+                rows.append([entity, component, _share_text(kept), "none tried below", "-", invalid_text])
+    return rows
+
+
+def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float],
+                      reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> List[str]:
     plan, reduction = summary["plan"], summary.get("reduction") or {}
     selection = reduction.get("final_selection")
     reference = reduction.get("reference")
@@ -384,15 +427,14 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
         lines += ["Note: {}".format(reduction["note"]), ""]
     lines += ["Final selection: {}. This is a local minimum found by reruns, not proof of the globally "
               "smallest cause.".format(_selection_text(selection)), ""]
-    if reduction.get("parts"):
-        lines += _table(["entity", "part", "fraction t", "lower bound tested", "resolution", "invalid midpoints"],
-                        [[p["entity"], p["component"], p["t"], p["lower"] if p.get("lower_tested") else "-",
-                          p["resolution"], ", ".join(str(v) for v in p.get("invalid_points") or []) or "-"]
-                         for p in reduction["parts"]]) + [""]
-        if any(p.get("invalid_points") for p in reduction["parts"]):
-            lines += ["Invalid midpoints were interpenetrating scenes: they say nothing about the policy, so "
-                      "the size stays at the smallest verified reproducing value and no lower bound is claimed "
-                      "from them.", ""]
+    sizes = size_rows(summary, reductions)
+    if sizes:
+        lines += _table(["entity", "part", "kept size", "largest size that passed", "precision", "invalid sizes"],
+                        sizes) + [""]
+        lines += ["Sizes are shares of the full difference between the two starts. Kept size: verified to make the "
+                  "policy fail (at least 4 of 5 attempts). Largest size that passed: the largest smaller size tried "
+                  "that did not fail that often, over every reduction Job. Precision: the gap between the two. "
+                  "Invalid sizes were interpenetrating scenes and say nothing about the policy.", ""]
     lines += ["## Differences between the failing start and the reference", ""]
     table = summary.get("differences") or []
     lines += (_table(["entity", "position (cm)", "rotation (deg)", "joints", "score"], difference_rows(table))
@@ -461,7 +503,8 @@ def reduction_section(summary: Mapping[str, Any], hourly_rate: Optional[float]) 
 
 
 def build_report(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]] = None,
-                 hourly_rate: Optional[float] = None) -> str:
+                 hourly_rate: Optional[float] = None,
+                 reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> str:
     if summary["mode"] == "scenario-screen":
         title = "# Scenario screen: {}".format(summary.get("suite"))
         lines = [title, "", "Stop reason: `{}`; complete: {}; Job seconds: {}. Checkpoint: {}.".format(
@@ -480,7 +523,7 @@ def build_report(summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]]
               "and a hypothesis.".format(plan["suite"], plan["task_id"]), ""]
     if screen is not None:
         lines += screen_section(screen)
-    lines += reduction_section(summary, hourly_rate)
+    lines += reduction_section(summary, hourly_rate, reductions)
     return "\n".join(lines) + "\n"
 
 

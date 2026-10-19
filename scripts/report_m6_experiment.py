@@ -308,12 +308,55 @@ def threshold_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> L
     return lines
 
 
-def level_table(families: Mapping[str, Any], order: Sequence[str] = ()) -> List[str]:
-    lines = ["| Family | Levels in the order tried (severity: failures/attempts) |", "| --- | --- |"]
+def _ordinal(number: int) -> str:
+    if 10 <= number % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return "{}{}".format(number, suffix)
+
+
+_PHASES = {"sweep": "sweep", "bisect": "narrowing"}
+
+
+def level_table(families: Mapping[str, Any], order: Sequence[str] = (), *, required: Optional[int] = None,
+                unconfirmed: bool = False) -> List[str]:
+    """One table per family with every level tried, sorted by severity (the search order is bisection order,
+    which reads as noise: 0.2, 0.4, 0.6, 0.5, 0.45...). ``tried as`` keeps the order: 1st, 2nd... and whether
+    the level came from the sweep or from narrowing. The smallest reproducing level is marked as the threshold,
+    "unconfirmed" when the unperturbed control failed."""
+
+    lines: List[str] = []
     for family in _ordered(families, order):
-        lines.append("| {} | {} |".format(
-            FAMILY_LABELS.get(family, family), _levels_text(families[family].get("levels") or ())))
-    return lines
+        result = families[family]
+        gate = required if required is not None else result.get("required_failures")
+        levels = [level for level in result.get("levels") or () if isinstance(level, Mapping)
+                  and isinstance(level.get("severity"), (int, float))]
+        tried = {id(level): number for number, level in enumerate(levels, start=1)}
+        threshold = result.get("threshold_severity")
+        lines += ["### " + FAMILY_LABELS.get(family, family), ""]
+        if not levels:
+            lines += ["No level was tried.", ""]
+            continue
+        lines += ["| s | failures | result | tried as |", "| ---: | ---: | --- | --- |"]
+        for level in sorted(levels, key=lambda item: (item["severity"], tried[id(item)])):
+            attempts = len(level.get("outcomes") or ())
+            failures = level.get("failures")
+            if not level.get("complete"):
+                outcome = "incomplete"
+            elif level.get("reproducible") is not None:
+                outcome = "fails" if level["reproducible"] else "passes"
+            elif isinstance(failures, int) and isinstance(gate, int):
+                outcome = "fails" if failures >= gate else "passes"
+            else:
+                outcome = "-"
+            if threshold is not None and level["severity"] == threshold and outcome == "fails":
+                outcome += " ← threshold (unconfirmed)" if unconfirmed else " ← threshold"
+            lines.append("| {:g} | {}/{} | {} | {} ({}) |".format(
+                level["severity"], "?" if failures is None else failures, attempts or result.get("attempts", "?"),
+                outcome, _ordinal(tried[id(level)]), _PHASES.get(level.get("phase"), level.get("phase") or "level")))
+        lines.append("")
+    return lines[:-1] if lines else lines
 
 
 def threshold_reading(families: Mapping[str, Any], config: Mapping[str, Any]) -> List[str]:
@@ -414,7 +457,11 @@ def render_threshold(summary: Mapping[str, Any]) -> List[str]:
         "",
     ]
     order = config.get("families") or ()
-    lines += threshold_table(families, order) + ["", *level_table(families, order), ""]
+    unconfirmed = bool((nominal.get("outcomes") or {}).get("policy_failure"))
+    lines += threshold_table(families, order) + ["", "Every level tried, by severity (`tried as` gives the order: the "
+                                                 "sweep first, then narrowing between the last passing level and "
+                                                 "the first failing one).", ""]
+    lines += level_table(families, order, required=config.get("required_failures"), unconfirmed=unconfirmed) + [""]
     lines += ["- " + sentence for sentence in threshold_reading(families, config)]
     lines += ["", "The camera columns are the median perturbed/unperturbed ratios of the policy input's mean and "
               "standard deviation over the threshold level's attempts (1.00 / 1.00 would mean unchanged)."]
@@ -540,7 +587,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("report rejected: {}".format(error), file=sys.stderr)
         return 2
     if args.output is None:
-        sys.stdout.write(text)
+        try:
+            sys.stdout.write(text)
+        except UnicodeEncodeError:                  # a console code page without the threshold arrow
+            sys.stdout.flush()
+            sys.stdout.buffer.write(text.encode("utf-8"))
     else:
         args.output.write_bytes(text.encode("utf-8"))
     return 0

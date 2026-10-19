@@ -1120,3 +1120,114 @@ def request_paraphrase_reply(prompt: dict, api_key: str, transport: Transport | 
         return fall_back("unsafe_response", provenance=provenance)
     result.update(content=content, provenance=provenance)
     return result
+
+
+# --- October 19: research-backed next steps (additive; nothing above is changed) -----------------------------
+
+# One call per case to the model that reads scenario explanations (ADR 0030): Nano's research summary was
+# the only output of that task it accepted, and it was still rejected for FL-S-8E0D. No price is pinned, so no
+# cost estimate is recorded; each call is about a cent and is reconciled with billing.
+NEXT_STEPS_MODEL = SCENARIO_EXPLAIN_MODEL
+NEXT_STEPS_RESERVATION_USD = Decimal("0.02")
+_MAX_REQUEST_BYTES_NEXT_STEPS = 24_000
+_MAX_TOKENS_NEXT_STEPS = 1200
+
+
+def _next_steps_payload(context: dict) -> dict:
+    # Imported here: next_steps reaches research_store, whose chain imports this module.
+    from .next_steps import NEXT_STEPS_PROMPT, context_ids
+
+    context_ids(context)
+    user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    payload = {
+        "model": NEXT_STEPS_MODEL,
+        "messages": [
+            {"role": "system", "content": NEXT_STEPS_PROMPT},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": _MAX_TOKENS_NEXT_STEPS,
+        "temperature": 0,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                         allow_nan=False).encode("utf-8")
+    if len(encoded) > _MAX_REQUEST_BYTES_NEXT_STEPS:
+        raise TokenFactoryError("request_too_large")
+    return payload
+
+
+def check_next_steps_request(context: dict) -> None:
+    """Raise before any request if the context would exceed its size bound."""
+    _next_steps_payload(context)
+
+
+def next_steps_request_size(context: dict) -> int:
+    """The request body size in bytes, for a dry run that makes no call."""
+    return len(json.dumps(_next_steps_payload(context), ensure_ascii=False, separators=(",", ":"),
+                          allow_nan=False).encode("utf-8"))
+
+
+def request_next_steps(context: dict, api_key: str, transport: Transport | None = None) -> dict:
+    """Make exactly one bounded POST for 2 to 4 source-cited next steps.
+
+    Returns ``response_json`` (the model text, only when it passes
+    :func:`robot_debug.next_steps.validate_next_steps` against ``context``, else None) and the ``provenance``
+    (the model and request status; no price is pinned, so no cost estimate). Rejected model text is returned
+    only as ``rejected_content`` for local diagnosis, and withheld if it carries the key.
+    """
+    from .next_steps import validate_next_steps
+
+    if not _valid_key(api_key):
+        raise TokenFactoryError("invalid_api_key")
+    payload = _next_steps_payload(context)
+    call = _default_transport if transport is None else transport
+    started = time.monotonic()
+    try:
+        response = call("POST", "chat/completions", payload, api_key)
+    except (Exception, KeyboardInterrupt) as exc:
+        latency = time.monotonic() - started
+        code = _post_error_code(exc)
+        status = ("transport_error" if code == "timeout"
+                  else "invalid_response" if code == "invalid_response" else "http_error")
+        return {"response_json": None,
+                "provenance": _scenario_provenance(status, code, latency, NEXT_STEPS_MODEL)}
+    latency = time.monotonic() - started
+    try:
+        if type(response) is not dict or response.get("model") != NEXT_STEPS_MODEL:
+            raise ValueError
+        prompt, completion = _usage(response)
+        if completion is not None and completion > _MAX_TOKENS_NEXT_STEPS:
+            raise ValueError
+    except Exception:
+        return {"response_json": None,
+                "provenance": _scenario_provenance("invalid_response", "invalid_response", latency,
+                                                   NEXT_STEPS_MODEL)}
+    choices = response.get("choices")
+    if (type(choices) is list and len(choices) == 1 and type(choices[0]) is dict
+            and choices[0].get("finish_reason") == "length"):
+        return {"response_json": None,
+                "provenance": _scenario_provenance("invalid_response", "output_limit", latency,
+                                                   NEXT_STEPS_MODEL, prompt, completion)}
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        content = None
+    try:
+        if (type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict
+                or choices[0].get("finish_reason") != "stop"
+                or type(choices[0].get("message")) is not dict or type(content) is not str):
+            raise ValueError
+        items = validate_next_steps(content, context)
+        if _research_leaks_key(content, api_key) or _contains_secret(items, api_key):
+            raise ValueError
+    except Exception:
+        result = {"response_json": None,
+                  "provenance": _scenario_provenance("invalid_response", "invalid_response", latency,
+                                                     NEXT_STEPS_MODEL, prompt, completion)}
+        if type(content) is str and not _research_leaks_key(content, api_key):
+            result["rejected_content"] = content
+        return result
+    return {"response_json": content,
+            "provenance": _scenario_provenance("completed", None, latency, NEXT_STEPS_MODEL, prompt, completion)}

@@ -1665,6 +1665,27 @@ def _case_evidence(reduction: Mapping[str, Any], measurement: Optional[Mapping[s
     return sorted(chosen, key=lambda row: row["index"])
 
 
+MAX_CASE_RERUNS = 200
+
+
+def all_reruns(reduction: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Every rerun of a reduction Job in the order and numbering of the report's Candidates table (``#``).
+
+    ``evidence`` keeps only the few rows the measurement was read from; the case page's "why it is
+    trustworthy" section needs them all (each kept shift alone, and the kept set without any one of them).
+    The numbers are the Job's own candidate indices, the same ids the explanation cites as ``c<index>``;
+    a continuation Job restarts at 0, so these are the rows of the Job the case was built from."""
+
+    rows = []
+    for candidate in reduction.get("candidates") or []:
+        if isinstance(candidate, Mapping) and isinstance(candidate.get("index"), int):
+            rows.append({
+                "index": candidate["index"], "phase": candidate.get("phase"), "role": candidate.get("role"),
+                "selection": copy.deepcopy(candidate.get("selection")),
+                "outcomes": list(candidate.get("outcomes") or []), "decision": candidate.get("decision")})
+    return sorted(rows, key=lambda row: row["index"])[:MAX_CASE_RERUNS]
+
+
 def _fmt(value: float, digits: int = 1) -> str:
     text = "{:.{}f}".format(value, digits)
     return text[:-2] if text.endswith(".0") and digits == 1 else text
@@ -1739,8 +1760,54 @@ def describe_minimal_cause(
     return sentence + "."
 
 
-def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
+def shrink_history(summaries: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Every shrink size tried for each kept part, across all reduction Jobs of a run.
+
+    ``summaries`` are the ``scenario-reduce`` summaries in Job order (the first reduce, then its
+    continuations ``reduce2``, ``reduce3``...). A reduction's ``parts`` list only holds the parts whose
+    size search finished, so a part still being shrunk when the budget ended (the October 19 ``l10-start14``
+    milk, shrunk to 87.5% in the continuation) is missing from it. The candidate log has every try: a
+    ``shrink`` candidate differs from the last reproducing selection in exactly one part, and that part is
+    the one tested. A candidate that changes several parts at once is left out rather than guessed at.
+
+    Sizes are fractions of the difference each Job started from. A continuation starts from the earlier
+    Job's reproducing selection, which a Job that stops before its shrink phase leaves at full size, so the
+    numbers of different Jobs share one scale.
+
+    Returns ``[{entity, component, tested: [{t, decision, job}]}]`` sorted by entity and component, each
+    ``tested`` list in the order the sizes were tried.
+    """
+
+    found: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for job, summary in enumerate(summaries or (), start=1):
+        reduction = summary.get("reduction") if isinstance(summary, Mapping) else None
+        candidates = (reduction or {}).get("candidates") if isinstance(reduction, Mapping) else None
+        current: Dict[Tuple[str, str], float] = {}
+        ordered = sorted((c for c in candidates or () if isinstance(c, Mapping) and isinstance(c.get("index"), int)),
+                         key=lambda c: c["index"])
+        for candidate in ordered:
+            if candidate.get("phase") != "shrink" or not isinstance(candidate.get("selection"), Mapping):
+                continue
+            sizes = {(entity, component): float(t)
+                     for entity, components in candidate["selection"].items() if isinstance(components, Mapping)
+                     for component, t in components.items() if isinstance(t, (int, float))}
+            moved = [key for key, t in sizes.items() if abs(t - current.get(key, 1.0)) > 1e-9]
+            decision = candidate.get("decision")
+            if len(moved) == 1 and decision in ("reproduces", "does_not_reproduce", "invalid_scene"):
+                found.setdefault(moved[0], []).append({"t": round(sizes[moved[0]], 4), "decision": decision,
+                                                       "job": job})
+            if decision == "reproduces":
+                current = sizes
+    return [{"entity": entity, "component": component, "tested": tested}
+            for (entity, component), tested in sorted(found.items())]
+
+
+def build_case(summary: Mapping[str, Any], reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> Dict[str, Any]:
     """A portable case record for a ``scenario-reduce`` summary.
+
+    ``reductions`` are all the run's reduction summaries in Job order (the first reduce and its
+    continuations); the case's ``minimal.shrink_history`` is read from them, so the sizes tried in a
+    continuation are not lost. Without it only ``summary`` is read.
 
     Holds what the later UI step renders: the suite, task and instruction, the failing
     start and reference, the minimal selection and its sentence, the replay recipe (a
@@ -1787,6 +1854,7 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
                 required_failures=reduction.get("required_failures", 4), attempts=reduction.get("attempts", 5),
                 parts=reduction.get("parts")),
             "parts": reduction.get("parts"),
+            "shrink_history": shrink_history(reductions if reductions else [summary]),
             "entity_minimal": reduction.get("entity_minimal"),
         },
         "replay": {
@@ -1807,6 +1875,7 @@ def build_case(summary: Mapping[str, Any]) -> Dict[str, Any]:
         },
         "differences": compact_differences(summary.get("differences") or []),
         "evidence": _case_evidence(reduction, measurement),
+        "reruns": all_reruns(reduction),
         "explanation": None,
         "measurements": {
             "candidates_tested": reduction.get("candidates_tested"),
@@ -1860,6 +1929,7 @@ __all__ = [
     "ScenarioConfigError",
     "ScenarioPool",
     "SUMMARY_NAME",
+    "all_reruns",
     "build_case",
     "build_reduce_workload",
     "describe_minimal_cause",
@@ -1871,5 +1941,6 @@ __all__ = [
     "read_evidence",
     "recommended_deadline_seconds",
     "run_scenario",
+    "shrink_history",
     "validate_mode_fields",
 ]

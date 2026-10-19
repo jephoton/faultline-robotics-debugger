@@ -140,6 +140,12 @@ def create_run_dir(root: Path, spec: Spec, spec_text: Optional[str], moment: dt.
     return run_dir
 
 
+THRESHOLDS_UNCONFIRMED_NOTE = (
+    "\n\n## Thresholds unconfirmed\n\nThe unperturbed control did not pass reliably, so the start is "
+    "flaky. Any threshold above is unconfirmed: it is not evidence that a disturbance breaks the "
+    "policy, and the case has no replay.\n")
+
+
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
@@ -943,10 +949,10 @@ class DefaultTools:
 
     # reports and cases
     def scenario_report(self, summary: Mapping[str, Any], screen: Optional[Mapping[str, Any]],
-                        hourly_usd: Optional[float]) -> str:
+                        hourly_usd: Optional[float], reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> str:
         module = _load_script("report_scenario_reduction")
         try:
-            return module.build_report(summary, screen, hourly_usd)
+            return module.build_report(summary, screen, hourly_usd, reductions)
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
@@ -960,11 +966,12 @@ class DefaultTools:
         except (module.ReportError, KeyError, TypeError) as error:
             raise StopRun("report_failed", str(error)) from None
 
-    def build_case(self, summary: Mapping[str, Any]) -> Dict[str, Any]:
+    def build_case(self, summary: Mapping[str, Any],
+                   reductions: Optional[Sequence[Mapping[str, Any]]] = None) -> Dict[str, Any]:
         from robot_debug import scenario_experiment as se
 
         try:
-            return se.build_case(summary)
+            return se.build_case(summary, reductions)
         except (ValueError, KeyError, TypeError):
             raise StopRun("case_failed", "the summary cannot be turned into a case") from None
 
@@ -990,10 +997,11 @@ class DefaultTools:
 
         return pipeline_research.key_available(env_file, self.research_deps)
 
-    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path]) -> Optional[Dict[str, Any]]:
+    def research_case(self, case: Mapping[str, Any], env_file: Optional[Path],
+                      run_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
         from robot_debug import pipeline_research
 
-        return pipeline_research.run(case, env_file, self.research_deps, now=self.now)
+        return pipeline_research.run(case, env_file, self.research_deps, now=self.now, run_dir=run_dir)
 
     def register_cases(self, run_dir: Path) -> List[str]:
         """Register every case of a pipeline run (``cases/<name>/`` folders), in route order."""
@@ -1216,6 +1224,7 @@ class Orchestrator:
         # YYMMDDHHMMSS: to the second, so two runs of one spec in the same minute cannot share Job names.
         self.tag = (match.group(1)[2:] + match.group(2)) if match else "000000" + "000000"
         self.notes: List[str] = []
+        self._reductions: List[Dict[str, Any]] = []      # the layout route's reduction summaries, in Job order
 
     def _checkpoint_args(self) -> Dict[str, Any]:
         """Keyword arguments for the workload builders: the override, or nothing at all."""
@@ -1805,6 +1814,7 @@ class Orchestrator:
         last: Optional[Dict[str, Any]] = None
         reason: Optional[str] = None
         previous_selection = None
+        self._reductions = []              # every reduction Job's summary, for the case's shrink history
         for index in range(1 + MAX_CONTINUATIONS):
             step = "reduce" if index == 0 else "reduce{}".format(index + 1)
             path = self.run_dir / "plans" / ("plan.json" if index == 0 else "plan-{}.json".format(step))
@@ -1821,6 +1831,7 @@ class Orchestrator:
                     raise                   # a user stop leaves the report and case to the resumed run
                 return best, last, stop.reason
             last = outcome.summary
+            self._reductions.append(last)
             reduction = last.get("reduction") or {}
             if verified_selection(reduction):
                 best = last
@@ -1852,7 +1863,8 @@ class Orchestrator:
         if self.steps.is_done("report"):
             pass
         else:
-            text = self.tools.scenario_report(summary, screen_summary, self.spec.backend.hourly_usd)
+            text = self.tools.scenario_report(summary, screen_summary, self.spec.backend.hourly_usd,
+                                              list(self._reductions) or None)
             (self.run_dir / "report.md").write_text(text, encoding="utf-8", newline="\n")
             self.steps.update("report", status="done")
             self.say("report", "report.md")
@@ -1869,7 +1881,7 @@ class Orchestrator:
     def _case_and_after(self, summary: Mapping[str, Any]) -> Optional[str]:
         case_path = self.run_dir / "case.json"
         if not self.steps.is_done("case"):
-            case = self.tools.build_case(summary)
+            case = self.tools.build_case(summary, list(self._reductions) or [summary])
             _write_json(case_path, case)
             candidate = (case.get("replay") or {}).get("candidate")
             if candidate:
@@ -2269,10 +2281,7 @@ class Orchestrator:
         except StopRun as stop:
             self._warn("report", "no stress-test report written ({})".format(stop.reason))
         if report is not None and case.get("thresholds_unconfirmed"):
-            report = report.rstrip("\n") + (
-                "\n\n## Thresholds unconfirmed\n\nThe unperturbed control did not pass reliably, so the start is "
-                "flaky. Any threshold above is unconfirmed: it is not evidence that a disturbance breaks the "
-                "policy, and the case has no replay.\n")
+            report = report.rstrip("\n") + THRESHOLDS_UNCONFIRMED_NOTE
         self._write_case_folder("audit", case, report, case.get("replay"))
 
     def _wording_original(self, screen_summary: Mapping[str, Any]) -> str:
@@ -2413,7 +2422,7 @@ class Orchestrator:
                 continue
             try:
                 case = _read_json(folder / "case.json")
-                record = self.tools.research_case(case, self.env_file)
+                record = self.tools.research_case(case, self.env_file, self.run_dir)
             except Exception as error:          # noqa: BLE001 - web context is optional; only the type is logged
                 self.steps.update(step, status="failed", error=type(error).__name__)
                 self._warn(step, "no web context for the {} case ({})".format(name, type(error).__name__))
@@ -2423,7 +2432,7 @@ class Orchestrator:
                 continue
             _write_json(folder / "research.json", record)
             sources = sum(len(entry.get("results") or ()) for entry in record.get("queries") or ())
-            self.steps.update(step, status="done", sources=sources, summary=(record.get("summary") or {}).get("status"))
+            self.steps.update(step, status="done", sources=sources, next_steps=(record.get("next_steps") or {}).get("status"))
             self.say(step, "web context for the {} case ({} sources)".format(name, sources))
             wrote = True
         self.steps.update("research", status="done", reason=None)
