@@ -34,6 +34,8 @@ finished; see the checkpoint below for publication and submission gates.
   envelope, not a billed charge. No GPU Job or Tavily search. Case ID unchanged.
   Initial commentary incorrectly said one attempt and was corrected from the
   saved record. `research.previous.json` keeps the earlier interpretation.
+  After refresh, all **1,312** raw evidence files matched the **two original
+  export manifests**; no measured outcomes were rewritten.
 - FL-S-8E0D's offline demo refreshed from registered evidence, including its
   candidate/replay history. Accepted next steps and source titles/URLs are
   included, but source snippets/search text and the private run-folder selector
@@ -49,9 +51,15 @@ finished; see the checkpoint below for publication and submission gates.
   `act(...)` warnings remain non-failing. Skips are not validation of optional
   dependencies or live-GPU paths.
 - Prepared **only** the approved three-case/13-video export at ignored
-  `artifacts/public-gallery-20261019-cleanup/`; exporter privacy checks and
+  `artifacts/public-gallery-20261019-cleanup-final/`; exporter privacy checks and
   static preview passed. No production redeploy. Do not copy private artifacts,
   `.env` or credential-bearing Vercel files into it.
+- Preview caught one existing card-summary error: a partly reduced case said
+  sizes were not shrunk. It now says **not fully shrunk**, with a failing-then-
+  passing regression assertion. Another 56 library/demo tests and 27 subtests
+  passed. Integrated into `main` without history rewrites; GitHub authentication
+  was verified as `jephoton`, and the cleanup was pushed. CI for the final
+  checkpoint must be checked independently of earlier recorded counts.
 
 **Next:** reviewed gallery redeploy needs Jethro's go. Then do billing
 reconciliation, first-hand FEEDBACK review, clean-checkout/public-repo audit,

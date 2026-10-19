@@ -33,76 +33,102 @@ independent concerns reviewed separately before final integration.
 
 ### 1. Accepted next-steps repair integration
 
-- [ ] Merge `worktree-agent-aff20f6737887e095` into the current feature branch.
+- [x] Merge `worktree-agent-aff20f6737887e095` into the current feature branch.
   Preserve the newer legacy-audit fallback in `scripts/regenerate_case_context.py`.
-- [ ] Run `PYTHONPATH=src python -B -m pytest tests/test_next_steps.py
+- [x] Run `PYTHONPATH=src python -B -m pytest tests/test_next_steps.py
   tests/test_token_factory.py tests/test_regenerate_case_context.py -q`.
   Existing repair tests must exercise one retry only and fail-closed behavior.
-- [ ] Review diff for request bounds, secret handling and summed provenance.
+- [x] Review diff for request bounds, secret handling and summed provenance.
 
 ### 2. Hide routine Windows command windows (test first)
 
-- [ ] Add tests for `robot_debug.backends.run_command`: Windows uses
+- [x] Add tests for `robot_debug.backends.run_command`: Windows uses
   `subprocess.CREATE_NO_WINDOW` (fallback numeric value 0x08000000), other
   platforms omit Windows flags; capture, timeout and exit behavior unchanged.
   Assert timeout still propagates. Run failing tests before implementation.
-- [ ] Set only the captured runner's `creationflags` on Windows. Do not change
+- [x] Set only the captured runner's `creationflags` on Windows. Do not change
   viewer `DETACHED_PROCESS`, process groups, breakaway handling, Stop, watchdog
   or interactive terminal commands. Setup and Nebius calls share this runner.
-- [ ] Run runner, backend, viewer environment/launcher/process tests; exercise
+- [x] Run runner, backend, viewer environment/launcher/process tests; exercise
   an innocuous local subprocess on Windows, never a paid Job.
-- [ ] Commit `fix(windows): hide captured background command windows`.
+- [x] Commit `fix(windows): hide captured background command windows`.
 
 ### 3. Product copy and document rewrite
 
-- [ ] Apply approved copy items 51/52/54 in
+- [x] Apply approved copy items 51/52/54 in
   `web/src/components/case/TeamSections.tsx`: shortened trust hints, "Ranked
   by Nemotron before any rerun.", remove redundant full-reading disclaimer.
-- [ ] Write failing content tests in `web/src/pages/pages.test.tsx` for the
+- [x] Write failing content tests in `web/src/pages/pages.test.tsx` for the
   revised reference/guide roles and preserved links/safety information.
-- [ ] Rewrite `docs/reference.md` around scope, terms/gates, layout reduction,
+- [x] Rewrite `docs/reference.md` around scope, terms/gates, layout reduction,
   probe formulas, report columns, statuses, replay, spending/claim boundaries.
   Preserve severity formulas and the nonmonotonic basket example; remove
   setup commands, repeated pitch/walkthroughs and duplicated estimates.
-- [ ] Rewrite `web/src/content/guide.tsx` as a short operational path: offline
+- [x] Rewrite `web/src/content/guide.tsx` as a short operational path: offline
   preview, prerequisites, model access, image, spec, dry run/start, recovery and
   replay. Preserve setup anchors (`prerequisites`, `huggingface`, `image`,
   `spec`, `run`, `resume`, `view`) and links to quickstart/runbook/reference.
-- [ ] Bring `docs/setup/diagnose.md` in line with one diagnosis pipeline and
+- [x] Bring `docs/setup/diagnose.md` in line with one diagnosis pipeline and
   implemented replay types; never promise arbitrary checkpoint compatibility
   or an all-services spending guarantee. No secrets or personal paths.
-- [ ] Run web tests/typecheck/build; commit source and generated bundle as
+- [x] Run web tests/typecheck/build; commit source and generated bundle as
   `docs(ui): streamline reference and operating guide`.
 
 ### 4. D582 interpretation refresh
 
-- [ ] Dry-run the existing regeneration helper against the D582 run, inspect
+- [x] Dry-run the existing regeneration helper against the D582 run, inspect
   exact payload, model/call ceiling and cached sources; no Tavily/GPU call.
-- [ ] Refresh next steps only, not already accepted scenario explanations.
+- [x] Refresh next steps only, not already accepted scenario explanations.
   Use the existing repaired request path; maximum two bounded POSTs. Keep
   returned invalid prose out of accepted records and preserve prior sidecar.
-- [ ] Verify case ID and raw outcome hashes unchanged, record acceptance or
+- [x] Verify case ID and raw outcome hashes unchanged, record acceptance or
   honest rejection and actual attempt/token provenance in the handoff/feedback.
   Stop this task if its budget or credentials are unavailable; complete all
   remaining local tasks and report the precise gate.
 
 ### 5. Full verification, offline demo and gallery preparation
 
-- [ ] Refresh `demo/root` from FL-S-8E0D with allowlisted reviewed files.
+- [x] Refresh `demo/root` from FL-S-8E0D with allowlisted reviewed files.
   Exclude research snippets/provider identities/secrets; keep metadata coherent.
-- [ ] Update `docs/ui-runbook.md`, `docs/codex-handoff/STATE.md`, relevant
+- [x] Update `docs/ui-runbook.md`, `docs/codex-handoff/STATE.md`, relevant
   architecture/operator notes and `FEEDBACK.md` with observed project defects.
   Walkthrough is finished; remove stale "waiting for Demo 6" gates.
-- [ ] Run full Python suite and full web suite/typecheck/build; verify rebuilt
+- [x] Run full Python suite and full web suite/typecheck/build; verify rebuilt
   committed bundle is fresh. Browser-check Home, both docs, three showcase
   cases, restored wording case, dry-run review and retained evidence tables.
   Never press Start or Run the test during QA.
-- [ ] Export only the three approved showcase cases into a new local gallery
+- [x] Export only the three approved showcase cases into a new local gallery
   folder; scan the output and preview locally without production deployment.
-- [ ] Integrate checked feature branch into main without rewriting history;
+- [x] Integrate checked feature branch into main without rewriting history;
   verify `gh auth status` resolves to jephoton, push, inspect CI outcome.
-- [ ] Commit handoff/verification results. Stop before billing reconciliation,
+- [x] Commit handoff/verification results. Stop before billing reconciliation,
   first-hand feedback, submission audit/rules check, video/write-up/submission.
 
 Completion means each item has evidence or an explicit external gate, not that
 an invalid model answer was accepted or an unapproved deployment occurred.
+
+## Verification record
+
+Executed inline as requested, with separate scope and correctness self-review.
+The Windows fix had a failing regression first and a real console-handle-zero
+smoke check. Repair integration preserved the legacy report fallback. Full local
+Python suite: 3,103 passed, 60 skipped, 3,153 subtests; later offline-demo/export
+checks: 34 passed, 36 subtests; final library/demo copy check: 56 passed,
+27 subtests. Web: 336 passed, typecheck/build and bundle freshness passed.
+Browser exercised docs anchors, three showcase cases, restored wording result,
+retained evidence tables, validation/dry-run Review, and the static preview.
+No paid Start action, new GPU Job or Tavily search.
+
+D582's refresh used exactly two bounded Nemotron responses (one repair),
+6,973 prompt and 472 completion tokens. Accepted four suggestions; case ID
+unchanged. All 1,312 raw evidence files matched the two original export manifests.
+Estimated reservation envelope US$0.04; actual charges still need reconciliation.
+Offline demo carries source titles/links, not snippets. The final prepared
+export is `artifacts/public-gallery-20261019-cleanup-final/` (three cases,
+13 videos); not deployed. Integrated into main and pushed under jephoton.
+Check the latest main GitHub Actions run for the independent CI outcome.
+
+The only remaining publication action is the separately gated gallery redeploy;
+financial reconciliation, submission audit/rules and pitch materials remain
+outside this completed cleanup batch.
+
