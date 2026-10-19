@@ -562,7 +562,7 @@ def rejection_reason(value: object, context: object) -> str:
 # --- record ----------------------------------------------------------------------------------------------
 
 _KEPT_PROVENANCE = ("model", "request_status", "error_code", "created_at", "latency_seconds", "prompt_tokens",
-                    "completion_tokens", "estimated_cost_usd")
+                    "completion_tokens", "estimated_cost_usd", "attempts")
 
 
 def build_record(result: Mapping[str, Any], context: Mapping[str, Any]) -> Dict[str, Any]:
