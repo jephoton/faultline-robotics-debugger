@@ -27,19 +27,19 @@ provider or launch a Job. Do not merge the outstanding next-steps repair branch.
 
 ## Tasks
 
-- [ ] TDD: add a legacy single-audit fixture whose step has a saved summary but
+- [x] TDD: add a legacy single-audit fixture whose step has a saved summary but
   whose case has no groups. Assert report regeneration emits one table per
   family, retains all level counts and phase order, and starts no model calls.
   Observe failure against current helper before adding the fallback.
-- [ ] Retain coverage that missing summaries in explicit grouped cases keep
+- [x] Retain coverage that missing summaries in explicit grouped cases keep
   the existing report; add a regression if needed. Run the focused test module
   and existing report-renderer tests with native Python 3.11, never `uv run`.
-- [ ] Review the narrow change, then dry-run the actual legacy run. Refresh
+- [x] Review the narrow change, then dry-run the actual legacy run. Refresh
   only its report/registration if planned model calls are zero; preserve the old
   report recoverably and keep case/evidence identities and outcomes unchanged.
-- [ ] Verify the local API and browser render F526's new tables and D582's
+- [x] Verify the local API and browser render F526's new tables and D582's
   existing ones. Update relevant handoff/runbook notes and commit atomically.
-- [ ] Explain All evidence's synthetic-aggregate warnings and recommend sidebar/
+- [x] Explain All evidence's synthetic-aggregate warnings and recommend sidebar/
   documentation scope with rough measured source sizes. Do not repair/remove
   All evidence, regroup navigation, add a language run, rewrite Reference/Guide
   or publish a gallery without Jethro's decision.
@@ -48,3 +48,20 @@ All implementation above is Green inside the explicitly requested table
 consistency change. Larger information-architecture choices remain proposals.
 Demo 6 is still in progress, so the previously discussed autonomous batch has
 not started. No new GPU/API spend or public redeployment is authorized here.
+
+## Verification and review
+
+- Worker observed the legacy report test fail before adding the fallback;
+  coordinator's native Python checks passed: 51 focused/report-renderer tests
+  plus 6 subtests, and 84 registration/library tests plus 25 subtests.
+- Independent review passed, including the explicit-group missing-summary guard
+  tested beside a valid legacy summary. The legacy fixture makes no text calls.
+- Actual F526 refresh planned and made zero model/provider calls. Case-file
+  and raw-summary hashes stayed unchanged; old reports were backed up locally.
+- Real Chromium rendered four per-family level tables on both D582 and F526,
+  preserved F526's motion-blur 1/5 row and order, and reported no page errors.
+- Evidence API warnings reproduced from six synthetic aggregates; diagnosed
+  only. The documentation/sidebar recommendations have not been implemented.
+- Public export/deployment and the pending repair-branch integration remain
+  outside this follow-up. Do not describe these checks as the complete pending
+  integration test run.

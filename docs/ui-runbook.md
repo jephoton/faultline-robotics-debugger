@@ -343,10 +343,13 @@ its failing condition and see whether it still fails.
    Five attempts each.
 2. Under **Test a policy**, choose **Which policy do you want to test?**:
    - **The original policy**: the case's own checkpoint. This confirms the
-     failure still repeats.
+     failure still repeats. For the first Demo 6 walkthrough, choose this;
+     no checkpoint ID or revision needs entering.
    - **A new checkpoint**: for example a retrained policy. Fill in
-     **Checkpoint id** and **Revision**; both are needed, so the result names
-     exactly which policy ran.
+     **Hugging Face model id** and **Revision (commit hash)**; both are needed,
+     so the result names exactly which policy ran. Use a compatible GR00T N1.7
+     checkpoint in LeRobot format for the same LIBERO suite and its full pinned
+     commit hash. A model name or arbitrary latest revision is not enough.
 3. The cost line says "Costs up to US$… on your Nebius account if you run
    it." **Limits** (closed) holds the spend cap and hour limit, pre-filled
    from the test's own plan.

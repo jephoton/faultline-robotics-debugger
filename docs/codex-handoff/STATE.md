@@ -148,7 +148,45 @@ the four default families, then one replay of any case it makes. See
 `docs/experiments/` once it finishes. Names come after the build. The
 Reference no longer uses "Mode 1 / Mode 2".
 
-## Handoff: October 19, evening (read this first)
+## UI walkthrough follow-up — October 19
+
+- Jethro is still working through Demo 6. The autonomous integration batch is
+  gated on his "Demo 6 done": complete the previously agreed steps 1–5, then
+  pause before step 6 (submission-readiness work/checks together). No new paid
+  run, model call or gallery redeploy was approved by this follow-up.
+- **FL-A-F526 table fix:** its older single-audit case has a saved `audit`
+  summary but no `groups`. The report-regeneration helper only handled grouped
+  cases, so it misleadingly kept the old compact table. It now uses the saved
+  legacy step when groups are absent, retaining the safeguard for missing
+  explicit group summaries. F526's local report/registration was refreshed
+  with zero Token Factory/Tavily/Job calls and recoverable report backups.
+  Raw summary and case-file SHA-256 values stayed unchanged. Both F526 and
+  D582 render four readable per-family level tables in the local browser.
+  The public export is not refreshed by this local change.
+- **All evidence warning diagnosed, not fixed:** six historical M3 synthetic
+  dry-run aggregates contain `synthetic`/`case_id`, not the real harness
+  `benchmark`/`tasks` fields. The generic catalog scans them and emits one
+  `synthetic_aggregate.json: KeyError` per file. The warning list is a scan
+  diagnostic, not robot-policy failures; the API still returned 2,022 episodes
+  during inspection. No evidence or archive data was removed.
+- **Pending proposals only:** one Cases sidebar list with type labels instead
+  of separate kind groups; do not launch a wording run to fill an empty group.
+  Keep Reference for definitions/interpretation, Run your own for actionable
+  operation, and move the global episode catalog toward an advanced/debug role.
+  Jethro explicitly requested only a pre-evaluation of page bloat, not a rewrite,
+  page removal, warning suppression or navigation redesign. Proposed bounded
+  work should remove overlap and improve warning presentation before considering
+  a full rewrite. Reference is about 5,047 words; Guide source about 1,595 words;
+  the Evidence source is mostly controls/code, not a comparable long document.
+- Demo 6 on the existing policy needs **The original policy**, not a guessed
+  model ID/revision. New-checkpoint inputs are for a compatible GR00T N1.7
+  LeRobot checkpoint and pinned Hugging Face commit, not an arbitrary model.
+- The 79-item copy branch is already merged locally (`5e22e9f`); the repair
+  branch is still separate. Its pending regeneration-script changes are outside
+  the legacy-report helper and must be integrated carefully later. This local
+  follow-up does not claim the complete pending integration passed its suites.
+
+## Handoff: October 19, evening
 
 ### In flight: two agent branches, not merged yet
 
@@ -214,8 +252,10 @@ file for (1), the description above for (2).
 
 ### Known small items
 
-- `FL-A-F526`'s report was not rebuilt: one probe group's saved summary is
-  missing, so it keeps the old order-tried table. Optional.
+- `FL-A-F526`'s report-refresh issue is resolved locally in the UI follow-up
+  above: the saved summary was present; the helper did not handle its legacy
+  single-audit case shape. Its public copy still awaits a separately approved
+  export/redeploy.
 - The old cases are archived locally in `artifacts/archive-2026-10-19/` (see
   its README). The WSL `.venv` was mostly deleted by `uv run`; recreate it
   only if needed.
