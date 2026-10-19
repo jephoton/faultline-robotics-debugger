@@ -138,448 +138,448 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}),i.js
   checkpoint: {id: your-org/your-checkpoint, revision: <commit sha>}`}),i.jsx("p",{children:"The checkpoint is downloaded with your Hugging Face token, so that account needs access. Faultline does not check that it fits the suite."})]})},{id:"run",title:"5. Dry run, then run",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"The dry run lists every planned Job with its deadline and worst-case cost and creates nothing. The control panel always does a dry run before it lets you start. From a terminal:"}),i.jsx(Fn,{children:`faultline diagnose my-spec.yaml --dry-run
 faultline diagnose my-spec.yaml --env-file .env`}),i.jsx("p",{children:"Before each Job Faultline reserves a worst case: the provider timeout (deadline plus ten minutes) plus a four-minute start allowance, at the hourly rate in the spec. The reservation is settled at the measured container time, and the run refuses a Job that could exceed the cap. Treat the cap as a safety limit rather than a guarantee: the cost model has not been reconciled against a Nebius bill yet. When no GPU is free, the Job is resubmitted automatically."}),i.jsxs("p",{children:["Results land in ",i.jsx("code",{children:"artifacts/runs/<name>-<timestamp>/"}),": a report, a case, a spend ledger, the downloaded evidence and, when Nemotron is on, an explanation."]})]})},{id:"resume",title:"6. Resume, stop and replay",body:i.jsxs(i.Fragment,{children:[i.jsx(Fn,{children:`faultline diagnose --resume artifacts/runs/<run-folder>
 faultline stop artifacts/runs/<run-folder>
-faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}),i.jsxs("p",{children:[i.jsx("strong",{children:"Resume"})," continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying twice) and replaces a worst-case charge with the measured one once it can read the Job. ",i.jsx("strong",{children:"Stop"})," cancels the current Job, waits for the provider to confirm, settles the cost and leaves the run resumable."]}),i.jsxs("p",{children:[i.jsx("strong",{children:"Replay"})," re-runs a saved case and says whether its failing condition still fails: the regression test after you change the policy. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts each. ",i.jsx("code",{children:"--expect fixed"})," or ",i.jsx("code",{children:"--expect reproduces"})," states which verdict you hope for, so the exit code tells a script whether you got it."]})]})},{id:"view",title:"7. This control panel",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"Start it from the repository, then open the address it prints:"}),i.jsx(Fn,{children:"faultline ui --artifacts artifacts"}),i.jsxs("p",{children:["It listens on this machine only. Starting, stopping, resuming and replaying are controls of this local server; a published gallery of the same pages has none. Each spec the panel runs is saved under ",i.jsx("code",{children:"artifacts/specs-ui/"}),", so any run can be repeated from a terminal."]})]})},{id:"notes",title:"Notes",body:i.jsxs("ul",{children:[i.jsxs("li",{children:[i.jsx("strong",{children:"Costs."})," A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model download. Figures are estimates from measured container time, pending billing reconciliation."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Bucket quota."})," Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a bucket access-policy quota, so delete emptied buckets from time to time."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Local backend."})," ",i.jsxs("code",{children:["backend: ","{kind: local}"]})," needs Docker with the NVIDIA runtime and a large GPU; it is implemented but untested on a real GPU."]})]})}];function hj(){It("Run your own");const{hash:e}=An();return w.useEffect(()=>{if(!e)return;const t=document.getElementById(decodeURIComponent(e.slice(1)));t&&(t.scrollIntoView(),t.focus({preventScroll:!0}))},[e]),i.jsxs("article",{children:[i.jsx("h1",{children:"Run your own"}),i.jsx("p",{className:"lede",children:"How to run a diagnosis on your own Nebius account: set up once, then dry-run, start, watch, stop, resume and replay from the control panel or from a terminal."}),i.jsxs("nav",{"aria-label":"On this page",className:"panel guide-toc",children:[i.jsx("p",{className:"section-label",children:"On this page"}),i.jsx("ol",{children:zh.map(t=>i.jsx("li",{children:i.jsx("a",{href:`#${t.id}`,children:t.title.replace(/^\d+\.\s*/,"")})},t.id))})]}),zh.map(t=>i.jsxs("section",{className:"section guide","aria-labelledby":`${t.id}-title`,children:[i.jsx("h2",{id:t.id,tabIndex:-1,children:i.jsx("span",{id:`${t.id}-title`,children:t.title})}),t.body]},t.id))]})}const fj=`# Faultline reference\r
-\r
-The documentation for what Faultline does and what everything it shows means:\r
-the diagnosis and its routes, the repeatability gate, how a reduction works, every stress-test\r
-severity, every report column and abbreviation, the verdicts and stop reasons,\r
-and how spending is capped. The control panel shows this page as\r
-**Reference**. For step-by-step use of the interface, see the\r
-[UI runbook](ui-runbook.md); for setup, the [quickstart](setup/diagnose.md).\r
-\r
-## 1. What Faultline is for\r
-\r
-Faultline finds **the smallest condition under which a robot policy fails**\r
-and keeps it as a **regression test** that reruns on every new checkpoint.\r
-The policy runs in simulation (LIBERO on MuJoCo). The evidence is reruns of\r
-the policy, never a model's opinion.\r
-\r
-### Regression tests\r
-\r
-In software, a **regression** is something that used to work and breaks after\r
-a change. A **regression test** is a small saved check, rerun after every\r
-change, that catches it.\r
-\r
-For a robot policy, every fine-tune or retrain is a change. Each Faultline\r
-case pins one failing condition, and \`faultline replay\` (or **Replay** on the\r
-case page) reruns it on any checkpoint to say whether it still fails.\r
-\`--expect fixed\` or \`--expect reproduces\` turns that into a pass/fail exit\r
-code for a script or CI job.\r
-\r
-### What a replay reruns\r
-\r
-| Case | Replay reruns | Verdict |\r
-| --- | --- | --- |\r
-| Layout reduction | The minimal scene and its passing reference, 5 attempts each | Still reproduces / no longer reproduces |\r
-| Disturbance probe | Each failing family at its threshold severity on the start, with the undisturbed control, 5 attempts each | Still fails at s = *x* / no longer fails |\r
-| Rewording probe | The failing wording, with the original wording as the control | The wording still fails / no longer fails |\r
-\r
-A replay whose control does not pass, or whose Job does not finish, is\r
-inconclusive, never a pass. A stress-test replay that stops after some of its\r
-Jobs (a spend cap, a cloud error) keeps the verdicts of the Jobs that ran in\r
-\`replay-result.json\` but has no verdict of its own, and \`--expect\` reports it\r
-as inconclusive (exit 5).\r
-\r
-The replay's dry run is for the case being replayed: a layout case plans one\r
-Job, a stress-test case one Job per probe group that holds a failing family,\r
-and a wording case one rewording-screen Job. The Replay form's default spend\r
-cap and hour limit are taken from that plan.\r
-\r
-### One diagnosis, routed on the untouched result\r
-\r
-There is one **New diagnosis**. You give it a task and a start, and it\r
-promises: *find the smallest condition under which the policy fails here.*\r
-\r
-1. **Check.** The start is run untouched (with confirmation attempts).\r
-2. **If it fails reliably:** find the smallest *layout* change that triggers\r
-   it. The differences between this start and the nearest passing benchmark\r
-   start are reduced to the ones the failure needs (section 4).\r
-3. **If it passes:** probe it with the disturbances and rewordings you chose.\r
-   Each probe reports the smallest severity, or the smallest word change, that\r
-   breaks it (section 5). If the probe's own control shows the start is\r
-   unreliable untouched, the start is reported as **flaky** and nothing is\r
-   blamed on a disturbance: the stress-test case is stopped, any threshold from\r
-   another group is marked unconfirmed, and it has no replay. Each case is\r
-   judged on its own control, so a failing rewording control leaves a passing\r
-   stress test valid.\r
-4. **Every failing condition becomes a replayable case.** The run's\r
-   **findings** list them; "no failing condition in these ranges" is a valid\r
-   finding too.\r
-\r
-| What you send | Route | What comes back |\r
-| --- | --- | --- |\r
-| A start that fails untouched | **layout** | "Fails from this layout; smallest trigger: these shifts" |\r
-| A start that passes | **probes** | "Passes untouched; breaks under blur from s = 0.50", or nothing breaks it |\r
-| A start that fails sometimes (some attempts, but not 4 of 5) | **flaky** | "Unreliable even untouched"; no probe is run or blamed |\r
-| A start that passes, with no probes chosen | **passes** | "Passes untouched" |\r
-\r
-Two other ways in only look for a failure to reduce, without probing:\r
-**Search a range of starts** and **A start file of my own** (section 4).\r
-\r
-Defaults:\r
-- The four image families **blur, noise, darken and contrast** (the only ones\r
-  where the policy has failed before), no rewordings, and a **US$2.50** cap\r
-  over **1.5 hours**.\r
-- Typically about **US$1.25 and 45 minutes** when the start passes, and about\r
-  **US$1.10 and 40 minutes** when it fails (measured runs on LIBERO-Object;\r
-  GPU waits add time). The Review stretches the testing part of the check and\r
-  of each probe for a suite with longer episodes, so LIBERO-10 shows more.\r
-- The other six families and rewordings are one tick away. More families mean\r
-  more probe Jobs, about half an hour each.\r
-\r
-### Related research (optional)\r
-\r
-With **Find related research** ticked and a Tavily key in \`.env\`, each new\r
-case gets a **Research context** section:\r
-- Tavily finds public sources about similar failures;\r
-- Nemotron 3 Nano summarises them.\r
-\r
-It is context, not evidence: it cannot say why this policy failed.\r
-\r
-The tickbox starts ticked only when the machine has a Tavily key. Ticking it\r
-without a key never stops a diagnosis: the Review shows a note and the run\r
-skips the research.\r
-\r
-### Fault codes\r
-\r
-Each case gets a display code such as \`FL-S-AFB5\`: \`FL\`, a letter for the\r
-kind, and the first hex digits of the case id. The full case id is always\r
-shown as well. The letters are:\r
-- \`S\`: a layout (scenario) reduction;\r
-- \`A\`: a disturbance probe (audit);\r
-- \`L\`: a rewording (language) probe;\r
-- \`M\`: the September occlusion case.\r
-\r
-## 2. Glossary\r
-\r
-| Term | Meaning |\r
-| --- | --- |\r
-| **Policy** | The robot model under test: NVIDIA GR00T N1.7, one checkpoint per LIBERO suite. |\r
-| **Suite, task** | LIBERO's four suites (Object, Spatial, Goal, 10), ten tasks each, each with an instruction such as "put both the alphabet soup and the tomato sauce in the basket". |\r
-| **Benchmark start** | One of the 50 fixed starting layouts LIBERO provides per task (where each object and the arm begin). |\r
-| **Episode / attempt** | One run of the policy from a start until success or the step limit. |\r
-| **Failing start** | A start that fails untouched (layout route): a benchmark start or an imported state file. |\r
-| **Reference** | On the layout route, a benchmark start of the same task that passes 5 of 5: the nearest such start. |\r
-| **Control** | On the probes route, the start run with no disturbance; it must pass for any disturbance to be judged. |\r
-| **Entity** | One object in the scene, or the robot. |\r
-| **Difference** | What differs for one entity between the failing start and the reference: position, rotation, or joints (the robot's arm joints, or an object's hinge/slide such as a drawer). |\r
-| **Part** | One kind of difference of one entity (position, rotation or joints). |\r
-| **Hybrid** | The reference with some differences applied. \`hybrid 28\` is start 28 with the listed shifts. |\r
-| **Selection** | The differences a hybrid applies, each with its share. |\r
-| **Share** | How far a difference is applied, from 0 (the reference) to 1 (100%, the failing value). \`robot (joints 0.75)\` moves the arm 75% of the way. |\r
-| **Candidate / rerun** | One scene (failing start, reference or hybrid) judged by the gate. |\r
-| **Minimal trigger / minimal cause** | The smallest set of differences found that still fails. The cause in the sense of *what* triggers the failure, not *why* the network fails. |\r
-| **Entity-minimal** | Removing any one entity from the set makes the failure go away. |\r
-| **Severity (\`s\`)** | The strength of a stress-test disturbance, from 0 (none) to 1 (strongest tested); see section 5. |\r
-| **Threshold** | The smallest severity at which a family fails reproducibly. |\r
-| **Meaning check** | A rule that drops a rewording if it loses an object or target word of the instruction. |\r
-\r
-## 3. The repeatability gate\r
-\r
-The policy is not deterministic: the same scene can pass once and fail the\r
-next time. Every judgement therefore uses repeated attempts.\r
-\r
-- **Failure gate** (failing starts, hybrids, disturbance levels): the scene\r
-  **reproduces** when at least **4 of 5** attempts are policy failures.\r
-- **Pass gate** (references, controls): the scene **passes** only if **5 of 5**\r
-  attempts succeed.\r
-- **Decided early.** A failure gate stops at 4 failures (reproduces) or 2\r
-  successes (can no longer reach 4 of 5). It holds the fifth attempt back and\r
-  runs it only when the first four give exactly three failures. A pass gate\r
-  stops at its first failure. This saves GPU time.\r
-- **skipped** (a report column): attempts not run because the answer was\r
-  already certain.\r
-- **late** (a report column): attempts already running when the answer was\r
-  decided. They are shown but never change the decision; a late \`F\` after\r
-  \`S S\` shows the scene sometimes fails anyway.\r
-- **Invalid scene** (\`I\`): objects started interpenetrating. Never counted as\r
-  a policy failure.\r
-\r
-## 4. The layout route: how a scenario reduction works\r
-\r
-### Three ways in\r
-\r
-| Option | When to use it | What happens first |\r
-| --- | --- | --- |\r
-| **A benchmark start** (\`diagnose.start\`) | You have a start number, for example from your own evaluation (LIBERO evaluations run the benchmark starts by number), and may not know whether it fails | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |\r
-| **Search a range of starts** (\`diagnose.screen\`) | You suspect the task has weak starts but do not know which | Each start in the range (for example \`10-49\`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |\r
-| **A start file of my own** (\`diagnose.import\`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's \`minimal-candidate.json\` is an example. Layout route only. |\r
-\r
-Older specs with \`mode: scenario\` and \`scenario.start\` / \`screen\` / \`import\` still work from the CLI; after the failing start is confirmed, all of them continue the same way.\r
-\r
-### The flow\r
-\r
-Each step either stops the run or passes to the next.\r
-\r
-1. **Screen** (one Job). The failing start and a pool of nearby benchmark\r
-   starts (by default 0–19, or the spec's \`scenario.pool\`) are run. Passing\r
-   starts become candidate references, ordered by closeness: centimetres of\r
-   object movement plus degrees of rotation and joint angle divided by ten,\r
-   summed (the report's **score**).\r
-2. **Plan.** The differences against each reference are listed. Nemotron 3\r
-   Ultra (or a fixed order, without Nemotron) ranks which entities to try\r
-   first. The ranking sets the order only.\r
-3. **Gates.**\r
-   - The failing start must reproduce, or the run stops\r
-     (\`failing_not_reproducible\`).\r
-   - The nearest reference must pass 5 of 5; if not, the next nearest is\r
-     tried, up to three (\`reference_not_passing\`).\r
-   - The **full hybrid** (every difference applied) must reproduce. If not,\r
-     the measured differences do not explain the failure, and the run stops\r
-     instead of reducing something meaningless.\r
-4. **Probe.** Each entity alone, in the ranked order. If one alone\r
-   reproduces, it is the cause on its own; step 5 is skipped.\r
-5. **Delta debugging (\`ddmin\`).** From all differences, try smaller groups\r
-   (halves, then the complement of each group, then smaller pieces). Any\r
-   smaller group that still reproduces becomes the new set. It ends when\r
-   removing any single entity makes it pass: **entity-minimal**. This is a\r
-   local minimum, not proof that no other combination exists.\r
-6. **Split.** Each surviving object is tried with only its position change\r
-   and only its rotation change; a part that is not needed is dropped.\r
-7. **Shrink.** Each surviving part is bisected from 100% towards 0 for four\r
-   steps (resolution 1/16 of the difference): 50%, then 25% or 75%, and so on.\r
-   With spare GPU workers two points are tried at once.\r
-8. **Continuations.** If a Job hits its candidate budget before the set is\r
-   entity-minimal, a new Job continues from the smallest set that reproduced\r
-   (up to three). Continuations stop at entity-minimal, even when sizes are\r
-   not yet shrunk, which is why a case can show every share at 100%.\r
-9. **Measure the guess.** For the entities Nemotron ranked first, existing\r
-   reruns answer: *necessary* (removing it from the final set makes the\r
-   failure go away) and *sufficient* (it reproduces alone).\r
-10. **Write up.** Report, case (with replay inputs), videos, Nemotron's\r
-    labelled reading of the verified result, library entry.\r
-\r
-Every candidate is cached by the exact scene it builds; the same hybrid never\r
-runs twice.\r
-\r
-### Worked example: \`FL-S-AFB5\`\r
-\r
-LIBERO-10 task 0, an imported failing start (benchmark start 14), reference\r
-28; the report's Candidates table from the continuation Job.\r
-\r
-| Rows | Phase | What happened |\r
-| --- | --- | --- |\r
-| 0–1 | gate | The failing start failed 4 of 4 (fifth skipped); start 28 passed 5 of 5. |\r
-| 2–7 | probe | Each of the six entities alone: all passed. No single culprit. |\r
-| 8–17 | ddmin | Groups of the six and their complements: none reproduced. |\r
-| 18 | ddmin | The five without the tomato sauce: 4 of 4 failures. The new set. |\r
-| 19–22 | ddmin | Each of the five removed in turn: all passed. Entity-minimal. |\r
-| 23–25 | shrink | The arm offset at 50% and 25% did not reproduce; at 75% it did. |\r
-\r
-The budget ended there. The recorded case keeps the arm at 100%: a defect\r
-fixed on October 18 discarded the verified 75%; new runs record it.\r
-\r
-## 5. The probes route: disturbances and rewordings\r
-\r
-### How an audit searches\r
-\r
-1. **Control.** The chosen start, undisturbed, 5 attempts. If it does not pass\r
-   reliably, nothing can be judged and the audit stops\r
-   (\`nominal_controls_failed\`). The audit does not look for another start: the\r
-   start is the question you asked.\r
-2. **Sweep.** For each family, severities 0.2, 0.4, 0.6, 0.8 and 1.0 in that\r
-   order, 5 attempts each. A level fails reproducibly at 4 of 5.\r
-3. **Bisect.** At the first failing level, four steps between the last passing\r
-   level and it narrow the threshold to 0.0125.\r
-4. **Result per family.** "Fails from s = x", "No failure up to s = 1.00"\r
-   (searched to the top, nothing reproduced), "Not tested" (the run stopped\r
-   before this family) or "Incomplete" (stopped during it).\r
-\r
-A level such as **1/5** means one of five attempts failed: not reproducible,\r
-but worth noting. One family is tested at a time; combinations are not.\r
-\r
-### Image families\r
-\r
-These alter the **pictures the policy receives** from both cameras (agent view\r
-and wrist, 256×256 pixels by default). The simulator and what an observer sees\r
-are unchanged. They approximate camera and sensor effects; they do not\r
-simulate them.\r
-\r
-| Family | What changes | Formula | s = 0.2 | 0.4 | 0.6 | 0.8 | 1.0 |\r
-| --- | --- | --- | --- | --- | --- | --- | --- |\r
-| **Blur** (\`blur\`) | Out-of-focus lens | Gaussian sigma \`8 s\` px | 1.6 px | 3.2 px | 4.8 px | 6.4 px | 8 px |\r
-| **Noise** (\`noise\`) | Grainy sensor in low light | Gaussian noise sigma \`100 s\` (of 0–255) | 20 | 40 | 60 | 80 | 100 |\r
-| **Darken** (\`darken\`) | Underexposure | brightness × \`(1 − 0.95 s)\` | ×0.81 | ×0.62 | ×0.43 | ×0.24 | ×0.05 |\r
-| **Contrast** (\`contrast\`) | Washed-out image | contrast × \`(1 − 0.9 s)\` | ×0.82 | ×0.64 | ×0.46 | ×0.28 | ×0.10 |\r
-| **JPEG compression** (\`jpeg\`) | Low-bandwidth video link | JPEG quality \`95 − 90 s\` | 77 | 59 | 41 | 23 | 5 |\r
-| **Colour cast** (\`colour_cast\`) | White-balance error (warm tint) | red × \`(1 + 0.6 s)\`, blue × \`(1 − 0.6 s)\` | R ×1.12, B ×0.88 | ×1.24, ×0.76 | ×1.36, ×0.64 | ×1.48, ×0.52 | ×1.60, ×0.40 |\r
-| **Motion blur** (\`motion_blur\`) | Moving or shaking camera | horizontal kernel \`1 + 30 s\` px | 7 px | 13 px | 19 px | 25 px | 31 px |\r
-| **Dead pixels** (\`dead_pixels\`) | Damaged sensor | fraction \`0.2 s\` of pixels stuck black or white | 4% | 8% | 12% | 16% | 20% |\r
-\r
-Noise and dead pixels are random but repeatable: the pattern is a fixed\r
-function of the episode, step, camera, family and severity, so every attempt\r
-at a level sees the same frames and a replay reproduces them.\r
-\r
-### Scene families\r
-\r
-These change the **simulated scene** once, when the episode starts.\r
-\r
-| Family | What changes | Formula | s = 0.2 | 0.4 | 0.6 | 0.8 | 1.0 |\r
-| --- | --- | --- | --- | --- | --- | --- | --- |\r
-| **Camera viewpoint** (\`viewpoint\`) | The agent-view camera moves sideways and turns back towards the table (wrist camera unchanged) | shift \`0.10 s\` m, turn \`10 s\`° | 2 cm, 2° | 4 cm, 4° | 6 cm, 6° | 8 cm, 8° | 10 cm, 10° |\r
-| **Scene lighting** (\`lighting\`) | Every light dims | light × \`(1 − 0.9 s)\` | ×0.82 | ×0.64 | ×0.46 | ×0.28 | ×0.10 |\r
-\r
-Calibration renders: \`docs/experiments/assets/scene-family-calibration.png\`\r
-(lighting at s = 1: mean brightness 139 → 16, dark but visible).\r
-\r
-### Rewordings\r
-\r
-There is no severity. Nemotron 3 Super writes rewordings of the instruction;\r
-the meaning check drops any that lose an object or target word; the original\r
-wording is the control (2 attempts) and each rewording gets one screening\r
-attempt. A rewording that fails is confirmed with the 4-of-5 gate and then\r
-reduced by word edits to the smallest change that still fails.\r
-\r
-### The September occlusion case\r
-\r
-A grey rectangle over part of the agent-view image, described by position and\r
-size as fractions of the image (not a severity), reduced by trimming edges.\r
-\r
-## 6. Reading a report\r
-\r
-Every report opens with a **Summary** (verdict, inputs, result, stop status),\r
-then the evidence.\r
-\r
-### Abbreviations used in reports\r
-\r
-| Abbreviation | Meaning |\r
-| --- | --- |\r
-| \`S\`, \`F\`, \`I\` | Attempt outcomes: success, policy failure, invalid scene. |\r
-| \`s = 0.4\` | Severity 0.4. |\r
-| \`1/5\` | One of five attempts failed. |\r
-| \`hybrid 28\`, \`reference 28\` | Start 28 with shifts applied; start 28 itself. |\r
-| \`fail-…\`, \`ref28-…\`, \`hyb-…\` and \`-a01\` | Video case ids: failing start, reference 28, hybrid; \`a01\` is attempt 1. |\r
-| \`orig\`, \`p01\` | The original wording; rewording 1. |\r
-| \`ddmin\` | Delta debugging (section 4). |\r
-| \`robot0_joint1\` | The robot's first arm joint (LIBERO's naming). |\r
-| \`alphabet_soup_1\` | The simulator's name for an object (first alphabet soup). |\r
-\r
-### Scenario report\r
-\r
-| Section / column | Meaning |\r
-| --- | --- |\r
-| **Screen**: \`task\`, \`start\`, \`outcomes\`, \`decision\`, \`max steps\` | Each screened start: its attempts, whether it failed reliably or passed, and the longest episode in steps. |\r
-| **Result / Minimal cause** | The verdict, failing start and reference, and the kept differences in a sentence and as a final selection. |\r
-| **Differences**: \`entity\`, \`position (cm)\`, \`rotation (deg)\`, \`joints\`, \`score\` | Every difference between the failing start and the reference; \`score\` = cm + degrees / 10, summed. |\r
-| **Hypothesis** | Nemotron's ranking and free-text hypothesis (or the fixed order). |\r
-| **Hypothesis vs result**: \`rank\`, \`entity\`, \`in final selection\`, \`necessary\`, \`sufficient\`, \`label\` | Whether each top-ranked entity survived, was needed, and was enough alone, with the reruns that show it under **Evidence**. |\r
-| **Candidates**: \`#\`, \`phase\`, \`role\`, \`selection\`, \`outcomes\`, \`decision\`, \`gate met\`, \`skipped\`, \`late\` | Every rerun (section 4): its number, step of the flow, scene, attempts, decision, whether the gate rule was met, and skipped and late attempts (section 3). |\r
-| **Effort** | Candidates tested, attempts run and skipped, Job seconds, an estimated compute cost. |\r
-| **Videos**: \`role\`, \`case id\`, \`outcome\`, \`video\` | Which recorded episode is the original, minimal and reference clip. |\r
-\r
-Hypothesis labels:\r
-\r
-| Label | Meaning |\r
-| --- | --- |\r
-| \`necessary_not_sufficient\` | Needed in the final set, but not enough alone. |\r
-| \`sufficient_not_necessary\` | Enough alone, but the final set does not need it. |\r
-| \`confirmed\` | Needed and enough alone, and the only entity left. |\r
-| \`not_in_final\` | Not part of the final set. |\r
-| \`inconclusive\` | The reruns do not settle it. |\r
-\r
-### Stress-test report\r
-\r
-| Column | Meaning |\r
-| --- | --- |\r
-| \`Family\` | The disturbance family (section 5). |\r
-| \`Smallest reproducibly failing severity\` | The threshold, or "none up to 1". |\r
-| \`Physical value\` | The threshold in physical units (for example blur 3.2 px). |\r
-| \`Last non-reproducing level\` | The highest severity below the threshold that did not fail reliably. |\r
-| \`Levels tried\`, \`Episodes\` | How many severities and episodes the family used. |\r
-| \`Stop reason\` | Why the family's search ended. |\r
-| \`Agent view mean / std ratio at threshold\`, \`Wrist …\` | How much the disturbance changed the camera images' brightness (mean) and contrast (standard deviation), as perturbed / undisturbed (1.00 / 1.00 = unchanged). |\r
-| \`Levels in the order tried\` | Each severity tried with failures / attempts. |\r
-\r
-### Rewording report\r
-\r
-| Column | Meaning |\r
-| --- | --- |\r
-| \`label\` | \`orig\` (the original) or \`p01\`… |\r
-| \`kind\` | \`original\` or \`paraphrase\`. |\r
-| \`outcomes\`, \`decision\` | Its attempts; \`control\`, \`passed\`, or a failure confirmed by the gate. |\r
-| \`word edits\` | How many words differ from the original. |\r
-| \`meaning check\` | \`kept\` or \`dropped\` (lost an object or target word). |\r
-| \`instruction\` | The wording itself. |\r
-\r
-## 7. Verdicts, run statuses and stop reasons\r
-\r
-| Case verdict | Meaning |\r
-| --- | --- |\r
-| **Failure repeats** | The failure met the 4-of-5 gate. |\r
-| **No failure found** | Nothing met the gate in the tested range. Bounded evidence, not proof of robustness. |\r
-| **Stopped** | The diagnosis ended before its question was answered; see the stop reason. |\r
-| **Incomplete** | The run did not finish its work. |\r
-| **Run failed** | A local or provider error; not a policy failure. |\r
-\r
-Run statuses on the run page: **Submitting a Job**, **Waiting for a GPU**,\r
-**Running**, **Downloading results**, **Stopping**, **Completed**,\r
-**Stopped**, **Failed**, **Interrupted**. Once the check is read, the run page\r
-also shows the **route**: layout, probes, flaky or passes (section 1).\r
-\r
-Colours:\r
-- **Red**: a failure (with a cross).\r
-- **Green**: a pass, including "No failure found" (with a tick).\r
-- **Amber**: anything that needs attention: stopped, flaky, waiting for a GPU.\r
-- Colour is never the only signal: an icon and a word go with it.\r
-\r
-| Stop reason | Meaning |\r
-| --- | --- |\r
-| \`budget_exhausted\` | Stopped at the candidate budget; the result is the smallest found so far. |\r
-| \`nominal_controls_failed\` | The undisturbed start did not pass reliably, so no disturbance can be judged. |\r
-| \`no_reproducible_failure\` | Nothing failed 4 of 5: a finished negative result. |\r
-| \`check_incomplete\` | The check ended before it decided the start (or the scene was invalid), so it is not known whether the start passes. Resume checks again. |\r
-| \`layout_skipped\` | The start fails untouched while layout diagnosis was off ("probe only"): nothing to probe and no layout Job. |\r
-| \`no_reference\` / \`reference_not_passing\` | No nearby benchmark start passed reliably. |\r
-| \`failing_not_reproducible\` / \`no_faithful_failure\` | The failing start (or imported start, or full hybrid) did not fail reliably. |\r
-| \`import_invalid\`, \`import_mismatch\` | The imported file was not valid, or does not match the task's scene. |\r
-| \`original_mismatch\` | The original wording did not match the task. |\r
-| \`capacity_unavailable\` | No GPU after six submissions. |\r
-| \`spend_cap\`, \`max_hours\` | The next Job could exceed the spend cap; the hour limit was reached. |\r
-| \`stopped_by_user\` | Stopped from the control panel or \`faultline stop\`. |\r
-| \`backend_error\`, \`auth_expired\` | A cloud call failed (resume to re-attach); the Nebius sign-in expired. |\r
-| \`process_ended\` | The run's process ended unexpectedly; Resume re-attaches. |\r
-| \`control_not_passing\` | The original wording did not pass both control attempts, so a failing rewording cannot be attributed to the wording. |\r
-| \`paraphrase_failed\`, \`llm_required\` | Nemotron could not write the rewordings (resume to retry), or they need Nemotron and it is off. |\r
-| \`original_unknown\` | The task's own wording is not known, so its rewordings cannot be probed. |\r
-\r
-## 8. Spending and the cap\r
-\r
-Before each Job, the run reserves its **worst case**:\r
-- The provider timeout: the Job's deadline plus ten minutes, rounded up to a\r
-  whole minute.\r
-- A four-minute start allowance.\r
-- Both at the hourly rate in the spec.\r
-\r
-A Job is refused if that reservation would exceed the cap. When it finishes,\r
-the reservation is replaced by the measured container time.\r
-- Only the first Job of a plan must fit the cap to start; a later Job that\r
-  does not fit stops the run, which can be resumed after raising the cap.\r
-- The cap covers Nebius Serverless Jobs only, not Token Factory calls or\r
-  storage.\r
-- Costs are estimates from measured time until reconciled against the bill.\r
-\r
-**Worst case and typical figures on Review.** The worst case is the check\r
-plus the larger of the two branches, because only one branch runs. Beside it,\r
-each branch shows a **typical** cost and time, modelled on measured runs. For\r
-example: the check, about 16 minutes and US$0.43; four disturbance families,\r
-about 29 minutes and US$0.82; a layout reduction, about 25 minutes and\r
-US$0.68. These are estimates. GPU waits, longer tasks and finding a failure\r
-(the narrowing steps) add time.\r
-\r
-A default cap of US$2.50 can sit below the worst case (US$3.09) and still\r
-cover the typical runs. The review then shows "The first Job fits, but not\r
-all of them". Raise the cap if you want layout continuations to run\r
-uninterrupted.\r
-\r
-## 9. What results do and do not show\r
-\r
-- They show, by reruns, what makes this policy (one checkpoint) fail this task\r
-  from these starts, or that it did not fail within the tested range.\r
-- A minimal trigger is a local minimum: another combination might also fail.\r
-- They do not explain why the network fails. The videos and Nemotron's\r
-  labelled reading are where that question starts.\r
-- Image families approximate camera effects; scene families change only the\r
-  camera pose and lights; one family at a time.\r
+faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}),i.jsxs("p",{children:[i.jsx("strong",{children:"Resume"})," continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying twice) and replaces a worst-case charge with the measured one once it can read the Job. ",i.jsx("strong",{children:"Stop"})," cancels the current Job, waits for the provider to confirm, settles the cost and leaves the run resumable."]}),i.jsxs("p",{children:[i.jsx("strong",{children:"Replay"})," re-runs a saved case and says whether its failing condition still fails: the regression test after you change the policy. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts each. ",i.jsx("code",{children:"--expect fixed"})," or ",i.jsx("code",{children:"--expect reproduces"})," states which verdict you hope for, so the exit code tells a script whether you got it."]})]})},{id:"view",title:"7. This control panel",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"Start it from the repository, then open the address it prints:"}),i.jsx(Fn,{children:"faultline ui --artifacts artifacts"}),i.jsxs("p",{children:["It listens on this machine only. Starting, stopping, resuming and replaying are controls of this local server; a published gallery of the same pages has none. Each spec the panel runs is saved under ",i.jsx("code",{children:"artifacts/specs-ui/"}),", so any run can be repeated from a terminal."]})]})},{id:"notes",title:"Notes",body:i.jsxs("ul",{children:[i.jsxs("li",{children:[i.jsx("strong",{children:"Costs."})," A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model download. Figures are estimates from measured container time, pending billing reconciliation."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Bucket quota."})," Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a bucket access-policy quota, so delete emptied buckets from time to time."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Local backend."})," ",i.jsxs("code",{children:["backend: ","{kind: local}"]})," needs Docker with the NVIDIA runtime and a large GPU; it is implemented but untested on a real GPU."]})]})}];function hj(){It("Run your own");const{hash:e}=An();return w.useEffect(()=>{if(!e)return;const t=document.getElementById(decodeURIComponent(e.slice(1)));t&&(t.scrollIntoView(),t.focus({preventScroll:!0}))},[e]),i.jsxs("article",{children:[i.jsx("h1",{children:"Run your own"}),i.jsx("p",{className:"lede",children:"How to run a diagnosis on your own Nebius account: set up once, then dry-run, start, watch, stop, resume and replay from the control panel or from a terminal."}),i.jsxs("nav",{"aria-label":"On this page",className:"panel guide-toc",children:[i.jsx("p",{className:"section-label",children:"On this page"}),i.jsx("ol",{children:zh.map(t=>i.jsx("li",{children:i.jsx("a",{href:`#${t.id}`,children:t.title.replace(/^\d+\.\s*/,"")})},t.id))})]}),zh.map(t=>i.jsxs("section",{className:"section guide","aria-labelledby":`${t.id}-title`,children:[i.jsx("h2",{id:t.id,tabIndex:-1,children:i.jsx("span",{id:`${t.id}-title`,children:t.title})}),t.body]},t.id))]})}const fj=`# Faultline reference
+
+The documentation for what Faultline does and what everything it shows means:
+the diagnosis and its routes, the repeatability gate, how a reduction works, every stress-test
+severity, every report column and abbreviation, the verdicts and stop reasons,
+and how spending is capped. The control panel shows this page as
+**Reference**. For step-by-step use of the interface, see the
+[UI runbook](ui-runbook.md); for setup, the [quickstart](setup/diagnose.md).
+
+## 1. What Faultline is for
+
+Faultline finds **the smallest condition under which a robot policy fails**
+and keeps it as a **regression test** that reruns on every new checkpoint.
+The policy runs in simulation (LIBERO on MuJoCo). The evidence is reruns of
+the policy, never a model's opinion.
+
+### Regression tests
+
+In software, a **regression** is something that used to work and breaks after
+a change. A **regression test** is a small saved check, rerun after every
+change, that catches it.
+
+For a robot policy, every fine-tune or retrain is a change. Each Faultline
+case pins one failing condition, and \`faultline replay\` (or **Replay** on the
+case page) reruns it on any checkpoint to say whether it still fails.
+\`--expect fixed\` or \`--expect reproduces\` turns that into a pass/fail exit
+code for a script or CI job.
+
+### What a replay reruns
+
+| Case | Replay reruns | Verdict |
+| --- | --- | --- |
+| Layout reduction | The minimal scene and its passing reference, 5 attempts each | Still reproduces / no longer reproduces |
+| Disturbance probe | Each failing family at its threshold severity on the start, with the undisturbed control, 5 attempts each | Still fails at s = *x* / no longer fails |
+| Rewording probe | The failing wording, with the original wording as the control | The wording still fails / no longer fails |
+
+A replay whose control does not pass, or whose Job does not finish, is
+inconclusive, never a pass. A stress-test replay that stops after some of its
+Jobs (a spend cap, a cloud error) keeps the verdicts of the Jobs that ran in
+\`replay-result.json\` but has no verdict of its own, and \`--expect\` reports it
+as inconclusive (exit 5).
+
+The replay's dry run is for the case being replayed: a layout case plans one
+Job, a stress-test case one Job per probe group that holds a failing family,
+and a wording case one rewording-screen Job. The Replay form's default spend
+cap and hour limit are taken from that plan.
+
+### One diagnosis, routed on the untouched result
+
+There is one **New diagnosis**. You give it a task and a start, and it
+promises: *find the smallest condition under which the policy fails here.*
+
+1. **Check.** The start is run untouched (with confirmation attempts).
+2. **If it fails reliably:** find the smallest *layout* change that triggers
+   it. The differences between this start and the nearest passing benchmark
+   start are reduced to the ones the failure needs (section 4).
+3. **If it passes:** probe it with the disturbances and rewordings you chose.
+   Each probe reports the smallest severity, or the smallest word change, that
+   breaks it (section 5). If the probe's own control shows the start is
+   unreliable untouched, the start is reported as **flaky** and nothing is
+   blamed on a disturbance: the stress-test case is stopped, any threshold from
+   another group is marked unconfirmed, and it has no replay. Each case is
+   judged on its own control, so a failing rewording control leaves a passing
+   stress test valid.
+4. **Every failing condition becomes a replayable case.** The run's
+   **findings** list them; "no failing condition in these ranges" is a valid
+   finding too.
+
+| What you send | Route | What comes back |
+| --- | --- | --- |
+| A start that fails untouched | **layout** | "Fails from this layout; smallest trigger: these shifts" |
+| A start that passes | **probes** | "Passes untouched; breaks under blur from s = 0.50", or nothing breaks it |
+| A start that fails sometimes (some attempts, but not 4 of 5) | **flaky** | "Unreliable even untouched"; no probe is run or blamed |
+| A start that passes, with no probes chosen | **passes** | "Passes untouched" |
+
+Two other ways in only look for a failure to reduce, without probing:
+**Search a range of starts** and **A start file of my own** (section 4).
+
+Defaults:
+- The four image families **blur, noise, darken and contrast** (the only ones
+  where the policy has failed before), no rewordings, and a **US$2.50** cap
+  over **1.5 hours**.
+- Typically about **US$1.25 and 45 minutes** when the start passes, and about
+  **US$1.10 and 40 minutes** when it fails (measured runs on LIBERO-Object;
+  GPU waits add time). The Review stretches the testing part of the check and
+  of each probe for a suite with longer episodes, so LIBERO-10 shows more.
+- The other six families and rewordings are one tick away. More families mean
+  more probe Jobs, about half an hour each.
+
+### Related research (optional)
+
+With **Find related research** ticked and a Tavily key in \`.env\`, each new
+case gets a **Research context** section:
+- Tavily finds public sources about similar failures;
+- Nemotron 3 Nano summarises them.
+
+It is context, not evidence: it cannot say why this policy failed.
+
+The tickbox starts ticked only when the machine has a Tavily key. Ticking it
+without a key never stops a diagnosis: the Review shows a note and the run
+skips the research.
+
+### Fault codes
+
+Each case gets a display code such as \`FL-S-AFB5\`: \`FL\`, a letter for the
+kind, and the first hex digits of the case id. The full case id is always
+shown as well. The letters are:
+- \`S\`: a layout (scenario) reduction;
+- \`A\`: a disturbance probe (audit);
+- \`L\`: a rewording (language) probe;
+- \`M\`: the September occlusion case.
+
+## 2. Glossary
+
+| Term | Meaning |
+| --- | --- |
+| **Policy** | The robot model under test: NVIDIA GR00T N1.7, one checkpoint per LIBERO suite. |
+| **Suite, task** | LIBERO's four suites (Object, Spatial, Goal, 10), ten tasks each, each with an instruction such as "put both the alphabet soup and the tomato sauce in the basket". |
+| **Benchmark start** | One of the 50 fixed starting layouts LIBERO provides per task (where each object and the arm begin). |
+| **Episode / attempt** | One run of the policy from a start until success or the step limit. |
+| **Failing start** | A start that fails untouched (layout route): a benchmark start or an imported state file. |
+| **Reference** | On the layout route, a benchmark start of the same task that passes 5 of 5: the nearest such start. |
+| **Control** | On the probes route, the start run with no disturbance; it must pass for any disturbance to be judged. |
+| **Entity** | One object in the scene, or the robot. |
+| **Difference** | What differs for one entity between the failing start and the reference: position, rotation, or joints (the robot's arm joints, or an object's hinge/slide such as a drawer). |
+| **Part** | One kind of difference of one entity (position, rotation or joints). |
+| **Hybrid** | The reference with some differences applied. \`hybrid 28\` is start 28 with the listed shifts. |
+| **Selection** | The differences a hybrid applies, each with its share. |
+| **Share** | How far a difference is applied, from 0 (the reference) to 1 (100%, the failing value). \`robot (joints 0.75)\` moves the arm 75% of the way. |
+| **Candidate / rerun** | One scene (failing start, reference or hybrid) judged by the gate. |
+| **Minimal trigger / minimal cause** | The smallest set of differences found that still fails. The cause in the sense of *what* triggers the failure, not *why* the network fails. |
+| **Entity-minimal** | Removing any one entity from the set makes the failure go away. |
+| **Severity (\`s\`)** | The strength of a stress-test disturbance, from 0 (none) to 1 (strongest tested); see section 5. |
+| **Threshold** | The smallest severity at which a family fails reproducibly. |
+| **Meaning check** | A rule that drops a rewording if it loses an object or target word of the instruction. |
+
+## 3. The repeatability gate
+
+The policy is not deterministic: the same scene can pass once and fail the
+next time. Every judgement therefore uses repeated attempts.
+
+- **Failure gate** (failing starts, hybrids, disturbance levels): the scene
+  **reproduces** when at least **4 of 5** attempts are policy failures.
+- **Pass gate** (references, controls): the scene **passes** only if **5 of 5**
+  attempts succeed.
+- **Decided early.** A failure gate stops at 4 failures (reproduces) or 2
+  successes (can no longer reach 4 of 5). It holds the fifth attempt back and
+  runs it only when the first four give exactly three failures. A pass gate
+  stops at its first failure. This saves GPU time.
+- **skipped** (a report column): attempts not run because the answer was
+  already certain.
+- **late** (a report column): attempts already running when the answer was
+  decided. They are shown but never change the decision; a late \`F\` after
+  \`S S\` shows the scene sometimes fails anyway.
+- **Invalid scene** (\`I\`): objects started interpenetrating. Never counted as
+  a policy failure.
+
+## 4. The layout route: how a scenario reduction works
+
+### Three ways in
+
+| Option | When to use it | What happens first |
+| --- | --- | --- |
+| **A benchmark start** (\`diagnose.start\`) | You have a start number, for example from your own evaluation (LIBERO evaluations run the benchmark starts by number), and may not know whether it fails | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
+| **Search a range of starts** (\`diagnose.screen\`) | You suspect the task has weak starts but do not know which | Each start in the range (for example \`10-49\`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |
+| **A start file of my own** (\`diagnose.import\`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's \`minimal-candidate.json\` is an example. Layout route only. |
+
+Older specs with \`mode: scenario\` and \`scenario.start\` / \`screen\` / \`import\` still work from the CLI; after the failing start is confirmed, all of them continue the same way.
+
+### The flow
+
+Each step either stops the run or passes to the next.
+
+1. **Screen** (one Job). The failing start and a pool of nearby benchmark
+   starts (by default 0–19, or the spec's \`scenario.pool\`) are run. Passing
+   starts become candidate references, ordered by closeness: centimetres of
+   object movement plus degrees of rotation and joint angle divided by ten,
+   summed (the report's **score**).
+2. **Plan.** The differences against each reference are listed. Nemotron 3
+   Ultra (or a fixed order, without Nemotron) ranks which entities to try
+   first. The ranking sets the order only.
+3. **Gates.**
+   - The failing start must reproduce, or the run stops
+     (\`failing_not_reproducible\`).
+   - The nearest reference must pass 5 of 5; if not, the next nearest is
+     tried, up to three (\`reference_not_passing\`).
+   - The **full hybrid** (every difference applied) must reproduce. If not,
+     the measured differences do not explain the failure, and the run stops
+     instead of reducing something meaningless.
+4. **Probe.** Each entity alone, in the ranked order. If one alone
+   reproduces, it is the cause on its own; step 5 is skipped.
+5. **Delta debugging (\`ddmin\`).** From all differences, try smaller groups
+   (halves, then the complement of each group, then smaller pieces). Any
+   smaller group that still reproduces becomes the new set. It ends when
+   removing any single entity makes it pass: **entity-minimal**. This is a
+   local minimum, not proof that no other combination exists.
+6. **Split.** Each surviving object is tried with only its position change
+   and only its rotation change; a part that is not needed is dropped.
+7. **Shrink.** Each surviving part is bisected from 100% towards 0 for four
+   steps (resolution 1/16 of the difference): 50%, then 25% or 75%, and so on.
+   With spare GPU workers two points are tried at once.
+8. **Continuations.** If a Job hits its candidate budget before the set is
+   entity-minimal, a new Job continues from the smallest set that reproduced
+   (up to three). Continuations stop at entity-minimal, even when sizes are
+   not yet shrunk, which is why a case can show every share at 100%.
+9. **Measure the guess.** For the entities Nemotron ranked first, existing
+   reruns answer: *necessary* (removing it from the final set makes the
+   failure go away) and *sufficient* (it reproduces alone).
+10. **Write up.** Report, case (with replay inputs), videos, Nemotron's
+    labelled reading of the verified result, library entry.
+
+Every candidate is cached by the exact scene it builds; the same hybrid never
+runs twice.
+
+### Worked example: \`FL-S-AFB5\`
+
+LIBERO-10 task 0, an imported failing start (benchmark start 14), reference
+28; the report's Candidates table from the continuation Job.
+
+| Rows | Phase | What happened |
+| --- | --- | --- |
+| 0–1 | gate | The failing start failed 4 of 4 (fifth skipped); start 28 passed 5 of 5. |
+| 2–7 | probe | Each of the six entities alone: all passed. No single culprit. |
+| 8–17 | ddmin | Groups of the six and their complements: none reproduced. |
+| 18 | ddmin | The five without the tomato sauce: 4 of 4 failures. The new set. |
+| 19–22 | ddmin | Each of the five removed in turn: all passed. Entity-minimal. |
+| 23–25 | shrink | The arm offset at 50% and 25% did not reproduce; at 75% it did. |
+
+The budget ended there. The recorded case keeps the arm at 100%: a defect
+fixed on October 18 discarded the verified 75%; new runs record it.
+
+## 5. The probes route: disturbances and rewordings
+
+### How an audit searches
+
+1. **Control.** The chosen start, undisturbed, 5 attempts. If it does not pass
+   reliably, nothing can be judged and the audit stops
+   (\`nominal_controls_failed\`). The audit does not look for another start: the
+   start is the question you asked.
+2. **Sweep.** For each family, severities 0.2, 0.4, 0.6, 0.8 and 1.0 in that
+   order, 5 attempts each. A level fails reproducibly at 4 of 5.
+3. **Bisect.** At the first failing level, four steps between the last passing
+   level and it narrow the threshold to 0.0125.
+4. **Result per family.** "Fails from s = x", "No failure up to s = 1.00"
+   (searched to the top, nothing reproduced), "Not tested" (the run stopped
+   before this family) or "Incomplete" (stopped during it).
+
+A level such as **1/5** means one of five attempts failed: not reproducible,
+but worth noting. One family is tested at a time; combinations are not.
+
+### Image families
+
+These alter the **pictures the policy receives** from both cameras (agent view
+and wrist, 256×256 pixels by default). The simulator and what an observer sees
+are unchanged. They approximate camera and sensor effects; they do not
+simulate them.
+
+| Family | What changes | Formula | s = 0.2 | 0.4 | 0.6 | 0.8 | 1.0 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Blur** (\`blur\`) | Out-of-focus lens | Gaussian sigma \`8 s\` px | 1.6 px | 3.2 px | 4.8 px | 6.4 px | 8 px |
+| **Noise** (\`noise\`) | Grainy sensor in low light | Gaussian noise sigma \`100 s\` (of 0–255) | 20 | 40 | 60 | 80 | 100 |
+| **Darken** (\`darken\`) | Underexposure | brightness × \`(1 − 0.95 s)\` | ×0.81 | ×0.62 | ×0.43 | ×0.24 | ×0.05 |
+| **Contrast** (\`contrast\`) | Washed-out image | contrast × \`(1 − 0.9 s)\` | ×0.82 | ×0.64 | ×0.46 | ×0.28 | ×0.10 |
+| **JPEG compression** (\`jpeg\`) | Low-bandwidth video link | JPEG quality \`95 − 90 s\` | 77 | 59 | 41 | 23 | 5 |
+| **Colour cast** (\`colour_cast\`) | White-balance error (warm tint) | red × \`(1 + 0.6 s)\`, blue × \`(1 − 0.6 s)\` | R ×1.12, B ×0.88 | ×1.24, ×0.76 | ×1.36, ×0.64 | ×1.48, ×0.52 | ×1.60, ×0.40 |
+| **Motion blur** (\`motion_blur\`) | Moving or shaking camera | horizontal kernel \`1 + 30 s\` px | 7 px | 13 px | 19 px | 25 px | 31 px |
+| **Dead pixels** (\`dead_pixels\`) | Damaged sensor | fraction \`0.2 s\` of pixels stuck black or white | 4% | 8% | 12% | 16% | 20% |
+
+Noise and dead pixels are random but repeatable: the pattern is a fixed
+function of the episode, step, camera, family and severity, so every attempt
+at a level sees the same frames and a replay reproduces them.
+
+### Scene families
+
+These change the **simulated scene** once, when the episode starts.
+
+| Family | What changes | Formula | s = 0.2 | 0.4 | 0.6 | 0.8 | 1.0 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Camera viewpoint** (\`viewpoint\`) | The agent-view camera moves sideways and turns back towards the table (wrist camera unchanged) | shift \`0.10 s\` m, turn \`10 s\`° | 2 cm, 2° | 4 cm, 4° | 6 cm, 6° | 8 cm, 8° | 10 cm, 10° |
+| **Scene lighting** (\`lighting\`) | Every light dims | light × \`(1 − 0.9 s)\` | ×0.82 | ×0.64 | ×0.46 | ×0.28 | ×0.10 |
+
+Calibration renders: \`docs/experiments/assets/scene-family-calibration.png\`
+(lighting at s = 1: mean brightness 139 → 16, dark but visible).
+
+### Rewordings
+
+There is no severity. Nemotron 3 Super writes rewordings of the instruction;
+the meaning check drops any that lose an object or target word; the original
+wording is the control (2 attempts) and each rewording gets one screening
+attempt. A rewording that fails is confirmed with the 4-of-5 gate and then
+reduced by word edits to the smallest change that still fails.
+
+### The September occlusion case
+
+A grey rectangle over part of the agent-view image, described by position and
+size as fractions of the image (not a severity), reduced by trimming edges.
+
+## 6. Reading a report
+
+Every report opens with a **Summary** (verdict, inputs, result, stop status),
+then the evidence.
+
+### Abbreviations used in reports
+
+| Abbreviation | Meaning |
+| --- | --- |
+| \`S\`, \`F\`, \`I\` | Attempt outcomes: success, policy failure, invalid scene. |
+| \`s = 0.4\` | Severity 0.4. |
+| \`1/5\` | One of five attempts failed. |
+| \`hybrid 28\`, \`reference 28\` | Start 28 with shifts applied; start 28 itself. |
+| \`fail-…\`, \`ref28-…\`, \`hyb-…\` and \`-a01\` | Video case ids: failing start, reference 28, hybrid; \`a01\` is attempt 1. |
+| \`orig\`, \`p01\` | The original wording; rewording 1. |
+| \`ddmin\` | Delta debugging (section 4). |
+| \`robot0_joint1\` | The robot's first arm joint (LIBERO's naming). |
+| \`alphabet_soup_1\` | The simulator's name for an object (first alphabet soup). |
+
+### Scenario report
+
+| Section / column | Meaning |
+| --- | --- |
+| **Screen**: \`task\`, \`start\`, \`outcomes\`, \`decision\`, \`max steps\` | Each screened start: its attempts, whether it failed reliably or passed, and the longest episode in steps. |
+| **Result / Minimal cause** | The verdict, failing start and reference, and the kept differences in a sentence and as a final selection. |
+| **Differences**: \`entity\`, \`position (cm)\`, \`rotation (deg)\`, \`joints\`, \`score\` | Every difference between the failing start and the reference; \`score\` = cm + degrees / 10, summed. |
+| **Hypothesis** | Nemotron's ranking and free-text hypothesis (or the fixed order). |
+| **Hypothesis vs result**: \`rank\`, \`entity\`, \`in final selection\`, \`necessary\`, \`sufficient\`, \`label\` | Whether each top-ranked entity survived, was needed, and was enough alone, with the reruns that show it under **Evidence**. |
+| **Candidates**: \`#\`, \`phase\`, \`role\`, \`selection\`, \`outcomes\`, \`decision\`, \`gate met\`, \`skipped\`, \`late\` | Every rerun (section 4): its number, step of the flow, scene, attempts, decision, whether the gate rule was met, and skipped and late attempts (section 3). |
+| **Effort** | Candidates tested, attempts run and skipped, Job seconds, an estimated compute cost. |
+| **Videos**: \`role\`, \`case id\`, \`outcome\`, \`video\` | Which recorded episode is the original, minimal and reference clip. |
+
+Hypothesis labels:
+
+| Label | Meaning |
+| --- | --- |
+| \`necessary_not_sufficient\` | Needed in the final set, but not enough alone. |
+| \`sufficient_not_necessary\` | Enough alone, but the final set does not need it. |
+| \`confirmed\` | Needed and enough alone, and the only entity left. |
+| \`not_in_final\` | Not part of the final set. |
+| \`inconclusive\` | The reruns do not settle it. |
+
+### Stress-test report
+
+| Column | Meaning |
+| --- | --- |
+| \`Family\` | The disturbance family (section 5). |
+| \`Smallest reproducibly failing severity\` | The threshold, or "none up to 1". |
+| \`Physical value\` | The threshold in physical units (for example blur 3.2 px). |
+| \`Last non-reproducing level\` | The highest severity below the threshold that did not fail reliably. |
+| \`Levels tried\`, \`Episodes\` | How many severities and episodes the family used. |
+| \`Stop reason\` | Why the family's search ended. |
+| \`Agent view mean / std ratio at threshold\`, \`Wrist …\` | How much the disturbance changed the camera images' brightness (mean) and contrast (standard deviation), as perturbed / undisturbed (1.00 / 1.00 = unchanged). |
+| \`Levels in the order tried\` | Each severity tried with failures / attempts. |
+
+### Rewording report
+
+| Column | Meaning |
+| --- | --- |
+| \`label\` | \`orig\` (the original) or \`p01\`… |
+| \`kind\` | \`original\` or \`paraphrase\`. |
+| \`outcomes\`, \`decision\` | Its attempts; \`control\`, \`passed\`, or a failure confirmed by the gate. |
+| \`word edits\` | How many words differ from the original. |
+| \`meaning check\` | \`kept\` or \`dropped\` (lost an object or target word). |
+| \`instruction\` | The wording itself. |
+
+## 7. Verdicts, run statuses and stop reasons
+
+| Case verdict | Meaning |
+| --- | --- |
+| **Failure repeats** | The failure met the 4-of-5 gate. |
+| **No failure found** | Nothing met the gate in the tested range. Bounded evidence, not proof of robustness. |
+| **Stopped** | The diagnosis ended before its question was answered; see the stop reason. |
+| **Incomplete** | The run did not finish its work. |
+| **Run failed** | A local or provider error; not a policy failure. |
+
+Run statuses on the run page: **Submitting a Job**, **Waiting for a GPU**,
+**Running**, **Downloading results**, **Stopping**, **Completed**,
+**Stopped**, **Failed**, **Interrupted**. Once the check is read, the run page
+also shows the **route**: layout, probes, flaky or passes (section 1).
+
+Colours:
+- **Red**: a failure (with a cross).
+- **Green**: a pass, including "No failure found" (with a tick).
+- **Amber**: anything that needs attention: stopped, flaky, waiting for a GPU.
+- Colour is never the only signal: an icon and a word go with it.
+
+| Stop reason | Meaning |
+| --- | --- |
+| \`budget_exhausted\` | Stopped at the candidate budget; the result is the smallest found so far. |
+| \`nominal_controls_failed\` | The undisturbed start did not pass reliably, so no disturbance can be judged. |
+| \`no_reproducible_failure\` | Nothing failed 4 of 5: a finished negative result. |
+| \`check_incomplete\` | The check ended before it decided the start (or the scene was invalid), so it is not known whether the start passes. Resume checks again. |
+| \`layout_skipped\` | The start fails untouched while layout diagnosis was off ("probe only"): nothing to probe and no layout Job. |
+| \`no_reference\` / \`reference_not_passing\` | No nearby benchmark start passed reliably. |
+| \`failing_not_reproducible\` / \`no_faithful_failure\` | The failing start (or imported start, or full hybrid) did not fail reliably. |
+| \`import_invalid\`, \`import_mismatch\` | The imported file was not valid, or does not match the task's scene. |
+| \`original_mismatch\` | The original wording did not match the task. |
+| \`capacity_unavailable\` | No GPU after six submissions. |
+| \`spend_cap\`, \`max_hours\` | The next Job could exceed the spend cap; the hour limit was reached. |
+| \`stopped_by_user\` | Stopped from the control panel or \`faultline stop\`. |
+| \`backend_error\`, \`auth_expired\` | A cloud call failed (resume to re-attach); the Nebius sign-in expired. |
+| \`process_ended\` | The run's process ended unexpectedly; Resume re-attaches. |
+| \`control_not_passing\` | The original wording did not pass both control attempts, so a failing rewording cannot be attributed to the wording. |
+| \`paraphrase_failed\`, \`llm_required\` | Nemotron could not write the rewordings (resume to retry), or they need Nemotron and it is off. |
+| \`original_unknown\` | The task's own wording is not known, so its rewordings cannot be probed. |
+
+## 8. Spending and the cap
+
+Before each Job, the run reserves its **worst case**:
+- The provider timeout: the Job's deadline plus ten minutes, rounded up to a
+  whole minute.
+- A four-minute start allowance.
+- Both at the hourly rate in the spec.
+
+A Job is refused if that reservation would exceed the cap. When it finishes,
+the reservation is replaced by the measured container time.
+- Only the first Job of a plan must fit the cap to start; a later Job that
+  does not fit stops the run, which can be resumed after raising the cap.
+- The cap covers Nebius Serverless Jobs only, not Token Factory calls or
+  storage.
+- Costs are estimates from measured time until reconciled against the bill.
+
+**Worst case and typical figures on Review.** The worst case is the check
+plus the larger of the two branches, because only one branch runs. Beside it,
+each branch shows a **typical** cost and time, modelled on measured runs. For
+example: the check, about 16 minutes and US$0.43; four disturbance families,
+about 29 minutes and US$0.82; a layout reduction, about 25 minutes and
+US$0.68. These are estimates. GPU waits, longer tasks and finding a failure
+(the narrowing steps) add time.
+
+A default cap of US$2.50 can sit below the worst case (US$3.09) and still
+cover the typical runs. The review then shows "The first Job fits, but not
+all of them". Raise the cap if you want layout continuations to run
+uninterrupted.
+
+## 9. What results do and do not show
+
+- They show, by reruns, what makes this policy (one checkpoint) fail this task
+  from these starts, or that it did not fail within the tested range.
+- A minimal trigger is a local minimum: another combination might also fail.
+- They do not explain why the network fails. The videos and Nemotron's
+  labelled reading are where that question starts.
+- Image families approximate camera effects; scene families change only the
+  camera pose and lights; one family at a time.
 `,pj="https://github.com/jephoton/faultline-robotics-debugger/blob/main/docs/";function mj(e){return e.replace(/^# .*\n+/,"").replace(/\]\((?!https?:|#|mailto:)([^)\s]+\.(?:md|png))(#[^)]*)?\)/g,(n,r,s="")=>`](${pj}${r}${s})`)}function gj(e){return Array.from(e.matchAll(/^## (.+)$/gm),t=>{const n=t[1].trim();return{id:`md-${Hm(n)}`,title:n}})}function yj(){It("Reference");const{hash:e}=An(),t=w.useMemo(()=>mj(fj),[]),n=w.useMemo(()=>gj(t),[t]);return w.useEffect(()=>{var r;e&&((r=document.getElementById(decodeURIComponent(e.slice(1))))==null||r.scrollIntoView())},[e]),i.jsxs("article",{className:"reference",children:[i.jsx("h1",{children:"Reference"}),i.jsx("p",{className:"lede",children:"What Faultline does and what everything it shows means: the two modes, the repeatability gate, how a reduction works, every severity level, every report column and abbreviation, the verdicts and stop reasons, and the spend cap."}),i.jsxs("nav",{"aria-label":"On this page",className:"panel guide-toc",children:[i.jsx("p",{className:"section-label",children:"On this page"}),i.jsx("ol",{children:n.map(r=>i.jsx("li",{children:i.jsx("a",{href:`#${r.id}`,children:r.title.replace(/^\d+\.\s*/,"")})},r.id))})]}),i.jsx(pc,{source:t,headingOffset:0})]})}function Et({id:e,label:t,hint:n,errors:r,children:s}){return i.jsxs("div",{className:"field",children:[i.jsx("label",{htmlFor:e,children:t}),s,n?i.jsx("span",{className:"field__hint",id:`${e}-hint`,children:n}):null,r==null?void 0:r.map(l=>i.jsxs("span",{className:"field__error",id:`${e}-error`,children:[i.jsx(M,{name:"alarm"})," ",l]},l))]})}function Ut(e,t,n){const r=[`${e}-hint`,n!=null&&n.length?`${e}-error`:null].filter(Boolean);return r.length?r.join(" "):void 0}function xj(e){return new Promise((t,n)=>{const r=new FileReader;r.onload=()=>t(String(r.result??"")),r.onerror=()=>n(new Error("The file could not be read.")),r.readAsText(e)})}const vj=15e5;function wj({choice:e,form:t,onChange:n,yaml:r,yamlEdited:s,onYamlChange:l,onYamlReset:a,validation:o,templateReady:u}){var I,N,F;const c=w.useId(),[f,d]=w.useState(null),m=w.useRef(null),_=o.status==="done"?o.errors:[],{byField:k,other:S}=L0(_),b=j=>k[j],g=Rh.includes(t.suite)?t.suite:"libero_10",p=Number(t.task),y=N0(t.suite,p),v=j=>`${c}-${j}`;async function R(j){if(d(null),!j){n({importFile:null});return}if(j.size>vj){d("That file is larger than the server accepts (about 1.5 MB)."),n({importFile:null});return}try{const P=await xj(j);JSON.parse(P);const D={name:j.name,content:P};n({importFile:D})}catch(P){d(P instanceof SyntaxError?"That file is not valid JSON.":"The file could not be read."),n({importFile:null})}}const A=[...f?[f]:[],...b("file")??[]];return i.jsxs("div",{className:"settings",children:[!u&&i.jsx("p",{role:"status",className:"muted",children:"Loading the spec template."}),i.jsxs("div",{className:"form-grid",children:[i.jsx(Et,{id:v("name"),label:"Name",hint:"Used for the run folder and the case.",errors:b("name"),children:i.jsx("input",{id:v("name"),type:"text",value:t.name,onChange:j=>n({name:j.target.value}),"aria-invalid":b("name")?!0:void 0,"aria-describedby":Ut(v("name"),!0,b("name")),autoComplete:"off",spellCheck:!1})}),i.jsx(Et,{id:v("suite"),label:"Suite",errors:b("suite"),children:i.jsx("select",{id:v("suite"),value:g,onChange:j=>n({suite:j.target.value,task:"0"}),children:Rh.map(j=>i.jsx("option",{value:j,children:S0[j]},j))})}),i.jsx(Et,{id:v("task"),label:"Task",hint:y?i.jsxs(i.Fragment,{children:["Instruction: “",y,"”"]}):"The benchmark task number.",errors:b("task"),children:i.jsx("select",{id:v("task"),value:t.task,onChange:j=>n({task:j.target.value}),"aria-describedby":Ut(v("task"),!0,b("task")),children:(Qm[g]??[]).map((j,P)=>i.jsxs("option",{value:String(P),children:[P,": ",j]},P))})}),e==="start"&&i.jsx(Et,{id:v("start"),label:"Start",hint:"The benchmark start, 0 to 49.",errors:b("start"),children:i.jsx("input",{id:v("start"),type:"text",inputMode:"numeric",value:t.start,onChange:j=>n({start:j.target.value}),"aria-invalid":b("start")?!0:void 0,"aria-describedby":Ut(v("start"),!0,b("start"))})}),e==="screen"&&i.jsxs(i.Fragment,{children:[i.jsx(Et,{id:v("range"),label:"Starts to search",hint:"For example 10-49.",errors:b("range"),children:i.jsx("input",{id:v("range"),type:"text",value:t.range,onChange:j=>n({range:j.target.value}),"aria-invalid":b("range")?!0:void 0,"aria-describedby":Ut(v("range"),!0,b("range"))})}),i.jsx(Et,{id:v("confirm"),label:"Confirmation attempts",hint:"Extra attempts (4 to 8) for a start that fails its first try. It counts as failing reliably at 4 failures; the default 4 gives the usual 4 of 5.",errors:void 0,children:i.jsx("input",{id:v("confirm"),type:"text",inputMode:"numeric",value:t.confirm,onChange:j=>n({confirm:j.target.value}),"aria-describedby":Ut(v("confirm"))})})]}),e==="import"&&i.jsxs(Et,{id:v("file"),label:"Start file",hint:"A JSON start-state file for the suite and task above. Faultline checks that it fails 4 of 5 times first.",errors:A,children:[i.jsx("input",{id:v("file"),ref:m,type:"file",accept:".json,application/json",onChange:j=>{var P;return void R((P=j.target.files)==null?void 0:P[0])},"aria-invalid":A.length?!0:void 0,"aria-describedby":Ut(v("file"),!0,A)}),t.importFile&&i.jsxs("span",{className:"field__hint",children:[i.jsx(M,{name:"file"})," ",t.importFile.name," (",Math.max(1,Math.round(t.importFile.content.length/1024))," KB)"]})]})]}),e==="start"&&i.jsxs("fieldset",{className:"probes",children:[i.jsx("legend",{children:"If the start passes untouched, also probe"}),i.jsxs("label",{className:"check",children:[i.jsx("input",{type:"checkbox",checked:t.probes,onChange:j=>n({probes:j.target.checked})}),"Probe with disturbances and rewordings"]}),i.jsx("span",{className:"field__hint",children:"Turn this off to only check the start and diagnose the layout if it fails. If the start passes, nothing more runs."}),i.jsxs("fieldset",{disabled:!t.probes,"aria-describedby":b("families")?v("families-error"):void 0,children:[i.jsx("legend",{children:"Disturbance families"}),i.jsx("p",{className:"muted",children:"Each family is searched from severity 0 (no change) to 1 (the strongest) for the smallest severity that breaks the policy. More families cost more time."}),["image","scene"].map(j=>i.jsxs("div",{children:[i.jsx("p",{className:"section-label",children:j==="image"?"Image, both cameras":"Scene, applied when the simulator resets"}),i.jsx("div",{children:Km.filter(P=>P.group===j).map(P=>i.jsxs("label",{className:"check",children:[i.jsx("input",{type:"checkbox",checked:t.families.includes(P.key),onChange:D=>n({families:Xm(D.target.checked?[...t.families,P.key]:t.families.filter(te=>te!==P.key))})}),P.label]},P.key))})]},j)),i.jsx("p",{className:"field__hint",children:"These four are where the policy has failed before; each extra family adds about half an hour and can need another Job."}),(I=b("families"))==null?void 0:I.map(j=>i.jsxs("span",{className:"field__error",id:v("families-error"),children:[i.jsx(M,{name:"alarm"})," ",j]},j))]}),i.jsx(Et,{id:v("rewordings"),label:"Rewordings to ask for",hint:"0 skips this probe; 1 to 12 asks Nemotron for that many rewordings, and the smallest word change that breaks the policy is kept.",errors:b("rewordings"),children:i.jsx("input",{id:v("rewordings"),type:"text",inputMode:"numeric",value:t.rewordings,disabled:!t.probes,onChange:j=>n({rewordings:j.target.value}),"aria-invalid":b("rewordings")?!0:void 0,"aria-describedby":Ut(v("rewordings"),!0,b("rewordings"))})})]}),i.jsxs("div",{className:"form-grid",children:[i.jsx(Et,{id:v("spend"),label:"Spend cap (US$)",hint:"The most this run may cost. It stops before a Job could go over.",errors:b("spend"),children:i.jsx("input",{id:v("spend"),type:"text",inputMode:"decimal",value:t.spend,onChange:j=>n({spend:j.target.value}),"aria-invalid":b("spend")?!0:void 0,"aria-describedby":Ut(v("spend"),!0,b("spend"))})}),i.jsx(Et,{id:v("hours"),label:"Hour limit",hint:"The most wall-clock time before the run stops.",errors:b("hours"),children:i.jsx("input",{id:v("hours"),type:"text",inputMode:"decimal",value:t.hours,onChange:j=>n({hours:j.target.value}),"aria-invalid":b("hours")?!0:void 0,"aria-describedby":Ut(v("hours"),!0,b("hours"))})})]}),i.jsxs("div",{className:"field",children:[i.jsxs("label",{className:"check",children:[i.jsx("input",{type:"checkbox",checked:t.nemotron,onChange:j=>n({nemotron:j.target.checked})}),"Ask Nemotron for a hypothesis and an explanation if the layout diagnosis runs"]}),i.jsxs("span",{className:"field__hint",children:["Needs a Token Factory key in your .env file. Nemotron only proposes an order and a reading; the reruns decide the result.",e==="start"&&" Rewordings are written by Nemotron too, whatever you choose here."]}),(N=b("nemotron"))==null?void 0:N.map(j=>i.jsxs("span",{className:"field__error",children:[i.jsx(M,{name:"alarm"})," ",j]},j))]}),i.jsxs("div",{className:"field",children:[i.jsxs("label",{className:"check",children:[i.jsx("input",{type:"checkbox",checked:t.research,onChange:j=>n({research:j.target.checked})}),"Find related research"]}),i.jsx("span",{className:"field__hint",children:"Searches public sources with Tavily and summarises them with Nemotron 3 Nano. Context, not evidence. Needs a Tavily key in .env."}),(F=b("research"))==null?void 0:F.map(j=>i.jsxs("span",{className:"field__error",children:[i.jsx(M,{name:"alarm"})," ",j]},j))]}),i.jsxs("details",{className:"yaml-panel",open:s||S.length>0?!0:void 0,children:[i.jsx("summary",{children:"Edit YAML"}),i.jsxs("p",{className:"muted",children:["This is the spec that will run, the same file you could pass to ",i.jsx("code",{children:"faultline diagnose"}),". Any spec key works here. Once you edit it, the YAML is the source of truth."]}),s&&i.jsxs("div",{className:"notice notice--attention",role:"note",children:[i.jsx(M,{name:"attention"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"Your YAML edits take priority"}),i.jsx("p",{children:"Changing the fields above no longer changes the spec."}),i.jsx("button",{type:"button",className:"btn btn--secondary btn--small",onClick:a,children:"Discard YAML edits and use the fields"})]})]}),i.jsx("label",{htmlFor:v("yaml"),className:"sr-only",children:"Spec in YAML"}),i.jsx("textarea",{id:v("yaml"),value:r,onChange:j=>l(j.target.value),rows:Math.min(30,Math.max(12,r.split(`
 `).length+1)),spellCheck:!1,"aria-describedby":S.length?v("yaml-errors"):void 0}),S.length>0&&i.jsx("ul",{className:"yaml-errors",id:v("yaml-errors"),children:S.map(j=>i.jsxs("li",{className:"field__error",children:[i.jsx(M,{name:"alarm"}),i.jsxs("span",{children:[i.jsx("code",{children:j.path||"spec"})," ",j.message]})]},`${j.path}-${j.message}`))})]}),i.jsxs("p",{className:"validation",role:"status","aria-live":"polite",children:[o.status==="checking"&&"Checking the spec.",o.status==="done"&&o.ok&&i.jsxs(i.Fragment,{children:[i.jsx(M,{name:"check"})," The spec has no problems."]}),o.status==="done"&&!o.ok&&i.jsxs(i.Fragment,{children:[i.jsx(M,{name:"alarm"})," ",_.length," ",_.length===1?"problem":"problems"," to fix before the review."]})]})]})}const kj=["What to check","Settings","Review"],jj=400;function _j(){return qs()?i.jsx(Sj,{}):i.jsx(Hl,{what:"New diagnosis"})}function Sj(){var N,F;It("New diagnosis");const e=tn(),[t,n]=w.useState(1),[r,s]=w.useState("start"),[l,a]=w.useState(()=>Lh("start")),[o,u]=w.useState(null),[c,f]=w.useState({status:"idle"}),[d,m]=w.useState(null),_=w.useRef(null),k=w.useRef(!0),S=_t(()=>e.specTemplate("diagnose"),[e]),g=((F=(N=_t(()=>e.environment(),[e]).data)==null?void 0:N.checks.find(j=>j.key==="tavily_key"))==null?void 0:F.ok)!==!1,p=w.useRef(!1);w.useEffect(()=>{p.current||a(j=>({...j,research:g}))},[g]);const y=S.data?Zm(S.data):null,v=R0(r,l,y),R=o??v;w.useEffect(()=>{var j;if(k.current){k.current=!1;return}(j=_.current)==null||j.focus()},[t]),w.useEffect(()=>{if(t!==2||S.loading)return;let j=!1;f({status:"checking"});const P=setTimeout(()=>{e.validateSpec(R).then(D=>{j||f({status:"done",ok:D.ok,errors:D.errors})}).catch(D=>{j||f({status:"done",ok:!1,errors:[{path:"",message:D.message}]})})},jj);return()=>{j=!0,clearTimeout(P)}},[e,R,t,S.loading]);function A(j){s(j),a(Lh(j,g)),p.current=!1,u(null),f({status:"idle"}),m(null)}async function I(){if(m(null),r==="import"&&!l.importFile&&o===null){f({status:"done",ok:!1,errors:[{path:"diagnose.import",message:"Choose the start file to upload."}]}),m("Choose your start file first.");return}try{const j=await e.validateSpec(R);if(f({status:"done",ok:j.ok,errors:j.errors}),!j.ok){m(`The spec has ${j.errors.length} ${j.errors.length===1?"problem":"problems"}. Fix what is marked below, then review.`);return}n(3)}catch(j){m(j instanceof Error?j.message:"The spec could not be checked.")}}return i.jsxs("section",{children:[i.jsx("h1",{ref:_,tabIndex:-1,children:"New diagnosis"}),i.jsx("ol",{className:"steps","aria-label":"Steps",children:kj.map((j,P)=>{const D=P+1,te=D===t?"current":D<t?"done":"todo";return i.jsxs("li",{className:`steps__item steps__item--${te}`,"aria-current":D===t?"step":void 0,children:[i.jsx("span",{className:"steps__num",children:te==="done"?i.jsx(M,{name:"tick"}):D}),i.jsx("span",{children:j})]},j)})}),t===1&&i.jsxs(i.Fragment,{children:[i.jsx(H0,{choice:r,onChoose:A}),i.jsx("p",{className:"muted",children:"Nothing is created or charged until you confirm on the review step."}),i.jsx("div",{className:"actions",children:i.jsx("button",{type:"button",className:"btn",onClick:()=>n(2),children:"Next: settings"})})]}),t===2&&i.jsxs(i.Fragment,{children:[i.jsx(wj,{choice:r,form:l,onChange:j=>{j.research!==void 0&&(p.current=!0),a(P=>({...P,...j}))},yaml:R,yamlEdited:o!==null,onYamlChange:j=>u(j),onYamlReset:()=>u(null),validation:c,templateReady:!S.loading}),S.error&&i.jsxs("p",{className:"muted",children:["The spec template could not be loaded (",S.error.message,"); add the backend block in the YAML."]}),d&&i.jsxs("div",{className:"notice notice--attention",role:"alert",children:[i.jsx(M,{name:"attention"}),i.jsx("div",{className:"notice__body",children:i.jsx("p",{children:d})})]}),i.jsxs("div",{className:"actions",children:[i.jsx("button",{type:"button",className:"btn btn--secondary",onClick:()=>n(1),children:"Back"}),i.jsx("button",{type:"button",className:"btn",onClick:()=>void I(),children:"Review"})]})]}),t===3&&i.jsxs(i.Fragment,{children:[i.jsx(lg,{yaml:R,importFile:l.importFile,launch:j=>e.startRun({yaml:R,plan_hash:j.plan_hash,...l.importFile?{import_file:l.importFile}:{},...tg(R)?{}:{no_llm:!0}})}),i.jsx("div",{className:"actions",children:i.jsx("button",{type:"button",className:"btn btn--secondary",onClick:()=>n(2),children:"Back to settings"})})]})]})}const bj={nebius_cli:{why:"Faultline runs its GPU work as Nebius Serverless Jobs through the Nebius CLI. The sign-in expires after about a day.",guide:"prerequisites"},docker:{why:"Only needed to build the simulator image once. Runs do not need it.",guide:"image"},token_factory_key:{why:"Nemotron hypotheses, explanations and rewordings use a Token Factory key. It stays on this machine and never enters a Job. Presence is checked, the value is never shown.",guide:"prerequisites"},spec_template:{why:"New diagnoses reuse the backend block (image and secret name) of a local spec. Only names are shown, never ids.",guide:"spec"}};function Nj({check:e}){const t=bj[e.key];return i.jsxs("li",{className:e.ok?"setup-check":"setup-check setup-check--attention",children:[i.jsxs("h2",{children:[i.jsx(M,{name:e.ok?"check":"attention"})," ",ng(e.key),i.jsx("span",{className:"setup-check__word",children:e.ok?"Ready":"Needs attention"})]}),i.jsx("p",{children:e.detail}),!e.ok&&e.fix&&i.jsxs("p",{className:"check-row__fix",children:[i.jsx("strong",{children:"To fix it:"})," ",e.fix]}),t&&i.jsxs("p",{className:"muted",children:[t.why," ",i.jsx(Te,{to:`/guide#${t.guide}`,children:"Read the guide"}),"."]})]})}function Tj(){const{session:e}=nr();return e.mode!=="local"?i.jsx(Hl,{what:"Setup"}):i.jsx(Ej,{})}function Ej(){var r;It("Setup");const e=tn(),t=_t(()=>e.environment(),[e]),n=((r=t.data)==null?void 0:r.checks.filter(s=>!s.ok).length)??0;return i.jsxs("section",{children:[i.jsx("h1",{children:"Setup"}),i.jsx("p",{className:"lede",children:"What this machine needs before it can start a diagnosis. Nothing here creates or changes anything."}),t.loading&&i.jsx("p",{role:"status","aria-busy":"true",children:"Checking. The Nebius sign-in check can take a few seconds."}),t.error&&i.jsxs("div",{className:"notice notice--attention",role:"alert",children:[i.jsx(M,{name:"attention"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"The checks could not run"}),i.jsx("p",{children:t.error.message})]})]}),t.data&&i.jsxs(i.Fragment,{children:[i.jsx("p",{role:"status",children:n===0?i.jsxs(i.Fragment,{children:[i.jsx(M,{name:"check"})," Everything needed is ready."]}):i.jsxs(i.Fragment,{children:[i.jsx(M,{name:"attention"})," ",n," ",n===1?"item needs":"items need"," attention."]})}),i.jsx("ul",{className:"setup-checks",children:t.data.checks.map(s=>i.jsx(Nj,{check:s},s.key))})]}),i.jsxs("div",{className:"actions",children:[i.jsxs("button",{type:"button",className:"btn btn--secondary",onClick:t.reload,children:[i.jsx(M,{name:"restart"})," Check again"]}),i.jsxs(Te,{to:"/guide",className:"btn btn--secondary",children:[i.jsx(M,{name:"guide"})," Open the guide"]})]})]})}const Rj=["completed","stopped","failed","interrupted"];function Xa(e){return Rj.includes(e)}const Cj={submitting:"Submitting the Job",waiting_for_gpu:"Waiting for a GPU",running:"Running on the GPU",downloading:"Downloading the results",settled:"Job finished and charged"};function Lj(e){var n;const t=((n=e.job)==null?void 0:n.phase)??null;switch(e.status){case"running":return t==="waiting_for_gpu"?{word:"Waiting for a GPU",tone:"attention",icon:"clock"}:t==="submitting"?{word:"Submitting a Job",tone:"neutral",icon:"clock"}:t==="downloading"?{word:"Downloading results",tone:"neutral",icon:"clock"}:{word:"Running",tone:e.attention?"attention":"neutral",icon:"clock"};case"stopping":return{word:"Stopping",tone:"attention",icon:"stop"};case"completed":return{word:"Completed",tone:"neutral",icon:"check"};case"stopped":return{word:"Stopped",tone:"attention",icon:"attention"};case"failed":return{word:"Failed",tone:"attention",icon:"attention"};case"interrupted":return{word:"Interrupted",tone:"attention",icon:"attention"}}}const Pj={scenario:"S",audit:"A",paraphrase:"L",replay:"R"};function Aj(e,t){return e==="diagnose"?`FL-${t==="layout"?"S":t==="probes"?"A":"·"}-····`:`FL-${Pj[e]??"X"}-····`}function Ij(e){switch(e){case"layout":return{tone:"alarm",icon:"alarm",title:"The start failed untouched: finding the smallest layout change"};case"probes":return{tone:"pass",icon:"check",title:"The start passed: probing"};case"flaky":return{tone:"attention",icon:"attention",title:"The start is flaky untouched: rewordings skipped",detail:"It does not pass reliably on its own, so no disturbance or wording can be blamed for a failure."};case"passes":return{tone:"pass",icon:"check",title:"Passes untouched",detail:"The start did not fail, so there was no failure to reduce."}}}function Oj(e){return e.status==="completed"?"tick":e.status==="stopped"||e.status==="failed"?"attention":e.status==="running"?"clock":"minus"}function Mj(e){const t=[];return e.state==="waiting_for_gpu"?t.push("waiting for a GPU"):e.status==="running"?t.push(e.state&&e.state!=="running"?e.state.replace(/_/g," "):"running"):t.push(e.status.replace(/_/g," ")),e.attempts>1&&t.push(`${e.attempts} attempts`),e.capacity_waits>0&&t.push(`${e.capacity_waits} capacity ${e.capacity_waits===1?"wait":"waits"}`),t.join(", ")}function $j({steps:e}){return i.jsx("ol",{className:"timeline","aria-label":"Steps of this run",children:e.map(t=>{const n=t.status==="stopped"||t.status==="failed"||t.state==="waiting_for_gpu";return i.jsxs("li",{className:n?"timeline__step timeline__step--attention":"timeline__step","aria-current":t.status==="running"?"step":void 0,children:[i.jsx(M,{name:Oj(t)}),i.jsx("span",{className:"timeline__label",children:t.label}),i.jsx("span",{className:"timeline__state muted",children:Mj(t)}),i.jsx("span",{})]},t.key)})})}function Fj({progress:e}){const t=e.job;if(!t||!t.phase)return i.jsx("p",{className:"muted",children:"No cloud Job is active right now."});const n=t.phase==="waiting_for_gpu",r=e.steps.reduce((s,l)=>s+l.capacity_waits,0);return i.jsxs("div",{className:n?"panel panel--attention":"panel",children:[i.jsxs("p",{className:"job__phase",children:[i.jsx(M,{name:n?"attention":"clock"}),i.jsx("strong",{children:Cj[t.phase]}),i.jsx("span",{className:"muted mono",children:t.name})]}),n&&i.jsxs("p",{children:["No GPU is free yet. Faultline resubmits the Job automatically, up to six times",r>0?`; ${r} ${r===1?"wait":"waits"} so far in this run`:"",". The worst case stays reserved until the Job is settled at its measured time."]})]})}function Za(e,t){return t<=0?0:Math.max(0,Math.min(100,e/t*100))}function zj({progress:e}){const t=Za(e.spent_usd,e.cap_usd),n=Math.min(100-t,Za(e.reserved_usd,e.cap_usd)),r=e.max_hours*3600,s=Za(e.elapsed_seconds,r);return i.jsxs("div",{className:"meters",children:[i.jsxs("div",{children:[i.jsxs("p",{className:"meter__label",children:[i.jsx("strong",{children:"Spend"}),i.jsxs("span",{className:"mono",children:[ee(e.spent_usd)," spent",e.reserved_usd>0?`, ${ee(e.reserved_usd)} reserved`:""," of ",ee(e.cap_usd)]})]}),i.jsxs("div",{className:"meter",role:"meter","aria-label":"Spend against the cap","aria-valuemin":0,"aria-valuemax":e.cap_usd,"aria-valuenow":Math.min(e.cap_usd,e.spent_usd+e.reserved_usd),"aria-valuetext":`${ee(e.spent_usd)} spent and ${ee(e.reserved_usd)} reserved of a ${ee(e.cap_usd)} cap`,children:[i.jsx("span",{className:"meter__spent",style:{width:`${t}%`}}),i.jsx("span",{className:"meter__reserved",style:{width:`${n}%`}})]}),i.jsx("p",{className:"muted meter__legend",children:"Solid is spent. Hatched is the worst case held back for a Job that is still running."})]}),i.jsxs("div",{children:[i.jsxs("p",{className:"meter__label",children:[i.jsx("strong",{children:"Time"}),i.jsxs("span",{className:"mono",children:[Gs(e.elapsed_seconds)," of ",e.max_hours," h"]})]}),i.jsx("div",{className:"meter",role:"meter","aria-label":"Time against the limit","aria-valuemin":0,"aria-valuemax":r,"aria-valuenow":Math.min(r,e.elapsed_seconds),"aria-valuetext":`${Gs(e.elapsed_seconds)} of ${e.max_hours} hours`,children:i.jsx("span",{className:"meter__spent",style:{width:`${s}%`}})})]})]})}function Dj({lines:e}){const t=w.useRef(null);return w.useEffect(()=>{const n=t.current;n&&(n.scrollTop=n.scrollHeight)},[e]),i.jsxs("details",{className:"log",open:!0,children:[i.jsxs("summary",{children:["Run log (last ",e.length," lines)"]}),e.length===0?i.jsx("p",{className:"empty",children:"Nothing has been logged yet."}):i.jsx("pre",{ref:t,tabIndex:0,"aria-label":"Last lines of the run log",children:e.join(`
 `)})]})}function Uj({onConfirm:e,onCancel:t,busy:n}){const r=w.useRef(null);return w.useEffect(()=>{var s;(s=r.current)==null||s.focus()},[]),i.jsxs("div",{className:"confirm",role:"alertdialog","aria-labelledby":"stop-title","aria-describedby":"stop-text",onKeyDown:s=>{s.key==="Escape"&&t()},children:[i.jsx("p",{id:"stop-title",className:"confirm__title",children:"Stop this run?"}),i.jsx("p",{id:"stop-text",children:"The current Job is cancelled and charged for the time it ran. You can resume later."}),i.jsxs("div",{className:"actions",children:[i.jsxs("button",{type:"button",className:"btn btn--stop",ref:r,onClick:e,"aria-busy":n,children:[i.jsx(M,{name:"stop"})," Stop the run"]}),i.jsx("button",{type:"button",className:"btn btn--secondary",onClick:t,children:"Keep running"})]})]})}const Bj=5e3,Wj=2e4,Hj=3;function Vj(){const e=qs(),{session:t}=nr();return t.mode!=="local"?i.jsx(Hl,{what:"Run"}):i.jsx(Gj,{controls:e})}function Gj({controls:e}){var Mt;const{run:t=""}=cm(),n=tn(),r=Fl(),{items:s,refreshLibrary:l,refreshRuns:a}=nr(),[o,u]=w.useState(0),c=w.useRef(0),f=_m(()=>n.progress(t),Bj,{key:`${t}#${o}`,until:G=>Xa(G.status)&&Date.now()-c.current>Wj}),d=f.data&&f.data.run===t?f.data:null,[m,_]=w.useState(!1),[k,S]=w.useState(!1),[b,g]=w.useState(null),[p,y]=w.useState(null),v=w.useRef(null),R=w.useRef(null),A=w.useRef(null),I=(d==null?void 0:d.name)??t;if(It(I),w.useEffect(()=>{const G=(d==null?void 0:d.status)??null;G!==null&&v.current!==null&&v.current!==G&&Xa(G)&&(l(),a()),G==="completed"&&(d!=null&&d.library_id)&&v.current!==null&&v.current!=="completed"&&y(Hj),v.current=G},[d==null?void 0:d.status,d==null?void 0:d.library_id,l,a]),w.useEffect(()=>{if(p===null)return;if(p<=0){d!=null&&d.library_id&&r(`/case/${encodeURIComponent(d.library_id)}`);return}const G=setTimeout(()=>y(O=>O===null?null:O-1),1e3);return()=>clearTimeout(G)},[p,r,d==null?void 0:d.library_id]),!d)return f.error instanceof kt&&f.error.status===404?i.jsxs("section",{children:[i.jsx("h1",{children:"Run not found"}),i.jsx("p",{className:"lede",children:f.error.message}),i.jsx(Te,{to:"/",className:"btn btn--secondary",children:"Back to the start"})]}):i.jsxs("section",{"aria-busy":!f.error,children:[i.jsx("h1",{children:t}),f.error?i.jsxs("div",{className:"notice notice--attention",role:"alert",children:[i.jsx(M,{name:"attention"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"Progress could not be read"}),i.jsxs("p",{children:[f.error.message," Trying again every few seconds."]})]})]}):i.jsx("p",{role:"status",children:"Reading the run."})]});const N=Lj(d),F=d.library_id?s.find(G=>G.id===d.library_id):void 0,j=(F==null?void 0:F.fault_code)??Aj(d.mode,d.route),P=d.route?Ij(d.route):null,D=Xa(d.status),te=((Mt=d.steps.find(G=>G.status==="running"))==null?void 0:Mt.label)??d.step;async function He(){var G;S(!0),g(null);try{await n.stopRun(t),_(!1),a(),f.refresh(),(G=R.current)==null||G.focus()}catch(O){g(O instanceof kt?O.message:"The run could not be stopped.")}finally{S(!1)}}async function Ot(){S(!0),g(null);try{const G=await n.resumeRun(t);a(),c.current=Date.now(),G.run===t?u(O=>O+1):r(`/run/${encodeURIComponent(G.run)}`)}catch(G){g(G instanceof kt?G.message:"The run could not be resumed.")}finally{S(!1)}}return i.jsxs("article",{children:[i.jsx(dg,{code:j,tag:F?"Fault code":"Fault code (assigned when the case is saved)",fields:[{label:"Status",value:N.word,tone:N.tone,icon:N.icon},{label:"Step",value:te??"none"},{label:"Kind",value:wm[d.mode]??d.mode},{label:"Spent",value:`${ee(d.spent_usd)} of ${ee(d.cap_usd)}`}],foot:t}),i.jsx("h1",{children:d.name}),i.jsx("p",{className:"sr-only",role:"status","aria-live":"polite",children:`${d.name}: ${N.word.toLowerCase()}${te?`, step ${te}`:""}, ${ee(d.spent_usd)} spent.`}),P&&i.jsxs("div",{className:`notice notice--${P.tone}`,role:"status","data-testid":"run-route",children:[i.jsx(M,{name:P.icon}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:P.title}),P.detail&&i.jsx("p",{children:P.detail})]})]}),D&&d.stop_text&&d.status!=="completed"&&i.jsxs("div",{className:"notice notice--attention",role:"note",children:[i.jsx(M,{name:"attention"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:d.status==="failed"?"The run failed":"The run stopped"}),i.jsx("p",{children:d.stop_text}),d.stop_reason==="auth_expired"&&i.jsxs("p",{children:[i.jsx(Te,{to:"/setup",children:"Open Setup"})," to check your sign-in."]}),d.resumable&&i.jsx("p",{children:"Nothing is lost: Resume re-attaches to the Jobs already submitted and never pays twice."})]})]}),d.status==="interrupted"&&!d.stop_text&&i.jsxs("div",{className:"notice notice--attention",role:"note",children:[i.jsx(M,{name:"attention"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"The run was interrupted"}),i.jsx("p",{children:"Its process is no longer running. Resume continues from the last finished step."})]})]}),d.status==="stopping"&&i.jsxs("div",{className:"notice notice--attention",role:"status",children:[i.jsx(M,{name:"stop"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"Stopping"}),i.jsx("p",{children:"The current Job is being cancelled. Faultline waits for the provider to confirm, then settles the cost."})]})]}),d.status==="completed"&&i.jsxs("div",{className:"notice notice--neutral",role:"status",children:[i.jsx(M,{name:"check"}),i.jsxs("div",{className:"notice__body",children:[i.jsx("p",{className:"notice__title",children:"The run finished"}),d.library_id?i.jsxs(i.Fragment,{children:[i.jsxs("p",{children:["The case is saved.",p!==null&&p>0&&` Opening it in ${p} ${p===1?"second":"seconds"}.`]}),i.jsxs("div",{className:"actions actions--tight",children:[i.jsx(Te,{className:"btn",to:`/case/${encodeURIComponent(d.library_id)}`,ref:A,children:"Open the case"}),p!==null&&p>0&&i.jsx("button",{type:"button",className:"btn btn--secondary",onClick:()=>y(null),children:"Stay here"})]})]}):i.jsx("p",{children:"No case was saved because nothing reproduced, or the run did not produce one. The log below says why."})]})]}),e&&(d.stoppable||d.resumable)&&i.jsxs("div",{className:"run-actions",children:[d.stoppable&&!m&&i.jsxs("button",{type:"button",className:"btn btn--stop",ref:R,onClick:()=>_(!0),children:[i.jsx(M,{name:"stop"})," Stop"]}),d.resumable&&i.jsxs("button",{type:"button",className:"btn",onClick:()=>void Ot(),"aria-busy":k,children:[i.jsx(M,{name:"replay"})," Resume"]})]}),m&&i.jsx(Uj,{onConfirm:()=>void He(),onCancel:()=>_(!1),busy:k}),b&&i.jsxs("div",{className:"notice notice--attention",role:"alert",children:[i.jsx(M,{name:"attention"}),i.jsx("div",{className:"notice__body",children:i.jsx("p",{children:b})})]}),f.error&&i.jsxs("p",{className:"muted",role:"status",children:["The latest update could not be read (",f.error.message,"). Showing the last one received."]}),i.jsx(le,{title:"Cloud Job",children:i.jsx(Fj,{progress:d})}),i.jsx(le,{title:"Spend and time",children:i.jsx(zj,{progress:d})}),i.jsx(le,{title:"Steps",children:i.jsx($j,{steps:d.steps})}),i.jsx(le,{title:"Log",children:i.jsx(Dj,{lines:d.log_tail})})]})}const Jj={v7_startTransition:!0,v7_relativeSplatPath:!0},Yj=1e4;function Qj({data:e}){return i.jsx(ym.Provider,{value:e,children:i.jsx(aw,{children:i.jsxs(mt,{element:i.jsx(Aw,{session:e.session,items:e.items,runs:e.runs,libraryState:e.libraryState}),children:[i.jsx(mt,{index:!0,element:i.jsx(lj,{})}),i.jsx(mt,{path:"case/:id",element:i.jsx(sj,{})}),i.jsx(mt,{path:"new",element:i.jsx(_j,{})}),i.jsx(mt,{path:"run/:run",element:i.jsx(Vj,{})}),i.jsx(mt,{path:"setup",element:i.jsx(Tj,{})}),i.jsx(mt,{path:"guide",element:i.jsx(hj,{})}),i.jsx(mt,{path:"reference",element:i.jsx(yj,{})}),i.jsx(mt,{path:"evidence",element:i.jsx(uj,{})}),i.jsx(mt,{path:"*",element:i.jsx(aj,{})})]})})})}function Kj({session:e}){const t=tn(),n=_t(()=>t.library(),[t,e.mode]),r=e.mode==="local",s=_m(()=>t.activeRuns(),Yj,{enabled:r}),{reload:l}=n,{refresh:a}=s,o=w.useMemo(()=>{var u;return{session:e,items:((u=n.data)==null?void 0:u.items)??[],libraryState:n.loading&&!n.data?"loading":n.error&&!n.data?"error":"ready",runs:s.data??[],refreshLibrary:l,refreshRuns:a}},[e,n.data,n.loading,n.error,s.data,l,a]);return i.jsx(Qj,{data:o})}function Xj(){const e=tn(),{data:t,error:n,loading:r,reload:s}=_t(()=>e.loadSession(),[e]);return r?i.jsx("main",{className:"boot","aria-busy":"true",children:i.jsx("p",{children:"Loading Faultline."})}):n||!t?i.jsxs("main",{className:"boot",children:[i.jsx("h1",{children:"Faultline could not start"}),i.jsx("p",{children:(n==null?void 0:n.message)??"The session could not be read."}),i.jsx("button",{type:"button",className:"btn",onClick:s,children:"Try again"})]}):i.jsx(Kj,{session:t})}function Zj({api:e=mm}){return i.jsx(gm.Provider,{value:e,children:i.jsx(mw,{future:Jj,children:i.jsx(Xj,{})})})}Tw();const hg=document.getElementById("root");if(!hg)throw new Error("Missing #root element");qp(hg).render(i.jsx(w.StrictMode,{children:i.jsx(Zj,{})}));
