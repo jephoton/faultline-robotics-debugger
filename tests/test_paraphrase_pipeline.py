@@ -688,6 +688,40 @@ class ReportTests(unittest.TestCase):
         text = self.module.build_report(self.screen, self.reduction, None)
         self.assertIn("stopped early", text)
 
+    def test_screen_only_all_passed_report_does_not_claim_a_failure(self):
+        text = self.module.build_report(lang_screen(failing=()), None, None)
+        limits = text.split("## What this does and does not show", 1)[1]
+        self.assertNotIn("listed wordings made the policy fail", limits)
+        self.assertIn("No paraphrase", text)
+        self.assertIn("no paraphrase that failed at least 4 of 5 attempts", limits)
+        self.assertIn("no minimal wording is claimed", limits)
+
+    def test_screen_only_failures_are_reported_as_observed_screen_outcomes(self):
+        text = self.module.build_report(self.screen, None, None)
+        limits = text.split("## What this does and does not show", 1)[1]
+        self.assertNotIn("listed wordings made the policy fail at the stated rate", limits)
+
+    def test_unverified_reduction_does_not_claim_a_local_minimum(self):
+        reduction = dict(self.reduction)
+        reduction["minimal"] = dict(reduction["minimal"], verified=False)
+        text = self.module.build_report(self.screen, reduction, None)
+        limits = text.split("## What this does and does not show", 1)[1]
+        self.assertNotIn("reduced wording reproduced", limits)
+        self.assertNotIn("edit-minimal local result", limits)
+        self.assertIn("no minimal wording is claimed", limits)
+
+    def test_verified_wording_without_edit_minimality_is_not_called_a_local_minimum(self):
+        self.reduction["minimal"]["edit_minimal"] = False
+        text = self.module.build_report(self.screen, self.reduction, None)
+        limits = text.split("## What this does and does not show", 1)[1]
+        self.assertNotIn("edit-minimal local result", limits)
+        self.assertIn("smallest change verified so far", limits)
+
+    def test_edit_minimal_reduction_may_claim_a_local_minimum(self):
+        text = self.module.build_report(self.screen, self.reduction, None)
+        limits = text.split("## What this does and does not show", 1)[1]
+        self.assertIn("edit-minimal local result", limits)
+
     def test_wrong_inputs_are_refused(self):
         with self.assertRaises(self.module.ReportError):
             self.module.build_report(self.reduction, None)

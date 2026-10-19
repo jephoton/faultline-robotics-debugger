@@ -279,17 +279,34 @@ def build_report(screen: Mapping[str, Any], reduction: Optional[Mapping[str, Any
     lines += screen_section(screen)
     if reduction is not None:
         lines += reduction_section(reduction, hourly_usd)
-    lines += ["## What this does and does not show", "",
-              "- It shows that, at this benchmark start and with this checkpoint, the listed wordings made the "
-              "policy fail at the stated rate in a simulator.",
+    lines += ["## What this does and does not show", ""]
+    verified_minimal = isinstance(minimal, Mapping) and minimal.get("verified") is True
+    if reduction is not None and verified_minimal:
+        lines.append("- It shows that the reduced wording reproduced a policy failure at this benchmark start "
+                     "and checkpoint in a simulator.")
+    elif screen.get("reproducing"):
+        lines.append("- The screen recorded the listed reproducing outcomes at this benchmark start and "
+                     "checkpoint in a simulator; no reduced wording was verified.")
+    else:
+        lines.append("- The screen recorded no paraphrase that failed at least 4 of 5 attempts at this "
+                     "benchmark start and checkpoint in a simulator.")
+    lines += [
               "- The tested family is rewordings of one instruction written by a language model; it does not "
               "cover other tasks, starts, seeds or kinds of language change.",
-              "- The minimal wording is a local minimum found by reruns: no single remaining edit can be "
-              "removed, but a different, smaller change might exist.",
               "- It is not a causal proof. The paraphrases were not checked by a person for meaning; the mechanical "
               "check only confirms that every object or target word of the original is still present, so a "
               "synonym for an object is flagged and a changed relation (for example, a different place to put "
-              "it) is not.", ""]
+              "it) is not."]
+    if verified_minimal:
+        if minimal.get("edit_minimal"):
+            lines.append("- The reduced wording is an edit-minimal local result: removing any one remaining edit "
+                         "stopped the failure from reproducing; a different, smaller change might exist.")
+        else:
+            lines.append("- The reduced wording is the smallest change verified so far; the reduction did not "
+                         "verify that every remaining edit is needed.")
+    else:
+        lines.append("- No failing wording was verified by reduction, so no minimal wording is claimed.")
+    lines.append("")
     return "\n".join(lines)
 
 
