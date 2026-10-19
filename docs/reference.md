@@ -108,7 +108,7 @@ promises: *find the smallest condition under which the policy fails here.*
 | A start that passes, with no probes chosen | **passes** | "Passes untouched" |
 
 Two other ways in only look for a failure to reduce, without probing:
-**Search a range of starts** and **A start file of my own** (section 4).
+**Find a failing start for me** and **A failure from my own scene (file)** (section 4).
 
 Defaults:
 - The four image families **blur, noise, darken and contrast** (the only ones
@@ -195,9 +195,9 @@ next time. Every judgement therefore uses repeated attempts.
 
 | Option | When to use it | What happens first |
 | --- | --- | --- |
-| **A benchmark start** (`diagnose.start`) | You have a start number, for example from your own evaluation (LIBERO evaluations run the benchmark starts by number), and may not know whether it fails | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
-| **Search a range of starts** (`diagnose.screen`) | You suspect the task has weak starts but do not know which | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |
-| **A start file of my own** (`diagnose.import`) | Your failure came from a layout that is not a benchmark start: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. Layout route only. |
+| **Check a start I name** (`diagnose.start`) | The usual choice. Most often a failure from your own LIBERO evaluation: episode *n* of a task always begins from benchmark start *n*, so a failed episode's number is its start. Also any start you want to stress-test | The check: if it fails 4 of 5, the layout route; if it passes, the probes route (section 1). |
+| **Find a failing start for me** (`diagnose.screen`) | You have no failure yet and want Faultline to find one in a range of starts | Each start in the range (for example `10-49`) gets one attempt. A start that fails gets the **confirmation attempts** (default 4). It counts as failing reliably at 4 failures, so the default is the usual 4 of 5; more confirmation attempts make the gate more lenient (4 failures out of up to 9). The start with the most failures that meets the gate is diagnosed. Layout route only: no probing. |
+| **A failure from my own scene (file)**, under **More ways in** (`diagnose.import`) | Your failure came from a layout that is not one of the 50 benchmark starts: your own randomised scene, or a state saved from your evaluation | The JSON start-state file is checked against the task's scene, then confirmed like a benchmark start. The case names it by a fingerprint of the file, not a start number. Any saved case's `minimal-candidate.json` is an example. Layout route only. |
 
 Older specs with `mode: scenario` and `scenario.start` / `screen` / `import` still work from the CLI; after the failing start is confirmed, all of them continue the same way.
 

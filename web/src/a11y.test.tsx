@@ -37,7 +37,7 @@ const PAGES: [string, string, () => Promise<unknown>][] = [
   ['language case', `/case/${IDS.wording}`, async () => screen.findByText(/Rewordings: 5 screened/)],
   ['language case without failure', `/case/${IDS.quiet}`, async () => screen.findByText(/No wording failed reliably/)],
   ['occlusion case', `/case/${IDS.occlusion}`, async () => screen.findByText(/Trimmed the right edge/)],
-  ['new diagnosis, step 1', '/new', async () => screen.findByRole('radio', { name: /a start file of my own/i })],
+  ['new diagnosis, step 1', '/new', async () => screen.findByRole('radio', { name: /a failure from my own scene/i })],
   ['run waiting for a GPU', `/run/${RUN_IDS.waiting}`, async () => screen.findByText(/No GPU is free yet/)],
   ['run, sign-in expired', `/run/${RUN_IDS.authExpired}`, async () => screen.findByRole('button', { name: /resume/i })],
   ['run that routed to probes', `/run/${RUN_IDS.probing}`, async () => screen.findByText('The start passed: probing')],

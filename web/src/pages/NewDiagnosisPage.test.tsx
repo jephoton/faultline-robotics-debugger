@@ -29,7 +29,7 @@ const PROMISE =
 const PROBE_GROUP = 'If the start passes untouched, also probe';
 
 /** Step 1 to step 2 for a kind of start, waiting until the template's backend block has arrived. */
-async function toSettings(user: User, source: RegExp = /a benchmark start/i) {
+async function toSettings(user: User, source: RegExp = /check a start i name/i) {
   await user.click(screen.getByRole('radio', { name: source }));
   await user.click(screen.getByRole('button', { name: /next: settings/i }));
   await screen.findByLabelText('Spend cap (US$)');
@@ -45,8 +45,8 @@ describe('step 1: what to check', () => {
     const user = userEvent.setup();
     await openNew();
     expect(screen.getByText(PROMISE)).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /a benchmark start/i })).toBeChecked();
-    for (const name of [/search a range of starts/i, /a start file of my own/i]) {
+    expect(screen.getByRole('radio', { name: /check a start i name/i })).toBeChecked();
+    for (const name of [/find a failing start for me/i, /a failure from my own scene/i]) {
       expect(screen.getByRole('radio', { name })).toBeInTheDocument();
     }
     expect(screen.getAllByRole('radio')).toHaveLength(3);
@@ -54,18 +54,27 @@ describe('step 1: what to check', () => {
     // The old three-card choice (scenario, stress test, rewordings) is gone from the main flow.
     expect(screen.queryByRole('radio', { name: /stress-test a passing start/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /test rewordings/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: /search a range of starts/i }));
-    expect(screen.getByRole('radio', { name: /search a range of starts/i })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: /find a failing start for me/i }));
+    expect(screen.getByRole('radio', { name: /find a failing start for me/i })).toBeChecked();
   });
 
   it('says plainly that a range and a file look for a failure and do not probe', async () => {
     await openNew();
-    const range = screen.getByRole('radio', { name: /search a range of starts/i }).closest('label') as HTMLElement;
-    const file = screen.getByRole('radio', { name: /a start file of my own/i }).closest('label') as HTMLElement;
-    expect(range).toHaveTextContent('It looks for a failure and does not probe.');
-    expect(file).toHaveTextContent('It looks for a failure and does not probe.');
-    const start = screen.getByRole('radio', { name: /a benchmark start/i }).closest('label') as HTMLElement;
-    expect(start).not.toHaveTextContent('does not probe');
+    const range = screen.getByRole('radio', { name: /find a failing start for me/i }).closest('label') as HTMLElement;
+    const file = screen.getByRole('radio', { name: /a failure from my own scene/i }).closest('label') as HTMLElement;
+    expect(range).toHaveTextContent('(no probes)');
+    expect(file).toHaveTextContent('(no probes)');
+    const start = screen.getByRole('radio', { name: /check a start i name/i }).closest('label') as HTMLElement;
+    expect(start).not.toHaveTextContent('no probes');
+    expect(start).toHaveTextContent('episode n of a task always begins from start n');
+  });
+
+  it('defines a start and keeps the file option under More ways in', async () => {
+    await openNew();
+    expect(screen.getByText(/A start is one of the benchmark’s 50 fixed starting layouts/)).toBeInTheDocument();
+    const file = screen.getByRole('radio', { name: /a failure from my own scene/i });
+    expect(file.closest('details')).toHaveTextContent('More ways in');
+    expect(screen.getByRole('radio', { name: /check a start i name/i }).closest('details')).toBeNull();
   });
 });
 
@@ -165,7 +174,7 @@ describe('step 2: settings', () => {
   it('offers no probe group for a range of starts, and asks for the range', async () => {
     const user = userEvent.setup();
     await openNew();
-    await toSettings(user, /search a range of starts/i);
+    await toSettings(user, /find a failing start for me/i);
     expect(screen.queryByRole('group', { name: PROBE_GROUP })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Rewordings to ask for')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Starts to search')).toHaveValue('10-49');
@@ -177,7 +186,7 @@ describe('step 2: settings', () => {
   it('offers no probe group for a start file either', async () => {
     const user = userEvent.setup();
     await openNew();
-    await toSettings(user, /a start file of my own/i);
+    await toSettings(user, /a failure from my own scene/i);
     expect(screen.queryByRole('group', { name: PROBE_GROUP })).not.toBeInTheDocument();
     expect(await screen.findByLabelText('Start file')).toBeInTheDocument();
     expect(yamlBox().value).not.toContain('probes:');
@@ -254,7 +263,7 @@ describe('step 2: settings', () => {
   it('reads an imported start file and rejects one that is not JSON', async () => {
     const user = userEvent.setup();
     await openNew();
-    await user.click(screen.getByRole('radio', { name: /a start file of my own/i }));
+    await user.click(screen.getByRole('radio', { name: /a failure from my own scene/i }));
     await user.click(screen.getByRole('button', { name: /next: settings/i }));
     const input = (await screen.findByLabelText('Start file')) as HTMLInputElement;
     await user.upload(input, new File(['not json'], 'bad.json', { type: 'application/json' }));
@@ -267,7 +276,7 @@ describe('step 2: settings', () => {
   it('asks for the start file before the review', async () => {
     const user = userEvent.setup();
     await openNew();
-    await user.click(screen.getByRole('radio', { name: /a start file of my own/i }));
+    await user.click(screen.getByRole('radio', { name: /a failure from my own scene/i }));
     await user.click(screen.getByRole('button', { name: /next: settings/i }));
     await screen.findByLabelText('Start file');
     await user.click(screen.getByRole('button', { name: 'Review' }));
@@ -276,7 +285,7 @@ describe('step 2: settings', () => {
 });
 
 describe('step 3: review and start', () => {
-  async function toReview(user: User, source: RegExp = /a benchmark start/i) {
+  async function toReview(user: User, source: RegExp = /check a start i name/i) {
     await toSettings(user, source);
     await user.click(screen.getByRole('button', { name: 'Review' }));
     await screen.findByRole('heading', { name: 'Dry run' });
@@ -377,7 +386,7 @@ describe('step 3: review and start', () => {
   it('plans only the check and the layout for a range of starts, named for the search', async () => {
     const user = userEvent.setup();
     await openNew();
-    await toReview(user, /search a range of starts/i);
+    await toReview(user, /find a failing start for me/i);
     expect(screen.getByRole('region', { name: 'First: search the range for a start that fails reliably' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Then: find the smallest layout change' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'If it passes: probe' })).not.toBeInTheDocument();
