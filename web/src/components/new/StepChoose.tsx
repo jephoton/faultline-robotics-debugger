@@ -1,13 +1,7 @@
 import type { DiagnosisChoice } from '../../lib/specYaml';
 
-/** The promise of the one diagnosis flow, as shown to the person (ADR 0035). */
-export const PIPELINE_PROMISE =
-  'Faultline runs your start untouched. If it fails, it finds the smallest change that triggers it. ' +
-  'If it passes, it looks for the smallest disturbance or rewording that breaks it.';
-
 /** What a "start" is, said once where the person first meets the word. */
-export const START_DEFINITION =
-  'A start is one of the benchmark’s 50 fixed starting layouts for a task: where the objects and the arm begin.';
+export const START_DEFINITION = 'A start is one of a task’s 50 fixed starting layouts.';
 
 interface Option {
   choice: DiagnosisChoice;
@@ -23,7 +17,7 @@ const OPTIONS: Option[] = [
     choice: 'start',
     title: 'Check a start I name',
     text:
-      'The usual choice. To diagnose a failure from your own LIBERO evaluation, give its task and start. In the standard LIBERO evaluation, episode n (counted from 0) begins from start n; some tools count from 1 or across tasks.',
+      'The usual choice. Give the task and start of a failure from your own LIBERO evaluation (episode n is start n, counted from 0; other tools may count differently).',
     route: 'check it untouched → if it fails, shrink the layout to the trigger; if it passes, probe it',
   },
   {
@@ -35,7 +29,7 @@ const OPTIONS: Option[] = [
   {
     choice: 'import',
     title: 'A failure from my own scene (file)',
-    text: 'For a failure outside the 50 benchmark starts, such as your own randomised scene: upload its saved start-state JSON file for one suite and task.',
+    text: 'Upload a saved start-state JSON file for a scene outside the 50 benchmark starts.',
     route: 'confirm it fails 4 of 5 → shrink the layout (no probes)',
   },
 ];
@@ -62,7 +56,6 @@ function Choice({ option, choice, onChoose }: { option: Option; choice: Diagnosi
 export function StepChoose({ choice, onChoose }: { choice: DiagnosisChoice; onChoose: (choice: DiagnosisChoice) => void }) {
   return (
     <>
-      <p className="lede">{PIPELINE_PROMISE}</p>
       <fieldset className="choices">
         <legend>What do you want to do?</legend>
         <p className="muted">{START_DEFINITION}</p>

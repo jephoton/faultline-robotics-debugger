@@ -124,7 +124,6 @@ function NewDiagnosis() {
       {step === 1 && (
         <>
           <StepChoose choice={choice} onChoose={choose} />
-          <p className="muted">Nothing is created or charged until you confirm on the review step.</p>
           <div className="actions">
             <button type="button" className="btn" onClick={() => setStep(2)}>
               Next: settings

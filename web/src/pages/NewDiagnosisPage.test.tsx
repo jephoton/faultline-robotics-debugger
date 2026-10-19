@@ -23,9 +23,6 @@ function postsTo(view: Awaited<ReturnType<typeof openNew>>, path: string) {
 
 type User = ReturnType<typeof userEvent.setup>;
 
-const PROMISE =
-  'Faultline runs your start untouched. If it fails, it finds the smallest change that triggers it. If it passes, it looks for the smallest disturbance or rewording that breaks it.';
-
 const PROBE_GROUP = 'If the start passes untouched, also probe';
 
 /** Step 1 to step 2 for a kind of start, waiting until the template's backend block has arrived. */
@@ -41,10 +38,11 @@ function yamlBox() {
 }
 
 describe('step 1: what to check', () => {
-  it('states the promise and offers three sources, a benchmark start first, on step 1 of 3', async () => {
+  it('offers three sources, a benchmark start first, on step 1 of 3', async () => {
     const user = userEvent.setup();
     await openNew();
-    expect(screen.getByText(PROMISE)).toBeInTheDocument();
+    expect(screen.queryByText(/Faultline runs your start untouched/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is created or charged/)).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /check a start i name/i })).toBeChecked();
     for (const name of [/find a failing start for me/i, /a failure from my own scene/i]) {
       expect(screen.getByRole('radio', { name })).toBeInTheDocument();
@@ -66,12 +64,12 @@ describe('step 1: what to check', () => {
     expect(file).toHaveTextContent('(no probes)');
     const start = screen.getByRole('radio', { name: /check a start i name/i }).closest('label') as HTMLElement;
     expect(start).not.toHaveTextContent('no probes');
-    expect(start).toHaveTextContent('episode n (counted from 0) begins from start n');
+    expect(start).toHaveTextContent('episode n is start n, counted from 0');
   });
 
   it('defines a start and shows the three ways in side by side', async () => {
     await openNew();
-    expect(screen.getByText(/A start is one of the benchmark’s 50 fixed starting layouts/)).toBeInTheDocument();
+    expect(screen.getByText('A start is one of a task’s 50 fixed starting layouts.')).toBeInTheDocument();
     for (const name of [/check a start i name/i, /find a failing start for me/i, /a failure from my own scene/i]) {
       expect(screen.getByRole('radio', { name }).closest('details')).toBeNull();
     }
@@ -80,16 +78,17 @@ describe('step 1: what to check', () => {
 });
 
 describe('step 2: settings', () => {
-  it('shows the task instruction from the static table and follows the suite', async () => {
+  it('shows the task instruction in the selected option, without a separate hint, and follows the suite', async () => {
     const user = userEvent.setup();
     await openNew();
     await user.click(screen.getByRole('button', { name: /next: settings/i }));
-    expect(await screen.findByLabelText('Task')).toBeInTheDocument();
-    expect(screen.getByText(/pick up the alphabet soup and place it in the basket/, { selector: '.field__hint' })).toBeInTheDocument();
+    const task = await screen.findByLabelText('Task');
+    expect(task).toHaveDisplayValue(/pick up the alphabet soup and place it in the basket/);
     await user.selectOptions(screen.getByLabelText('Suite'), 'libero_goal');
-    expect(screen.getByText(/open the middle drawer of the cabinet/, { selector: '.field__hint' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Task')).toHaveDisplayValue(/open the middle drawer of the cabinet/);
     await user.selectOptions(screen.getByLabelText('Task'), '7');
-    expect(screen.getByText(/turn on the stove/, { selector: '.field__hint' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Task')).toHaveDisplayValue(/turn on the stove/);
+    expect(screen.queryByText(/Instruction:/)).not.toBeInTheDocument();
   });
 
   it('names the run after the suite, task and start until the person types a name', async () => {
@@ -169,7 +168,7 @@ describe('step 2: settings', () => {
     await toSettings(user);
     const box = screen.getByRole('checkbox', { name: 'Find related research' });
     expect(box).toBeChecked();
-    expect(screen.getByText(/Searches public sources with Tavily and summarises them with Nemotron 3 Nano\. Context, not evidence\. Needs a Tavily key in \.env\./)).toBeInTheDocument();
+    expect(screen.getByText('Public sources found with Tavily; Nemotron cites them in suggested next steps. Context, not evidence.')).toBeInTheDocument();
     expect(yamlBox().value).toMatch(/^research: true$/m);
     await user.click(box);
     expect(yamlBox().value).toMatch(/^research: false$/m);
@@ -310,12 +309,12 @@ describe('step 3: review and start', () => {
     await screen.findByText('Total worst case');
   }
 
-  it('states the promise and what is being checked', async () => {
+  it('states what is being checked, without a separate promise', async () => {
     const user = userEvent.setup();
     await openNew();
     await toReview(user);
     const what = screen.getByRole('heading', { name: 'What will run' }).closest('section') as HTMLElement;
-    expect(within(what).getByText(PROMISE)).toBeInTheDocument();
+    expect(within(what).queryByText(/Faultline runs your start untouched/)).not.toBeInTheDocument();
     expect(within(what).getByText('Diagnosis')).toBeInTheDocument();
     expect(within(what).getByText('benchmark start 0')).toBeInTheDocument();
   });
@@ -336,20 +335,19 @@ describe('step 3: review and start', () => {
     expect(within(fails).getByText('reference')).toBeInTheDocument();
     expect(within(fails).getByText('reduce')).toBeInTheDocument();
     expect(within(fails).getByText('US$2.11', { selector: 'dd' })).toBeInTheDocument();
-    expect(within(fails).getByText('Typical').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
+    expect(within(fails).getByText('Typical (estimate)').nextElementSibling).toHaveTextContent('about 25 minutes, cost not known yet');
 
     // Four image families make one audit Job; no scene families and no rewordings are chosen by default.
     expect(within(passes).getByText('probe-images-1')).toBeInTheDocument();
     expect(within(passes).queryByText('probe-scene')).not.toBeInTheDocument();
     expect(within(passes).queryByText('rewordings-screen')).not.toBeInTheDocument();
     expect(within(passes).getByText('US$1.30', { selector: 'dd' })).toBeInTheDocument();
-    const typical = within(passes).getByText('Typical').nextElementSibling as HTMLElement;
+    const typical = within(passes).getByText('Typical (estimate)').nextElementSibling as HTMLElement;
     expect(typical).toHaveTextContent('about US$0.65 and 25 minutes');
-    expect(typical).toHaveTextContent('(typical, an estimate; GPU waits can add more)');
-    expect(within(first).getByText('Typical').nextElementSibling).toHaveTextContent('about US$0.49 and 15 minutes');
+    expect(within(first).getByText('Typical (estimate)').nextElementSibling).toHaveTextContent('about US$0.49 and 15 minutes');
     // The summary: the check plus each branch.
-    expect(screen.getByText('Typical total if it passes').nextElementSibling).toHaveTextContent('about US$1.14 and 40 minutes');
-    expect(screen.getByText('Typical total if it fails').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
+    expect(screen.getByText('Typical total if it passes (estimate)').nextElementSibling).toHaveTextContent('about US$1.14 and 40 minutes');
+    expect(screen.getByText('Typical total if it fails (estimate)').nextElementSibling).toHaveTextContent('about 40 minutes, cost not known yet');
   });
 
   it('plans one audit Job per four image families, a scene Job and the rewordings when everything is chosen', async () => {
@@ -378,7 +376,7 @@ describe('step 3: review and start', () => {
     const total = screen.getByText('Total worst case').nextElementSibling as HTMLElement;
     // 0.98 for the check plus 2.11 for the layout (the larger branch), since only one branch runs.
     expect(total).toHaveTextContent('US$3.09');
-    expect(total).toHaveTextContent('only one of them runs');
+    expect(total).toHaveTextContent('only one runs');
     const cap = screen.getByText('Spend cap').nextElementSibling as HTMLElement;
     expect(cap).toHaveTextContent('US$2.50');
     // The check fits the small default cap, but the layout branch would not: the cap rule says so.
@@ -502,7 +500,7 @@ describe('step 3: review and start', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Find related research' }));
     await user.click(screen.getByRole('button', { name: 'Review' }));
     await screen.findByText('Total worst case');
-    expect(screen.getByRole('note')).toHaveTextContent('Related research will be skipped: no Tavily key');
+    expect(screen.getByRole('note')).toHaveTextContent('Related research will be skipped (no Tavily key). The diagnosis is not affected.');
     await user.click(screen.getByRole('button', { name: /start diagnosis/i }));
     await waitFor(() => expect(postsTo(view, '/api/runs')).toHaveLength(1));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

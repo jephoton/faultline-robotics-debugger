@@ -14,11 +14,11 @@ export function checkLabel(key: string): string {
   return CHECK_LABEL[key] ?? key.replace(/_/g, ' ');
 }
 
-function JobsTable({ jobs, caption, total }: { jobs: DryRunJob[]; caption: string; total?: number }) {
+function JobsTable({ jobs, caption, captionHidden, total }: { jobs: DryRunJob[]; caption: string; captionHidden?: boolean; total?: number }) {
   return (
     <div className="table-wrap">
       <table className="data">
-        <caption>{caption}</caption>
+        <caption className={captionHidden ? 'sr-only' : undefined}>{caption}</caption>
         <thead>
           <tr>
             <th scope="col">Job</th>
@@ -94,13 +94,12 @@ function CapFacts({ plan }: { plan: DryRun }) {
           </strong>
         ) : over ? (
           <strong className="warn-text">
-            <Icon name="attention" /> The first Job fits, but not all of them. Each Job is charged what it
-            measured, so this matters only if the Jobs before it cost their worst case. Then the first to be
-            refused is{' '}
+            <Icon name="attention" /> The first Job fits, but not all of them. If earlier Jobs cost their worst case, the run stops
+            at{' '}
             {refusedJobs(plan)
               .map((job) => (job.branch ? `${job.name} (${REFUSED_BRANCH[job.branch]})` : job.name))
               .join('; ')}
-            , and the run stops there; you can raise the cap and resume.
+            ; raise the cap and resume.
           </strong>
         ) : (
           <span className="muted">(the worst case is {usd(plan.cap_usd - plan.worst_case_total_usd)} under it)</span>
@@ -116,7 +115,7 @@ function CapFacts({ plan }: { plan: DryRun }) {
 function FlatPlan({ plan }: { plan: DryRun }) {
   return (
     <>
-      <JobsTable jobs={plan.jobs} caption="Planned Jobs. Nothing has been created yet." total={plan.worst_case_total_usd} />
+      <JobsTable jobs={plan.jobs} caption="Planned Jobs" total={plan.worst_case_total_usd} />
       <CapFacts plan={plan} />
     </>
   );
@@ -145,11 +144,11 @@ const BRANCH_TITLE: Record<Branch, Record<DiagnosisSource, string>> = {
 };
 
 const BRANCH_TEXT: Record<Branch, string> = {
-  check: 'Runs the start as it is, with confirmation attempts if it fails. Everything after this depends on the result.',
+  check: 'With confirmation attempts if it fails.',
   layout:
-    'Finds the nearest passing start as a reference, then shrinks the differences until only the shifts that cause the failure remain. This becomes a replayable case.',
+    'Takes the nearest passing start as a reference and shrinks the differences to the shifts that cause the failure.',
   probes:
-    'Searches each chosen disturbance family for the smallest severity that breaks the policy, and asks Nemotron for rewordings, reducing a failing one to the smallest word change. A check that finds the start flaky ends the run. A probe control that fails skips the probes still to come.',
+    'Searches each chosen disturbance family for the smallest severity that breaks the policy, and asks Nemotron for rewordings, reducing a failing one to the smallest word change.',
 };
 
 interface Typical {
@@ -178,8 +177,6 @@ function typicalText(typical: Typical): string {
   return 'not known yet';
 }
 
-const TYPICAL_NOTE = '(typical, an estimate; GPU waits can add more)';
-
 interface BranchPlanProps {
   plan: DryRun;
   branches: DryRunBranch[];
@@ -203,16 +200,16 @@ function BranchPlan({ plan, branches, source, headingLevel }: BranchPlanProps) {
             <Heading className="branch__title">{title}</Heading>
             <p className="muted">{BRANCH_TEXT[branch]}</p>
             {jobs.length > 0 ? (
-              <JobsTable jobs={jobs} caption={`Planned Jobs. ${title}. Nothing has been created yet.`} />
+              <JobsTable jobs={jobs} caption={`Planned Jobs. ${title}`} captionHidden />
             ) : (
               <p className="muted">No Jobs are planned for this branch.</p>
             )}
             <dl className="facts">
               <dt>Worst case</dt>
               <dd>{usd(entry?.worst_case_usd ?? jobs.reduce((sum, job) => sum + job.worst_case_usd, 0))}</dd>
-              <dt>Typical</dt>
+              <dt>Typical (estimate)</dt>
               <dd>
-                {typicalText(typicalOf(entry))} <span className="muted">{TYPICAL_NOTE}</span>
+                {typicalText(typicalOf(entry))}
               </dd>
             </dl>
           </section>
@@ -222,21 +219,21 @@ function BranchPlan({ plan, branches, source, headingLevel }: BranchPlanProps) {
         <dt>Total worst case</dt>
         <dd>
           {usd(plan.worst_case_total_usd)}{' '}
-          <span className="muted">(the check plus the larger of the two branches, because only one of them runs)</span>
+          <span className="muted">(the check plus the larger branch; only one runs)</span>
         </dd>
         {present('layout') && (
           <>
-            <dt>Typical total if it fails</dt>
+            <dt>Typical total if it fails (estimate)</dt>
             <dd>
-              {typicalText(typicalWith(branches, 'layout'))} <span className="muted">{TYPICAL_NOTE}</span>
+              {typicalText(typicalWith(branches, 'layout'))}
             </dd>
           </>
         )}
         {present('probes') && (
           <>
-            <dt>Typical total if it passes</dt>
+            <dt>Typical total if it passes (estimate)</dt>
             <dd>
-              {typicalText(typicalWith(branches, 'probes'))} <span className="muted">{TYPICAL_NOTE}</span>
+              {typicalText(typicalWith(branches, 'probes'))}
             </dd>
           </>
         )}
