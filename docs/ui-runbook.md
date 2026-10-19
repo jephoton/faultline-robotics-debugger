@@ -367,7 +367,9 @@ its failing condition and see whether it still fails.
 - `FL-A-D582`, October 19: **Still fails** on the original policy, US$0.35.
   Blur at s = 0.4625 failed 4 of 5. Noise at s = 1.0 failed 3 of 5 (it
   failed 4 of 5 when found), so its threshold is borderline.
-- The layout case from run 2: *(pending)*.
+- `FL-S-8E0D`, October 19: **Still fails** on the original policy
+  (`nvidia/gr00t17-lerobot-libero_10-640` at `5ee08ab`), US$0.37. The minimal
+  scene failed again and the reference passed 5 of 5.
 
 **From a script:** the section shows the command
 `faultline replay <case folder> --spec replay.yaml --expect fixed`, which

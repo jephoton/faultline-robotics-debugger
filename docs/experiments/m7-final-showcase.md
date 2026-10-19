@@ -1,6 +1,6 @@
 # M7: final showcase runs (October 19, 2026)
 
-**Status:** in progress.
+**Status:** complete (October 19, 2026).
 
 **Scope (Jethro, October 19):** the gallery shows fresh cases made by the
 single diagnosis pipeline (ADR 0035). Each case is replayed on the same
@@ -127,3 +127,25 @@ not always the smallest that do.
 The case replaces `FL-S-AFB5` in the gallery and in `demo/root`. The bundled
 copy leaves out `research.json`, because it holds third-party search
 snippets.
+
+### Replay of `FL-S-8E0D` (same checkpoint)
+
+The replay was run from the case's Regression test section after the polish
+merge, so it records its checkpoint
+(`nvidia/gr00t17-lerobot-libero_10-640` at `5ee08ab`). Verdict: **still
+fails**.
+- The minimal scene failed again (4 failures).
+- The reference passed 5 of 5.
+
+US$0.37.
+
+## Spend
+
+| Item | Cost |
+| --- | --- |
+| Run 1 and its replay | US$1.25 (of US$4 approved) |
+| Run 2 and its replay | US$2.62 (of US$4.30 approved) |
+| **Showcase total** | **US$3.87** |
+
+These are ledger estimates; they still need reconciling against the Nebius
+bill.
