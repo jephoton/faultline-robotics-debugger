@@ -124,13 +124,25 @@ class LedgerTests(unittest.TestCase):
         self.assertAlmostEqual(again.spent, ledger.spent)
         self.assertEqual(again.jobs["a"]["state"], "settled")
 
-    def test_reload_with_a_different_cap_or_rate_is_refused(self):
+    def test_reload_with_a_different_rate_or_a_lower_cap_or_hours_is_refused(self):
         self.make().reserve("a", 1.0)
-        for kwargs in ({"cap_usd": 9.0}, {"hourly_usd": 9.0}, {"max_hours": 9.0}):
+        for kwargs in ({"hourly_usd": 9.0}, {"hourly_usd": 0.1}, {"cap_usd": 2.9}, {"max_hours": 1.9}):
             values = dict(cap_usd=3.0, max_hours=2.0, hourly_usd=RATE)
             values.update(kwargs)
             with self.assertRaises(lg.LedgerError):
                 lg.Ledger.load(self.path, clock=self.clock, **values)
+
+    def test_a_resume_may_raise_the_cap_and_the_hours_and_the_new_limits_are_kept(self):
+        ledger = self.make()
+        ledger.reserve("a", 1.0)
+        ledger.settle("a", container_seconds=1800)
+        spent = ledger.spent
+        raised = lg.Ledger.load(self.path, cap_usd=9.0, max_hours=5.0, hourly_usd=RATE, clock=self.clock)
+        self.assertEqual((raised.cap_usd, raised.max_hours, raised.spent), (9.0, 5.0, spent))
+        on_disk = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual((on_disk["cap_usd"], on_disk["max_hours"]), (9.0, 5.0))
+        with self.assertRaises(lg.LedgerError):                  # and it cannot then go back down
+            lg.Ledger.load(self.path, cap_usd=3.0, max_hours=5.0, hourly_usd=RATE, clock=self.clock)
 
     def test_load_creates_when_absent(self):
         ledger = lg.Ledger.load(self.path, cap_usd=3.0, max_hours=2.0, hourly_usd=RATE, clock=self.clock)

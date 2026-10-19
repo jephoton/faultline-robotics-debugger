@@ -475,6 +475,29 @@ class StopAndResumeTests(LauncherCase):
         self.make().resume(folder.name)
         self.assertNotIn("--no-llm", self.popen.calls[0]["argv"])
 
+    def test_resume_can_raise_the_cap_and_the_hours_in_the_runs_own_spec(self):
+        folder = self.make_run(run={"status": "stopped", "reason": "spend_cap"})
+        (folder / "spec.yaml").write_text(
+            "budget:\n  max_spend_usd: 10.0   # the cap\n  max_hours: 5\n", encoding="utf-8")
+        launcher = self.make(behaviour="normal")
+        self.popen.run_name = folder.name
+        launcher.resume(folder.name, {"max_spend_usd": 14, "max_hours": 6})
+        text = (folder / "spec.yaml").read_text(encoding="utf-8")
+        self.assertIn("max_spend_usd: 14   # the cap", text)
+        self.assertIn("max_hours: 6", text)
+        self.assertEqual(self.popen.calls[0]["argv"][3:6], ["diagnose", "--resume", str(folder.resolve())])
+
+    def test_resume_refuses_a_lower_limit_and_does_not_start_anything(self):
+        folder = self.make_run(run={"status": "stopped", "reason": "spend_cap"})
+        (folder / "spec.yaml").write_text("budget: {max_spend_usd: 10.0, max_hours: 5}\n", encoding="utf-8")
+        before = (folder / "spec.yaml").read_text(encoding="utf-8")
+        with self.assertRaises(ApiError) as caught:
+            self.make().resume(folder.name, {"max_spend_usd": 9})
+        self.assertEqual(caught.exception.status, 400)
+        self.assertIn("never lowered", caught.exception.message)
+        self.assertEqual((folder / "spec.yaml").read_text(encoding="utf-8"), before)
+        self.assertEqual(self.popen.calls, [])
+
     def test_resume_refusals(self):
         live = self.make_run("live-20261017T000000Z", process=True)
         done = self.make_run("done-20261016T000000Z", run={"status": "completed"})

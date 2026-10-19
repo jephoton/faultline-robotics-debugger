@@ -142,7 +142,15 @@ def register_routes(api: Api, *, library: Library, runs_root: Path, specs: SpecS
     api.add_route("POST", r"/api/runs/(?P<run>[^/]+)/stop", stop_run)
 
     def resume_run(request: Request):
-        return 202, {"run": launcher.resume(request.params["run"])}
+        limits = {}
+        for key in ("max_spend_usd", "max_hours"):
+            value = request.body.get(key)
+            if value is None:
+                continue
+            if type(value) not in (int, float) or isinstance(value, bool):
+                raise ApiError(400, "{} must be a number.".format(key))
+            limits[key] = value
+        return 202, {"run": launcher.resume(request.params["run"], limits)}
 
     api.add_route("POST", r"/api/runs/(?P<run>[^/]+)/resume", resume_run)
 

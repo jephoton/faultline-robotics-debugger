@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 import robot_debug
 from robot_debug import orchestrator as orch
+from robot_debug import run_limits
 from robot_debug.viewer import processes
 from robot_debug.viewer.processes import Probe
 from robot_debug.viewer.security import ApiError
@@ -280,8 +281,11 @@ class Launcher:
         finally:
             self._lock.release()
 
-    def resume(self, run: str) -> str:
-        """``faultline diagnose --resume RUN_DIR``; the run keeps its folder."""
+    def resume(self, run: str, limits: Optional[Mapping[str, Any]] = None) -> str:
+        """``faultline diagnose --resume RUN_DIR``; the run keeps its folder.
+
+        ``limits`` may carry a larger ``max_spend_usd`` and/or ``max_hours`` (a run stopped at its cap or hour
+        limit): they are written to the run's own spec before it continues. They can only go up."""
 
         folder = self._folder(run)
         if processes.recorded_process(folder, self.probe) is not None:
@@ -291,10 +295,16 @@ class Launcher:
             raise ApiError(409, "This run already finished; there is nothing to resume.")
         if progress["mode"] == "replay":
             raise ApiError(409, "A replay cannot be resumed; start it again from its case.")
+        asked = {key: (limits or {}).get(key) for key in run_limits.LIMIT_KEYS if (limits or {}).get(key) is not None}
         if not self._lock.acquire(blocking=False):
             raise ApiError(409, "Another run is being started.")
         try:
             self._refuse_if_busy()
+            if asked:
+                try:
+                    run_limits.raise_limits(folder, **asked)
+                except run_limits.RunLimitError as error:
+                    raise ApiError(400, str(error)) from None
             launch_dir = self.specs.new_directory(progress["name"] + "-resume")
             no_llm = (processes.read_run_header(folder) or {}).get("no_llm") is True      # as the run started
             self._spawn(["diagnose", "--resume", str(folder.resolve())] + (["--no-llm"] if no_llm else []), launch_dir)

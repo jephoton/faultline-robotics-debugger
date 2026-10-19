@@ -95,8 +95,14 @@ class Ledger:
             if state["schema_version"] != SCHEMA_VERSION or type(state["jobs"]) is not dict:
                 raise ValueError
             for key, value in (("cap_usd", cap_usd), ("max_hours", max_hours), ("hourly_usd", hourly_usd)):
-                if not math.isclose(float(state[key]), float(value), rel_tol=0, abs_tol=_EPSILON):
-                    raise LedgerError("the ledger was written for a different {}; start a new run".format(key))
+                if math.isclose(float(state[key]), float(value), rel_tol=0, abs_tol=_EPSILON):
+                    continue
+                if key != "hourly_usd" and float(value) > float(state[key]):
+                    continue         # a resume may raise the spend cap or the hour limit (never the price)
+                if key == "hourly_usd":
+                    raise LedgerError("the ledger was written for a different hourly_usd; start a new run")
+                raise LedgerError("the ledger was written for {} {:g}; a resume can raise the spend cap or the hour "
+                                  "limit, never lower them".format(key, float(state[key])))
             float(state["elapsed_seconds"])
         except LedgerError:
             raise

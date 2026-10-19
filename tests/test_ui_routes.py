@@ -249,6 +249,26 @@ class ControlRoutes(RoutesCase):
         self.assertEqual((status, payload), (202, {"run": run}))
         self.assertEqual(self.popen.calls[-1]["argv"][3:5], ["diagnose", "--resume"])
 
+    def test_resume_with_larger_limits_and_with_bad_ones(self):
+        self.assertEqual(self.start()[0], 202)
+        run = "started-20261017T010203Z"
+        self.drop_live_process()
+        (self.runs / run / "steps.json").write_text(json.dumps(fx.steps_document("started", "scenario", {}, {
+            "status": "stopped", "reason": "spend_cap"})), encoding="utf-8")
+        (self.runs / run / "spec.yaml").write_text(fx.spec_text("started", "scenario"), encoding="utf-8")
+        calls = len(self.popen.calls)
+        for body in ({"max_spend_usd": "9"}, {"max_hours": True}, {"max_spend_usd": 1}):
+            status, payload = self.server.post_json("/api/runs/{}/resume".format(run), body)
+            self.assertEqual(status, 400, body)
+        self.assertEqual(len(self.popen.calls), calls, "a bad request starts nothing")
+        self.popen.run_name = run
+        status, payload = self.server.post_json("/api/runs/{}/resume".format(run),
+                                                {"max_spend_usd": 25, "max_hours": 8})
+        self.assertEqual((status, payload), (202, {"run": run}))
+        spec = (self.runs / run / "spec.yaml").read_text(encoding="utf-8")
+        self.assertIn("max_spend_usd: 25", spec)
+        self.assertIn("max_hours: 8", spec)
+
     def test_stop_and_resume_of_unknown_or_idle_runs(self):
         for action in ("stop", "resume"):
             status, payload = self.server.post_json("/api/runs/nothing-20261017T000000Z/{}".format(action), {})
