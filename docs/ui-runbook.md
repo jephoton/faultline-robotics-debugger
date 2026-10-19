@@ -245,7 +245,8 @@ and what it costs, before anything is created.
 
    Then choose **Next: settings**.
 3. **Settings**, for a benchmark start:
-   - Suite, **Task** (its instruction is shown) and **Start**.
+   - Suite, **Task** (its instruction is shown) and **Start**, by default
+     LIBERO-Object, task 0, start 0.
    - **If the start passes untouched, also probe**, on by default, with
      **Disturbance families**. **Blur**, **Noise**, **Darken** and
      **Contrast** are ticked, "where the policy has failed before"; the other
@@ -253,7 +254,8 @@ and what it costs, before anything is created.
    - **Rewordings to ask for** (0 skips them).
    - **Spend cap (US$)** (default 2.5) and **Hour limit** (default 1.5).
    - The Nemotron option.
-   - **Find related research**.
+   - **Find related research**, ticked only when a Tavily key is found.
+     Without one, Review shows a note; it never blocks Start.
 
    Choose **Review**.
 4. **Expected on Review**, under **Dry run**, three blocks, each with its Jobs,
@@ -271,9 +273,11 @@ and what it costs, before anything is created.
    total if it fails** and **Typical total if it passes**. **This machine**
    shows the setup checks.
 5. **Do not press Start diagnosis** (it is on this page). With the default
-   US$2.50 cap, Review says "The first Job fits, but not all of them": typical
-   runs fit, but a layout continuation would stop at the cap and can be
-   resumed after raising it.
+   US$2.50 cap, Review says "The first Job fits, but not all of them" and
+   names `reduce` and `probe-image-1`. Each Job is charged what it measured,
+   so those are refused only if the check costs its worst case (US$1.22). A
+   typical check (about US$0.43) leaves room for either branch's first Job. A
+   run stopped at the cap can be resumed after raising it.
 
 **Edit YAML** shows the `mode: diagnose` spec the form writes. Once you edit
 it, it becomes the source of truth until **Discard YAML edits and use the
@@ -299,14 +303,16 @@ policy, and see whether its failing condition still fails.
 3. Choose **What do you expect?** (**No expectation**, **Still reproduces**,
    or **Fixed (after a change meant to cure it)**). Leave **A different
    checkpoint (optional)** empty unless testing another policy.
-4. Check **Spend cap (US$)** is at least 1.20 (the default; a layout replay's
-   worst case is about US$1.08). Choose **Dry run the replay**. **Stop here
+4. The replay's **Spend cap (US$)** and hours default to its own plan (a
+   layout replay's worst case is about US$1.08; a disturbance replay plans
+   one Job per probe group). Choose **Dry run the replay**. **Stop here
    unless the spend is agreed.**
 5. With agreement, choose **Start replay** once.
 
 **Expected if run:** a verdict under **Replays**: still reproduces / still
 fails, or no longer. A replay whose control fails, or whose Job does not
-finish, is inconclusive. The October 15 replay of the demo case still
+finish, is inconclusive, and so is a replay that stops between probe groups
+(its partial result is kept). The October 15 replay of the demo case still
 reproduced, measured at US$0.41.
 
 ---
@@ -330,8 +336,13 @@ active at a time; a start is refused while another run's process is alive.
    **route**:
    - "The start failed untouched: finding the smallest layout change" (red);
    - "The start passed: probing" (green);
-   - "The start is flaky untouched: rewordings skipped" (amber);
+   - "The start is flaky untouched" (amber): it failed some attempts but not
+     4 of 5, so nothing more runs and no case is made; or a probe's own
+     control failed, so the probes still to come are skipped;
    - "Passes untouched".
+
+   If the check cannot decide (an unfinished or invalid start), the run stops
+   with `check_incomplete`; a resume reruns the check.
 
    The readout's status word follows the
    Job (**Submitting a Job**, **Waiting for a GPU** in amber, **Running**,
