@@ -35,9 +35,11 @@ image was needed or authorized by this redeployment. See the
 The [readiness audit](docs/submission/readiness-audit.md) records the current
 Physical AI no-hardware video alternative, public MIT repository, scanner
 triage and dependency caveats. Clean snapshot: 3,166 tests run with 63 skipped;
-front-end: 336 passed and typecheck passed. Billing screenshots and first-hand
-feedback confirmation are pending; a reported $0.82 remaining balance is not
-a usage total or authority for more spending. No new paid work is required.
+front-end: 336 passed and typecheck passed. Billing views now record September
+19–October 19: $42.04 AI Cloud and $0.13 Token Factory including VAT, not
+lifetime/per-run reconciliation. First-hand feedback confirmation is pending;
+a reported $0.82 remaining balance is not usage or authority for more spending.
+No new paid work is required.
 
 **Everything below is the original September 12 startup plan, kept for
 history.** Its milestone table (section 6) is maintained; dated status notes

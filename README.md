@@ -139,6 +139,11 @@ Typical cost and time with the defaults (one L40S, measured runs):
 - about US$1.25 and 45 minutes when the start passes;
 - about US$1.10 and 40 minutes when it fails.
 
+These per-run cost figures are estimates. Supplied billing views for September
+19–October 19, 2026 show AI Cloud $42.04 and Token Factory $0.13 including VAT;
+these are period totals, not the complete project cost or a per-run audit
+([billing scope](docs/submission/billing-reconciliation.md)).
+
 What everything means (routes, the gate, every severity, report columns,
 verdicts) is in the [Reference](docs/reference.md), which is also a page in
 the control panel.

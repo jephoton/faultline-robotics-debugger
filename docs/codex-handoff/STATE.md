@@ -61,9 +61,13 @@ These are drafts, not a Devpost/YouTube submission or another gallery release.
   currency code are absent. See [partial billing reconciliation](../submission/billing-reconciliation.md).
 - Jethro subsequently confirmed this is the **only AI Cloud account used for
   Faultline**. Do not request a second account's bill based on the earlier
-  intended account split. Await date range/currency/project filters and the
-  separate Token Factory usage screenshot; the $42.04 is still scoped evidence,
-  not a reconciled lifetime total.
+  intended account split. The subsequent date selector reads **September 19–
+  October 19, 2026**. Token Factory's supplied view shows **$0.12 subtotal,
+  $0.01 VAT, $0.13 total**; AI Cloud shows **$42.04 including VAT**. Their
+  arithmetic sum is **$42.17 including VAT** for the selected window, not a
+  lifetime total. Rounded token usage is not exact per-call accounting.
+  No need to request these screenshots again; only other dates/project-filter
+  scope/currency remain relevant if final claims require a broader total.
 - Jethro requested a shorter FEEDBACK. The root summary is now about 870
   words instead of 4,596, retaining the table and both first-hand notes.
   Original dated detail is preserved in

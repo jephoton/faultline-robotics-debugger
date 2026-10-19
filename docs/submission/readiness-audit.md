@@ -107,10 +107,10 @@ seek organizer clarification if they require unrestricted paid execution.
 
 ## Remaining gates
 
-1. Confirm date/currency/project filters for the supplied $42.04 AI Cloud view,
-   other periods if relevant, and Token Factory charges. Jethro confirmed only
-   this AI Cloud account was used for Faultline; see
-   [the partial reconciliation](billing-reconciliation.md). Do not add
+1. Supplied September 19–October 19 views now show AI Cloud $42.04 and Token
+   Factory $0.13 including VAT. Review other dates and project filters only
+   if making a lifetime/account-wide cost claim; one AI Cloud account was used.
+   See [the period reconciliation](billing-reconciliation.md). Do not add
    overlapping session estimates.
 2. Jethro confirms first-hand feedback and entrant/right-to-use declarations.
 3. Review the draft story and timed video plan, then record/edit and check

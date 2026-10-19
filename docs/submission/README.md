@@ -9,14 +9,14 @@ Working package for human review, not an already submitted entry.
 - [Devpost draft](devpost-draft.md): story, demonstrated results, Built With
   and limitations.
 - [Video plan](video-plan.md): timed pitch and shot list using existing evidence.
-- [Billing reconciliation](billing-reconciliation.md): supplied usage evidence
-  and the missing period/account scope, not a finalized project total.
+- [Billing reconciliation](billing-reconciliation.md): September 19–October 19
+  service totals and remaining per-run/lifetime scope limits.
 
 ## What Jethro still needs to supply or approve
 
 | Item | Needed input | Current position |
 | --- | --- | --- |
-| Billing | Usage totals, currency and billing periods; redact personal/payment details | One screenshot: $42.04 including VAT. Jethro confirms only this AI Cloud account was used; date range/project filters remain pending. Reported $0.82 remaining is not usage or a spending allowance |
+| Billing | Review scoped totals; provide other dates only if claiming lifetime spend | September 19–October 19: AI Cloud $42.04 + Token Factory $0.13 = $42.17 including VAT. Only one AI Cloud account used; project filters/currency code not visible. $0.82 remaining is not usage or a spending allowance |
 | Feedback | Confirm or amend [first-hand notes](../../FEEDBACK.md#jethros-first-hand-notes); add onboarding/reuse opinions if desired | Existing notes concern sign-in expiry and capacity waits; not newly confirmed |
 | Video | Approve/edit script and select narration approach | Timed draft only, no finished video or public YouTube link |
 | Cover | Approve a cover derived from the app after the final story is settled | Not produced; no image-generation spend approved |

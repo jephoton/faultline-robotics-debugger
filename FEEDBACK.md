@@ -37,10 +37,11 @@ These existing notes are retained for Jethro's confirmation before submission.
 ## Costs and evidence boundaries
 
 Run-level figures in the linked notes are estimates, not finalized bills.
-The latest supplied billing screenshot shows a **$42.04 total including VAT**
-for a date/project filter not yet confirmed; Jethro confirmed only this AI
-Cloud account was used. It is not yet a reconciled project
-total. See the [billing worksheet](docs/submission/billing-reconciliation.md).
+For **September 19–October 19, 2026**, the supplied console views show
+**AI Cloud $42.04** and **Token Factory $0.13**, including VAT
+($42.17 combined). Only one AI Cloud account was used. These are scoped
+period totals, not a lifetime project total or validation of each run's
+estimate. See the [billing worksheet](docs/submission/billing-reconciliation.md).
 Do not add overlapping session totals or treat a reservation as a charge.
 
 The [development log](docs/dev-log.md) records our exporter, Windows-process,
