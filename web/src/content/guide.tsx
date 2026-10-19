@@ -207,7 +207,10 @@ faultline stop artifacts/runs/<run-folder>
 faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}</Code>
         <p>
           <strong>Resume</strong> continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying
-          twice) and replaces a worst-case charge with the measured one once it can read the Job. <strong>Stop</strong> cancels the current
+          twice) and replaces a worst-case charge with the measured one once it can read the Job. A run stopped at its spend cap or hour
+          limit can be resumed with a larger one (raise only, never lower): in the panel, next to Resume; from the command line, by raising
+          <code>budget</code> in the run folder's <code>spec.yaml</code>. A Job whose results could not be downloaded is downloaded again on
+          resume, not run again. <strong>Stop</strong> cancels the current
           Job, waits for the provider to confirm, settles the cost and leaves the run resumable.
         </p>
         <p>

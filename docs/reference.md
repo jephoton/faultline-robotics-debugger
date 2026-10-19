@@ -281,22 +281,34 @@ Each step either stops the run or passes to the next.
 Every candidate is cached by the exact scene it builds; the same hybrid never
 runs twice.
 
-### Worked example: `FL-S-AFB5`
+### Worked example: `FL-S-8E0D`
 
-LIBERO-10 task 0, an imported failing start (benchmark start 14), reference
-28; the report's Candidates table from the continuation Job.
+LIBERO-10 task 0, benchmark start 14, with reference start 4. This is the
+report's Candidates table across the reduction Job and its continuation. The
+failing start and the reference differ in five entities: the soup, basket,
+milk and orange juice positions, and the arm's joints.
 
 | Rows | Phase | What happened |
 | --- | --- | --- |
-| 0–1 | gate | The failing start failed 4 of 4 (fifth skipped); start 28 passed 5 of 5. |
-| 2–7 | probe | Each of the six entities alone: all passed. No single culprit. |
-| 8–17 | ddmin | Groups of the six and their complements: none reproduced. |
-| 18 | ddmin | The five without the tomato sauce: 4 of 4 failures. The new set. |
-| 19–22 | ddmin | Each of the five removed in turn: all passed. Entity-minimal. |
-| 23–25 | shrink | The arm offset at 50% and 25% did not reproduce; at 75% it did. |
+| 0–1 | gate | The failing start failed 4 of 5; start 4 passed 5 of 5. |
+| 2–6 | probe | Each of the five alone: all passed. No single culprit. |
+| 7–14 | ddmin | Groups of the five and their complements: none reproduced. |
+| 15 | ddmin | The four without the soup: 4 of 4 failures. The new set. |
+| 16–18 | ddmin | Each of three removed in turn: all passed. Without the arm (row 10) it also passed. Entity-minimal. |
+| 19–25 | shrink | The arm: 50%, 25%, 75%, 62.5%, 87.5% and 81.25% did not reproduce; 93.75% did. |
+| 26–32 | shrink | The basket: 93.75% kept. |
+| 33–37 | shrink | The milk: 87.5% kept. |
 
-The budget ended there. The recorded case keeps the arm at 100%: a defect
-fixed on October 18 discarded the verified 75%; new runs record it.
+The candidate budget ended before the orange juice was shrunk, so it stays at
+100%.
+
+**A limit, visible in rows 30–31.** The basket at 81.25% also reproduced
+(4 of 5), but the case keeps 93.75%. Size shrinking halves the interval
+step by step and assumes that if a smaller shift does not fail, no smaller
+one does. At 87.5% the basket failed only 2 of 4, so the search moved
+upward. A stochastic policy near the 4-of-5 line can break that assumption.
+Every kept size is verified to reproduce, but it is not always the smallest
+that does.
 
 ## 5. The probes route: disturbances and rewordings
 
@@ -458,7 +470,8 @@ Colours:
 | `import_invalid`, `import_mismatch` | The imported file was not valid, or does not match the task's scene. |
 | `original_mismatch` | The original wording did not match the task. |
 | `capacity_unavailable` | No GPU after six submissions. |
-| `spend_cap`, `max_hours` | The next Job could exceed the spend cap; the hour limit was reached. |
+| `spend_cap`, `max_hours` | The next Job could exceed the spend cap; the hour limit was reached. The run page offers a larger cap or hour limit before **Resume** (raise only, never lower). |
+| `download_failed` | The Job finished and is paid for, but its results could not be downloaded. Resume downloads them again (keeping files already complete) and does not run the Job again. |
 | `stopped_by_user` | Stopped from the control panel or `faultline stop`. |
 | `backend_error`, `auth_expired` | A cloud call failed (resume to re-attach); the Nebius sign-in expired. |
 | `process_ended` | The run's process ended unexpectedly; Resume re-attaches. |
@@ -476,8 +489,11 @@ Before each Job, the run reserves its **worst case**:
 
 A Job is refused if that reservation would exceed the cap. When it finishes,
 the reservation is replaced by the measured container time.
-- Only the first Job of a plan must fit the cap to start; a later Job that
-  does not fit stops the run, which can be resumed after raising the cap.
+- Only the first Job of a plan must fit the cap to start. A later Job that
+  does not fit stops the run (`spend_cap`). On the run page, **Raise the limit
+  before you resume** takes a larger cap or hour limit, then **Resume**
+  continues. A limit can be raised, never lowered, and never below what is
+  spent.
 - The cap covers Nebius Serverless Jobs only, not Token Factory calls or
   storage.
 - Costs are estimates from measured time until reconciled against the bill.

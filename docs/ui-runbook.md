@@ -55,12 +55,10 @@
 
 | Fault code | Name | Route | Verdict |
 | --- | --- | --- | --- |
-| *(run 2, pending)* | LIBERO-10 task 0, start 14 | Layout: a failing start shrunk to its trigger | *to fill in* |
+| `FL-S-8E0D` | l10-start14 | Layout: a failing start shrunk to its trigger | Failure repeats (four shifts) |
 | `FL-A-D582` | object-start0 | Probes: a disturbance that breaks a passing start | Failure repeats (blur from s = 0.4625) |
 | `FL-A-F526` | catalog-spatial | Probes: nothing broke it | No failure found |
 
-Older cases stay in the local library, under the same groups; see
-[Earlier experiments](#earlier-experiments-local-only).
 
 ---
 
@@ -70,12 +68,7 @@ Older cases stay in the local library, under the same groups; see
 layout differences that still fails. Reruns decide this, not the model's
 opinion, and the result is kept as a regression test.
 
-> **To refresh after run 2.** Run 2 (LIBERO-10 task 0, start 14, on image
-> v17) replaces `FL-S-AFB5` here. Until then, the steps below use
-> `FL-S-AFB5`, the October 16 recording of the same start. Its sizes stay at
-> 100% because of a defect fixed on October 18; run 2's sizes should shrink.
-
-1. Under **Scenario reductions**, open the layout case.
+1. Under **Scenario reductions**, open **l10-start14** (`FL-S-8E0D`).
 2. **Expected header:** the fault code, verdict **Failure repeats**, kind
    **Scenario reduction**, **LIBERO-10, task 0**, and the instruction "put
    both the alphabet soup and the tomato sauce in the basket".
@@ -88,31 +81,41 @@ opinion, and the result is kept as a regression test.
    Set **Speed** to `0.5x` to compare the arm's approach. Clear **Keep in
    step** to move one clip on its own; ticking it again lines all three up at
    the earliest position.
-4. In **Report**, read **Summary**. For `FL-S-AFB5`:
+4. In **Report**, read **Summary**. **Expected:**
    - Verdict: reproduces.
-   - Reference: benchmark start 28, the nearest start that passed.
-   - Five kept shifts: soup position 2.9 cm, cream cheese 1.1 cm, milk
-     2.4 cm, orange juice 3.7 cm, and the arm's joints (6 joints, up to 2.6°).
-   - Status: entity-minimal; each kept shift is needed.
+   - Failing start: benchmark start 14. Reference: benchmark start 4, the
+     nearest start that passed.
+   - Four kept shifts:
+     - basket position 2.1 cm (93.8% of the full difference);
+     - milk 2.2 cm (87.5%);
+     - orange juice 0.8 cm (100%);
+     - the arm's joints (5 joints, up to 2.1°, 93.8%).
+   - Status: stopped at the candidate budget, entity-minimal (each kept
+     shift is needed), sizes not fully shrunk.
 5. Read on: **Screen**, **Result**, **Minimal cause**, **Differences between
    the failing start and the reference**, then **Hypothesis** and
-   **Hypothesis vs result**. Nemotron ranked the robot first: it is needed,
-   but not enough on its own.
-6. In **Candidates**, choose **Show all … rows**. The phases:
-   - **gates:** the failing start fails; the reference passes 5 of 5;
-   - **probe:** each difference alone passes;
-   - **ddmin:** only the group of five fails;
-   - **minimality:** removing any one of the five makes it pass;
-   - **shrink:** each kept shift is halved towards the reference while it
-     still fails.
+   **Hypothesis vs result**. Nemotron 3 Ultra ranked the arm first and the
+   soup second. The reruns show the arm is needed but not enough on its own,
+   and the soup is not needed at all.
+6. In **Candidates**, choose **Show all 38 rows**. The phases:
+   - **gate** (0–1): the failing start fails 4 of 5; start 4 passes 5 of 5;
+   - **probe** (2–6): each of the five differences alone passes;
+   - **ddmin** (7–18): only the four without the soup fail (row 15, 4 of 4),
+     and removing any one of the four makes it pass;
+   - **shrink** (19–37): each kept shift is halved towards the reference
+     while it still fails.
+
+   One honest limit: the basket at 81.25% also failed (row 31), but the
+   search kept 93.75% (see the Reference's worked example).
 7. **Nemotron's reading** (collapsed) holds the model's hypotheses, labelled
    as interpretation, not evidence. **Regression test** is Demo 6. **Run
    details** (collapsed) gives the Jobs, spend and time.
 
-**Talking point:** "The arm and five objects differ between a failing and a
-passing start. Reruns, not the model, show that five are needed together:
-each alone passes, and removing one makes the failure go away. That is the
-minimal trigger, and the case reruns it on any future checkpoint."
+**Talking point:** "Five things differ between a failing and a passing
+start. Reruns, not the model, show that four are needed together: each alone
+passes, and removing any one makes the failure go away. Nemotron guessed the
+soup mattered; it does not. That is the minimal trigger, and the case reruns
+it on any future checkpoint."
 
 **Variant: a failure from your own scene.** On the New diagnosis page, open
 **More ways in** and choose **A failure from my own scene (file)**. Upload a
@@ -120,8 +123,7 @@ start-state JSON file, for example any case's `minimal-candidate.json`, with
 its suite and task. The file must fail 4 of 5 first, or the run stops ("The
 imported start did not fail reliably"). A file from another scene stops with
 "The imported start did not match the task's scene." The case names the file
-by a fingerprint, not a start number. `FL-S-AFB5` itself came from such an
-import of start 14 (October 16, US$1.80).
+by a fingerprint, not a start number.
 
 ---
 
@@ -195,10 +197,8 @@ strength is not a repeatable failure."
 
 **An unreliable start.** If the check fails some attempts but not 4 of 5,
 the run ends with the **flaky** route. Nothing more runs, no case is made, and
-no disturbance is blamed. The local case `FL-A-08D3` (LIBERO-Goal task 0,
-start 0) shows the same situation from before the single pipeline: its
-control failed 3 of 5, so the stress test stopped (`nominal_controls_failed`,
-amber).
+no disturbance is blamed. The run page shows "The start is flaky untouched"
+in amber.
 
 ---
 
@@ -318,8 +318,8 @@ process is alive.
 **Rewordings.** Set **Rewordings to ask for** above 0 to add a wording probe.
 Nemotron 3 Super writes everyday rewordings, a meaning check drops any that
 lose an object or target, and a failing wording is reduced to the smallest
-word change. The local case `FL-L-C72C` (October 17, US$0.31) shows a wording
-probe that found no failure.
+word change. The wording probes run so far found no failure: GR00T passed
+every rewording tried.
 
 If **Start** reports a timeout or a server error, do not press Start again.
 The page shows its own warning ("The run may have started…") and hides
@@ -364,8 +364,6 @@ its failing condition and see whether it still fails.
 | **Inconclusive** (amber) | The control failed, the Job did not finish, or the test stopped part-way. |
 
 **Recorded:**
-- `FL-S-AFB5`, October 15: **Still fails** on the original policy (checkpoint
-  not recorded), US$0.41.
 - `FL-A-D582`, October 19: **Still fails** on the original policy, US$0.35.
   Blur at s = 0.4625 failed 4 of 5. Noise at s = 1.0 failed 3 of 5 (it
   failed 4 of 5 when found), so its threshold is borderline.
@@ -430,6 +428,8 @@ attention, always with an icon and a word. The run page also shows the
 | Run fails at once: "a Nebius quota is used up" (buckets) | Each run's bucket is kept until its objects expire (1 day). Delete emptied `faultline-*` buckets (Nebius refuses non-empty ones), then **Resume**. |
 | Cloud Job: waiting for a GPU | Normal. It resubmits up to six times; nothing is billed while waiting. |
 | Status **Interrupted** | **Resume**. |
+| Stopped at the spend cap or hour limit | Under **Raise the limit before you resume**, enter a larger **New spend cap (US$)** or **New hour limit**, then **Resume**. A limit can be raised on a resume, never lowered. |
+| Stopped: `download_failed` | The Job finished and is paid for, but its results could not be downloaded (a dropped connection). **Resume**: it downloads them again, keeps files already complete, and does not run the Job again. |
 | Progress looks stale | The run page refreshes every 5 seconds while the tab is visible. Check **Log** and **Steps** before acting. |
 | Setup: "1 item needs attention" for Docker only | Safe to ignore: Docker is needed to build the image, not to run. |
 | Start timed out | Check **Running** before anything else. |
@@ -459,17 +459,3 @@ Use recorded cases only; start nothing.
 For the control panel, add: **New diagnosis** → **Check a start I name** →
 **Next: settings** → **Review**. Show the check, the two branches with their
 typical cost and time, and stop before Start.
-
-## Earlier experiments (local only)
-
-These stay in the local library and leave the public gallery:
-- `FL-S-AFB5`: the October 16 layout case (replaced by run 2).
-- `FL-A-A70E`: a scene stress test of LIBERO-Object, where the camera
-  viewpoint failed 1/5 at s = 0.8 and 1.0. Too isolated to meet the gate.
-- `FL-A-08D3`: a scene stress test of LIBERO-Goal that stopped on a failing
-  control (Demo 3).
-- `FL-M-52D8`: the September occlusion case. A grey block covering 14% of the
-  agent camera makes the policy fail. Occlusion was an earlier experiment
-  mode, not a family in the New diagnosis.
-- `FL-L-C72C`, `FL-L-CEB3`, `FL-L-6CE6`: wording probes. None found a
-  failure; GR00T passed all 24 rewordings tried across three suites.

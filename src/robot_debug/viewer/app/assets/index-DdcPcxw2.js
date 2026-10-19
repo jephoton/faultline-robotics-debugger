@@ -138,7 +138,7 @@ faultline image build --push cr.<region>.nebius.cloud/<your-registry-id>`}),i.js
   checkpoint: {id: your-org/your-checkpoint, revision: <commit sha>}`}),i.jsx("p",{children:"The checkpoint is downloaded with your Hugging Face token, so that account needs access. Faultline does not check that it fits the suite."})]})},{id:"run",title:"5. Dry run, then run",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"The dry run lists every planned Job with its deadline and worst-case cost and creates nothing. The control panel always does a dry run before it lets you start. From a terminal:"}),i.jsx(Fn,{children:`faultline diagnose my-spec.yaml --dry-run
 faultline diagnose my-spec.yaml --env-file .env`}),i.jsx("p",{children:"Before each Job Faultline reserves a worst case: the provider timeout (deadline plus ten minutes) plus a four-minute start allowance, at the hourly rate in the spec. The reservation is settled at the measured container time, and the run refuses a Job that could exceed the cap. Treat the cap as a safety limit rather than a guarantee: the cost model has not been reconciled against a Nebius bill yet. When no GPU is free, the Job is resubmitted automatically."}),i.jsxs("p",{children:["Results land in ",i.jsx("code",{children:"artifacts/runs/<name>-<timestamp>/"}),": a report, a case, a spend ledger, the downloaded evidence and, when Nemotron is on, an explanation."]})]})},{id:"resume",title:"6. Resume, stop and replay",body:i.jsxs(i.Fragment,{children:[i.jsx(Fn,{children:`faultline diagnose --resume artifacts/runs/<run-folder>
 faultline stop artifacts/runs/<run-folder>
-faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}),i.jsxs("p",{children:[i.jsx("strong",{children:"Resume"})," continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying twice) and replaces a worst-case charge with the measured one once it can read the Job. ",i.jsx("strong",{children:"Stop"})," cancels the current Job, waits for the provider to confirm, settles the cost and leaves the run resumable."]}),i.jsxs("p",{children:[i.jsx("strong",{children:"Replay"})," re-runs a saved case and says whether its failing condition still fails: the regression test after you change the policy. On a case page it is the ",i.jsx("strong",{children:"Regression test"})," section: choose the original policy or a new checkpoint, estimate the cost, then run it. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts each. ",i.jsx("code",{children:"--expect fixed"})," or ",i.jsx("code",{children:"--expect reproduces"})," states which verdict you hope for, so the exit code tells a script whether you got it. A new checkpoint goes under ",i.jsx("code",{children:"policy.checkpoint"})," in the replay spec."]})]})},{id:"view",title:"7. This control panel",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"Start it from the repository, then open the address it prints:"}),i.jsx(Fn,{children:"faultline ui --artifacts artifacts"}),i.jsxs("p",{children:["It listens on this machine only. Starting, stopping, resuming and replaying are controls of this local server; a published gallery of the same pages has none. Each spec the panel runs is saved under ",i.jsx("code",{children:"artifacts/specs-ui/"}),", so any run can be repeated from a terminal."]})]})},{id:"notes",title:"Notes",body:i.jsxs("ul",{children:[i.jsxs("li",{children:[i.jsx("strong",{children:"Costs."})," A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model download. Figures are estimates from measured container time, pending billing reconciliation."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Bucket quota."})," Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a bucket access-policy quota, so delete emptied buckets from time to time."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Local backend."})," ",i.jsxs("code",{children:["backend: ","{kind: local}"]})," needs Docker with the NVIDIA runtime and a large GPU; it is implemented but untested on a real GPU."]})]})}];function vj(){Ot("Run your own");const{hash:e}=Pn();return w.useEffect(()=>{if(!e)return;const t=document.getElementById(decodeURIComponent(e.slice(1)));t&&(t.scrollIntoView(),t.focus({preventScroll:!0}))},[e]),i.jsxs("article",{children:[i.jsx("h1",{children:"Run your own"}),i.jsx("p",{className:"lede",children:"How to run a diagnosis on your own Nebius account: set up once, then dry-run, start, watch, stop, resume and replay from the control panel or from a terminal."}),i.jsxs("nav",{"aria-label":"On this page",className:"panel guide-toc",children:[i.jsx("p",{className:"section-label",children:"On this page"}),i.jsx("ol",{children:Uh.map(t=>i.jsx("li",{children:i.jsx("a",{href:`#${t.id}`,children:t.title.replace(/^\d+\.\s*/,"")})},t.id))})]}),Uh.map(t=>i.jsxs("section",{className:"section guide","aria-labelledby":`${t.id}-title`,children:[i.jsx("h2",{id:t.id,tabIndex:-1,children:i.jsx("span",{id:`${t.id}-title`,children:t.title})}),t.body]},t.id))]})}const wj=`# Faultline reference
+faultline replay artifacts/runs/<run-folder> --spec my-replay.yaml --expect fixed`}),i.jsxs("p",{children:[i.jsx("strong",{children:"Resume"})," continues an interrupted run with the same spec: it re-attaches to Jobs already submitted (never paying twice) and replaces a worst-case charge with the measured one once it can read the Job. A run stopped at its spend cap or hour limit can be resumed with a larger one (raise only, never lower): in the panel, next to Resume; from the command line, by raising",i.jsx("code",{children:"budget"})," in the run folder's ",i.jsx("code",{children:"spec.yaml"}),". A Job whose results could not be downloaded is downloaded again on resume, not run again. ",i.jsx("strong",{children:"Stop"})," cancels the current Job, waits for the provider to confirm, settles the cost and leaves the run resumable."]}),i.jsxs("p",{children:[i.jsx("strong",{children:"Replay"})," re-runs a saved case and says whether its failing condition still fails: the regression test after you change the policy. On a case page it is the ",i.jsx("strong",{children:"Regression test"})," section: choose the original policy or a new checkpoint, estimate the cost, then run it. A layout case reruns its minimal scene and passing reference; a disturbance case reruns each failing family at its threshold with the undisturbed control; a rewording case reruns the failing wording against the original. Five attempts each. ",i.jsx("code",{children:"--expect fixed"})," or ",i.jsx("code",{children:"--expect reproduces"})," states which verdict you hope for, so the exit code tells a script whether you got it. A new checkpoint goes under ",i.jsx("code",{children:"policy.checkpoint"})," in the replay spec."]})]})},{id:"view",title:"7. This control panel",body:i.jsxs(i.Fragment,{children:[i.jsx("p",{children:"Start it from the repository, then open the address it prints:"}),i.jsx(Fn,{children:"faultline ui --artifacts artifacts"}),i.jsxs("p",{children:["It listens on this machine only. Starting, stopping, resuming and replaying are controls of this local server; a published gallery of the same pages has none. Each spec the panel runs is saved under ",i.jsx("code",{children:"artifacts/specs-ui/"}),", so any run can be repeated from a terminal."]})]})},{id:"notes",title:"Notes",body:i.jsxs("ul",{children:[i.jsxs("li",{children:[i.jsx("strong",{children:"Costs."})," A typical Job is roughly US$0.3 to 0.9 on one L40S; about ten minutes of each Job is image pull and model download. Figures are estimates from measured container time, pending billing reconciliation."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Bucket quota."})," Each diagnosis uses one Object Storage bucket whose objects expire after a day. Tenants have a bucket access-policy quota, so delete emptied buckets from time to time."]}),i.jsxs("li",{children:[i.jsx("strong",{children:"Local backend."})," ",i.jsxs("code",{children:["backend: ","{kind: local}"]})," needs Docker with the NVIDIA runtime and a large GPU; it is implemented but untested on a real GPU."]})]})}];function vj(){Ot("Run your own");const{hash:e}=Pn();return w.useEffect(()=>{if(!e)return;const t=document.getElementById(decodeURIComponent(e.slice(1)));t&&(t.scrollIntoView(),t.focus({preventScroll:!0}))},[e]),i.jsxs("article",{children:[i.jsx("h1",{children:"Run your own"}),i.jsx("p",{className:"lede",children:"How to run a diagnosis on your own Nebius account: set up once, then dry-run, start, watch, stop, resume and replay from the control panel or from a terminal."}),i.jsxs("nav",{"aria-label":"On this page",className:"panel guide-toc",children:[i.jsx("p",{className:"section-label",children:"On this page"}),i.jsx("ol",{children:Uh.map(t=>i.jsx("li",{children:i.jsx("a",{href:`#${t.id}`,children:t.title.replace(/^\d+\.\s*/,"")})},t.id))})]}),Uh.map(t=>i.jsxs("section",{className:"section guide","aria-labelledby":`${t.id}-title`,children:[i.jsx("h2",{id:t.id,tabIndex:-1,children:i.jsx("span",{id:`${t.id}-title`,children:t.title})}),t.body]},t.id))]})}const wj=`# Faultline reference
 
 The documentation for what Faultline does and what everything it shows means:
 the diagnosis and its routes, the repeatability gate, how a reduction works, every stress-test
@@ -421,22 +421,34 @@ Each step either stops the run or passes to the next.
 Every candidate is cached by the exact scene it builds; the same hybrid never
 runs twice.
 
-### Worked example: \`FL-S-AFB5\`
+### Worked example: \`FL-S-8E0D\`
 
-LIBERO-10 task 0, an imported failing start (benchmark start 14), reference
-28; the report's Candidates table from the continuation Job.
+LIBERO-10 task 0, benchmark start 14, with reference start 4. This is the
+report's Candidates table across the reduction Job and its continuation. The
+failing start and the reference differ in five entities: the soup, basket,
+milk and orange juice positions, and the arm's joints.
 
 | Rows | Phase | What happened |
 | --- | --- | --- |
-| 0–1 | gate | The failing start failed 4 of 4 (fifth skipped); start 28 passed 5 of 5. |
-| 2–7 | probe | Each of the six entities alone: all passed. No single culprit. |
-| 8–17 | ddmin | Groups of the six and their complements: none reproduced. |
-| 18 | ddmin | The five without the tomato sauce: 4 of 4 failures. The new set. |
-| 19–22 | ddmin | Each of the five removed in turn: all passed. Entity-minimal. |
-| 23–25 | shrink | The arm offset at 50% and 25% did not reproduce; at 75% it did. |
+| 0–1 | gate | The failing start failed 4 of 5; start 4 passed 5 of 5. |
+| 2–6 | probe | Each of the five alone: all passed. No single culprit. |
+| 7–14 | ddmin | Groups of the five and their complements: none reproduced. |
+| 15 | ddmin | The four without the soup: 4 of 4 failures. The new set. |
+| 16–18 | ddmin | Each of three removed in turn: all passed. Without the arm (row 10) it also passed. Entity-minimal. |
+| 19–25 | shrink | The arm: 50%, 25%, 75%, 62.5%, 87.5% and 81.25% did not reproduce; 93.75% did. |
+| 26–32 | shrink | The basket: 93.75% kept. |
+| 33–37 | shrink | The milk: 87.5% kept. |
 
-The budget ended there. The recorded case keeps the arm at 100%: a defect
-fixed on October 18 discarded the verified 75%; new runs record it.
+The candidate budget ended before the orange juice was shrunk, so it stays at
+100%.
+
+**A limit, visible in rows 30–31.** The basket at 81.25% also reproduced
+(4 of 5), but the case keeps 93.75%. Size shrinking halves the interval
+step by step and assumes that if a smaller shift does not fail, no smaller
+one does. At 87.5% the basket failed only 2 of 4, so the search moved
+upward. A stochastic policy near the 4-of-5 line can break that assumption.
+Every kept size is verified to reproduce, but it is not always the smallest
+that does.
 
 ## 5. The probes route: disturbances and rewordings
 
@@ -598,7 +610,8 @@ Colours:
 | \`import_invalid\`, \`import_mismatch\` | The imported file was not valid, or does not match the task's scene. |
 | \`original_mismatch\` | The original wording did not match the task. |
 | \`capacity_unavailable\` | No GPU after six submissions. |
-| \`spend_cap\`, \`max_hours\` | The next Job could exceed the spend cap; the hour limit was reached. |
+| \`spend_cap\`, \`max_hours\` | The next Job could exceed the spend cap; the hour limit was reached. The run page offers a larger cap or hour limit before **Resume** (raise only, never lower). |
+| \`download_failed\` | The Job finished and is paid for, but its results could not be downloaded. Resume downloads them again (keeping files already complete) and does not run the Job again. |
 | \`stopped_by_user\` | Stopped from the control panel or \`faultline stop\`. |
 | \`backend_error\`, \`auth_expired\` | A cloud call failed (resume to re-attach); the Nebius sign-in expired. |
 | \`process_ended\` | The run's process ended unexpectedly; Resume re-attaches. |
@@ -616,8 +629,11 @@ Before each Job, the run reserves its **worst case**:
 
 A Job is refused if that reservation would exceed the cap. When it finishes,
 the reservation is replaced by the measured container time.
-- Only the first Job of a plan must fit the cap to start; a later Job that
-  does not fit stops the run, which can be resumed after raising the cap.
+- Only the first Job of a plan must fit the cap to start. A later Job that
+  does not fit stops the run (\`spend_cap\`). On the run page, **Raise the limit
+  before you resume** takes a larger cap or hour limit, then **Resume**
+  continues. A limit can be raised, never lowered, and never below what is
+  spent.
 - The cap covers Nebius Serverless Jobs only, not Token Factory calls or
   storage.
 - Costs are estimates from measured time until reconciled against the bill.
