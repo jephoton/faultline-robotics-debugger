@@ -34,10 +34,13 @@
 2. Open <http://127.0.0.1:8765>. **Expected:**
    - at the top of the sidebar, **New diagnosis** and **Running** ("Nothing
      running.");
-   - the case groups **Scenario reductions**, **Stress tests**, **Language**
-     and **Earlier**, each row with a green, red or amber bar;
-   - at the bottom, **Setup**, **Reference**, **Run your own** and **All
-     evidence**.
+   - one **Cases** list, each row with its name, fault code and outcome;
+   - at the bottom, **Setup**, **Reference** and **Run your own**.
+
+   Cases share one diagnosis workflow; navigation does not split them by
+   implementation type. Each case still explains the conditions actually
+   tested. There is no global All evidence page: inspect a case's own evidence
+   instead. The original records remain on disk.
 
    **Reference** is the one page that explains everything the panel shows.
 3. Only before Demos 5 and 6, open **Setup**. **Expected:** "Everything
@@ -58,6 +61,7 @@
 | `FL-S-8E0D` | l10-start14 | Layout: a failing start shrunk to its trigger | Failure repeats (four shifts) |
 | `FL-A-D582` | object-start0 | Probes: a disturbance that breaks a passing start | Failure repeats (blur from s = 0.4625) |
 | `FL-A-F526` | catalog-spatial | Probes: nothing broke it | No failure found |
+| `FL-L-C72C` | ui-paraphrase-spatial | Instruction rewordings, restored locally from the archive | No failure found |
 
 
 ---
@@ -68,7 +72,7 @@
 layout differences that still fails. Reruns decide this, not the model's
 opinion, and the result is kept as a regression test.
 
-1. Under **Scenario reductions**, open **l10-start14** (`FL-S-8E0D`).
+1. Under **Cases**, open **l10-start14** (`FL-S-8E0D`).
 2. **Expected header:** the fault code, verdict **Failure repeats**, kind
    **Scenario reduction**, **LIBERO-10, task 0**, and the instruction "put
    both the alphabet soup and the tomato sauce in the basket".
@@ -132,7 +136,7 @@ by a fingerprint, not a start number.
 **Point:** a start that passes untouched is probed. Faultline finds the
 smallest severity of each disturbance that reliably breaks it.
 
-1. Under **Stress tests**, open **object-start0 - stress test**
+1. Under **Cases**, open **object-start0 - stress test**
    (`FL-A-D582`).
 2. **Expected header:** verdict **Failure repeats** (red), kind **Stress
    test**, **LIBERO-Object, task 0**. The sentence: "The policy fails
@@ -180,7 +184,7 @@ What each family and severity means physically is in the
 error. A start that fails some attempts untouched cannot blame a
 disturbance.
 
-1. Under **Stress tests**, open **catalog-spatial** (`FL-A-F526`).
+1. Under **Cases**, open **catalog-spatial** (`FL-A-F526`).
    **Expected:** verdict **No failure found** (green), LIBERO-Spatial task 0.
 2. **Summary:** the unperturbed control failed 0 of 5. JPEG compression,
    colour cast, motion blur and dead pixels each show "no failure up to
@@ -199,6 +203,22 @@ strength is not a repeatable failure."
 the run ends with the **flaky** route. Nothing more runs, no case is made, and
 no disturbance is blamed. The run page shows "The start is flaky untouched"
 in amber.
+
+### Optional wording example (local archive restored)
+
+Open **ui-paraphrase-spatial**, fault code **FL-L-C72C**, under **Cases**.
+It is the recorded October 17 run, not a new test. In the report's **Screen** table, the
+original instruction has two successful attempts; each of four rewordings has
+one successful screening attempt and passed the mechanical meaning check.
+No wording failed reliably, so there was nothing to confirm or reduce.
+
+Talking point: "We also test whether changing the instruction's wording breaks
+the policy. These four did not, at this one task and start. That is a bounded
+success result, not proof of general language robustness."
+
+This case is restored in the local panel only. It has not been added to the
+published gallery or the bundled demo. Its archive copy is preserved; no new
+GPU Job or language-model call was needed.
 
 ---
 

@@ -61,3 +61,13 @@ archive report and raw summary unchanged. No new model or robot test.
 Smaller-model worker owns these two files, independent reviewer checks the
 conditional claims, and root handles local regeneration and Git. Separate
 commit: `fix(reports): bound wording claims to recorded evidence`.
+
+## Verification outcome
+
+Completed locally: navigation and report fixes had failing regression tests
+before implementation, then 334 web tests and 163 relevant Python tests
+(105 subtests) passed. Production build/type check and committed-bundle
+freshness passed. Independent specification and code-quality reviews passed.
+Browser checks confirmed the five-case list, restored wording outcomes, removed
+route without evidence API fetch, and retained D582/F526 per-family tables.
+Report regeneration used only saved data; no paid call or public deploy.

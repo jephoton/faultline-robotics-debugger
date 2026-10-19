@@ -112,6 +112,11 @@ What the user sees at each step:
 - **Read the case.** Result and videos first, then why to trust it (gate counts,
   each shift alone passing, the control), then Nemotron's reading and next steps,
   then the full evidence.
+- **Navigate by case, not engine.** The sidebar and static gallery use one
+  Cases list, with names, fault codes and outcomes rather than type groups or
+  badges. Tested conditions and methods remain in each case. The global All
+  evidence page was removed after walkthrough review; per-case evidence and
+  the underlying records/API remain available.
 - **Keep it.** The regression test replays the case in a fresh Job. Export
   publishes finished cases to the static gallery.
 

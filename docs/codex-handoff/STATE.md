@@ -4,6 +4,8 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
+> Read **UI walkthrough follow-up — October 19** for the latest local work.
+> Its approved scope supersedes the earlier navigation proposals below.
 
 ## Current position — October 17, 2026
 
@@ -19,9 +21,10 @@ Next is **M7b: demo/video and submission preparation**.
 
 ## What exists and what has been demonstrated
 
-- **Two modes:** debug a failing simulator start by reducing its differences
-  from a passing reference; audit a passing start with image/scene families or
-  instruction paraphrases. The CLI owns the diagnosis, spend ledger, evidence,
+- **One diagnosis workflow:** check the start untouched, then reduce a reliable
+  failure's differences from a passing reference, or probe a passing start with
+  image/scene families and instruction rewordings. A flaky start stops without
+  blaming a disturbance. The CLI owns diagnosis, spend ledger, evidence,
   report and case. Four LIBERO suites have live execution evidence.
 - **Scenario result:** LIBERO-10 task 0, start 14 versus passing start 28 needs
   a conjunction of five entity shifts. Entity removal is locally minimal;
@@ -39,7 +42,7 @@ Next is **M7b: demo/video and submission preparation**.
   Model prose is interpretation, not measured evidence (ADR 0030).
 - **Control panel:** `faultline ui` serves the committed React/Vite bundle.
   It includes diagnosis setup/dry run/confirmation, live progress, Stop/Resume,
-  case evidence, scenario Replay, setup checks, guide and All evidence. Local
+  case evidence, scenario Replay, setup checks and guide. Local
   controls require loopback, session token and same-origin checks; one paid run
   at a time. `faultline export` produces a separate static, control-free gallery.
 - **October 17 live panel check:** LIBERO-Spatial task 0/start 0, four Nemotron
@@ -169,15 +172,42 @@ Reference no longer uses "Mode 1 / Mode 2".
   `synthetic_aggregate.json: KeyError` per file. The warning list is a scan
   diagnostic, not robot-policy failures; the API still returned 2,022 episodes
   during inspection. No evidence or archive data was removed.
-- **Pending proposals only:** one Cases sidebar list with type labels instead
-  of separate kind groups; do not launch a wording run to fill an empty group.
-  Keep Reference for definitions/interpretation, Run your own for actionable
-  operation, and move the global episode catalog toward an advanced/debug role.
-  Jethro explicitly requested only a pre-evaluation of page bloat, not a rewrite,
-  page removal, warning suppression or navigation redesign. Proposed bounded
-  work should remove overlap and improve warning presentation before considering
-  a full rewrite. Reference is about 5,047 words; Guide source about 1,595 words;
-  the Evidence source is mostly controls/code, not a comparable long document.
+- **Latest accepted UI scope (supersedes the earlier proposals):** Jethro
+  rejected arbitrary type labels for the unified pipeline and explicitly asked
+  to remove All evidence. Use one Cases list without type headings/badges in
+  navigation and the static home gallery. Keep names, fault codes, outcomes,
+  case-specific methods and per-case Full evidence; preserve raw records and
+  internal APIs. A broader Reference/Run your own cleanup is still only a
+  proposal: no whole-document rewrite is approved.
+- **Wording example restored locally:** copied the archived
+  `ui-paraphrase-spatial-20261017T015821Z` run back into `artifacts/runs/`;
+  report and step hashes matched on copying, and the archive copy remains untouched.
+  The library exposes **FL-L-C72C**: original instruction succeeds twice;
+  four rewordings each succeed once in screening. No reproduced wording
+  failure and no reduction. No GPU/model call, new test or gallery publication.
+- The restored report's old canned limitations falsely implied failures and a
+  minimal wording. Its formatter now conditions those claims on observed
+  outcomes and verified/edit-minimal reduction evidence. Regenerated only the
+  restored local report from its saved summary, without model calls; original
+  archive report, raw language summary and steps stay unchanged. The summary
+  tables, attempt counts and case identity are unchanged. Relevant Python
+  suites passed: 163 tests and 105 subtests.
+- **Navigation verification:** 334 web tests passed (including axe structural
+  checks), TypeScript check and production build passed; 53 library tests plus
+  20 subtests passed. Independent specification and quality reviews passed.
+  Browser checked all five local cases in one input-ordered Cases list,
+  FL-L-C72C's original plus four wording rows, and `/evidence` Not Found with
+  zero evidence-API requests. D582/F526 still expose four per-family tables
+  inside Full evidence. No page errors or paid calls. Existing React test
+  `act(...)` warnings remain outside this change.
+- **Windows console flashes investigated from code:** each backend command
+  starts the Nebius CLI (with WSL as the Windows fallback); `backends.run_command` captures
+  output but has no Windows no-window flag. The detached diagnosis owns a
+  sequence of short-lived commands, including Job status polls (default 60 s).
+  Browser progress polling only reads local state; it is not a GPU submission.
+  Flashes therefore do not imply duplicate paid Jobs. This source-based
+  diagnosis was not reproduced with a paid run. Process flags/lifecycle are
+  unchanged; any quiet-launch fix must preserve detachment, Stop and auth.
 - Demo 6 on the existing policy needs **The original policy**, not a guessed
   model ID/revision. New-checkpoint inputs are for a compatible GR00T N1.7
   LeRobot checkpoint and pinned Hugging Face commit, not an arbitrary model.
