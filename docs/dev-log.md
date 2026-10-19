@@ -4,6 +4,33 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## Post-walkthrough cleanup — October 19
+
+**Transient Windows consoles.** The diagnosis deliberately detaches from the
+panel so it survives closing the browser/server. Its short captured Nebius/WSL
+calls inherited no console and could allocate a visible one for every poll.
+The shared captured runner now sets `CREATE_NO_WINDOW` only on Windows. It
+still waits, captures stdout/stderr, returns exit status and propagates timeout;
+the diagnosis's process groups, breakaway fallback and cancellation logic are
+unchanged. A failing regression test preceded the fix; 228 related tests passed
+and a native Windows child reported `GetConsoleWindow() == 0`. No paid run was
+needed. Operator-run interactive sign-in commands are not hidden.
+
+**Interpretation repair and copy integration.** Merged the one-repair next-steps
+path, including combined token accounting and fail-closed checks, while keeping
+the newer legacy-audit report fallback. The D582 refresh used two responses
+and accepted four suggestions; invalid first text was not published. An initial
+progress message incorrectly inferred one attempt from the accepted status;
+the saved provenance corrected it to two. This is a reporting correction, not
+a second refresh. No GPU/Tavily call was made.
+
+**Documentation drift.** Reference and Run your own duplicated walkthroughs,
+setup commands and old modes. Reference now defines evidence; the guide is an
+operating path with stable Setup anchors. The quickstart now describes the
+unified workflow and existing disturbance/wording replay. It avoids putting
+Hugging Face token values on CLI arguments. The offline case keeps source
+titles/URLs and accepted suggestions, not third-party search snippets.
+
 ## Public gallery publication — October 17
 
 The installed Vercel CLI could not validate its initial HTTPS connection with

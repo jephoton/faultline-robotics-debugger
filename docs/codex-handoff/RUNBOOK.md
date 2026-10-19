@@ -32,8 +32,9 @@ opening or refreshing a page does not.
 
 ## Prepare a bounded diagnosis
 
-1. Choose a scenario, audit or paraphrase example from `configs/specs/` and
-   copy it to an ignored local path. Fill in project, image digest and secret
+1. Prefer the unified `configs/specs/diagnose.yaml` example; specialized
+   scenario, audit and paraphrase CLI examples remain available. Copy it to
+   an ignored local path. Fill in project, image digest and secret
    **name**, not the secret value. Every spec needs `budget.max_spend_usd` and
    `budget.max_hours`. For imported scenario starts, follow the JSON contract
    in [the quickstart](../setup/diagnose.md); a checkpoint override needs a

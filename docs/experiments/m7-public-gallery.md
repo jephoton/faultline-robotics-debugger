@@ -1,5 +1,15 @@
 # M7a step 5: public gallery
 
+## October 19 cleanup export — prepared, not deployed
+
+The post-walkthrough cleanup prepared the ignored local export
+`artifacts/public-gallery-20261019-cleanup/`: the same three approved showcase
+cases, 13 videos, refreshed D582 suggestions and F526 per-family tables, unified
+Cases navigation and rewritten Reference/Run your own. Exporter privacy guards
+passed; a local browser preview had no controls, page errors or failed requests.
+Production publication still needs Jethro's go. This is not another deployment
+or permission to publish the restored wording example/private run artifacts.
+
 ## Result — October 17, 2026
 
 Published and verified:

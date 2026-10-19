@@ -11,7 +11,8 @@
 > - **How the system works:** [architecture](architecture.md).
 > - **Public, read-only gallery:**
 >   [faultline-robotics-debugger.vercel.app](https://faultline-robotics-debugger.vercel.app/)
->   (no controls). It is due to be refreshed with the showcase cases below.
+>   (no controls). The three showcase cases are published; the latest local
+>   navigation, documentation and interpretation fixes await a reviewed redeploy.
 >
 > **Spending rule.** Demos 1–4 only read saved evidence or make dry runs; they
 > create nothing in the cloud and cost nothing. Demos 5 and 6 press **Start**
@@ -43,6 +44,8 @@
    instead. The original records remain on disk.
 
    **Reference** is the one page that explains everything the panel shows.
+   **Run your own** is the shorter operating path; it links detailed setup
+   rather than repeating this walkthrough. Setup's section links still work.
 3. Only before Demos 5 and 6, open **Setup**. **Expected:** "Everything
    needed is ready." The checks are:
    - Nebius sign-in;

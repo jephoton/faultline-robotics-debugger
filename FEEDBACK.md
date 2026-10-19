@@ -20,6 +20,29 @@ friction during Vercel deployment is documented separately in the
 
 ## Summary
 
+### October 19 post-walkthrough cleanup
+
+- **Token Factory / Nemotron 3 Ultra:** refreshed the LIBERO-Object showcase
+  case's next steps from saved measurements and 13 cached sources. The first
+  answer needed repair; the single permitted corrective response passed the
+  checks and yielded four suggestions. Provenance records two attempts,
+  6,973 prompt tokens and 472 completion tokens in total. No new Tavily search
+  or GPU Job was run. The per-call reservation is US$0.02 (US$0.04 for this
+  two-attempt envelope), not a reconciled price or measured charge.
+- The bounded repair worked in this interaction; it does not eliminate human
+  review. Suggestions include future tests or architectural changes that are
+  not implemented or validated by Faultline. Schema/citation acceptance is
+  not evidence that a proposed remedy will work.
+- **Project defects, not provider defects:** captured Windows CLI subprocesses
+  opened transient consoles; those calls now use the Windows no-window flag.
+  The detached diagnosis/Stop/Resume settings are unchanged. An actual local
+  child process reported no console handle. Old wording-report boilerplate
+  also implied a minimum even when nothing failed; that formatter is fixed.
+  See [the development log](docs/dev-log.md).
+
+The required first-hand feedback and final billing reconciliation remain
+submission tasks; this cleanup does not claim to have completed them.
+
 | Tool | What we used it for | What worked | Friction and attribution | Would we use it again? |
 | --- | --- | --- | --- | --- |
 | Nebius AI Cloud Serverless Jobs | The main runtime from October 10: about 20 single-L40S Jobs (pilot, M5B re-run, M3 batching, M6, M7 mode 1, breadth pack, replay), most of them driven by `faultline diagnose`. About US$9 estimated for the October 12–16 Jobs. | Private-registry pulls, GR00T serving on one L40S, exact-ID status and logs, `get-by-name` recovery, dry-run validation, and a bucket policy plus lifecycle expiry for narrow read-only download keys all worked. Startup was consistent (image pull about 3 minutes, our model download 337–347 s). All four LIBERO suite checkpoints served the same way. | Provider side: L40S capacity waits (four of nine submissions in one M7 session found no machine after about 27 minutes; nothing billed), a tenant bucket access-policy quota of 10, `job create --format json` and `--async` sometimes returning non-JSON, an `@sha256` image reference rejected by a 64-character label limit, a completed Job still showing its instance as `RUNNING`, and an expired CLI sign-in surfacing as a generic "context deadline exceeded". Ours: the first export assumed local inode and rename semantics on a bucket mount; one workload deadline was too short for our own runtime. | Yes, for bounded single-GPU evaluation. Plan for capacity waits and keep buckets few. |

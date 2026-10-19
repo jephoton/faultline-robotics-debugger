@@ -4,10 +4,64 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **UI walkthrough follow-up — October 19** for the latest local work.
-> Its approved scope supersedes the earlier navigation proposals below.
+> Read **Post-walkthrough cleanup — October 19** for the latest work.
+> Earlier dated proposals and allowances below are historical, not new authority.
 
-## Current position — October 17, 2026
+## Current position — October 19, 2026
+
+Jethro finished the six demo walkthroughs and explicitly authorized the complete
+cleanup batch inline, including suppressing transient command windows and
+rewriting Reference/Run your own. Implementation and local verification are
+finished; see the checkpoint below for publication and submission gates.
+
+## Post-walkthrough cleanup — October 19
+
+- Accepted repair branch `worktree-agent-aff20f6737887e095` merged, preserving
+  the legacy-audit report fix. Manual UI copy items 51/52/54 applied. The older
+  “two agents in flight” handoff below is superseded, not work to redo.
+- Captured backend CLI calls use `CREATE_NO_WINDOW` on Windows; a real child
+  returned console handle zero. Output, exit codes and timeout propagation
+  remain tested. Detached owner, process groups, Stop and Resume are unchanged.
+  Restarted the local viewer with no active runs, using its owned terminal.
+- Reference is an evidence dictionary (about 2,520 words versus 5,611 before),
+  with gates, severity formulas, report fields, replay verdicts and claim limits.
+  Run your own is the operational route with stable Setup anchors and links to
+  detailed setup/UI scenarios. Quickstart no longer describes old modes or
+  scenario-only replay, or puts token values on CLI arguments.
+- D582 next steps refreshed from stored sources: first response rejected,
+  single repair accepted, four suggestions. Provenance: two attempts, 6,973
+  prompt tokens, 472 completion tokens. US$0.04 is the two-response reservation
+  envelope, not a billed charge. No GPU Job or Tavily search. Case ID unchanged.
+  Initial commentary incorrectly said one attempt and was corrected from the
+  saved record. `research.previous.json` keeps the earlier interpretation.
+- FL-S-8E0D's offline demo refreshed from registered evidence, including its
+  candidate/replay history. Accepted next steps and source titles/URLs are
+  included, but source snippets/search text and the private run-folder selector
+  are excluded. Original artifact files remain unchanged. Its existing accepted
+  scenario suggestions were retained, not regenerated or claimed improved.
+- Verification: full local Python suite **3,103 passed, 60 skipped, 3,153
+  subtests passed**; added offline-demo/export checks **34 passed, 36 subtests**.
+  Full web suite **336 passed**, typecheck/build passed. Windows tests covered
+  hidden runner behavior and unchanged lifecycle. Browser checked the rewritten
+  docs/anchors, three showcase cases, wording example, unchanged evidence
+  tables, New diagnosis through dry-run Review, and static three-case preview;
+  no page errors, failed responses or paid Start actions. Existing React
+  `act(...)` warnings remain non-failing. Skips are not validation of optional
+  dependencies or live-GPU paths.
+- Prepared **only** the approved three-case/13-video export at ignored
+  `artifacts/public-gallery-20261019-cleanup/`; exporter privacy checks and
+  static preview passed. No production redeploy. Do not copy private artifacts,
+  `.env` or credential-bearing Vercel files into it.
+
+**Next:** reviewed gallery redeploy needs Jethro's go. Then do billing
+reconciliation, first-hand FEEDBACK review, clean-checkout/public-repo audit,
+current Devpost rules check, write-up, pitch video/cover and final submission.
+These have not been claimed complete. No new GPU tests are needed for cleanup;
+M3/HPC expansion remains optional stretch work.
+
+Execution plan: [final cleanup batch](../superpowers/plans/2026-10-19-final-cleanup-batch.md).
+
+## Earlier M7a completion checkpoint — October 17
 
 M1–M6 and **M7a steps 1–5 are complete**, including the control panel's live
 acceptance check and the published
@@ -153,10 +207,9 @@ Reference no longer uses "Mode 1 / Mode 2".
 
 ## UI walkthrough follow-up — October 19
 
-- Jethro is still working through Demo 6. The autonomous integration batch is
-  gated on his "Demo 6 done": complete the previously agreed steps 1–5, then
-  pause before step 6 (submission-readiness work/checks together). No new paid
-  run, model call or gallery redeploy was approved by this follow-up.
+- Jethro completed Demo 6 and authorized the full inline cleanup batch above.
+  The earlier wait-for-walkthrough gate is cleared. Public redeploy and the
+  submission-readiness checks remain separate gates; no new GPU work was run.
 - **FL-A-F526 table fix:** its older single-audit case has a saved `audit`
   summary but no `groups`. The report-regeneration helper only handled grouped
   cases, so it misleadingly kept the old compact table. It now uses the saved
@@ -211,14 +264,13 @@ Reference no longer uses "Mode 1 / Mode 2".
 - Demo 6 on the existing policy needs **The original policy**, not a guessed
   model ID/revision. New-checkpoint inputs are for a compatible GR00T N1.7
   LeRobot checkpoint and pinned Hugging Face commit, not an arbitrary model.
-- The 79-item copy branch is already merged locally (`5e22e9f`); the repair
-  branch is still separate. Its pending regeneration-script changes are outside
-  the legacy-report helper and must be integrated carefully later. This local
-  follow-up does not claim the complete pending integration passed its suites.
+- The 79-item copy branch (`5e22e9f`) and repair branch are now merged; the
+  three manual copy items are applied. Use the post-walkthrough checkpoint's
+  current verification, not the older pending-integration instructions below.
 
-## Handoff: October 19, evening
+## Previous handoff: October 19, evening (superseded by cleanup above)
 
-### In flight: two agent branches, not merged yet
+### Historical branch briefs (both integrated; do not redo)
 
 1. **`worktree-agent-a3b9101bc186fa838`: UI copy changes.** It applies every
    item in `docs/superpowers/specs/2026-10-19-ui-copy-review.md` (Jethro
