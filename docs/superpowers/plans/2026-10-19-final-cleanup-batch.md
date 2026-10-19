@@ -131,4 +131,3 @@ Check the latest main GitHub Actions run for the independent CI outcome.
 The only remaining publication action is the separately gated gallery redeploy;
 financial reconciliation, submission audit/rules and pitch materials remain
 outside this completed cleanup batch.
-
