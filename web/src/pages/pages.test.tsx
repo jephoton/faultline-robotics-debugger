@@ -33,7 +33,7 @@ describe('home, static gallery', () => {
     const main = screen.getByRole('main');
     expect(await within(main).findByRole('heading', { name: 'Scenario reductions' })).toBeInTheDocument();
     expect(within(main).getByRole('link', { name: 'soup-start14' })).toHaveAttribute('href', `/case/${encodeURIComponent(IDS.soup)}`);
-    expect(within(main).getByText(/does not claim every failure mode/)).toBeInTheDocument();
+    expect(within(main).getByText(/not every failure mode/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /new diagnosis/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Running now' })).not.toBeInTheDocument();
   });

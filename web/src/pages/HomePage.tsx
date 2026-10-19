@@ -3,7 +3,7 @@ import { useAppData, useControls } from '../api/context';
 import type { LibraryItem } from '../api/types';
 import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
-import { shortDate, suiteLabel, usd } from '../lib/format';
+import { suiteLabel, usd } from '../lib/format';
 import { KIND_GROUP, KIND_LABEL } from '../lib/status';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
@@ -18,9 +18,6 @@ function Intro() {
   return (
     <section className="panel intro" aria-labelledby="intro-title">
       <h2 id="intro-title">What Faultline does</h2>
-      <p className="lede lede--tight">
-        Faultline finds a failure of a robot policy, confirms that it repeats, reduces it to its cause and saves it as a replayable case.
-      </p>
       <ol className="loop">
         {LOOP.map((step, index) => (
           <li key={step.title}>
@@ -32,9 +29,8 @@ function Intro() {
         ))}
       </ol>
       <p className="muted">
-        Each case below was made by one diagnosis of a GR00T policy on LIBERO tasks. It describes the disturbances that were tested and
-        the reruns that were made; it does not claim every failure mode, and a reduced cause is the smallest one found, not proof of
-        causation.
+        Cases cover the disturbances tested and the reruns made, not every failure mode. A reduced cause is the smallest one found, not
+        proof of causation.
       </p>
     </section>
   );
@@ -88,9 +84,6 @@ export function HomePage() {
             </section>
           );
         })}
-        <p className="muted">
-          Want to run one yourself? <Link to="/guide">Read how to run your own</Link>.
-        </p>
       </section>
     );
   }
@@ -98,7 +91,6 @@ export function HomePage() {
   return (
     <section>
       <h1>Faultline</h1>
-      <p className="lede">Find a robot-policy failure, confirm it repeats, reduce it to its cause and keep it as a replayable test.</p>
 
       {runs.length > 0 && (
         <section className="section" aria-labelledby="home-running">
@@ -130,19 +122,12 @@ export function HomePage() {
         {libraryState === 'loading' && <p role="status">Loading the cases.</p>}
         {libraryState === 'error' && <p className="empty">The cases could not be loaded.</p>}
         {libraryState === 'ready' && !latest && (
-          <p className="empty">
-            No cases yet. {controls ? 'Start a diagnosis to make the first one.' : 'Cases appear here after a diagnosis finishes.'}
-          </p>
+          <p className="empty">No cases yet.</p>
         )}
         {latest && (
           <ul className="cards">
             <CaseCard item={latest} />
           </ul>
-        )}
-        {latest && (
-          <p className="muted">
-            Made {shortDate(latest.created)}. Every case is listed in the sidebar.
-          </p>
         )}
       </section>
 

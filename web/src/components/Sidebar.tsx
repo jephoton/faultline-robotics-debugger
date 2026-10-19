@@ -99,9 +99,7 @@ export function Sidebar({ session, items, runs, libraryState, onNavigate }: Prop
             )}
           </div>
         )}
-        {libraryState === 'loading' && <p className="nav-empty">Loading cases.</p>}
         {libraryState === 'error' && <p className="nav-empty">Cases could not be loaded.</p>}
-        {libraryState === 'ready' && items.length === 0 && <p className="nav-empty">No cases yet.</p>}
         {KIND_GROUP.map((group) => {
           const rows = items.filter((item) => item.kind === group.kind);
           if (rows.length === 0) return null;
