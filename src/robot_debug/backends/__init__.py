@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import subprocess
+import sys
 from typing import Any, Callable, List, Mapping, Optional, Protocol, Sequence, runtime_checkable
 
 
@@ -147,9 +148,15 @@ def run_command(argv: Sequence[str], *, cwd: Optional[Path] = None,
     start a real process. Secrets must never be placed in ``argv``.
     """
 
+    # A detached diagnosis has no console to inherit. Without this flag each
+    # short CLI/WSL status call can allocate a visible console on Windows.
+    # These calls are captured and waited for; the diagnosis owner's separate
+    # detachment/process-group settings remain unchanged.
+    options = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)} if sys.platform == "win32" else {}
     return subprocess.run(
         list(argv), cwd=None if cwd is None else str(cwd), capture_output=True,
         text=True, encoding="utf-8", errors="replace", timeout=timeout, check=False,
+        **options,
     )
 
 
