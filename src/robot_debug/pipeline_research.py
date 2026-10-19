@@ -195,10 +195,12 @@ def run(case: Mapping[str, Any], env_file: Optional[Path], deps: Optional[Resear
     provenance = summary.get("provenance") if isinstance(summary.get("provenance"), Mapping) else {}
     kept = {key: provenance.get(key) for key in ("model", "request_status", "estimated_cost_usd")
             if key in provenance}
+    related = [dict(entry, text=rs.collapse_citations(entry["text"])) if isinstance(entry.get("text"), str) else entry
+               for entry in summary["related_work"]]           # a note must not repeat a marker: "[S1] [S1]"
     return {
         "schema_version": 1, "kind": "diagnosis_research", "case_id": case.get("case_id"), "created_at": created,
         "queries": [{"query": q["query"], "retrieved_at": q["retrieved_at"], "results": q["results"]}
                     for q in queries],
-        "summary": {"status": summary["status"], "related_work": summary["related_work"],
+        "summary": {"status": summary["status"], "related_work": related,
                     "limitations": summary["limitations"], "provenance": kept},
     }

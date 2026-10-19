@@ -99,6 +99,41 @@ class Queries(unittest.TestCase):
             self.assertNotIn(private, text)
 
 
+class RepeatedCitations(unittest.TestCase):
+    def test_adjacent_repeats_collapse_and_other_markers_stay(self):
+        from robot_debug.research_store import collapse_citations
+
+        self.assertEqual("A study [S1] says so.", collapse_citations("A study [S1] [S1] says so."))
+        self.assertEqual("A study [S1].", collapse_citations("A study [S1][S1]  [S1]."))
+        self.assertEqual("A [S1] and [S2] [S1].", collapse_citations("A [S1] and [S2] [S1]."))
+        self.assertEqual("no markers", collapse_citations("no markers"))
+
+    def test_the_stored_note_never_repeats_a_marker(self):
+        class Repeating(FakeResearch):
+            def summarize(self, context, key, *, system_prompt=None):
+                note = {"related_work": [{"text": "Paper 1.0 studies robot policies [S1] [S1]",
+                                          "source_ids": ["S1"]}],
+                        "limitations": ["Public sources are context, not evidence about this case."]}
+                return {"response_json": json.dumps(note),
+                        "provenance": {"request_status": "ok", "model": "fake/nano", "estimated_cost_usd": 0.0001}}
+
+        case = {"case_id": "ab" * 32, "kind": "audit", "suite": "libero_object", "task_id": 0,
+                "families": {"blur": {"threshold_severity": 0.4, "stop_reason": "threshold_found"}}}
+        record = pr.run(case, None, deps=Repeating().deps())
+        self.assertEqual("Paper 1.0 studies robot policies [S1]", record["summary"]["related_work"][0]["text"])
+
+    def test_the_library_cites_each_source_once(self):
+        from robot_debug.viewer.library import _research_block
+
+        def note(text, ids):
+            return {"summary": {"status": "interpreted", "related_work": [{"text": text, "source_ids": ids}]}}
+
+        self.assertEqual("Study says so [S1]", _research_block(note("Study says so [S1]", ["S1"]))["related"])
+        self.assertEqual("Study says so [S1]", _research_block(note("Study says so [S1] [S1]", ["S1"]))["related"])
+        self.assertEqual("Study says so [S1] [S2]", _research_block(note("Study says so [S1]", ["S1", "S2"]))["related"])
+        self.assertEqual("Study says so [S1, S2]", _research_block(note("Study says so", ["S1", "S2"]))["related"])
+
+
 class SystemPrompt(unittest.TestCase):
     CONTEXT = {"facts": {"suite": "LIBERO-10"}, "sources": [
         {"source_id": "S1", "title": "t", "url": "https://example.invalid/a", "snippet": "s"}]}

@@ -50,6 +50,7 @@ FILE_LABELS = (("report", "report.md"), ("case", "case.json"), ("explanation", "
                ("candidate", "minimal-candidate.json"), ("replay_inputs", "replay-inputs.json"))
 FILE_NAMES = frozenset(name for _key, name in FILE_LABELS)
 _CASE_ID = re.compile(r"[0-9a-f]{64}\Z")
+_CITATION_REPEAT = re.compile(r"(\[S\d+\])(?:\s*\1)+")        # "[S1] [S1]" shown once
 _STAMP = re.compile(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z\Z")
 _MAX_JSON_BYTES = 4 * 1024 * 1024
 _MAX_TEXT_BYTES = 1024 * 1024
@@ -832,7 +833,9 @@ def _research_block(record: Any) -> Dict[str, Any]:
         for entry in _list(summary.get("related_work")):
             text = _str(_mapping(entry).get("text"))
             if text:
+                text = _CITATION_REPEAT.sub(r"\1", text)
                 ids = [i for i in _list(_mapping(entry).get("source_ids")) if isinstance(i, str)]
+                ids = [i for i in ids if "[{}]".format(i) not in text]       # the note already cites these
                 parts.append(text + ("" if not ids else " [" + ", ".join(ids) + "]"))
         related = "\n\n".join(parts) or None
     return {"related": related, "sources": sources}

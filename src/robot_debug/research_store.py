@@ -41,6 +41,15 @@ _ID = re.compile(r"[0-9a-f]{64}\Z")
 _UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _SOURCE_ID = re.compile(r"S([1-9][0-9]?)\Z")
 _CITATION = re.compile(r"\[S(\d+)\]")
+_REPEATED_CITATION = re.compile(r"(\[S\d+\])(?:\s*\1)+")
+
+
+def collapse_citations(text: str) -> str:
+    """The text with an adjacent repeated citation marker kept once: ``[S1] [S1]`` becomes ``[S1]``."""
+
+    return _REPEATED_CITATION.sub(r"\1", text)
+
+
 # A dotted host-like token (any alphabetic final label), with or without a path.
 _BARE_DOMAIN = re.compile(
     r"[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
