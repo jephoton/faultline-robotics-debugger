@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Setup PATH and authentication — October 21** for the latest work.
+> Read **Owner-reported submission — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,22 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Owner-reported submission — October 21
+
+The project owner reports that the entry is submitted and the video completed.
+They report approximately 3:30 runtime, with the last 30 seconds covering
+local setup and the public gallery's read-only boundary. The video/entry URL,
+submission receipt and final submitted source SHA were not supplied/verified;
+do not invent them or certify duration compliance. The owner previously
+declined agent media review. Earlier preparation checklists are historical,
+not evidence that the owner's submission remains unsubmitted.
+
+At their request, README now prominently distinguishes the read-only hosted
+gallery from local execution and links the own-account/paid-compute quickstart.
+This repository update is local until explicitly integrated/pushed; do not
+claim the public README changed. No upload, submission modification, gallery
+redeploy or cloud action was performed in this step.
 
 ## Setup PATH and authentication — October 21
 

@@ -1,6 +1,10 @@
 # Submission preparation
 
-Working package for human review, not an already submitted entry.
+The project owner reports submission and video completion on October 21.
+This directory preserves preparation drafts and checks; it is not a verified
+copy of the submitted form. Entry/video URLs and final source receipt have
+not been supplied here. Older unchecked items record our verification limits,
+not a claim that the owner's entry is still unsubmitted.
 
 - [Final checklist and version freeze](final-checklist.md): October 21 live
   rules/access check, pending integration and final submission receipt.
@@ -54,7 +58,8 @@ No credentials, account IDs or invoice/payment details belong in this file.
 - [ ] Owner finishes video, confirms media compliance and public YouTube URL.
 - [ ] Recheck final rules, repository/gallery/video links without authentication.
 - [ ] Pin submission source/deployed version and retain free judge access.
-- [ ] Submit with the project owner's explicit approval; save confirmation without secrets.
+- [x] Submit (project owner reports completed October 21; confirmation URL not supplied).
 
-Audit implementation lives on `codex/submission-readiness`; draft content
-has not been uploaded to Devpost, YouTube or a new gallery deployment.
+Audit implementation lives locally on `codex/submission-readiness`. The owner
+reports submitting independently; no agent uploaded the form or video.
+The four-case gallery was deployed October 21 as separately approved.

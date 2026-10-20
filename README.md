@@ -5,6 +5,15 @@ failure to a **smaller confirmed trigger** and keeps it as a **replayable
 regression test** for compatible checkpoints. It works on simulated manipulation
 policies (vision-language-action models such as NVIDIA GR00T).
 
+> **Public demo vs. running your own:** The
+> [hosted gallery](https://faultline-robotics-debugger.vercel.app/) lets you
+> inspect recorded results, reports and videos. It **cannot start a new
+> diagnosis or replay**. To run your own experiments, follow the
+> [local setup and diagnosis quickstart](docs/setup/diagnose.md), configure
+> your own Nebius account and model access, and run `faultline ui` locally.
+> New experiments use paid cloud compute; inspecting the gallery or bundled
+> offline demo does not require a cloud account.
+
 **Scope today:** GR00T N1.7 on the LIBERO benchmark (4 suites, 40 tasks, one
 simulated arm). The loop itself is not tied to LIBERO. Another simulator
 needs an adapter, which is not built. The adapter must:
