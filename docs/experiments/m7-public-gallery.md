@@ -1,5 +1,48 @@
 # M7a step 5: public gallery
 
+## October 21: rewording case added — verified
+
+The project owner explicitly approved publishing **FL-L-C72C** alongside the
+three existing cases. The existing Vercel project now serves four cases at the
+same [production URL](https://faultline-robotics-debugger.vercel.app/).
+[Direct wording case](https://faultline-robotics-debugger.vercel.app/case/r-c72cb10f501b).
+
+This is the saved October 17 LIBERO-Spatial task 0/start 0 screen: the original
+instruction succeeded twice, each of four Nemotron rewordings succeeded once,
+and all four passed the mechanical meaning check. No wording failure or
+reduction is claimed. The wording case has no recorded video; the gallery's
+existing 13 videos are unchanged. No robot, Nemotron or Tavily call was made.
+
+Fresh export: `artifacts/public-gallery-20261021-wording/` (ignored), generated
+with explicit `--runs-root artifacts/runs` and four exact library/case IDs.
+The CLI accepts IDs/long prefixes, not fault-code labels; initial selector
+errors were local only and created no deployment or paid work. Export tests:
+**34 passed**. Public-projection privacy checks passed for 18 JSON/Markdown
+files. The upload allowlist contained only app assets, public case data/media,
+license text and host configuration: **43 files / 12,740,309 bytes**.
+Only the previous project association was copied; `.vercel` and `.vercelignore`
+were excluded. No raw run, spec, key or private backend-state file was uploaded.
+
+Deployment `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq` is READY and production-aliased.
+Source checkpoint `3ed9654` (application bundle unchanged from `5f23cae`).
+The previous READY deployment `dpl_9zmZ6LGN7RWCGVkyv96EWiP5Zx99` remains the
+rollback target; no old deployment or source evidence was deleted.
+
+Acceptance:
+
+- All **42 served files / 12,740,201 bytes** matched local SHA-256, including
+  all 13 existing videos. `vercel.json` is host configuration, not served media.
+- Anonymous HTTP 200 for all four case routes; exported case JSON and files
+  matched the local export. Static session has controls false/token null;
+  library has four cases and no warnings.
+- Browser loaded the wording direct link, rendered all five instruction rows
+  with their actual attempt counts, showed no-failure/no-reduction limitations,
+  and exposed all four cases in the unified navigation. No public run controls
+  appeared on that page. This was a focused publication check, not a fresh
+  whole-site accessibility/performance or media-playback audit.
+- No application code, new cloud resource, hosting upgrade or GitHub push.
+  Publication does not mean the local readiness branch is integrated.
+
 ## October 20 production refresh — verified
 
 The project owner authorized carrying on with the reviewed redeployment without another

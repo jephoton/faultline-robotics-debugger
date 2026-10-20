@@ -28,3 +28,10 @@ Use the committed existing exporter and preserve all source/archive evidence.
 6. Check local document links and whitespace. Commit the publication record
    and documentation atomically with Conventional Commits. No unrelated
    branch integration or push is implied by gallery-deployment approval.
+
+Completed: four-case export published to the existing domain, with all 42
+served files matching local SHA-256. 34 existing tests passed; browser verified
+the five instruction rows, bounded outcome and four-case navigation. There
+are still 13 videos: the wording screen has none. Source `3ed9654`, deployment
+`dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq`; details in the publication record. No
+robot/model calls, source-evidence changes, GitHub push or paid upgrade.

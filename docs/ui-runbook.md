@@ -11,8 +11,9 @@
 > - **How the system works:** [architecture](architecture.md).
 > - **Public, read-only gallery:**
 >   [faultline-robotics-debugger.vercel.app](https://faultline-robotics-debugger.vercel.app/)
->   (no controls). The three showcase cases are published; the latest local
->   navigation, documentation and interpretation fixes await a reviewed redeploy.
+>   (no controls). The three showcase cases and the rewording example are
+>   published. Navigation/documentation fixes were deployed October 20;
+>   the rewording example was added October 21.
 >
 > **Spending rule.** Demos 1–4 only read saved evidence or make dry runs; they
 > create nothing in the cloud and cost nothing. Demos 5 and 6 press **Start**
@@ -207,7 +208,7 @@ the run ends with the **flaky** route. Nothing more runs, no case is made, and
 no disturbance is blamed. The run page shows "The start is flaky untouched"
 in amber.
 
-### Optional wording example (local archive restored)
+### Optional wording example (also in the public gallery)
 
 Open **ui-paraphrase-spatial**, fault code **FL-L-C72C**, under **Cases**.
 It is the recorded October 17 run, not a new test. In the report's **Screen** table, the
@@ -219,9 +220,11 @@ Talking point: "We also test whether changing the instruction's wording breaks
 the policy. These four did not, at this one task and start. That is a bounded
 success result, not proof of general language robustness."
 
-This case is restored in the local panel only. It has not been added to the
-published gallery or the bundled demo. Its archive copy is preserved; no new
-GPU Job or language-model call was needed.
+This case is in the local panel and, since October 21, the
+[public gallery](https://faultline-robotics-debugger.vercel.app/case/r-c72cb10f501b).
+It has not been added to the bundled offline demo. Its archive copy is
+preserved; no new GPU Job or language-model call was needed. This screen has
+no recorded video; use its instruction/outcome table to demonstrate rewordings.
 
 ---
 

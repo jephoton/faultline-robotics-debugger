@@ -22,13 +22,21 @@ measured findings, not an LLM's diagnosis. Follow the same story as the
 | 1:35–1:55 | FL-A-D582: paired blur video, levels and replay result | “On another starting state, blur causes a repeatable failure, including four out of five replay attempts. Noise falls below the threshold on replay, so the report treats it as borderline.” |
 | 1:55–2:20 | Existing Nemotron ranking/next steps; simple on-screen labels for Jobs/GR00T and Token Factory/Nemotron | “Nebius AI Cloud Serverless Jobs run GR00T and the simulations. NVIDIA Nemotron on Nebius Token Factory ranks layout hypotheses, generates instruction rewordings and explains results. Tavily finds research for suggested next steps. Simulator reruns decide the outcomes, not the model's explanation.” |
 | 2:20–2:35 | FL-A-F526: no-failure finding and tested ranges | “This third case found no reliable failure within the tested ranges. Faultline reports that too. These are simulation results, not real-robot safety guarantees.” |
-| 2:35–2:45 | Gallery and repository links; hold closing frame | “Explore three recorded cases in the free gallery. Install Faultline to run your own diagnoses.” |
+| 2:35–2:45 | Gallery and repository links; hold closing frame | “Explore four recorded cases in the free gallery. Install Faultline to run your own diagnoses.” |
 
 Read only the spoken column. Do not narrate case IDs, headings or every table
 row. Finish each line, then let the evidence stay visible for the rest of its
 slot. Pre-open the pages; cut between them rather than recording navigation
 delays. If a take runs long, shorten transitions—not playback by speeding up
 the robot clips. No architecture walkthrough or setup tutorial is needed.
+
+The gallery now also includes the passing rewording screen FL-L-C72C. The
+timed route above remains valid; if demonstrating it in the video, replace
+the 2:20–2:35 no-failure shot rather than adding time. Suggested replacement:
+“Nemotron also rewords the instruction. All four variations passed the meaning
+check and succeeded once. No wording failure was found in this screen.”
+Show the original's two successes and the four single-attempt rows; this is
+not a five-attempt confirmation or a reduced language failure.
 
 ## Footage and truth checks
 

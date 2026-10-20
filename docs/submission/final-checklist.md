@@ -7,6 +7,14 @@ another screenshot/cover/video review by an agent.
 
 ## Verified checkpoint
 
+**October 21 publication update:** the owner approved adding FL-L-C72C. The
+gallery now has four cases, including the passing wording screen, and the same
+13 videos. Deployment `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq`; all 42 served files
+match the fresh export. See the [publication record](../experiments/m7-public-gallery.md).
+The three-case HTTP/text fingerprints below record the earlier pre-redeploy
+check and must not be mistaken for current library fingerprints. The final
+source SHA still awaits approved GitHub integration.
+
 | Item | Verified state |
 | --- | --- |
 | Public repository | `jephoton/faultline-robotics-debugger`, public; MIT detected |
@@ -33,9 +41,10 @@ as UTF-8, not a new whole-deployment binary inventory:
 | `/data/session.json` | `58ed714db2ecd1470913f1dccceb07ef4ca63d805781151d8146324913ad65d6` |
 | `/data/library.json` | `4f912ed1c1c184b3a9d85cfeea79aa3e0ca38f5c279300ba67e5aa57c3003579` |
 
-Preserve the October 20 gallery deployment and its existing
+Preserve the October 21 four-case gallery deployment and its existing
 [publication record](../experiments/m7-public-gallery.md). Its source application
-checkpoint is `5f23cae`, not the future submission-document SHA. A docs-only
+checkpoint remains `5f23cae`; the additional export was made at `3ed9654`,
+not the future submission-document SHA. A docs-only
 integration does not require exporting or redeploying the gallery.
 
 ## 1. Finish the form — project owner
@@ -96,7 +105,8 @@ execution rather than promising free hosted GPU jobs.
 - Final public source SHA: pending approved integration.
 - CI URL/result for that exact SHA: pending.
 - Gallery URL: https://faultline-robotics-debugger.vercel.app/
-- Gallery deployment record: October 20; application checkpoint `5f23cae`.
+- Gallery deployment record: October 21, `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq`;
+  four cases, application checkpoint `5f23cae`, export source `3ed9654`.
 - Public YouTube URL: pending owner.
 - Devpost entry URL and submitted timestamp: pending owner approval/submission.
 - Final rules/link check date: pending immediately-before-submit check.

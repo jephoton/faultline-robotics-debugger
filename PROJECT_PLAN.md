@@ -4,6 +4,14 @@
 
 ## Current status — October 20, 2026
 
+October 21 submission update: the story is approved, screenshots/cover are
+owner-completed and video is in progress. The public gallery now has **four
+cases**, including FL-L-C72C's passing rewording screen, on the same domain.
+The three-case gallery references in the dated milestone snapshot below are
+superseded by this update. No new robot/model runs were needed. The readiness
+branch is local; final integration, questionnaire ratings, rights declarations
+and submission remain gated. See the [final checklist](docs/submission/final-checklist.md).
+
 Faultline finds a robot-policy failure, confirms that it repeats, reduces it to
 a minimal trigger and saves it as a replayable regression case. The
 [README](README.md) gives the pitch, results and how it runs; the

@@ -98,7 +98,8 @@ original names for compatibility.
 ## See a real result in one minute
 
 Open the [public Faultline gallery](https://faultline-robotics-debugger.vercel.app)
-to explore the three showcase cases and their evidence without installing anything.
+to explore four recorded examples—layout reduction, image probes, a bounded
+no-failure result and instruction rewordings—without installing anything.
 It is read-only: diagnoses and replays run through the local tool, not the site.
 
 [`demo/`](demo/README.md) holds one finished diagnosis (the LIBERO-10 failure

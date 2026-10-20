@@ -34,7 +34,7 @@ In the image-probe case, LIBERO-Object task 0, start 0 passed untouched. Gaussia
 
 In the third case, no tested probe met the failure gate. LIBERO-Spatial task 0, start 0 passed untouched; JPEG, colour-cast and dead-pixel probes did not trigger reliable failures. Motion blur caused one failure in five attempts at maximum tested strength, below the gate. This is a bounded result, not a general robustness guarantee.
 
-All three reports and their recordings are available in the [public case gallery](https://faultline-robotics-debugger.vercel.app).
+The [public case gallery](https://faultline-robotics-debugger.vercel.app) also includes a rewording screen: the original instruction succeeded twice, and four Nemotron-written variations each succeeded once and passed the mechanical meaning check. No wording failure was found in that screen. The gallery has four examples; videos accompany the three original showcase cases, not the rewording screen.
 
 ## How we built it
 

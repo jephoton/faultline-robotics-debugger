@@ -14,6 +14,14 @@ passed for 180 links; the review also checked feedback/submission anchors.
 
 ### October 21 recheck and public access
 
+Later on October 21, the owner approved adding the saved rewording example.
+The public gallery now has **four cases**, not three, with the existing
+13 videos. All 42 served files matched the fresh export, and a focused browser
+check verified the wording table and navigation. See the
+[publication record](../experiments/m7-public-gallery.md). The earlier
+three-case check below is retained as dated evidence. No fresh robot/model
+run was required; this does not publish the local readiness branch to GitHub.
+
 Reopened the official rules and overview. The deadline remains October 30,
 10:00 PDT; judging ends December 15 at noon PST (December 16, 04:00 Singapore).
 The rules still explicitly allow a Physical AI project without hardware to

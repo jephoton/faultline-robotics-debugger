@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Recording-ready script — October 21** for the latest work.
+> Read **Four-case gallery published — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,26 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Four-case gallery published — October 21
+
+The project owner explicitly approved adding the saved rewording case to the
+public site. Production now includes **FL-L-C72C** as well as FL-S-8E0D,
+FL-A-D582 and FL-A-F526. [Direct wording page](https://faultline-robotics-debugger.vercel.app/case/r-c72cb10f501b).
+Original instruction succeeds twice; four variations pass the mechanical
+meaning check and each succeed once. No wording failure/reduction or new
+robot/model call. The wording screen has no video; existing 13 videos remain.
+
+Export at source `3ed9654` with unchanged application bundle: 43 upload files,
+42 served files, all remote SHA-256 checks passed; 34 export/demo tests passed.
+Deployment `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq` is READY on the existing domain.
+Browser verified all five instruction rows and four-case navigation. The old
+deployment is retained for rollback. Details:
+[publication record](../experiments/m7-public-gallery.md#october-21-rewording-case-added--verified).
+Runbook and submission gallery references now reflect four cases. Video plan
+retains its runtime and offers replacing the brief no-failure shot with the
+wording table, not adding an extra segment. No GitHub push/integration, paid
+experiment, secret exposure or source/archive evidence modification.
 
 ## Recording-ready script — October 21
 
