@@ -4,15 +4,18 @@ import { IDS } from '../mocks/fixtures';
 import { renderApp } from '../test/utils';
 
 describe('home, local', () => {
-  it('shows the latest case, the running run, and New diagnosis', async () => {
+  it('shows all case cards in library order, the running run, and New diagnosis', async () => {
     renderApp('/');
     expect(await screen.findByRole('heading', { level: 1, name: 'Faultline' })).toBeInTheDocument();
     const running = await screen.findByRole('heading', { name: 'Running now' });
     const section = running.closest('section') as HTMLElement;
     expect(within(section).getByRole('link', { name: 'paraphrase-task1' })).toHaveAttribute('href', '/run/para-demo-20261017-093000');
-    const latest = (await screen.findByRole('heading', { name: 'Latest case' })).closest('section') as HTMLElement;
-    // The newest case by date is the quiet language run from October 16.
-    expect(await within(latest).findByRole('link', { name: 'paraphrase-task4' })).toBeInTheDocument();
+    const cases = (await within(screen.getByRole('main')).findByRole('heading', { name: 'Cases' })).closest('section') as HTMLElement;
+    await within(cases).findByRole('link', { name: 'soup-start14' });
+    expect(within(cases).getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'soup-start14', 'my-failing-start', 'soup-screen', 'audit-task0', 'paraphrase-task0',
+      'diagnose-obj0', 'diagnose-obj0 (wording)', 'paraphrase-task4', 'Occlusion case (M4)',
+    ]);
     expect(screen.getAllByRole('link', { name: /new diagnosis/i }).length).toBeGreaterThan(1);
   });
 

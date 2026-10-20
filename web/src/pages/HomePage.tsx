@@ -58,7 +58,6 @@ export function HomePage() {
   const { session, items, runs, libraryState } = useAppData();
   const controls = useControls();
   const isStatic = session.mode === 'static';
-  const latest = [...items].filter((item) => item.created).sort((a, b) => String(b.created).localeCompare(String(a.created)))[0] ?? items[0];
 
   if (isStatic) {
     return (
@@ -109,16 +108,18 @@ export function HomePage() {
         </section>
       )}
 
-      <section className="section" aria-labelledby="home-latest">
-        <h2 id="home-latest">Latest case</h2>
+      <section className="section" aria-labelledby="home-cases">
+        <h2 id="home-cases">Cases</h2>
         {libraryState === 'loading' && <p role="status">Loading the cases.</p>}
         {libraryState === 'error' && <p className="empty">The cases could not be loaded.</p>}
-        {libraryState === 'ready' && !latest && (
+        {libraryState === 'ready' && items.length === 0 && (
           <p className="empty">No cases yet.</p>
         )}
-        {latest && (
+        {items.length > 0 && (
           <ul className="cards">
-            <CaseCard item={latest} />
+            {items.map((item) => (
+              <CaseCard key={item.id} item={item} />
+            ))}
           </ul>
         )}
       </section>

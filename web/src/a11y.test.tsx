@@ -27,7 +27,7 @@ async function audit(container: HTMLElement) {
 }
 
 const PAGES: [string, string, () => Promise<unknown>][] = [
-  ['home', '/', async () => screen.findByRole('heading', { name: 'Latest case' })],
+  ['home', '/', async () => waitFor(() => expect(within(screen.getByRole('main')).getByRole('heading', { name: 'Cases' })).toBeInTheDocument())],
   ['scenario case', `/case/${IDS.soup}`, async () => screen.findByText('Show all 26 rows')],
   ['imported scenario case', `/case/${IDS.imported}`, async () => screen.findByText(/imported file f00dfeedf00d/)],
   ['stopped case', `/case/${IDS.nominal}`, async () => screen.findByText('No minimal cause was found for this run.')],
@@ -107,7 +107,7 @@ describe('keyboard use', () => {
   it('the skip link is the first stop and the sidebar comes before the main area', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    await screen.findByRole('heading', { name: 'Latest case' });
+    await waitFor(() => expect(within(screen.getByRole('main')).getByRole('heading', { name: 'Cases' })).toBeInTheDocument());
     await user.tab();
     expect(screen.getByRole('link', { name: /skip to content/i })).toHaveFocus();
     const sidebar = document.getElementById('sidebar') as HTMLElement;
@@ -118,7 +118,7 @@ describe('keyboard use', () => {
   it('the skip link moves focus to the main area', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    await screen.findByRole('heading', { name: 'Latest case' });
+    await waitFor(() => expect(within(screen.getByRole('main')).getByRole('heading', { name: 'Cases' })).toBeInTheDocument());
     await user.tab();
     await user.keyboard('{Enter}');
     // The browser follows #main; the main area takes focus because it has tabindex -1.
@@ -130,7 +130,7 @@ describe('keyboard use', () => {
     const user = userEvent.setup();
     renderApp('/');
     const nav = await screen.findByRole('navigation', { name: 'Runs and cases' });
-    await user.click(await screen.findByRole('link', { name: /soup-start14/ }));
+    await user.click(await within(nav).findByRole('link', { name: /soup-start14/ }));
     await screen.findByRole('heading', { level: 1, name: 'soup-start14' });
     expect(document.getElementById('main')).toHaveFocus();
     expect(document.title).toBe('FL-S-AFB5 soup-start14 - Faultline');
@@ -158,7 +158,7 @@ describe('keyboard use', () => {
   it('Escape closes the drawer and returns focus to the menu button', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    await screen.findByRole('heading', { name: 'Latest case' });
+    await waitFor(() => expect(within(screen.getByRole('main')).getByRole('heading', { name: 'Cases' })).toBeInTheDocument());
     const menu = screen.getByRole('button', { name: /menu/i });
     await user.click(menu);
     expect(menu).toHaveAttribute('aria-expanded', 'true');
