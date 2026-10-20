@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Rules/access recheck and freeze preparation — October 21** for the latest work.
+> Read **Recording-ready script — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,21 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Recording-ready script — October 21
+
+At the project owner's request, the [video script](../submission/video-plan.md)
+was tightened to 258 spoken words across eight timed shots targeting 2:45,
+with 15 seconds of limit margin. At 120 words/minute, narration takes about
+2:09, leaving 36 seconds for evidence and pauses. All shot allocations require
+at most 136 words/minute. Layout reduction/replay remains the main case;
+blur and bounded no-failure results are brief supporting examples. Nebius Jobs,
+GR00T, Token Factory/Nemotron and Tavily receive spoken attribution. The
+architecture walkthrough and cover discussion were removed. The plan allocates
+100 seconds of application views from 0:15–1:55; the owner must still check
+actual exported duration and module footage. No recording, media review,
+upload, experiment or model call occurred. Older 2:40/296-word script figures
+below are superseded. No further agent media review is requested.
 
 ## Rules/access recheck and freeze preparation — October 21
 

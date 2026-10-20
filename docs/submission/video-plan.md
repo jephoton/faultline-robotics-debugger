@@ -1,6 +1,6 @@
 # Faultline pitch video — review draft
 
-Target **2 minutes 40 seconds**, leaving margin below three minutes. This is
+Target **2 minutes 45 seconds**, leaving 15 seconds below three minutes. This is
 a shot list and narration draft, not a rendered video. Use existing recordings
 and the gallery/local panel; do not launch a paid run to obtain footage.
 
@@ -15,14 +15,20 @@ measured findings, not an LLM's diagnosis. Follow the same story as the
 
 | Time | Screen/shot | Spoken draft |
 | --- | --- | --- |
-| 0:00–0:15 | Faultline title, then failing robot clip | “Faultline is a debugging workbench for robot foundation models. A benchmark score tells you how often a policy fails. We turn a failure into a smaller test you can inspect and replay.” |
-| 0:15–0:30 | Local New diagnosis Review: untouched check and two branches; never press Start | “Choose a task and start, then review the compute budget. Faultline checks the policy untouched. A reliable failure goes to layout reduction; a passing start goes to controlled probes.” |
-| 0:30–1:05 | FL-S-8E0D, original/minimal/reference clips; Summary and Candidates | “NVIDIA GR00T turns camera views, instructions and robot state into actions in simulation. This saved LIBERO start fails repeatedly. Faultline compares a passing layout and reruns smaller combinations. These four shifts reproduce the failure together. Remove any one and it no longer meets our failure gate in these tests. The retained sizes aren't a global minimum; the report keeps that limitation visible.” |
-| 1:05–1:25 | FL-A-D582 videos and levels table | “From another untouched passing start, blur repeatedly breaks the task. The saved threshold also failed four out of five replay attempts. Noise was borderline on replay, so it isn't the headline result.” |
-| 1:25–1:40 | Regression test history and saved replay inputs, no new Replay action | “Keep the inputs, videos and report as a regression case. The recorded replay still fails on the original policy. A compatible updated checkpoint can be tested against the same saved condition.” |
-| 1:40–2:05 | Nemotron layout ranking versus actual candidates; labeled Next steps/source links | “Nebius AI Cloud Serverless Jobs run the GR00T policy and simulations. NVIDIA Nemotron on Nebius Token Factory ranks layout hypotheses, generates instruction variations and helps interpret evidence. Tavily supplies research context for suggested next steps. Software enforces the test gates; simulator reruns decide the outcomes. Suggestions aren't proven fixes.” |
-| 2:05–2:25 | FL-A-F526 no-failure result, tested ranges; compact architecture view | “No failure found is useful too: this start survived these tested ranges. These are bounded results in simulation, not real-robot safety guarantees. Faultline joins discovery, confirmation, reduction and replay in one inspectable workflow.” |
-| 2:25–2:40 | Gallery URL and repository, title/closing frame | “Explore three recorded cases free in the public gallery. Install Faultline to run your own diagnoses. The goal is a smaller, repeatable debugging case—not another average success rate.” |
+| 0:00–0:15 | Failing robot clip in the app; Faultline name visible | “A robot's success rate doesn't tell you how to reproduce one failure. Faultline is a debugging workbench for robot foundation models: find a failure, confirm it, reduce its trigger, and save a replayable test.” |
+| 0:15–0:35 | Local New diagnosis Review: task/start, budget and two branches; never press Start | “Choose a task, starting state and budget. Faultline tests the policy unchanged. A repeatable failure goes to layout reduction. A passing start goes to image, scene or instruction tests.” |
+| 0:35–1:15 | FL-S-8E0D: original/reduced/reference videos, then Summary/Candidates showing basket, milk, orange juice and arm | “Here, NVIDIA GR00T fails four out of five attempts in LIBERO simulation. Faultline compares a passing layout and tests smaller combinations of changes. Four shifts are needed together: the basket, milk, orange juice and robot arm. Remove any one and the result no longer meets the failure threshold in these tests. The sizes aren't proven smallest.” |
+| 1:15–1:35 | Same case: recorded regression result and saved replay inputs; no Replay action | “The case keeps the inputs, videos and report. A recorded replay still fails on the original policy. An engineer can test a compatible updated checkpoint against the same saved condition.” |
+| 1:35–1:55 | FL-A-D582: paired blur video, levels and replay result | “On another starting state, blur causes a repeatable failure, including four out of five replay attempts. Noise falls below the threshold on replay, so the report treats it as borderline.” |
+| 1:55–2:20 | Existing Nemotron ranking/next steps; simple on-screen labels for Jobs/GR00T and Token Factory/Nemotron | “Nebius AI Cloud Serverless Jobs run GR00T and the simulations. NVIDIA Nemotron on Nebius Token Factory ranks layout hypotheses, generates instruction rewordings and explains results. Tavily finds research for suggested next steps. Simulator reruns decide the outcomes, not the model's explanation.” |
+| 2:20–2:35 | FL-A-F526: no-failure finding and tested ranges | “This third case found no reliable failure within the tested ranges. Faultline reports that too. These are simulation results, not real-robot safety guarantees.” |
+| 2:35–2:45 | Gallery and repository links; hold closing frame | “Explore three recorded cases in the free gallery. Install Faultline to run your own diagnoses.” |
+
+Read only the spoken column. Do not narrate case IDs, headings or every table
+row. Finish each line, then let the evidence stay visible for the rest of its
+slot. Pre-open the pages; cut between them rather than recording navigation
+delays. If a take runs long, shorten transitions—not playback by speeding up
+the robot clips. No architecture walkthrough or setup tutorial is needed.
 
 ## Footage and truth checks
 
@@ -31,8 +37,9 @@ measured findings, not an LLM's diagnosis. Follow the same story as the
   dependent on an unlabeled video alone.
 
 - Keep **at least 75 seconds of legible application modules operating** in
-  the final cut: the continuous 0:15–1:40 route already allocates 85 seconds
-  before any slides. Exclude title/slides from that count and verify the
+  the final cut: 0:15–1:55 allocates 100 seconds of setup preview, evidence,
+  tables and replay history. Include robot-video playback and actual UI
+  interactions, not only still screenshots. Exclude title/slides and verify the
   actual edit. Follow the current Physical AI no-hardware alternative in
   [the readiness audit](readiness-audit.md#current-rules-check).
 - Label saved results “Recorded Nebius simulation”; label Review “Budget preview —
@@ -55,14 +62,11 @@ measured findings, not an LLM's diagnosis. Follow the same story as the
   unrelated tabs. Use only authorized footage/fonts/music; silence is better
   than unlicensed background music.
 
-## Cover concept and production gate
+## Recording and publication
 
-A screenshot-derived cover: **Faultline** / “Turn robot failures into
-replayable tests”, paired failing/passing robot frames and a small
-“Find → Confirm → Reduce → Replay” line. Keep text readable at thumbnail size.
-No new logo or brand direction is required.
-
-The project owner reviews the story and chooses narration (own voice recommended for a
-personal pitch; any alternative must be approved). Then record/edit the
-existing UI, measure final duration and module-footage time, review the cover,
-and obtain explicit approval before public YouTube upload and submission.
+The project owner has completed screenshots and cover and is producing the
+video; no further agent media review is requested. Record from existing
+evidence only. Check the final exported duration, module-footage time and
+private information yourself. Use public YouTube under the current specific
+hackathon rules. A word-count/timing plan does not certify a finished recording.
+No upload or submission is performed by editing this script.
