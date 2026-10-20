@@ -16,6 +16,8 @@ describe('home, local', () => {
       'soup-start14', 'my-failing-start', 'soup-screen', 'audit-task0', 'paraphrase-task0',
       'diagnose-obj0', 'diagnose-obj0 (wording)', 'paraphrase-task4', 'Occlusion case (M4)',
     ]);
+    const intro = screen.getByRole('heading', { name: 'What Faultline does' }).closest('section') as HTMLElement;
+    expect(intro.compareDocumentPosition(cases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /new diagnosis/i }).length).toBeGreaterThan(1);
   });
 

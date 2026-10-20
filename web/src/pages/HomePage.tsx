@@ -108,6 +108,7 @@ export function HomePage() {
         </section>
       )}
 
+      <Intro />
       <section className="section" aria-labelledby="home-cases">
         <h2 id="home-cases">Cases</h2>
         {libraryState === 'loading' && <p role="status">Loading the cases.</p>}
@@ -131,7 +132,6 @@ export function HomePage() {
           </Link>
         </p>
       )}
-      <Intro />
     </section>
   );
 }

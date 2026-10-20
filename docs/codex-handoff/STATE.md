@@ -17,6 +17,12 @@ below for the remaining submission tasks, not another publication gate.
 
 ## Local demo home and archive — October 21
 
+Follow-up layout correction: the owner wants **What Faultline does above
+Cases**, matching the public gallery, not below the cards. Intro moved above
+the local Cases section. Regression test verified the ordering (red/green),
+all 14 page tests and build/typecheck passed, and the running local browser
+was refreshed and verified. Server remains running; public site unchanged.
+
 The project owner approved showing all local cases on home, retaining active
 runs above Cases and New diagnosis. Implemented in `38d4828`, with rebuilt
 packaged assets. A regression test first failed on the missing Cases section,
