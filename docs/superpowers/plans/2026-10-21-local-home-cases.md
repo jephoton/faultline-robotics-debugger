@@ -17,3 +17,10 @@ tasks to delegate. Routine implementation follows the accepted UI choice.
    restarting any active experiment. Verify live home cards and sidebar.
 5. Record the local behavior in handoff, make a conventional commit and
    leave the server running for the owner's demo. No public redeploy or push.
+
+Completed: regression test failed as expected, then all 336 web tests and
+build/typecheck passed; 30 packaged-demo/export tests passed. Source and bundle
+committed in `38d4828`. Local browser verified all four cards and the wording
+case link/Back action; server left running at port 8765. The additional request
+to hide FL-S-964B was handled by a recoverable, hash-verified archive move,
+without deleting evidence or hiding the distinct D582 case. No cloud action.

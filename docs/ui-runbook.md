@@ -23,6 +23,11 @@
 
 ## Setup (before the demo)
 
+Local home shows all visible cases as cards, below any active runs, plus
+New diagnosis. `object-t0-start0` (FL-S-964B) was hidden at the owner's request
+by archiving its run; the separate `object-start0 - stress test` (FL-A-D582)
+remains. Source evidence was preserved; see the current handoff for restoration.
+
 1. **Start the control panel** from the repository root:
 
    ```bash

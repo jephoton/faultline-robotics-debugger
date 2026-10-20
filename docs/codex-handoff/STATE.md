@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Four-case gallery published — October 21** for the latest work.
+> Read **Local demo home and archive — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,31 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Local demo home and archive — October 21
+
+The project owner approved showing all local cases on home, retaining active
+runs above Cases and New diagnosis. Implemented in `38d4828`, with rebuilt
+packaged assets. A regression test first failed on the missing Cases section,
+then passed after the change. All 336 web tests, TypeScript/build and 30
+Python export/packaged-demo tests passed. Existing non-failing React act
+warnings remain. Accessibility tests were updated to wait for the final main
+element rather than capturing the temporary bootstrap element.
+
+The owner also requested hiding **object-t0-start0 / FL-S-964B**, not the
+separate D582 blur/noise case. Its exact run directory was moved from
+`artifacts/runs/object-t0-start0-20261019T081353Z` to
+`artifacts/archive-2026-10-21/object-t0-start0-20261019T081353Z` after confirming
+zero active runs. All 11 file SHA-256 values matched before/after. Nothing was
+deleted; restore that directory to `artifacts/runs/` to show it again.
+
+The local server was started on http://127.0.0.1:8765/ with `--artifacts
+artifacts`, and left running for the owner's recording. Browser verified four
+home cards (8E0D, D582, C72C, F526), New diagnosis, opening the wording report
+and Back returning home. No paid action was pressed. Session ownership may
+end with the tool/app process; recheck health if a later session needs it.
+The new local home bundle was not publicly redeployed; the public four-case
+gallery remains on its verified October 21 deployment.
 
 ## Four-case gallery published — October 21
 
