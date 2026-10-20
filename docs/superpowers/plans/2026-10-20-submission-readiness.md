@@ -144,3 +144,27 @@ submission package: billing scope, first-hand confirmation, story/narration,
 actual video/cover, rights/eligibility, judge access and final publication.
 The audit branch is kept local; this checkpoint does not approve a push,
 merge, deployment, paid run or submission.
+
+## Approved editorial follow-up — October 20
+
+The user approved the focused narrative pass: present Faultline explicitly as
+**a debugging workbench for robot foundation models**, not an autonomous AI
+researcher or new embodied agent. This continues the existing drafting task;
+it does not reopen product architecture, model choice or experiment scope.
+
+- Writer (Luna) owns `docs/submission/devpost-draft.md`: sharpen title/tagline
+  and opening, keep the three evidenced cases, distinguish GR00T under test
+  from Nemotron assistance, and replace stale preparation prose. Feedback is
+  approved and period billing is recorded; neither is a future feature.
+- Coordinator owns `docs/submission/video-plan.md` and STATE: align the
+  narration with the same approved positioning and update the next review gate.
+  No footage generation, new experiment, upload or public publishing.
+- Independent reviewer checks both drafts against final-showcase, breadth-pack,
+  ADR 0030 and the billing worksheet. No changed measurements, global-minimum
+  claims, causal proof, universal checkpoint support or unsupported savings.
+- Verify local links, privacy, numeric claims and `git diff --check`, then
+  commit the editorial unit locally. Human story/video approval remains.
+
+Concurrency: writer drafts while coordinator aligns the script; file ownership
+does not overlap. Coordinator integrates and is sole Git owner. This is green
+editorial work within the accepted story, not permission to submit it.
