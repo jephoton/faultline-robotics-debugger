@@ -56,11 +56,11 @@ Specific onboarding notes, strengths and friction for Nebius AI Cloud, Token Fac
 
 ## What's next
 
-The next evaluation step is to compare the integrated loop with explicit search baselines and measure time to first apparent failure, reproducible failure, and reduced failure. Broader task and start coverage would show how often the current results generalize. Neither comparison nor broad coverage is established by these three cases.
+With the working diagnosis, inspection and replay workflow in place, the next step is broader validation. We want to compare Faultline with simpler grid and random searches, measuring the time and compute cost needed to find a repeatable failure and reduce its triggering condition. Testing more robot tasks and starting states would also show how broadly the current findings generalize. These are future experiments, not results claimed by this submission.
 
 ## Limitations
 
-The results apply to the named checkpoint, simulator/reset setup, starts, and tested ranges. Reduction does not establish a global minimum or causal proof. The public evaluation evidence for start 14 concerns a different GR00T checkpoint and does not show the same cause. Suggested remedies, physical-robot behavior, universal checkpoint compatibility and cost savings have not been established.
+The demonstrated results cover specific GR00T checkpoint, simulator, task and starting-state configurations within the tested perturbation ranges. A reduced case preserves a repeatable failure, but is not necessarily the smallest possible trigger or proof of the underlying cause. We have not established the same behavior on arbitrary robot policies or physical robots. Nemotron's explanations and suggested next steps remain hypotheses, not verified fixes, and we have not yet shown that the diagnostic workflow saves time or money compared with simpler searches.
 
 <!-- END ABOUT THE PROJECT -->
 
