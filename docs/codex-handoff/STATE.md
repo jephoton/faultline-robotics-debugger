@@ -35,6 +35,11 @@ no submitted form, video or public source was modified by this cleanup.
 
 ## Owner-reported submission — October 21
 
+The owner subsequently supplied the finished video URL:
+https://youtu.be/BvUGodDrmH0. Added to README quick links and submission records.
+Video visibility, content and duration were not independently reviewed; no
+upload or edit was performed. Entry URL/source SHA remain unrecorded.
+
 The project owner reports that the entry is submitted and the video completed.
 They report approximately 3:30 runtime, with the last 30 seconds covering
 local setup and the public gallery's read-only boundary. The video/entry URL,

@@ -109,7 +109,8 @@ Use JPG, PNG or GIF, each at most 5 MB; prefer 3:2. The supplied form permits up
 
 ## Project Media → demo video URL
 
-**Pending: insert the actual reviewed video URL.** Do not use the gallery URL here.
+[Finished video supplied by the project owner](https://youtu.be/BvUGodDrmH0).
+Visibility, duration and content were not independently reviewed in this update.
 
 The supplied form accepts YouTube or Vimeo and public or unlisted access without a password. The hackathon requirements supplied earlier specifically request a public YouTube video; use that stricter option unless a final rules check confirms otherwise. Keep the finished video under three minutes, with at least one minute of key application modules operating for the Physical AI no-hardware alternative. The [video plan](video-plan.md) targets 2:45; no video has been rendered or uploaded by this drafting step.
 

@@ -2,12 +2,15 @@
 
 The project owner reports submitting Faultline and completing the video on
 October 21, 2026. These files preserve preparation work, not a verified export
-of the submitted form. The final entry/video URLs and submitted source SHA
-have not been supplied here. Do not interpret old draft checklists as proof
+of the submitted form. The [finished video](https://youtu.be/BvUGodDrmH0) was
+supplied by the owner; the entry URL and submitted source SHA are not recorded.
+Do not interpret old draft checklists as proof
 that the owner's entry remains unsubmitted.
 
 ## Materials
 
+- [Demo video](https://youtu.be/BvUGodDrmH0) — owner-supplied finished recording;
+  not reviewed or certified by this documentation update.
 - [Story and form fields](devpost-draft.md) — reviewed story, tags and links.
 - [Video script](video-plan.md) — planned timing and shot list; not a recording.
 - [Nemotron feedback answers](nemotron-feedback-draft.md) — form-specific draft;

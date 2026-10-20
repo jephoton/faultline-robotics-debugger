@@ -107,6 +107,8 @@ execution rather than promising free hosted GPU jobs.
 - Gallery URL: https://faultline-robotics-debugger.vercel.app/
 - Gallery deployment record: October 21, `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq`;
   four cases, application checkpoint `5f23cae`, export source `3ed9654`.
-- Public YouTube URL: pending owner.
-- Devpost entry URL and submitted timestamp: pending owner approval/submission.
+- YouTube URL: https://youtu.be/BvUGodDrmH0 (owner-supplied; visibility/content not
+  independently reviewed).
+- Devpost entry: owner reports submitted October 21; entry URL and exact
+  submitted timestamp not supplied.
 - Final rules/link check date: pending immediately-before-submit check.

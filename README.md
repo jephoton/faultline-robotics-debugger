@@ -7,6 +7,7 @@ replay on a compatible checkpoint.
 ## Quick links
 
 [Public demo](https://faultline-robotics-debugger.vercel.app/) ·
+[Demo video](https://youtu.be/BvUGodDrmH0) ·
 [Run your own](docs/setup/diagnose.md) ·
 [UI walkthrough](docs/ui-runbook.md) ·
 [Architecture](docs/architecture.md) ·
