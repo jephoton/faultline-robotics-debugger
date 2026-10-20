@@ -102,8 +102,11 @@ execution rather than promising free hosted GPU jobs.
 
 ## Final receipt — fill only when verified
 
-- Final public source SHA: pending approved integration.
-- CI URL/result for that exact SHA: pending.
+- Approved source checkpoint: `80e5bc8`, fast-forwarded into local main after
+  the owner's final push approval. The closeout documentation adds a later
+  commit; resolve current remote main for the exact published HEAD.
+- CI URL/result for that published HEAD: verify the new GitHub run, not the
+  earlier successful run listed in the historical checkpoint above.
 - Gallery URL: https://faultline-robotics-debugger.vercel.app/
 - Gallery deployment record: October 21, `dpl_7f7eowiSoNKY8TGYTwwRwAJvbsHq`;
   four cases, application checkpoint `5f23cae`, export source `3ed9654`.

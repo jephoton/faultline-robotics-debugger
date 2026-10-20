@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Reader-facing documentation cleanup — October 21** for the latest work.
+> Read **Final Git publication authorized — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,28 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Final Git publication authorized — October 21
+
+The owner said “go push, we're done,” authorizing integration and publication
+of the completed readiness branch. Fast-forwarded it into local main through
+`80e5bc8` (finished README, YouTube link, privacy/feedback/submission records,
+and local-home UI corrections). No force push or history rewrite. This
+checkpoint supersedes earlier local-only/pending-approval statements below.
+
+Fresh pre-publication checks: **336 web tests**, **116 focused Python tests**,
+typecheck/production build, zero generated-bundle drift, diff whitespace and
+changed-file sensitive/artifact-name checks passed. Full Python suite remains
+the earlier dated audit plus the pending CI run; do not describe the focused
+116 as a fresh full run. Existing React act warnings remain non-failing.
+
+The same main publication contains this closeout record. Verify remote main
+and its CI before declaring publication complete; use GitHub's current main
+SHA and run URL for the exact post-closeout commit, not the previous CI run.
+No new deployment or paid compute is implied. Public gallery remains the
+four-case October 21 deployment; local Docker engine remains unresolved WMI
+startup work, not a demo blocker. Video URL: https://youtu.be/BvUGodDrmH0.
+Entry URL/exact receipt remain unrecorded; submission is owner-reported.
 
 ## Reader-facing documentation cleanup — October 21
 

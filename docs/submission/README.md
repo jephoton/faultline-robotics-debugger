@@ -29,10 +29,10 @@ that the owner's entry remains unsubmitted.
 - [Version/checklist record](final-checklist.md) — publication checkpoints
   and pending receipt fields.
 
-The four-case gallery was deployed October 21. Readiness-branch changes are
-still local until integrated/pushed; submission by the owner does not imply
-that every local documentation change is public. No agent uploaded the form
-or video, and no final media review is claimed.
+The four-case gallery was deployed October 21. The owner subsequently
+authorized integration/push of the completed readiness work into main; see
+the current handoff for that checkpoint and verify CI on the published SHA.
+No agent uploaded the form or video, and no final media review is claimed.
 
 Keep judge access available through the end of the judging period. Preserve
 the final source SHA, deployment, entry URL and video URL when available;
