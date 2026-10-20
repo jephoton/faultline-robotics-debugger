@@ -23,6 +23,13 @@ the local Cases section. Regression test verified the ordering (red/green),
 all 14 page tests and build/typecheck passed, and the running local browser
 was refreshed and verified. Server remains running; public site unchanged.
 
+Final requested local order: **Faultline heading → the same gallery lede
+paragraph and styling → New diagnosis → What Faultline does → Cases** (active
+runs, when present, remain before the introduction). Added the missing lede
+and moved the action above Intro. Test assertions cover both requirements;
+red/green verified, all 14 page tests and build/typecheck passed. Refreshed
+browser and screenshot confirmed the text, spacing and order. No redeploy.
+
 The project owner approved showing all local cases on home, retaining active
 runs above Cases and New diagnosis. Implemented in `38d4828`, with rebuilt
 packaged assets. A regression test first failed on the missing Cases section,

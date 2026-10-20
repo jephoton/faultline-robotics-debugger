@@ -82,6 +82,7 @@ export function HomePage() {
   return (
     <section>
       <h1>Faultline</h1>
+      <p className="lede">A gallery of diagnoses of a robot policy: what failed, how often, the smallest change that causes it, and how it was made.</p>
 
       {runs.length > 0 && (
         <section className="section" aria-labelledby="home-running">
@@ -108,6 +109,13 @@ export function HomePage() {
         </section>
       )}
 
+      {controls && (
+        <p>
+          <Link to="/new" className="btn">
+            <Icon name="plus" /> New diagnosis
+          </Link>
+        </p>
+      )}
       <Intro />
       <section className="section" aria-labelledby="home-cases">
         <h2 id="home-cases">Cases</h2>
@@ -125,13 +133,6 @@ export function HomePage() {
         )}
       </section>
 
-      {controls && (
-        <p>
-          <Link to="/new" className="btn">
-            <Icon name="plus" /> New diagnosis
-          </Link>
-        </p>
-      )}
     </section>
   );
 }

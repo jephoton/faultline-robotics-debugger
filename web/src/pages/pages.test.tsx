@@ -18,6 +18,10 @@ describe('home, local', () => {
     ]);
     const intro = screen.getByRole('heading', { name: 'What Faultline does' }).closest('section') as HTMLElement;
     expect(intro.compareDocumentPosition(cases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const main = screen.getByRole('main');
+    expect(within(main).getByText('A gallery of diagnoses of a robot policy: what failed, how often, the smallest change that causes it, and how it was made.')).toHaveClass('lede');
+    const newDiagnosis = within(main).getByRole('link', { name: /new diagnosis/i });
+    expect(newDiagnosis.compareDocumentPosition(intro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /new diagnosis/i }).length).toBeGreaterThan(1);
   });
 
