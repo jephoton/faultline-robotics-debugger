@@ -32,6 +32,36 @@ opening or refreshing a page does not.
 
 ## Prepare a bounded diagnosis
 
+### Windows PATH when the panel cannot find installed tools
+
+If the native Python panel reports missing Nebius/Docker even though they are
+installed, check its process PATH, not only a separate terminal's PATH. For
+Nebius installed in WSL and Docker Desktop at its default location:
+
+```powershell
+$env:PATH = "$env:SystemRoot\System32;$env:ProgramFiles\Docker\Docker\resources\bin;$env:PATH"
+$env:PYTHONPATH = 'src'
+py -3.11 -B -m robot_debug.cli ui --artifacts artifacts --port 8765
+```
+
+Restart the panel only after checking there are no active runs. The launcher
+can then find `wsl.exe` and invoke the existing WSL Nebius installation. For
+interactive sign-in inside WSL, Windows System32 must also be on its PATH so
+the CLI can open the Windows browser:
+
+```bash
+export PATH="/mnt/c/Windows/System32:$PATH"
+"$HOME/.nebius/bin/nebius" iam whoami
+```
+
+Keep identity output private. After sign-in, use Setup's Check again. Its
+authentication result may be cached for 60 seconds. The current Docker check
+only finds the executable; separately use `docker info` to confirm the engine
+is running. Docker is needed for building an image, not browsing saved cases
+or submitting an already-built image to a Job.
+
+### Before starting cloud work
+
 1. Prefer the unified `configs/specs/diagnose.yaml` example; specialized
    scenario, audit and paraphrase CLI examples remain available. Copy it to
    an ignored local path. Fill in project, image digest and secret

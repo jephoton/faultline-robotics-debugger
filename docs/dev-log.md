@@ -4,6 +4,32 @@ This log records observed engineering issues separately from provider
 feedback in [`FEEDBACK.md`](../FEEDBACK.md). A risk identified by review or
 tests is not necessarily a failure seen in the live pilot.
 
+## October 21: native viewer PATH and Docker startup
+
+The native Windows panel reported missing Nebius/Docker despite existing WSL
+Nebius and Docker Desktop installations. Its process PATH lacked System32 and
+Docker's CLI folder. Restarted the idle viewer with those directories on its
+process PATH; no machine-wide environment change. The existing launcher found
+WSL, and an interactive `iam whoami` renewed sign-in after adding Windows
+System32 to the WSL PATH for browser launch. Setup then reported signed in.
+No account identity/token was written here and no cloud work was started.
+
+Docker initially exited on an inaccessible temporary `run/dockerInference`
+socket, the same previously diagnosed local runtime issue. With Docker stopped,
+preserved the runtime directory in timestamped sibling backups under
+`%LOCALAPPDATA%/Docker/` and restarted; images/volumes/settings untouched.
+The socket error cleared, but the engine repeatedly stopped while querying
+`Win32OptionalFeature` over WMI: “Object server is stopping when OLE service
+contacts it.” A normal Docker restart did not resolve that second issue.
+Winmgmt itself reported running; no Windows service restart, WSL shutdown,
+factory reset, reinstall or deletion was performed.
+
+The panel's existing Docker check only tests executable discovery, so green
+does not prove engine health. `docker info` did not succeed. Docker is not
+needed for the recorded demo or submitting a prebuilt image. Viewer remains
+available; engine recovery is unresolved local Windows/Docker work, not a
+Nebius inference defect. See the operator runbook's process-PATH instructions.
+
 ## Post-walkthrough cleanup — October 19
 
 **Transient Windows consoles.** The diagnosis deliberately detaches from the

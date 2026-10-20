@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Local demo home and archive — October 21** for the latest work.
+> Read **Setup PATH and authentication — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,26 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Setup PATH and authentication — October 21
+
+The owner requested Nebius sign-in and Docker startup. Native viewer PATH
+missed System32/Docker CLI directories; restarted the idle viewer with those
+on its process PATH, preserving keys/specs/evidence. Existing WSL Nebius
+authentication renewed successfully; live Setup reports all five checks green.
+Keep session output private. No GPU/model/paid cloud action occurred.
+
+**Docker engine is NOT verified ready:** Desktop opens and CLI is found, but
+after the approved recoverable runtime-folder repair cleared an inaccessible
+socket, its engine stopped on a Windows WMI `Win32OptionalFeature` query.
+Normal restart did not fix it; no factory reset, service restart, WSL shutdown
+or destructive repair. Runtime backups remain under `%LOCALAPPDATA%/Docker/`.
+The existing panel Docker check tests installation only. Do not claim it proves
+engine readiness. Recorded demo/prebuilt image operations do not need Docker.
+See [dev-log](../dev-log.md#october-21-native-viewer-path-and-docker-startup)
+and [runbook](RUNBOOK.md#windows-path-when-the-panel-cannot-find-installed-tools).
+Viewer remains on port 8765, now started with corrected PATH. A subsequent
+restart must retain it; no machine-wide PATH change was made.
 
 ## Local demo home and archive — October 21
 
