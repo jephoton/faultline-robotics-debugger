@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Devpost form mapping — October 21** for the latest work.
+> Read **Questionnaire and media progress — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,23 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Questionnaire and media progress — October 21
+
+The project owner approved the final story and reports screenshots and cover
+completed; video production is now their active task. Image files were not
+inspected in this checkpoint. Earlier notes saying all images remain unproduced
+are superseded by this update. Built With tags were not separately confirmed.
+
+The actual nine-question Nemotron form is drafted in
+[the questionnaire](../submission/nemotron-feedback-draft.md), using the
+recorded variant comparisons and tool feedback. Three subjective ratings
+(quality, recommendation and relative inference experience) remain for the
+project owner; do not invent personal ratings or a cross-provider benchmark.
+Existing first-hand feedback remains approved. No new model call, spend,
+deployment or submission occurred. Next autonomous work can prepare final
+publication/version checks; publishing still needs approval and final video
+review awaits the supplied asset/URL.
 
 ## Devpost form mapping — October 21
 

@@ -9,6 +9,8 @@ Working package for human review, not an already submitted entry.
 - [Devpost draft](devpost-draft.md): marked paste-ready About the project story,
   separate Built With tags, Try it out links and image/video field guidance.
 - [Video plan](video-plan.md): timed pitch and shot list using existing evidence.
+- [Nemotron questionnaire draft](nemotron-feedback-draft.md): nine form-specific
+  answers; three subjective ratings still need the project owner's input.
 - [Billing reconciliation](billing-reconciliation.md): September 19–October 19
   service totals and remaining per-run/lifetime scope limits.
 - [Privacy audit](privacy-audit.md): neutral documentation, tracked-tree
@@ -19,9 +21,9 @@ Working package for human review, not an already submitted entry.
 | Item | Needed input | Current position |
 | --- | --- | --- |
 | Billing | Review scoped totals; provide other dates only if claiming lifetime spend | September 19–October 19: AI Cloud $42.04 + Token Factory $0.13 = $42.17 including VAT. Only one AI Cloud account used; project filters/currency code not visible. $0.82 remaining is not usage or a spending allowance |
-| Feedback | [Approved first-hand notes](../../FEEDBACK.md#first-hand-notes) | User approved the feedback; personal-name heading removed and note text preserved |
+| Feedback | Choose questionnaire ratings and review form-specific answers | Existing first-hand notes remain approved; questionnaire draft prepared from recorded evidence |
 | Video | Approve/edit script and select narration approach | Timed draft only, no finished video or public YouTube link |
-| Cover | Approve a cover derived from the app after the final story is settled | Not produced; no image-generation spend approved |
+| Images/cover | Final privacy/readability/rights review of supplied assets | Project owner reports screenshots and cover completed; files not inspected in this step |
 | Submission | Confirm track, entrant eligibility, rights/attributions and final content; approve public uploads and submit | No Devpost fields changed or personal attestations made |
 
 ## Billing worksheet (do not sum these rows)
@@ -44,8 +46,10 @@ No credentials, account IDs or invoice/payment details belong in this file.
 
 - [x] Confirm feedback and record billing totals only for the supplied period.
 - [ ] Review source/model/media attributions and entrant declarations.
-- [ ] Approve the Devpost story and Built With list.
-- [ ] Produce and review the actual video and cover; confirm public YouTube URL.
+- [x] Approve the Devpost story (confirmed October 21).
+- [ ] Confirm Built With tags and questionnaire answers/ratings.
+- [x] Produce screenshots and cover (project owner confirmation, October 21).
+- [ ] Review final media; finish video and confirm public YouTube URL.
 - [ ] Recheck final rules, repository/gallery/video links without authentication.
 - [ ] Pin submission source/deployed version and retain free judge access.
 - [ ] Submit with the project owner's explicit approval; save confirmation without secrets.
