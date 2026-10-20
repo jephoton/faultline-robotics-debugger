@@ -12,6 +12,32 @@ passed for 180 links; the review also checked feedback/submission anchors.
 
 ## Current rules check
 
+### October 21 recheck and public access
+
+Reopened the official rules and overview. The deadline remains October 30,
+10:00 PDT; judging ends December 15 at noon PST (December 16, 04:00 Singapore).
+The rules still explicitly allow a Physical AI project without hardware to
+show at least one minute of key application modules operating. They require
+a public YouTube video under three minutes; the form's Vimeo/unlisted options
+do not override that specific requirement. Public code, license, setup,
+model/platform use and feedback remain required. This is a textual alignment
+assessment, not organizer approval or an entrant eligibility determination.
+
+Unauthenticated HTTP checks returned 200 for the repository, public LICENSE,
+README, NOTICE and setup guide, gallery root, all three case routes and their
+JSON detail documents. The gallery session still disables controls and the
+library lists exactly the three showcase cases without warnings. No footage,
+image or fresh browser review was performed, as requested by the project owner.
+The web text extractor could not render the gallery, so direct anonymous HTTP
+and JSON checks supplied the access evidence instead.
+
+Fetched main remains `257c130df213a9d5365e2e50b93dc6c53b54fb7e`, with successful
+CI run 39283937968; GitHub still reports PUBLIC and MIT. The local readiness
+branch is not integrated/pushed. See the [freeze/checklist](final-checklist.md)
+for the exact checkpoint, fingerprints, pending integration and final receipt.
+
+### October 20 original check
+
 Sources checked October 20: [official rules](https://nebiusglobalaihackathon.devpost.com/rules),
 [overview and judging](https://nebiusglobalaihackathon.devpost.com/), and
 [organizer advice](https://nebiusglobalaihackathon.devpost.com/updates/46205-how-to-build-a-winning-project).
@@ -114,9 +140,14 @@ seek organizer clarification if they require unrestricted paid execution.
    overlapping session estimates.
 2. Feedback is approved, with a neutral heading and unchanged note text.
    Entrant/right-to-use declarations remain for the project owner.
-3. Review the draft story and timed video plan, then record/edit and check
-   the actual final video's duration and at least one minute of module footage.
-4. Approve the final public uploads/submission and preserve the judge build.
+3. Story is approved and screenshots/cover are completed, per the project
+   owner. Video remains in progress; the owner handles media compliance, with
+   no further agent media review requested. Questionnaire ratings/answers and
+   Built With tags still need owner confirmation.
+4. Approve public integration/push of the local readiness work, check CI on
+   the final SHA, complete the final rules/link check once the video URL is
+   available, approve submission and preserve the judge build. Use the
+   [final checklist](final-checklist.md); no release was created by this audit.
 
 No GPU, Token Factory or Tavily calls, new cloud resources, hosting upgrade,
 public redeployment or submission were made by this audit.

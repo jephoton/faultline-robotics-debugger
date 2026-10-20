@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Questionnaire and media progress — October 21** for the latest work.
+> Read **Rules/access recheck and freeze preparation — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,22 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Rules/access recheck and freeze preparation — October 21
+
+The project owner requested only live rules/public-link rechecking and a
+version-freeze/submission checklist, explicitly declining image/video reviews.
+Completed read-only checks and prepared
+[the final checklist](../submission/final-checklist.md) with versions, gallery
+text fingerprints, integration gates and a pending submission receipt.
+[The readiness audit](../submission/readiness-audit.md#october-21-recheck-and-public-access)
+records fresh rules and access evidence. Gallery, three case routes and JSON
+details, repo/license/README/NOTICE/setup all returned anonymous HTTP 200.
+Public main is `257c130`; CI 39283937968 remains successful. Local readiness
+work remains unintegrated/unpushed. No release, tag, deploy or submission was
+made. Story is approved, images completed and video owner-led/in progress;
+do not ask for another media review. Questionnaire ratings, tags, rights and
+publication/submission approval remain owner gates. No paid calls were made.
 
 ## Questionnaire and media progress — October 21
 
