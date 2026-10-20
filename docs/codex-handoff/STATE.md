@@ -17,6 +17,13 @@ below for the remaining submission tasks, not another publication gate.
 
 ## Setup PATH and authentication — October 21
 
+Later demo cleanup: at the owner's request, the newer **object-t0-start0 /
+FL-S-494A** run `object-t0-start0-20261020T174410Z` was also moved from
+`artifacts/runs/` to `artifacts/archive-2026-10-21/`. Zero active runs were
+present; file hashes were verified after the move and the API no longer lists
+it. Recover by moving that exact directory back into `artifacts/runs/`.
+No evidence deletion, public gallery change or paid call.
+
 The owner requested Nebius sign-in and Docker startup. Native viewer PATH
 missed System32/Docker CLI directories; restarted the idle viewer with those
 on its process PATH, preserving keys/specs/evidence. Existing WSL Nebius
