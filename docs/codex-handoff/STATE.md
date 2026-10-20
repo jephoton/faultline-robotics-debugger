@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Owner-reported submission — October 21** for the latest work.
+> Read **Reader-facing documentation cleanup — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,24 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Reader-facing documentation cleanup — October 21
+
+The owner requested README quick links, removal of its Roadmap/Local checks
+sections and cleanup of prominent documentation. README now leads with demo,
+own-account setup, UI guide, architecture, results, feedback and license links.
+It keeps actual install/run commands, read-only versus paid execution,
+four-case measured results, NVIDIA/Nebius roles and bounded claims; detailed
+history is linked instead of repeated. Test/build commands remain in the
+operator runbook, and the roadmap/evidence files were not deleted.
+
+`docs/README.md` is now a short usage/results/maintainer index pointing first
+to the final showcase rather than an older superseded reduction.
+`docs/submission/README.md` records owner-reported submission and links audit
+records without duplicate billing tables or stale media-production tasks.
+No embedded reference/guide or application code changed, so no UI rebuild or
+redeployment was needed. Documentation remains local until approved push;
+no submitted form, video or public source was modified by this cleanup.
 
 ## Owner-reported submission — October 21
 

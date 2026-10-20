@@ -1,65 +1,37 @@
-# Submission preparation
+# Submission records
 
-The project owner reports submission and video completion on October 21.
-This directory preserves preparation drafts and checks; it is not a verified
-copy of the submitted form. Entry/video URLs and final source receipt have
-not been supplied here. Older unchecked items record our verification limits,
-not a claim that the owner's entry is still unsubmitted.
+The project owner reports submitting Faultline and completing the video on
+October 21, 2026. These files preserve preparation work, not a verified export
+of the submitted form. The final entry/video URLs and submitted source SHA
+have not been supplied here. Do not interpret old draft checklists as proof
+that the owner's entry remains unsubmitted.
 
-- [Final checklist and version freeze](final-checklist.md): October 21 live
-  rules/access check, pending integration and final submission receipt.
-- [Readiness audit](readiness-audit.md): current rules, repo/security checks,
-  evidence limits and remaining gates.
-- [Clean-checkout test](clean-checkout.md): installation and offline-demo
-  checks in a fresh Python environment.
-- [Devpost draft](devpost-draft.md): marked paste-ready About the project story,
-  separate Built With tags, Try it out links and image/video field guidance.
-- [Video plan](video-plan.md): timed pitch and shot list using existing evidence.
-- [Nemotron questionnaire draft](nemotron-feedback-draft.md): nine form-specific
-  answers; three subjective ratings still need the project owner's input.
-- [Billing reconciliation](billing-reconciliation.md): September 19–October 19
-  service totals and remaining per-run/lifetime scope limits.
-- [Privacy audit](privacy-audit.md): neutral documentation, tracked-tree
-  checks, intentional attribution/fixture exceptions and history limitations.
+## Materials
 
-## What the project owner still needs to supply or approve
+- [Story and form fields](devpost-draft.md) — reviewed story, tags and links.
+- [Video script](video-plan.md) — planned timing and shot list; not a recording.
+- [Nemotron feedback answers](nemotron-feedback-draft.md) — form-specific draft;
+  the owner's final ratings are not recorded here.
+- [Tool feedback](../../FEEDBACK.md) — approved first-hand observations and
+  links to the detailed history.
 
-| Item | Needed input | Current position |
-| --- | --- | --- |
-| Billing | Review scoped totals; provide other dates only if claiming lifetime spend | September 19–October 19: AI Cloud $42.04 + Token Factory $0.13 = $42.17 including VAT. Only one AI Cloud account used; project filters/currency code not visible. $0.82 remaining is not usage or a spending allowance |
-| Feedback | Choose questionnaire ratings and review form-specific answers | Existing first-hand notes remain approved; questionnaire draft prepared from recorded evidence |
-| Video | Owner finishes video and confirms media compliance/public YouTube URL | In progress; project owner declined further agent media review |
-| Images/cover | Owner handles final media compliance | Owner reports screenshots and cover completed; no further agent review requested |
-| Submission | Confirm track, entrant eligibility, rights/attributions and final content; approve public uploads and submit | No Devpost fields changed or personal attestations made |
+## Verification records
 
-## Billing worksheet (do not sum these rows)
+- [Readiness audit](readiness-audit.md) — rules, public access and known limits.
+- [Clean-checkout audit](clean-checkout.md) — isolated Python installation and
+  offline-demo checks on the development machine, not a second-machine test.
+- [Privacy audit](privacy-audit.md) — scan scope, exceptions and limits.
+- [Billing worksheet](billing-reconciliation.md) — September 19–October 19
+  totals; not lifetime or exact per-run reconciliation.
+- [Version/checklist record](final-checklist.md) — publication checkpoints
+  and pending receipt fields.
 
-| Evidence | Amount | Treatment |
-| --- | --- | --- |
-| [October 19 showcase](../experiments/m7-final-showcase.md#spend) | US$3.87 estimated | Includes two diagnoses and their replays; not total project spend |
-| Earlier unverified subtotal in the [historical handoff](../codex-handoff/STATE.md#previous-handoff-october-19-evening-superseded-by-cleanup-above) | About US$8.21 | Potentially overlapping sessions; match date/resource scope before adding anything |
-| October 19 Nemotron repair | Two attempts; 6,973 prompt and 472 completion tokens | US$0.04 reservation envelope, not actual bill |
-| Earlier Token Factory estimates | Approximate daily summaries | Not reconciled; may overlap the repair above |
+The four-case gallery was deployed October 21. Readiness-branch changes are
+still local until integrated/pushed; submission by the owner does not imply
+that every local documentation change is public. No agent uploaded the form
+or video, and no final media review is claimed.
 
-Use posted charges, not credit purchases or remaining balances. Separate AI
-Cloud GPU, storage, egress/tax and Token Factory inference where billing makes
-that possible. The earlier intended two-account split was not actual usage:
-The project owner confirmed only one AI Cloud account was used. Report any
-unmatched total transparently rather than forcing it to agree with estimates.
-No credentials, account IDs or invoice/payment details belong in this file.
-
-## Final pre-submit check
-
-- [x] Confirm feedback and record billing totals only for the supplied period.
-- [ ] Review source/model/media attributions and entrant declarations.
-- [x] Approve the Devpost story (confirmed October 21).
-- [ ] Confirm Built With tags and questionnaire answers/ratings.
-- [x] Produce screenshots and cover (project owner confirmation, October 21).
-- [ ] Owner finishes video, confirms media compliance and public YouTube URL.
-- [ ] Recheck final rules, repository/gallery/video links without authentication.
-- [ ] Pin submission source/deployed version and retain free judge access.
-- [x] Submit (project owner reports completed October 21; confirmation URL not supplied).
-
-Audit implementation lives locally on `codex/submission-readiness`. The owner
-reports submitting independently; no agent uploaded the form or video.
-The four-case gallery was deployed October 21 as separately approved.
+Keep judge access available through the end of the judging period. Preserve
+the final source SHA, deployment, entry URL and video URL when available;
+do not store credentials, personal attestations or private billing screenshots
+in these records.

@@ -22,3 +22,8 @@ GitHub push, historical rewrite or deletion of evidence.
 
 Existing app imports Markdown reference material; do not edit embedded
 `docs/reference.md` or the UI guide as part of this documentation-only scope.
+
+Completed: README product entry point and quick links, requested section
+removals, concise docs index and submitted-status preparation hub. Maintainer
+commands remain in the operator runbook; detailed history and evidence remain
+unchanged. No application/embedded-document change, deploy, push or paid call.

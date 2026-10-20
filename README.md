@@ -1,370 +1,187 @@
 # Faultline — turn robot failures into replayable tests
 
-Built for the Nebius × NVIDIA hackathon. Faultline reduces a robot-policy
-failure to a **smaller confirmed trigger** and keeps it as a **replayable
-regression test** for compatible checkpoints. It works on simulated manipulation
-policies (vision-language-action models such as NVIDIA GR00T).
+Faultline is a debugging workbench for robot foundation models. Find a
+repeatable failure, reduce its triggering condition, and keep a test you can
+replay on a compatible checkpoint.
 
-> **Public demo vs. running your own:** The
-> [hosted gallery](https://faultline-robotics-debugger.vercel.app/) lets you
-> inspect recorded results, reports and videos. It **cannot start a new
-> diagnosis or replay**. To run your own experiments, follow the
-> [local setup and diagnosis quickstart](docs/setup/diagnose.md), configure
-> your own Nebius account and model access, and run `faultline ui` locally.
-> New experiments use paid cloud compute; inspecting the gallery or bundled
-> offline demo does not require a cloud account.
+## Quick links
 
-**Scope today:** GR00T N1.7 on the LIBERO benchmark (4 suites, 40 tasks, one
-simulated arm). The loop itself is not tied to LIBERO. Another simulator
-needs an adapter, which is not built. The adapter must:
-- reset to an exact state;
-- expose shiftable object and robot positions;
-- rerun the policy;
-- check success.
+[Public demo](https://faultline-robotics-debugger.vercel.app/) ·
+[Run your own](docs/setup/diagnose.md) ·
+[UI walkthrough](docs/ui-runbook.md) ·
+[Architecture](docs/architecture.md) ·
+[Results](#demonstrated-results) ·
+[Tool feedback](FEEDBACK.md) ·
+[MIT license](LICENSE)
 
-See [Where it applies](docs/reference.md#where-it-applies).
+> **The public gallery is read-only.** It shows saved reports and recordings;
+> it cannot start a diagnosis or replay. New experiments run through the local
+> app using your own Nebius account, model access and paid compute.
+> Browsing the gallery or bundled offline case needs no cloud account.
 
-## The problem
+## Why Faultline
 
-A team fine-tuning a robot policy works in a loop:
+A success rate tells a robotics team how often a policy fails, not which
+conditions make one failure repeat. Faultline connects discovery,
+confirmation, reduction and replay so engineers can investigate a specific
+failure and test it again after changing the policy.
 
-1. **Evaluate.** Run hundreds of simulated episodes and get a success rate
-   (say 82%).
-2. **Triage.** Watch the failed episodes and sort them by hand: missed
-   grasp, wrong object, timeout.
-3. **Reproduce.** Try to make one failure happen again; the policy is
-   stochastic, so a failure seen once may not repeat.
-4. **Fix.** Guess what triggers it, then add training data or change
-   training, and retrain.
-5. **Re-check.** Did that failure go away, and did anything else break?
+It builds on existing evaluation harnesses and reduction methods. The
+contribution is the combined debugging workflow, not a new robot policy,
+perturbation technique or claim to cover every possible failure.
 
-Published accounts of VLA deployment and evaluation describe this iterative
-loop, with failure analysis done by people replaying videos and logs
-([factory-floor case study](https://arxiv.org/pdf/2605.27461),
-[VLA benchmarking](https://arxiv.org/pdf/2511.11298),
-[HELM](https://arxiv.org/pdf/2604.18791)). Two steps are weak:
+## Try it
 
-- **The average hides the failure.** A success rate says how often the
-  policy fails, not under which conditions
-  ([LIBERO-Plus](https://arxiv.org/pdf/2510.13626)).
-- **Re-checking known failures is not systematic.** Simulated evaluation can
-  gate a checkpoint release
-  ([NVIDIA](https://perspectives.nvidia.com/isaac-sim/task/faq/policy-testing-systems-ab-evaluation-gated-promotion-regression-baselines-robotics-cicd-1/)),
-  but a recent survey notes "a noticeable lack of systematic research on
-  regression testing for autonomous systems"
-  ([survey](https://arxiv.org/html/2506.16101v1)).
+### Explore recorded cases
 
-## What Faultline does
+Open the [public gallery](https://faultline-robotics-debugger.vercel.app/).
+Its four examples cover layout reduction, image probes, instruction
+rewordings and a bounded no-failure result.
 
-- **Confirms** a failure is real: it must fail at least 4 of 5 attempts, and
-  a nearby passing layout must pass 5 of 5.
-- **Reduces** the differences between failing and passing layouts through
-  reruns (delta debugging, as compilers do with crashing programs). A completed
-  entity-removal check establishes that removing any one retained shift loses
-  the failure gate under those tests. This is not a globally smallest layout
-  or proof of causation; size shrinking may stop at the budget. *Why* the
-  network fails remains a question for investigation.
-- **Keeps** it as a case (videos, report, replay inputs) and **replays** it on
-  compatible checkpoints when requested.
-- **Nemotron** proposes the order in which differences are tested and writes
-  a labelled reading of the verified result. The reruns, not the model, decide.
-
-One **New diagnosis** does it. It runs your start untouched:
-- if it fails, Faultline searches for a smaller set of layout changes that
-  preserves the failure;
-- if it passes, Faultline probes it with image, scene and wording
-  disturbances and searches for a failure threshold within the chosen budget.
-
-Every failing condition becomes a replayable case. "Nothing broke it in
-these ranges" is a valid finding too.
-
-### What is regression testing?
-
-In software, a **regression** is something that used to work and breaks after
-a change. A **regression test** is a small saved check, rerun after every
-change, that catches it. Each test pins one known failure (or fix), so a
-change that silently undoes a fix is noticed at once.
-
-For robot policies, every fine-tune or retrain is a change. Faultline's cases
-are the saved checks:
-
-- `faultline replay CASE --spec replay.yaml --expect fixed` reruns the case's
-  minimal scene and its passing reference on a checkpoint (5 attempts each).
-  The exit code says whether you got the result you expected, so a script or
-  CI job can gate a checkpoint on its known failures.
-- `--expect reproduces` checks a failure is still there, for example before
-  you claim a fix. `policy.checkpoint` in the spec points the replay at
-  another checkpoint.
-
-A replay covers its saved scene and its attempts only, not every task or
-starting condition. That is why many small cases are more useful than one.
-
-The repository is
-[`jephoton/faultline-robotics-debugger`](https://github.com/jephoton/faultline-robotics-debugger).
-The local checkout folder and the `robot_debug` Python package keep their
-original names for compatibility.
-
-## See a real result in one minute
-
-Open the [public Faultline gallery](https://faultline-robotics-debugger.vercel.app)
-to explore four recorded examples—layout reduction, image probes, a bounded
-no-failure result and instruction rewordings—without installing anything.
-It is read-only: diagnoses and replays run through the local tool, not the site.
-
-[`demo/`](demo/README.md) holds one finished diagnosis (the LIBERO-10 failure
-below, with its report, Nemotron explanation and the original, minimal and
-reference videos). No GPU or cloud account is needed:
+To inspect the bundled layout case locally, clone this repository and run
+from its root with Python **3.10 or 3.11**:
 
 ```bash
 python -B -c "import sys; sys.path.insert(0, 'src'); from robot_debug.cli import main; sys.exit(main(['ui', '--artifacts', 'demo/root']))"
 ```
 
-Then open <http://127.0.0.1:8765> and select the case in the sidebar.
+Open <http://127.0.0.1:8765>. No GPU or cloud account is needed to inspect
+this case. See [demo contents](demo/README.md) and the
+[UI walkthrough](docs/ui-runbook.md).
 
-For a click-by-click walkthrough and recipes for different goals, start with
-the [UI user runbook](docs/ui-runbook.md). The [Reference](docs/reference.md)
-(also a page in the control panel) documents the modes, the gate, how a
-reduction works, every severity, every report column and abbreviation, and
-the stop reasons. Its first walkthrough uses saved
-evidence and starts no new compute; setup instructions are separate.
+### Run your own diagnosis
 
-## One diagnosis, routed on the untouched result
-
-| The start, run untouched... | Route | What Faultline does | The case it keeps |
-| --- | --- | --- | --- |
-| **fails reliably** (4 of 5) | layout | Finds the nearest benchmark start that passes, then delta-debugs the differences (object positions, the arm's pose) down to a smaller reproducing set. Nemotron proposes the order; reruns decide. | The retained layout trigger and its reduction limits, with original, reduced and reference videos |
-| **passes** | probes | Runs the chosen disturbances (by default blur, noise, darken and contrast; JPEG, colour cast, motion blur, dead pixels, camera viewpoint, lighting and Nemotron-written rewordings are one tick away) and searches for a failing severity or word change within the budget | The retained failing disturbance or wording and its search limits, with videos |
-| **fails sometimes** | flaky | Reports the start as unreliable untouched; no disturbance is blamed | — |
-
-You can also search a range of benchmark starts for one that fails, or import
-your own failing start-state file. Both go straight to the layout route.
-
-`faultline replay` (or **Replay** on a case with saved failing inputs) reruns a
-case on a compatible checkpoint selected by `policy.checkpoint` in the replay spec, so you can test
-a retrained policy against the failures you found. Optionally, each new case
-also gets suggested next steps: Nemotron 3 Ultra cites public sources found
-with Tavily. They are suggestions, not evidence.
-
-Typical cost and time with the defaults (one L40S, measured runs):
-- about US$1.25 and 45 minutes when the start passes;
-- about US$1.10 and 40 minutes when it fails.
-
-These per-run cost figures are estimates. Supplied billing views for September
-19–October 19, 2026 show AI Cloud $42.04 and Token Factory $0.13 including VAT;
-these are period totals, not the complete project cost or a per-run audit
-([billing scope](docs/submission/billing-reconciliation.md)).
-
-What everything means (routes, the gate, every severity, report columns,
-verdicts) is in the [Reference](docs/reference.md), which is also a page in
-the control panel.
-
-Occlusion (a black rectangle over a camera) is not a probe family. It ran
-in the earlier experiment modes (M4 to M6); its results are listed below.
-
-## What it has found so far
-
-All results are for GR00T N1.7 on LIBERO, one seed per run, on single Nebius
-L40S GPUs. Each is budget-local evidence for the tested task, start and
-family, not a general claim.
-
-### The showcase cases
-
-These are October 19 runs of the single New diagnosis, each kept as a
-regression test ([write-up](docs/experiments/m7-final-showcase.md)).
-
-- **Layout route, `FL-S-8E0D`.** On LIBERO-10 task 0 ("put both the alphabet
-  soup and the tomato sauce in the basket"), start 14 fails 4 of 5, while the
-  nearby start 4 passes.
-  - The two starts differ in five things. **Four shifts are needed together:**
-    - the basket, 2.1 cm (93.8% of its difference);
-    - the milk, 2.2 cm (87.5%);
-    - the orange juice, 0.8 cm (100%);
-    - the arm's five joints, up to 2.1° (93.8%).
-  - Each shift alone passes, and removing any one makes the failure go away.
-  - Nemotron 3 Ultra ranked the arm first and the soup second. The reruns
-    show the arm is needed but not enough on its own, and the soup is not
-    needed at all.
-  - The regression test on the same checkpoint: **still fails**.
-  - A public evaluation of GR00T N1.6 (allenai's vla-evaluation-harness)
-    also records episode 14 of this task failing. That is how a team would
-    arrive here ([evidence](docs/experiments/m7-workflow-evidence.md)).
-- **Probe route, `FL-A-D582`.** LIBERO-Object task 0, start 0 passes
-  untouched.
-  - **Blur breaks it from severity 0.4625** (a sigma of 3.7 px): 5 of 5
-    failures there, and 1 of 5 at 0.45.
-  - Noise breaks it only at full strength, and only borderline: 3 of 5 on
-    the replay.
-  - Darkening and contrast never break it.
-  - The regression test on the same checkpoint: blur **still fails**.
-  - The M6 experiment had found blur failing on this start from 3.9 px six
-    days earlier, an independent and consistent threshold.
-- **Nothing broke it, `FL-A-F526`.** LIBERO-Spatial task 0, start 0 kept
-  succeeding under these, at full strength:
-  - JPEG compression down to quality 5;
-  - a strong colour cast;
-  - 20% dead pixels;
-  - motion blur, which failed once in five attempts at its strongest
-    setting, short of the 4-of-5 gate.
-
-### Earlier results
-
-- **Minimal occlusion (LIBERO-Object task 0, start 0).** A black rectangle
-  over the upper-right 14% of the third-person camera reproducibly breaks the
-  task; it was reduced from 25%. The robot still grasps the soup but times
-  out carrying it ([M4](docs/experiments/m4-reducer.md)). The same reduction
-  was reproduced from an imported external demonstration
-  ([M5B](docs/experiments/m5b-external-replay.md)). Occlusion ran in the
-  earlier experiment modes; it is not a family in the New diagnosis.
-- **Camera roles (hypothesis, same task).** Blacking out the wrist camera as
-  well stops the grasp entirely, while the same rectangle on the wrist camera
-  alone is harmless. The wrist view appears to drive grasping and the
-  third-person view the carry
-  ([M6](docs/experiments/m6-camera-and-scalar-families.md)).
-- **Robust within the tested ranges**
-  ([breadth pack](docs/experiments/m7-breadth-pack.md)):
-  - lights at 10% never failed on LIBERO-Object task 0, start 0;
-  - the camera viewpoint failed once in five at 80% and at 100% of its range,
-    short of the gate;
-  - 20 Nemotron-written rewordings, on LIBERO-Object and LIBERO-10, all
-    succeeded;
-  - on LIBERO-Goal task 0, start 0, the untouched policy itself passed only
-    2 of 5, so no disturbance was blamed.
-- **All four LIBERO suites** (Object, 10, Spatial, Goal) run end to end
-  through `faultline diagnose`.
-- **Cheaper runs.** Batching concurrent inference requests on one GR00T
-  server gave +18% throughput at 12 parallel workers in two runs. It gave no
-  gain at 8 workers, where the GPU was not yet the bottleneck
-  ([M3 batching](docs/experiments/m3-batched-inference.md)).
-
-## How NVIDIA and Nebius are used
-
-- **NVIDIA GR00T N1.7** (one checkpoint per LIBERO suite) is the robot policy
-  under test, served on Nebius AI Cloud GPUs.
-- **NVIDIA Nemotron on Nebius Token Factory**, each model chosen by a measured
-  comparison ([ADR 0030](docs/decisions/0030-nemotron-model-per-task.md)):
-  Nemotron 3 Ultra ranks a scenario failure's differences and states a
-  hypothesis before any rerun, and explains each verified scenario case;
-  it also writes each new case's suggested next steps, citing Tavily sources.
-  Nemotron 3 Super writes instruction paraphrases. Audit and paraphrase cases
-  have no Nemotron explanation yet. Model output is kept separate from measured evidence: "the
-  model proposes, the simulator verifies".
-- **Nebius AI Cloud Serverless Jobs** run every diagnosis, replay and audit
-  (one L40S each), with evidence exported to private Object Storage.
-- **Tavily** finds public sources for each new case, in the New diagnosis's
-  optional research step. Nemotron 3 Ultra cites them in the suggested next
-  steps, which are suggestions, not evidence ([M5D](docs/experiments/m5d-tavily-research.md)
-  records the first experiment).
-
-## How it runs
-
-- **Simulator and policy:** LIBERO on robosuite/MuJoCo, through the
-  [vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness),
-  with GR00T N1.7 served by the harness's LeRobot server plus Faultline's
-  batching server.
-- **One command:** `faultline diagnose SPEC.yaml` runs a whole diagnosis on
-  Nebius Serverless (or, untested, a local NVIDIA GPU): it creates and cleans
-  up the results bucket and download key, submits each Job, waits under a
-  watchdog, resubmits when no GPU is free, downloads only that Job's
-  evidence, writes the report and case, and enforces a spend cap. Before each
-  Job it reserves a worst case: the provider timeout (deadline plus ten
-  minutes) plus a four-minute start allowance, at the hourly rate, which is
-  our understanding of how Serverless bills. That has not yet been reconciled
-  against the Nebius bill. `faultline replay CASE` re-runs a saved scenario
-  case as a regression test ([quickstart](docs/setup/diagnose.md)).
-- **Cost:** a typical Job is US$0.3–0.9 on one L40S; the dry run prints every
-  planned Job's worst case before anything is created.
-- **Locally:** specs, the spend ledger, Nemotron calls, reports and the control panel
-  run on the workstation, as does Tavily research when you run it; keys never
-  enter a Job.
-
-## Roadmap
-
-M1–M6 are complete. **M7a** turns the engine into a product
-([ADR 0027](docs/decisions/0027-m7-product-consolidation-and-access.md)):
-scenario reduction, `faultline diagnose / replay`, and the breadth
-pack (four suites; image, scene and language families) and the **control
-panel** (a browser UI over the same commands,
-[ADR 0033](docs/decisions/0033-control-panel-ui.md)) and the public static
-**gallery** of finished cases are done
-([publication checks and limits](docs/experiments/m7-public-gallery.md)).
-
-M7b is the submission (demo video and write-up). LIBERO-Plus integration is a
-post-M7 stretch goal.
-
-## Local checks
+Install the CLI and cloud dependencies:
 
 ```bash
-PYTHONPATH=src python -B -m unittest discover -s tests
+python -m pip install -e ".[cli,cloud]"
 ```
 
-The suite uses fakes for the
-simulator, model and cloud; it does not start paid work. The control panel's
-front end has its own checks (Node 24):
+Follow the [diagnosis quickstart](docs/setup/diagnose.md) to configure Nebius
+sign-in, GPU quota, a private simulator image and model access. Nemotron
+features also need a Token Factory key; Tavily research is optional.
+Keep credentials out of Git.
 
-```bash
-npm --prefix web ci
-npm --prefix web test -- --run
-```
-
-## Control panel
+Then open the local control panel:
 
 ```bash
 faultline ui --open
 ```
 
-(From a source checkout without installing: `PYTHONPATH=src python -m
-robot_debug.cli ui --open`.) The control panel is a browser UI over the same
-commands:
-- A sidebar of runs and cases.
-- **New diagnosis**: you choose the start and what to probe if it passes. The
-  review shows both branches with their worst-case and typical cost and
-  time, and the run starts only after you confirm.
-- A live run page showing the route, with a safe **Stop** (the current Job is
-  cancelled and charged for the time it ran; `--resume` continues) and
-  **Resume**.
-- Report-first case pages for every kind: a findings list, videos in step,
-  the full report, Nemotron's reading labelled for review, related research
-  as context.
-- **Replay** for every case kind.
-- A **Reference** page explaining everything shown.
-- A **Setup** page that checks the Nebius sign-in, keys and image.
+Choose **New diagnosis**, select a task and starting state, then review the
+budget before confirming a run. The same workflow is available from the CLI:
 
-It listens on 127.0.0.1 only; every action needs the page's session token and
-a same-origin request, and one paid run runs at a time. Everything it does can
-be done from the terminal (`faultline diagnose`, `stop`, `replay`), and every
-spec it writes is kept under `artifacts/specs-ui/`.
+```bash
+faultline diagnose my-spec.yaml --dry-run
+faultline diagnose my-spec.yaml
+```
 
-`faultline export --out site/` writes the finished cases as a static gallery
-(no controls, private run folders, cloud resource IDs or local paths) for any
-static host. Public case/evidence fingerprints remain available for reference.
+The first command previews the plan; the second can start paid cloud work.
+First-time image building needs Docker and a roughly 20 GB build/push.
+Docker is not needed to view evidence or submit an already-built image.
+
+## How diagnosis works
+
+| Untouched starting state | Next step |
+| --- | --- |
+| Fails reliably | Find a passing reference and reduce the layout differences while retaining the failure. |
+| Passes | Try the selected image, scene or instruction changes within the budget. |
+| Fails inconsistently | Report the baseline as flaky; do not blame a disturbance. |
+
+Layout confirmation requires at least **4 failures in 5 attempts**, with
+the passing reference succeeding **5 of 5**. Reduction tests which changes can
+be removed or shrunk. Completed entity-removal checks show whether removing
+any single retained shift loses the failure gate in those tests; they do
+not prove globally smallest shift sizes or the underlying cause.
+
+The app keeps reports, inputs and available videos together. **Stop/Resume**
+handles interrupted runs, and **Replay** reruns a saved failing condition on
+a compatible checkpoint. A no-failure screen is also a valid result; it does
+not become a failing regression case.
+
+For example, with a configured replay spec:
+
+```bash
+faultline replay CASE --spec replay.yaml --expect reproduces
+```
+
+Set `policy.checkpoint` in that spec to select a compatible policy.
+`--expect fixed` checks for the expected fixed outcome; it does not fix the
+model. Recorded showcase replays used the original checkpoint, not a proven
+improved model. See the [reference](docs/reference.md) for gates, levels,
+report columns and stop reasons.
+
+## Demonstrated results
+
+The gallery reports specific GR00T N1.7 runs in LIBERO simulation, not broad
+robustness claims.
+
+| Case | Recorded finding |
+| --- | --- |
+| **FL-S-8E0D — layout** | LIBERO-10 task 0, start 14 failed 4/5 attempts. Against passing start 4, basket, milk, orange juice and arm shifts were needed together. Removing any one lost the failure gate; sizes were not fully minimized. The reduced scene failed on replay; the reference passed 5/5. |
+| **FL-A-D582 — image probes** | LIBERO-Object task 0, start 0 passed untouched. Blur at severity 0.4625 (sigma 3.7 px) failed 5/5 in search and 4/5 on replay. Noise fell below the gate on replay: 3/5. |
+| **FL-A-F526 — bounded no-failure result** | LIBERO-Spatial task 0, start 0 had no reliable failure under the tested JPEG, colour-cast, dead-pixel and motion-blur ranges. Motion blur failed once in five attempts at maximum tested strength. |
+| **FL-L-C72C — rewordings** | The original instruction succeeded twice; four Nemotron-generated variations passed the mechanical meaning check and each succeeded once. No wording failure or reduction. This screen has no recorded video. |
+
+[Layout/blur experiment](docs/experiments/m7-final-showcase.md) ·
+[Breadth measurements](docs/experiments/m7-breadth-pack.md) ·
+[Wording walkthrough](docs/ui-runbook.md#optional-wording-example-also-in-the-public-gallery)
+
+Earlier experiments reduced an occlusion from 25% to 14.06% image area and
+replayed it from an imported state. Occlusion belongs to the earlier tooling,
+not the current New diagnosis probe list. Supporting throughput experiments
+are also recorded; they do not establish diagnostic time or cost savings.
+See the [results index](docs/README.md#results).
+
+## How NVIDIA and Nebius are used
+
+- **NVIDIA GR00T N1.7** is the robot policy under test. It turns observations
+  and instructions into actions in LIBERO/robosuite/MuJoCo through the
+  [AllenAI VLA evaluation harness](https://github.com/allenai/vla-evaluation-harness).
+- **NVIDIA Nemotron on Nebius Token Factory** ranks layout hypotheses and
+  writes explanations/next steps with Ultra; Super generates instruction
+  rewordings. Nano handled earlier research summaries. Hosted API calls avoid
+  operating a separate Nemotron server. Models were selected through
+  [small task-specific comparisons](docs/decisions/0030-nemotron-model-per-task.md).
+  Model suggestions are separate from measured test outcomes.
+- **Nebius AI Cloud Serverless Jobs** run the current robot evaluations and
+  replays on one L40S per Job. A private registry holds the simulator image;
+  Object Storage holds evidence; the secret store supplies model-access
+  credentials. Earlier experiments also used L40S/H100 VMs.
+- **Tavily** supplies public research sources for optional next-step suggestions.
+  A cited suggestion is not a verified remedy.
+
+Python coordinates jobs, budgets and reports; React provides the local UI
+and exported static gallery. The local panel binds to loopback, requires a
+session token for actions and allows one paid run at a time. Token Factory
+and Tavily keys stay on the workstation, not in simulator Jobs.
+[Full architecture](docs/architecture.md).
+
+Per-run costs are estimates. Supplied September 19–October 19, 2026 billing
+views show AI Cloud **$42.04** and Token Factory **$0.13**, including VAT.
+These are period totals, not lifetime spend or matched per-run charges.
+[Billing scope](docs/submission/billing-reconciliation.md).
+
+## Scope and limitations
+
+Support covers the four LIBERO suite paths—Object, 10, Spatial and Goal—not
+validation of all 40 tasks. Results depend on the checkpoint, task, start,
+seed and tested range. Another simulator needs an adapter; arbitrary video
+is not a replayable starting state.
+
+A reduced failure is not causal proof or a guarantee of the smallest trigger.
+Image changes approximate physical effects; simulated results do not establish
+real-robot safety. Nemotron assistance is demonstrated, but diagnostic savings,
+verified remedies and universal checkpoint compatibility are not.
+Training and formal verification are out of scope.
 
 ## Documentation
 
-- [Where to look](docs/README.md): an index of the quickstart, results,
-  decisions and internal history.
-- [Quickstart: run a diagnosis](docs/setup/diagnose.md) (Python 3.10 or 3.11).
-- [Project plan and milestones](PROJECT_PLAN.md) and the
-  [current handoff state](docs/codex-handoff/STATE.md).
-- [Decision records](docs/decisions/) (ADRs) for every accepted design choice.
-- [Experiment notes](docs/experiments/) with exact evidence, spend and claim
-  limits for each run.
-- [Hackathon tool feedback](FEEDBACK.md) on Nebius AI Cloud, Token Factory and
-  NVIDIA models.
-- [Learning guide](PROJECT-LEARNING-GUIDE.md) in plain language.
-
-## Scope and claims
-
-Faultline builds on existing VLA evaluation, perturbation testing and
-parallel execution; its contribution is the integrated path from controlled
-search to a small, reproducible, replayable counterexample, with time and GPU
-cost measured. Results cover the tested policy, tasks, seeds and perturbation
-families only. Image-space perturbations approximate, not simulate, physical
-effects. Model training and formal verification are out of scope.
+Use the [documentation index](docs/README.md) for setup, reference material,
+experiment records and maintainer notes. The
+[learning guide](PROJECT-LEARNING-GUIDE.md) explains the project in plain language.
 
 ## License
 
-Original project code is licensed under the [MIT License](LICENSE).
-External models, datasets and other third-party assets keep their own terms;
-this repository does not relicense model weights or assets. See
-[NOTICE.md](NOTICE.md) for the third-party components and where their terms
-live.
+Original project code uses the [MIT License](LICENSE). External models,
+datasets and assets retain their own terms; see [third-party notices](NOTICE.md).
