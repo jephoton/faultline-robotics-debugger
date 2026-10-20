@@ -1,6 +1,6 @@
 # HUMAN REVIEW DRAFT — Devpost submission
 
-No claims in this draft have been submitted. Review the wording, first-hand tool feedback, and billing before submission.
+Nothing in this draft has been submitted. Tool feedback is approved; supplied billing-period totals are recorded, not matched to individual runs or lifetime spend. The publication gate at the end is internal review text, not submission copy.
 
 ## Project title
 
@@ -8,53 +8,54 @@ No claims in this draft have been submitted. Review the wording, first-hand tool
 
 ## Tagline
 
-Find a failure, check that it repeats, reduce its trigger, and keep it as a regression test.
+A debugging workbench for robot foundation models: find repeatable failures, reduce their triggers, and keep replayable regression tests.
 
-## The problem
+## What if a robot fails on one exact start?
 
-A benchmark success rate tells a robotics engineer how often a policy succeeds. It does not point to the conditions behind one failure. Engineers still need to locate a failed rollout, reproduce it despite policy and simulator variability, work out which conditions matter, and check whether the failure returns after a model update.
+A robot foundation model can score well on a benchmark and still fail on one scene. Robotics engineers need to reproduce that rollout, isolate a reproducible triggering condition, and save a regression test for future policy changes.
 
-Faultline takes a failing or passing LIBERO start and runs a diagnosis workflow. It first checks the untouched start. A reliable failure goes through layout reduction against a passing reference. A passing start can be tested against selected image, scene, and instruction disturbances. A flaky start is reported as flaky rather than blamed on a probe. Confirmed findings are saved with their inputs, evidence, and replay path.
+Faultline is a debugging workbench for robot foundation models. Within a configured compute budget, it checks a LIBERO start, probes selected image, scene or instruction changes when it passes, or reduces a failing scene against a passing reference. Repeated runs separate reliable findings from flaky outcomes. Confirmed cases keep inputs, evidence, and a replay path together.
 
-## What we built
+The contribution is that integrated debugging workflow, not a new robot policy or reduction algorithm. It gives an evaluation engineer a concrete case to investigate and replay, rather than only an aggregate score.
 
-The contribution is the integrated diagnostic loop for modern vision-language-action manipulation policies: search, repeatability control, counterexample reduction, inspection, replay, and GPU time/cost measurement. Evaluation harnesses, perturbation tests, simulation search, and parallel execution already exist; Faultline does not claim any one of those primitives as its novelty.
+## The cases
 
-In the October 19 showcase, the layout case began with LIBERO-10 task 0, start 14, which failed 4 of 5 attempts. Faultline compared it with passing start 4 and identified four entity shifts needed together: basket, milk, orange juice, and the robot arm. The saved case replayed with the minimal scene failing again and the reference passing 5 of 5. The record explicitly warns that the retained shifts are verified to reproduce, but are not proven to be the smallest possible sizes; the size search was budget-limited and showed non-monotone outcomes. [M7 showcase record](../experiments/m7-final-showcase.md)
+In the layout case, GR00T N1.7 failed 4 of 5 attempts on LIBERO-10 task 0, start 14. Against passing reference start 4, four shifts reproduced the failure together: basket, milk, orange juice, and robot arm. Removing any one lost the failure gate in those tests. The reduced scene failed on replay; the reference passed 5 of 5. Budget limits and non-monotone results mean these are not proven to be the smallest shift sizes. [FL-S-8E0D showcase record](../experiments/m7-final-showcase.md)
 
-In the probe case, LIBERO-Object task 0, start 0 passed untouched. Blur at severity 0.4625 (sigma 3.70 pixels) failed 5 of 5 attempts in the search and 4 of 5 on replay, meeting the repeatability gate both times. Noise was borderline: 4 of 5 at full strength in the search but 3 of 5 on replay. Darkening and contrast did not trigger failures at the tested levels. This makes blur the robust finding; noise is not presented as confirmed. [M7 showcase record](../experiments/m7-final-showcase.md)
+In the image-probe case, LIBERO-Object task 0, start 0 passed untouched. Gaussian blur at severity 0.4625 (sigma 3.7 pixels) failed 5 of 5 search attempts and 4 of 5 replay attempts, meeting the repeatability gate. Noise was borderline: 4 of 5 in search, 3 of 5 on replay, below the gate. Blur is confirmed; noise is not. [FL-A-D582 showcase record](../experiments/m7-final-showcase.md)
 
-The third case, LIBERO-Spatial task 0, start 0, kept succeeding through its tested image probes. At full tested strength, that included JPEG quality 5, a strong colour cast, 20% dead pixels, and motion blur; motion blur failed once in five attempts, below the gate. This is a bounded “nothing broke it in these ranges” result, not a robustness guarantee. [Breadth-pack measurements](../experiments/m7-breadth-pack.md)
+In the third case, no tested probe met the failure gate. LIBERO-Spatial task 0, start 0 passed untouched; JPEG, colour-cast and dead-pixel probes did not trigger reliable failures. Motion blur caused one failure in five attempts at maximum tested strength, below the gate. This is a bounded result, not a general robustness guarantee. [FL-A-F526 breadth-pack measurements](../experiments/m7-breadth-pack.md)
 
-## How it works and what we used
+## How the workbench runs
 
-Faultline runs LIBERO through the AllenAI VLA evaluation harness, robosuite/MuJoCo, and NVIDIA GR00T N1.7 checkpoints. Nebius AI Cloud Serverless Jobs run the diagnoses and replays on one L40S GPU per job; private Object Storage holds run evidence. Nebius Token Factory serves NVIDIA Nemotron models for limited text tasks: Ultra proposes scenario-difference ranking and writes case explanations or suggested next steps, while Super generates instruction paraphrases. The simulator reruns determine measured outcomes; model prose is shown as interpretation, not evidence. Tavily supplies optional public-source context for suggested next steps.
+Faultline is a Physical AI simulation and policy-evaluation tool built around LIBERO, the AllenAI VLA evaluation harness, robosuite, and MuJoCo. GR00T N1.7 is the closed-loop policy under test; diagnosis and replay jobs ran on Nebius AI Cloud Serverless Jobs, using one L40S GPU per job. Run evidence is stored in Nebius Object Storage.
 
-All four LIBERO suites (Object, 10, Spatial, Goal) have run end to end through `faultline diagnose`. That establishes suite-path support, not evaluation of every one of the 40 tasks. The numeric results above come from three showcase cases on specific starts, including a layout comparison between starts 14 and 4. [README scope and results](../../README.md) [workflow evidence](../experiments/m7-workflow-evidence.md)
+NVIDIA Nemotron on **Nebius Token Factory** assists the workflow: Ultra ranks layout hypotheses before reruns, writes scenario explanations and suggests next steps using optional Tavily research; Super generates instruction variations. Earlier research summaries used Nano. Programmed gates and simulator reruns decide whether a failure repeats or a reduced case reproduces; generated text is not proof of cause. [Model comparison](../decisions/0030-nemotron-model-per-task.md)
 
-## Challenges and what we learned
+All four LIBERO suite paths—Object, 10, Spatial, and Goal—run end to end through `faultline diagnose`. That is path support, not testing all 40 tasks: the results above are three showcase cases on specific starts. [Workflow evidence](../experiments/m7-workflow-evidence.md)
 
-GPU capacity waits sometimes stretched short jobs: in one earlier session, four of nine L40S submissions found no machine after about 27 minutes of retries, with no charge while waiting. Separately, an interrupted evidence download during the layout showcase was traced to unstable workstation networking; it was an operator/network recovery issue, not a Nebius service failure. Retries and resumable downloads were added to the workflow. [FEEDBACK.md](../../FEEDBACK.md) [M7 showcase record](../experiments/m7-final-showcase.md)
+## What we learned and what’s next
 
-The model comparison also changed how the system uses generated text. Different Nemotron variants made factual or formatting errors, while Ultra passed the checked scenario-explanation facts in the comparison. The practical lesson is to give the model computed measurements and ask it to interpret them; reruns and validators remain authoritative. [ADR 0030](../decisions/0030-nemotron-model-per-task.md)
+GPU capacity waits sometimes stretched short jobs. Two interrupted layout-evidence downloads were traced to workstation networking, then addressed with retries and resumable downloads. [Showcase record](../experiments/m7-final-showcase.md) [Tool feedback](../../FEEDBACK.md)
 
-## What’s next
+Model errors also reinforced a design boundary: give Nemotron computed facts to interpret, but keep outcome checks in code. Its assistance is demonstrated; an improvement in diagnostic speed or cost is not.
 
-Next is a judge-ready walkthrough, broader task/start evaluation, and a comparison against explicit search baselines using time to first apparent failure, reproducible failure, and reduced failure. Broader perturbation and simulator coverage would be needed before extending the claims. Billing estimates also need reconciliation against posted Nebius charges. The showcase ledger currently estimates US$3.87 total; it is not a finalized billed cost. [M7 showcase record](../experiments/m7-final-showcase.md) [public gallery record](../experiments/m7-public-gallery.md)
+The next evaluation step is to compare the integrated loop with explicit search baselines and measure time to first apparent failure, reproducible failure, and reduced failure. Broader task and start coverage would show how often the current results generalize. Neither comparison nor broad coverage is established by these three cases.
+
+The [billing worksheet](billing-reconciliation.md) records the supplied reporting window separately from estimated per-run costs; it is not a lifetime project total.
 
 ## Built with
 
-Python, React, LIBERO, robosuite, MuJoCo, AllenAI VLA Evaluation Harness, NVIDIA GR00T N1.7, NVIDIA Nemotron 3 Nano/Super/Ultra, Nebius AI Cloud Serverless Jobs, Nebius Token Factory, Nebius Object Storage, Tavily, and Vercel (static gallery hosting).
+Python, React, LIBERO, robosuite, MuJoCo, AllenAI VLA Evaluation Harness, NVIDIA GR00T N1.7, NVIDIA Nemotron 3 Nano/Super/Ultra, Nebius AI Cloud Serverless Jobs, Nebius Token Factory, Nebius Object Storage, Tavily, and Vercel static hosting.
 
 ## Try it and inspect the evidence
 
 - [Public case gallery](https://faultline-robotics-debugger.vercel.app) — read-only reports and recordings for the three showcase cases; it does not run diagnoses or replays.
-- [Repository and local setup](https://github.com/jephoton/faultline-robotics-debugger) — the bundled offline case viewer needs no cloud account. New diagnoses/replays require a configured Nebius account, model access and paid compute; the public static gallery cannot launch them. The installed control panel and CLI share that execution path.
+- [Repository and local setup](https://github.com/jephoton/faultline-robotics-debugger) — the bundled offline case viewer needs no cloud account. New diagnoses and replays require the operator’s own configured Nebius account, model access, and paid compute; the public gallery cannot launch them.
 - [UI runbook](../ui-runbook.md) and [diagnosis quickstart](../setup/diagnose.md).
-- [Test commands and scope](../../README.md#local-checks) — Python unit suite and web front-end checks use fakes/CPU-only paths and do not start paid jobs.
 
 ## Limitations
 
-Results cover the named checkpoint, simulator/reset setup, starts, and tested perturbation ranges only. The four-suite path does not mean all 40 tasks were tested. Reduction does not establish a global minimum or causal proof; the layout size search can retain a verified trigger that may not be the smallest. The public evaluation evidence for start 14 concerns a different GR00T checkpoint and does not show the same cause. The system does not validate whether suggested remedies work. Cross-simulator compatibility, physical-robot behavior, universal checkpoint compatibility, and cost savings have not been established. Showcase cost figures are estimates pending billing reconciliation.
+The results apply to the named checkpoint, simulator/reset setup, starts, and tested ranges. Reduction does not establish a global minimum or causal proof. The public evaluation evidence for start 14 concerns a different GR00T checkpoint and does not show the same cause. Suggested remedies, physical-robot behavior, universal checkpoint compatibility and cost savings have not been established.
 
-**Pre-submit review gate (not submission prose):** the gallery and offline build are free to inspect, but new GPU work is not free hosted execution. Review the rules' testing-access requirement and obtain organizer clarification if that account-free test build is insufficient; do not promise sponsor-paid experiments without authorization.
+**Internal publication gate — exclude from submission copy:** final wording, entrant/media rights and judge access require review before submission. Free gallery/offline-demo access is not free hosted GPU execution; see the [readiness audit](readiness-audit.md#remaining-gates). No upload or submission is authorized by this draft.

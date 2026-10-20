@@ -168,3 +168,10 @@ it does not reopen product architecture, model choice or experiment scope.
 Concurrency: writer drafts while coordinator aligns the script; file ownership
 does not overlap. Coordinator integrates and is sole Git owner. This is green
 editorial work within the accepted story, not permission to submit it.
+
+Editorial execution: completed with Luna drafting, coordinator integration and
+independent evidence review (PASS). Both drafts use the approved workbench
+positioning and separate measured robot outcomes from Nemotron assistance.
+Local link/privacy checks and `git diff --check` passed. Script timing remains
+a plan, not verification of a finished video. Next is human story/script review;
+no publication, model call, cloud run or application change occurred.

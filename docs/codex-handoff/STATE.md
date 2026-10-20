@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Privacy cleanup and feedback approval — October 20** for the latest work.
+> Read **Submission narrative alignment — October 20** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,29 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Submission narrative alignment — October 20
+
+The approved editorial pass is complete in the
+[Devpost draft](../submission/devpost-draft.md) and
+[video script](../submission/video-plan.md). Both lead with **a debugging
+workbench for robot foundation models**. GR00T is the closed-loop policy under
+test; Nemotron assists with hypotheses, instruction variations and evidence
+interpretation. Simulator reruns and software gates determine measured outcomes.
+No autonomous-researcher, causal-proof, global-minimum or diagnostic-savings
+claim was added. Physical AI is framed as simulation and robot-policy debugging,
+not a new embodied agent or demonstrated real-robot deployment.
+
+Independent evidence review passed against the showcase/breadth experiment
+notes, model-role ADR and billing worksheet. Local links and whitespace checks
+passed. The video plan allocates 85 seconds to application modules and roughly
+296 spoken words across 2:40; the actual edited video still needs timing and
+truth checks. No video was recorded, rendered or uploaded in this pass.
+
+Next: the project owner reviews the story and spoken script, chooses narration,
+then produces/approves the video and cover. Feedback is already approved and
+the supplied billing period is recorded; do not reopen those confirmations.
+Drafts remain local on `codex/submission-readiness`, not published or submitted.
 
 ## Privacy cleanup and feedback approval — October 20
 
