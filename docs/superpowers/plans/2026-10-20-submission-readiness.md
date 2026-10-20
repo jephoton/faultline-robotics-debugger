@@ -175,3 +175,11 @@ positioning and separate measured robot outcomes from Nemotron assistance.
 Local link/privacy checks and `git diff --check` passed. Script timing remains
 a plan, not verification of a finished video. Next is human story/script review;
 no publication, model call, cloud run or application change occurred.
+
+October 21 editorial continuation: map the existing draft to the supplied
+Devpost form, keeping one marked About the project story separate from tags,
+links and media requirements. Use public URLs inside the paste boundary and
+keep internal evidence/review notes outside it. Coordinator-owned routine
+formatting within the approved narrative; no new material design decision,
+provider call or publication. Verify story sections, tag count, local links,
+privacy patterns and whitespace before a local documentation commit.

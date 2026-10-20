@@ -6,8 +6,8 @@ Working package for human review, not an already submitted entry.
   evidence limits and remaining gates.
 - [Clean-checkout test](clean-checkout.md): installation and offline-demo
   checks in a fresh Python environment.
-- [Devpost draft](devpost-draft.md): story, demonstrated results, Built With
-  and limitations.
+- [Devpost draft](devpost-draft.md): marked paste-ready About the project story,
+  separate Built With tags, Try it out links and image/video field guidance.
 - [Video plan](video-plan.md): timed pitch and shot list using existing evidence.
 - [Billing reconciliation](billing-reconciliation.md): September 19–October 19
   service totals and remaining per-run/lifetime scope limits.

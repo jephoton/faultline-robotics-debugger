@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Submission narrative alignment — October 20** for the latest work.
+> Read **Devpost form mapping — October 21** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,21 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## Devpost form mapping — October 21
+
+The project owner supplied the actual Devpost fields. The
+[Devpost draft](../submission/devpost-draft.md) now separates a marked,
+paste-ready **About the project** story (inspiration, product, evidence, build,
+challenges, learning and next steps) from 16 suggested Built With tags, two
+Try it out links and media guidance. Repository-relative evidence links and
+publication notes are outside the copy boundary. No new result or feature was
+added. Draft changes remain local; no Devpost field was filled automatically.
+
+The supplied form permits YouTube/Vimeo and public/unlisted video, but earlier
+hackathon-specific requirements ask for public YouTube. The draft recommends
+the stricter public YouTube route pending final rules verification. Images and
+the finished video are still unproduced; story/media approval remains next.
 
 ## Submission narrative alignment — October 20
 
