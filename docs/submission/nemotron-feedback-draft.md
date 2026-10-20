@@ -1,115 +1,90 @@
 # Nemotron feedback questionnaire — review draft
 
-Prepared from recorded project observations, not submitted. The project owner
-must choose the three subjective ratings and approve the wording. The existing
-approved first-hand notes remain approved; this questionnaire adds form-specific
-answers, not a replacement account of the experience.
+Draft answers, not submitted. The three ratings need the project owner's input.
+The sign-in and GPU-capacity feedback below includes the approved first-hand notes.
 
 ## 1. Which models, and why those sizes/variants?
 
-We used Nemotron 3 Nano 30B-A3B, Super 120B-A12B and Ultra 550B-A55B through
-Nebius Token Factory. We chose by task rather than using the largest model
-everywhere. In small comparisons on stored inputs, Ultra was the most reliable
-for explaining scenario evidence and is used for layout hypotheses,
-explanations and suggested next steps. Super produced more varied instruction
-paraphrases while preserving the target objects: all ten checked paraphrases
-kept their meaning, whereas Nano changed a target in one and Ultra's wording
-was too similar. Nano handled earlier short research summaries. These were
-small task-specific comparisons, not a general model benchmark.
+We used Nemotron 3 Ultra 550B-A55B for layout hypotheses, explanations and next
+steps; Super 120B-A12B for instruction rewordings; and Nano 30B-A3B for earlier
+research summaries. All ran through Token Factory. In our small comparisons,
+Ultra made fewer explanation errors. Super kept the meaning in all ten checked
+rewordings and varied the wording more than Ultra. Nano changed a target in one.
 
 ## 2. Output quality: rating and explanation
 
 **Rating: [project owner to choose, 1–10].**
 
-Ultra could turn measured robot-test evidence into useful explanations, and
-Super generated usable instruction variations. Reliability still required
-guardrails. Nano once described an applied scene change as reverted; Super
-inverted a prediction in an explanation; outputs sometimes cited nonexistent
-evidence or used wording stronger than the tests justified. Even Ultra needed
-a repair attempt on a later next-steps response. We therefore precompute facts,
-validate structure and citations, and keep model hypotheses separate from
-simulator outcomes. We did not assess multilingual performance.
+Ultra explained test results well, but none of the models was consistently
+correct. Nano confused an applied change with a reverted one; Super inverted
+a prediction. Some answers cited nonexistent evidence or claimed more than
+the tests showed. Ultra also needed a retry. We check answers in code and do
+not let the model decide whether a robot test failed.
 
 ## 3. Fine-tuning, prompting or out of the box?
 
-No fine-tuning. We prompt-engineered the hosted models with task-specific
-instructions, measured evidence packets, explicit evidence IDs and constrained
-JSON output requirements. For explanations, one plain sentence per rerun and
-precomputed shrink history helped prevent misreading. Code validates required
-fields, citations and unsupported claims. A next-steps response can receive
-one repair attempt with the rejection reason; if it still fails, it is not
-shown. Instruction variations also undergo a meaning check before use. We
-adjusted output budgets and used the hosted thinking control where appropriate.
+No fine-tuning. We supplied instructions, test results and evidence IDs, and
+requested JSON. Precomputing counts and describing each rerun in one sentence
+helped. Code checks the fields, references and unsupported claims. Invalid
+next-step answers get one retry with the rejection reason, then are hidden if
+still invalid. Rewordings are checked for meaning before use.
 
 ## 4. Comparison with other models used for similar tasks
 
-Our controlled comparison was between Nemotron variants, not against another
-model family. On the same stored explanation inputs, Ultra preserved the
-checked facts where Nano or Super made factual or formatting errors. Super
-was a better fit for varied, meaning-preserving paraphrases. Nano was adequate
-for an earlier short summary task. We have not measured whether Nemotron
-outperforms another vendor's model on robotics diagnosis, and coding-assistant
-use during development is not an equivalent comparison.
+We compared Nano, Super and Ultra on the same project inputs, not against
+other model families. Ultra was better at explanations; Super was better for
+varied rewordings that kept the meaning. We cannot claim either outperforms
+another provider's model on this task.
 
 ## 5. Most valuable Nebius capabilities and deployment details
 
-Token Factory's OpenAI-compatible API let the local Faultline backend call
-Nemotron without provisioning a separate model-serving GPU. Token usage and
-latency reporting helped us track individual calls and compare variants.
-Hosted inference supported layout-hypothesis ranking, instruction generation
-and report assistance; we have not measured diagnostic speed gains from it.
-
-Separately, Nebius AI Cloud Serverless Jobs ran the GR00T robot policy and
-LIBERO simulations on one NVIDIA L40S GPU per Job. A private registry supplied
-the simulator image, Object Storage held videos and traces, and a secret store
-injected the Hugging Face token. Nemotron was served by Token Factory, **not**
-by those L40S Jobs. We did not deploy a Nemotron Endpoint, fine-tune it or test
-autoscaling Nemotron infrastructure ourselves.
+Token Factory let us call Nemotron without running a model server. Its
+OpenAI-compatible API made integration simple; token and latency reporting
+helped compare calls. Separately, Serverless Jobs ran GR00T and LIBERO on one
+L40S per Job. We used a private registry for the image, Object Storage for
+videos/traces and a secret store for model access. Nemotron ran through Token
+Factory, not on those L40S Jobs. We did not test Nemotron autoscaling.
 
 ## 6. Likelihood of recommending Nemotron on Nebius
 
 **Rating: [project owner to choose, 1–10].**
 
-I would recommend it for human-reviewed hypotheses, structured explanations
-and wording generation. API integration was straightforward once the model
-identifier and endpoint were confirmed, and using different sizes for different
-tasks was useful. I would not treat generated diagnoses as ground truth:
-robotics claims still need explicit evidence checks and simulator reruns.
+Yes, for explanations and rewordings that an application checks before use.
+The API was easy to use once we confirmed the endpoint and model name. I
+would not use its answers alone to decide what caused a robot failure.
 
 ## 7. Inference experience versus previous cloud/local environments
 
 **Rating: [project owner to choose, 1–10, based on actual prior experience].**
 
-For this project, hosted Token Factory inference avoided operating our own
-Nemotron model server. The main onboarding friction was that API credentials
-were separate from the AI Cloud CLI session, and cookbook/quickstart model
-identifiers and endpoint examples differed. Usage reporting and the thinking
-control were helpful. We did not run an equivalent Nemotron workload locally
-or on another cloud, so this is not a controlled latency, cost or quality
-comparison with those environments.
+Token Factory saved us from setting up a Nemotron server. The documentation
+had inconsistent endpoint/model examples. We did not run the same model
+locally or on another cloud, so we cannot make a direct performance comparison.
+
+The broader AI Cloud experience was more frustrating. The CLI sign-in expired
+after about a day; twice a run stopped partway, once mid-Job, and I had to sign
+in through the browser and resume. GPU availability was the biggest delay:
+on October 13, four of nine L40S submissions found no machine after about
+27 minutes of retries; another took 22 minutes to start. Waiting was not
+billed. These were AI Cloud issues, not Token Factory inference failures.
 
 ## 8. Features or improvements that would help
 
-Consistent copyable endpoint/model identifiers across the catalog, quickstart
-and cookbook would shorten onboarding. Clearer guidance on thinking mode,
-output-budget sizing and structured-output validation would help applications
-that need short, evidence-bound answers. Easier matching of per-call usage
-records to billed charges would also help us reconcile estimates.
-
-For the broader AI Cloud workflow, clearer expired-authentication errors and
-capacity estimates or alternative GPU-preset suggestions would reduce time
-spent waiting and recovering. These were cloud-orchestration issues, not
-Nemotron output-quality failures.
+- Token Factory: consistent endpoint/model examples, clearer output-token
+  guidance, and easier matching of call usage to billed charges.
+- AI Cloud: clearer guidance for unattended authentication and an explicit
+  expired-session error instead of a generic timeout. Having to return and
+  sign in repeatedly interrupted the work.
+- GPU capacity: show an estimated wait or suggest an available alternative
+  machine. Long retries without knowing whether a GPU would become available
+  made short experiments take hours.
 
 ## 9. What we hope to see from the Nemotron team next
 
-Better reliability on evidence-grounded structured tasks: distinguish an
-observed result from a hypothesis, preserve exact counts and applied/reverted
-state, and cite only supplied evidence. We would also value smaller models
-that retain this reliability for low-cost explanations, and published
-evaluations for scientific or robotics evidence interpretation. For Faultline,
-faithful uncertainty is more useful than a confident explanation unsupported
-by the reruns.
+Fewer mistakes when reading test results: correct counts, correct descriptions
+of which changes were applied, no invented evidence references, and no claims
+of cause when the tests only show a repeated failure. Getting that reliability
+in smaller models would let us use them for more of the explanations.
 
 ## Internal sources — do not paste as an extra answer
 

@@ -17,6 +17,13 @@ below for the remaining submission tasks, not another publication gate.
 
 ## Rules/access recheck and freeze preparation — October 21
 
+Questionnaire wording was subsequently shortened at the project owner's
+request. Answers 7 and 8 now explicitly include their repeated CLI sign-in
+interruptions and unavailable L40S submissions, with the recorded wait counts.
+These are labeled AI Cloud issues, not Token Factory/Nemotron inference faults.
+The approved first-hand paragraphs in root FEEDBACK remain unchanged. Three
+subjective questionnaire ratings still need owner input; no new call or spend.
+
 The project owner requested only live rules/public-link rechecking and a
 version-freeze/submission checklist, explicitly declining image/video reviews.
 Completed read-only checks and prepared
