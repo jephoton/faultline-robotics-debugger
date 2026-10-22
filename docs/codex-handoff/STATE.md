@@ -4,7 +4,7 @@
 > notes. Older entries are preserved in
 > [the historical state archive](STATE-history-through-2026-10-17.md); their
 > next steps, balances and one-run allowances are not current authority.
-> Read **Final Git publication authorized — October 21** for the latest work.
+> Read **README cover — October 22** for the latest work.
 > Earlier dated proposals and allowances below are historical, not new authority.
 
 ## Current position — October 20, 2026
@@ -14,6 +14,17 @@ cleanup batch inline, including suppressing transient command windows and
 rewriting Reference/Run your own. Implementation and local verification are
 finished and the reviewed gallery has now been redeployed. See the checkpoint
 below for the remaining submission tasks, not another publication gate.
+
+## README cover — October 22
+
+The owner supplied and authorized publishing the project cover. Stored it
+unchanged at `docs/assets/faultline-cover.png` and embedded it below the README
+title, with alt text and a short illustration caption. SHA-256 matches the
+supplied PNG; no image editing or generation. No application code, gallery
+deployment, robot experiment or model call is involved. The previous final
+main checkpoint `2b9abd9` was successfully pushed and its Python/web CI run
+39473777443 passed. This small asset/documentation update is separately
+authorized for GitHub publication; it does not change the submitted video.
 
 ## Final Git publication authorized — October 21
 

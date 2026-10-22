@@ -1,5 +1,9 @@
 # Faultline — turn robot failures into replayable tests
 
+![Faultline project cover: a robot arm and examples of layout reduction and visual disturbance testing](docs/assets/faultline-cover.png)
+
+*Project cover illustration. Measured results and limitations are documented below.*
+
 Faultline is a debugging workbench for robot foundation models. Find a
 repeatable failure, reduce its triggering condition, and keep a test you can
 replay on a compatible checkpoint.
